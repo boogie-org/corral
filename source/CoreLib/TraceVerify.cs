@@ -1,0 +1,386 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Microsoft.Boogie;
+using System.Diagnostics;
+using cba.Util;
+
+namespace cba
+{
+    public class RestrictToTrace
+    {
+        // Current counter, one for each string that is renamed
+        private Dictionary<string,int> usedNames;
+        // The input program
+        private Program inp;
+        // A mapping: name -> implementation for inp
+        private Dictionary<string, Implementation> nameToImpl;
+        // A mapping: name -> procedure for inp
+        private Dictionary<string, Procedure> nameToProc;
+        // The set of procedures (without implementation) that are called by some trace
+        private HashSet<string> calledProcsNoImpl;
+        // The output program
+        private Program output;
+        // The code transformation done to go from inp to output
+        private InsertionTrans tinfo;
+        // New proc declarations to be added 
+        private HashSet<int> newFixedContextProcs;
+        // Add proc declaration for Fix_RaiseException
+        private bool addRaiseExceptionProcDecl;
+        // Add concretization assignments
+        public static bool addConcretization = false;
+        public static bool addConcretizationAsConstants = false;
+
+        public RestrictToTrace(Program p, InsertionTrans t)
+        {
+            inp = p;
+
+            usedNames = new Dictionary<string, int>();
+            nameToImpl = BoogieUtil.nameImplMapping(inp);
+            nameToProc = BoogieUtil.nameProcMapping(inp);
+            calledProcsNoImpl = new HashSet<string>();
+            output = new Program();
+            tinfo = t;
+            newFixedContextProcs = new HashSet<int>();
+            addRaiseExceptionProcDecl = false;
+        }
+
+        private string addIntToString(string s, int i)
+        {
+            return s + "__unique__" + (i + 1).ToString();
+        }
+
+        // Restricts a program to a single trace. 
+        //
+        // Returns the new name of trace.procName.
+        // Adds resultant declarations to output program
+        public string addTrace(ErrorTrace trace)
+        {
+            return addTraceRec(trace);
+        }
+
+        private static int const_counter = 0;
+
+        private string addTraceRec(ErrorTrace trace)
+        {
+            Debug.Assert(trace.Blocks.Count != 0);
+
+            // First, construct the procedure declaration: only a name change required
+            string newName = getNewName(trace.procName);
+            Procedure proc = nameToProc[trace.procName];
+
+            output.TopLevelDeclarations.Add(
+                new Procedure(Token.NoToken, newName, proc.TypeParameters, proc.InParams,
+                    proc.OutParams, proc.Requires, proc.Modifies, proc.Ensures,
+                    proc.Attributes));
+
+            // Now to peice together the commands from the implementation. We keep around
+            // multiple blocks to make sure that trace mapping works out.
+            var traceBlocks = new List<Block>();
+
+            Implementation impl = nameToImpl[trace.procName];
+
+            var labelToBlock = BoogieUtil.labelBlockMapping(impl);
+
+            // These two need not agree. This happens when impl.Block[0] has
+            // no commands.
+            // Debug.Assert(impl.Blocks[0].Label == trace.Blocks[0].blockName);
+            Debug.Assert(reachableViaEmptyBlocks(impl.Blocks[0].Label, labelToBlock).Contains(trace.Blocks[0].blockName));
+
+            for (int i = 0, n = trace.Blocks.Count; i < n; i++)
+            {
+                Block curr = labelToBlock[trace.Blocks[i].blockName];
+
+                Block traceBlock = new Block();
+                traceBlock.Cmds = new CmdSeq();
+                traceBlock.Label = addIntToString(trace.Blocks[i].blockName, i); // (The "i" is to deal with loops)
+                if (i != n - 1)
+                {
+                    traceBlock.TransferCmd = BoogieAstFactory.MkGotoCmd(addIntToString(trace.Blocks[i + 1].blockName, i + 1));
+                }
+                else
+                {
+                    traceBlock.TransferCmd = new ReturnCmd(Token.NoToken);
+                }
+                tinfo.addTrans(newName, trace.Blocks[i].blockName, traceBlock.Label);
+
+                #region Check consistency
+                Debug.Assert(curr.Cmds.Length >= trace.Blocks[i].Cmds.Count);
+                if (trace.Blocks[i].Cmds.Count != curr.Cmds.Length)
+                {
+                    Debug.Assert((i == n - 1));
+                }
+
+                if (curr.TransferCmd is ReturnCmd)
+                {
+                    Debug.Assert(i == n - 1);
+                }
+                else if (curr.TransferCmd is GotoCmd)
+                {
+                    StringSeq targets = (curr.TransferCmd as GotoCmd).labelNames;
+                    // one of these targets should be the next label
+                    if (i != n - 1)
+                    {
+                        Debug.Assert(reachableViaEmptyBlocks(targets, labelToBlock).Contains(trace.Blocks[i + 1].blockName));
+                    }
+                }
+                else
+                {
+                    throw new InternalError("Unknown transfer command");
+                }
+                #endregion
+
+                // Index into trace.Blocks[i].Cmds
+                int instrCount = -1;
+
+                foreach (Cmd c in curr.Cmds)
+                {
+                    instrCount++;
+                    if (instrCount == trace.Blocks[i].Cmds.Count)
+                        break;
+
+                    ErrorTraceInstr curr_instr = trace.Blocks[i].Cmds[instrCount];
+                    if (curr_instr.info.isValid)
+                    {
+                        traceBlock.Cmds.Add(InstrumentationConfig.getFixedContextProc(curr_instr.info.executionContext));
+                        newFixedContextProcs.Add(curr_instr.info.executionContext);
+                    }
+
+                    // Don't keep "fix context value" procs from the input program
+                    if (InstrumentationConfig.getFixedContextValue(c) != -1)
+                    {
+                        traceBlock.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.True));
+                        addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+                        continue;
+                    }
+
+                    // Don't keep "fix raise exception" procs from the input program
+                    if (InstrumentationConfig.isFixedRaiseExceptionProc(c))
+                    {
+                        traceBlock.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.True));
+                        addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+                        continue;
+                    }
+
+                    if (addConcretization && c is HavocCmd && curr_instr.info != null && curr_instr.info.hasIntVar("si_arg")
+                        && (c as HavocCmd).Vars.Length > 0 && (c as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt)
+                    {
+                        // concretize havoc-ed variable
+                        var val = curr_instr.info.getIntVal("si_arg");
+                        traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst((c as HavocCmd).Vars[0].Decl, val));
+                        addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+                        continue;
+                    }
+
+                    if (!(c is CallCmd))
+                    {
+                        traceBlock.Cmds.Add(c);
+                        Debug.Assert(!curr_instr.isCall());
+                        addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+
+                        continue;
+                    }
+                    Debug.Assert(curr_instr.isCall());
+
+                    CallCmd cc = c as CallCmd;
+                    CallInstr call_instr = curr_instr as CallInstr;
+
+                    if (!nameToImpl.ContainsKey(cc.Proc.Name) || !call_instr.hasCalledTrace)
+                    {
+                        // This is a call to a procedure without implementation; skip;
+                        calledProcsNoImpl.Add(cc.Proc.Name);
+                        traceBlock.Cmds.Add(c);
+                        Debug.Assert(!call_instr.hasCalledTrace);
+                        if (addConcretization && cc.Outs.Count == 1 &&
+                            call_instr.info.hasIntVar("si_arg"))
+                        {
+                            var val = call_instr.info.getIntVal("si_arg");
+
+                            if (!addConcretizationAsConstants || !cc.Proc.Name.Contains("malloc"))
+                            {
+                                traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, val));
+                            }
+                            else
+                            {
+                                // create a constant that is equal to this literal, then use the constant
+                                // for concretization
+
+                                var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                                    string.Format("alloc_{0}", const_counter), Microsoft.Boogie.Type.Int), false);
+                                const_counter++;
+
+                                traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqVar(cc.Outs[0].Decl, constant));
+                                output.TopLevelDeclarations.Add(constant);
+                                output.TopLevelDeclarations.Add(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
+                            }
+
+                        }
+                        addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+                        continue;
+                    }
+
+                    Debug.Assert(call_instr.calleeTrace.procName == cc.Proc.Name);
+                    var callee = addTraceRec(call_instr.calleeTrace);
+
+                    var newcmd = new CallCmd(Token.NoToken, callee, cc.Ins, cc.Outs, cc.Attributes, cc.IsAsync);
+                    traceBlock.Cmds.Add(newcmd);
+                    addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
+
+                }
+                traceBlocks.Add(traceBlock);
+            }
+
+            Debug.Assert(traceBlocks.Count != 0);
+            if (trace.raisesException)
+            {
+                var exitblk = traceBlocks.Last();
+                exitblk.Cmds.Add(InstrumentationConfig.getFixedRaiseExceptionProc());
+                addRaiseExceptionProcDecl = true;
+            }
+
+            // Add the implementation to output
+            //var block = new Block(Token.NoToken, trace.Blocks[0].blockName, traceCmdSeq, new ReturnCmd(Token.NoToken));
+            //List<Block> blocks = new List<Block>();
+            //blocks.Add(block);
+
+            //tinfo.addTrans(newName, trace.Blocks[0].blockName, trace.Blocks[0].blockName);
+            tinfo.addProcNameTrans(trace.procName, newName);
+
+            output.TopLevelDeclarations.Add(
+                new Implementation(Token.NoToken, newName, impl.TypeParameters,
+                    impl.InParams, impl.OutParams, impl.LocVars, traceBlocks, impl.Attributes));
+            
+            return newName;
+        }
+
+        // Record the fact that we added instruction corresponding to "in" as the last instruction
+        // of "curr"
+        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, CmdSeq curr)
+        {
+            CmdSeq cseq = new CmdSeq();
+            cseq.Add(curr.Last());
+            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Length - 1, cseq);
+        }
+
+        // Return the set of blocks reachable while only going through empty blocks
+        private HashSet<string> reachableViaEmptyBlocks(string lab, Dictionary<string, Block> labelBlockMap)
+        {
+            StringSeq ss = new StringSeq();
+            ss.Add(lab);
+            return reachableViaEmptyBlocks(ss, labelBlockMap);
+        }
+
+        // Return the set of blocks reachable while only going through empty blocks
+        private HashSet<string> reachableViaEmptyBlocks(StringSeq lab, Dictionary<string, Block> labelBlockMap)
+        {
+            var stack = new List<Block>();
+            var visited = new HashSet<string>();
+
+            foreach (string s in lab)
+            {
+                stack.Add(labelBlockMap[s]);
+            }
+
+            while (stack.Count != 0)
+            {
+                var node = stack.First();
+                stack.RemoveAt(0);
+
+                if (visited.Contains(node.Label))
+                    continue;
+
+                visited.Add(node.Label);
+
+                if (node.Cmds.Length != 0)
+                    continue;
+
+                if (node.TransferCmd is GotoCmd)
+                {
+                    var gc = node.TransferCmd as GotoCmd;
+                    foreach (string s in gc.labelNames)
+                    {
+                        stack.Add(labelBlockMap[s]);
+                    }
+                }
+            }
+
+            return visited;
+        }
+
+        private string getNewName(string str)
+        {
+            int val;
+            if (usedNames.TryGetValue(str, out val))
+            {
+                usedNames[str] = val + 1;
+                return str + "_trace_" + val;
+            }
+            else
+            {
+                usedNames.Add(str, 2);
+                return str + "_trace_" + 1;
+            }
+        }
+
+        // Get the unique string to which str was renamed to by getNewName
+        public string getUniqueName(string str)
+        {
+            int val;
+            if (!usedNames.TryGetValue(str, out val))
+            {
+                throw new InternalError("getUniqueName: String not renamed to anything!");
+            } else if(val != 2){
+                throw new InternalError("getUniqueName: name not unique!");
+            } else {
+                return str + "_trace_" + 1;
+            }
+        }
+
+        public Program getProgram() {
+            // Names for procs that fix context values
+            HashSet<string> newProcsToAdd = new HashSet<string>();
+            foreach (var i in newFixedContextProcs)
+            {
+                newProcsToAdd.Add(InstrumentationConfig.getFixedContextProcName(i));
+            }
+            if (addRaiseExceptionProcDecl)
+            {
+                newProcsToAdd.Add(InstrumentationConfig.getFixedRaiseExceptionProcName());
+            }
+
+            // Add globals, axioms, functions, etc
+            foreach (Declaration decl in inp.TopLevelDeclarations)
+            {
+                if ((decl is Procedure) || (decl is Implementation))
+                    continue;
+                output.TopLevelDeclarations.Add(decl);
+            }
+            
+            // Add procedure declarations (ones without an implementation), as required
+            foreach (string str in calledProcsNoImpl)
+            {
+                newProcsToAdd.Remove(str);
+                output.TopLevelDeclarations.Add(nameToProc[str]);
+                tinfo.addProcNameTrans(str, str);
+            }
+
+            // Add declaration for fixing context values
+            foreach (var p in newProcsToAdd)
+            {
+                var proc = new Procedure(Token.NoToken, p, new TypeVariableSeq(),
+                    new VariableSeq(), new VariableSeq(), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+                output.TopLevelDeclarations.Add(proc);
+            }
+
+            //string outfile = "trace.bpl";
+            //BoogieUtil.PrintProgram(output, outfile);
+
+            Program ret = output;
+            output = null;
+
+            return ret;
+        }
+
+    }
+}
