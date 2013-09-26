@@ -25,7 +25,7 @@ namespace cba
                 if (decl is Procedure)
                 {
                     Procedure proc = decl as Procedure;
-                    proc.Modifies = new IdentifierExprSeq();
+                    proc.Modifies = new List<IdentifierExpr>();
                     
                     if (!msa.modSets.ContainsKey(proc))
                         continue;

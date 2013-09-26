@@ -170,7 +170,7 @@ namespace cba
         // that are not tracked
         public override Procedure VisitProcedure(Procedure node)
         {
-            IdentifierExprSeq mods = new IdentifierExprSeq();
+            List<IdentifierExpr> mods = new List<IdentifierExpr>();
             foreach (IdentifierExpr ie in node.Modifies)
             {
                 GlobalVariable gbl = ie.Decl as GlobalVariable;
@@ -190,8 +190,8 @@ namespace cba
             // contain untracked variables. The correct way would be to (universally/existentially) quantify out
             // the variables
 
-            EnsuresSeq abstracted_en = new EnsuresSeq();
-            RequiresSeq abstracted_req = new RequiresSeq();
+            List<Ensures> abstracted_en = new List<Ensures>();
+            List<Requires> abstracted_req = new List<Requires>();
 
             // Check ensures annotations
             foreach (Ensures en in node.Ensures)
@@ -287,7 +287,7 @@ namespace cba
         public override Block VisitBlock(Block block)
         {
             var ret = sliceBlock(block);
-            Debug.Assert(tinfo.getNumTrans(currImplementation.Name, block.Label) == block.Cmds.Length);
+            Debug.Assert(tinfo.getNumTrans(currImplementation.Name, block.Label) == block.Cmds.Count);
             return ret;
         }
 
@@ -297,7 +297,7 @@ namespace cba
         private Block sliceBlock(Block block)
         {
             // The new list of commands that we will construct
-            CmdSeq sliced = new CmdSeq();
+            List<Cmd> sliced = new List<Cmd>();
 
             foreach (Cmd cmd in block.Cmds)
             {
@@ -307,7 +307,7 @@ namespace cba
                     // This is an assume true, don't put it in the final program
                     if (tinfo != null)
                     {
-                        tinfo.add(currImplementation.Name, block.Label, new InstrTrans(cmd, new CmdSeq()));
+                        tinfo.add(currImplementation.Name, block.Label, new InstrTrans(cmd, new List<Cmd>()));
                     }
                     continue;
                 }
@@ -322,7 +322,7 @@ namespace cba
                     continue;
                 }
 
-                CmdSeq newcmd = new CmdSeq();
+                List<Cmd> newcmd = new List<Cmd>();
 
                 // Now we need to look at what sort of a command are we dealing with
                 if (cmd is AssignCmd)
@@ -355,7 +355,7 @@ namespace cba
                         {
                             Debug.Assert(currImplementation != null);
                             var dvar = getNewLocal(exp.Type, currImplementation);
-                            newcmd.Add(new HavocCmd(Token.NoToken, new IdentifierExprSeq(Expr.Ident(dvar))));
+                            newcmd.Add(new HavocCmd(Token.NoToken, new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(dvar) })));
                             newIns.Add(Expr.Ident(dvar));
                         }
                         else
@@ -394,7 +394,7 @@ namespace cba
                 {
                     // Remove the havoced variables that are not tracked.
                     HavocCmd hcmd = (HavocCmd)cmd;
-                    var newvars = new IdentifierExprSeq();
+                    var newvars = new List<IdentifierExpr>();
 
                     foreach (IdentifierExpr ie in hcmd.Vars)
                     {
@@ -404,7 +404,7 @@ namespace cba
                         }
                     }
 
-                    if (newvars.Length != 0)
+                    if (newvars.Count != 0)
                         newcmd.Add(new HavocCmd(hcmd.tok, newvars));
                 }
                 else
@@ -421,9 +421,9 @@ namespace cba
             return new Block(block.tok, block.Label, sliced, block.TransferCmd);
         }
 
-        private CmdSeq AbstractAssign(AssignCmd acmd)
+        private List<Cmd> AbstractAssign(AssignCmd acmd)
         {
-            var newcmd = new CmdSeq();
+            var newcmd = new List<Cmd>();
 
             // !KeepSimple: then map indices are given special treatment
             var KeepSimple = UseSimpleSlicing || (currImplementation == null) || (acmd.Lhss.Count != 1);
@@ -494,7 +494,7 @@ namespace cba
 
             if (varsToHavoc.Count != 0)
             {
-                var ieseq = new IdentifierExprSeq();
+                var ieseq = new List<IdentifierExpr>();
                 varsToHavoc.Iter(v => ieseq.Add(Expr.Ident(v)));
                 newcmd.Add(new HavocCmd(Token.NoToken, ieseq));
             }
@@ -686,7 +686,7 @@ namespace cba
             globalsRead.UnionWith(varsRead.globalsUsed);
 
             // Get rid of declarations (before variable slice adds new variables)
-            var newvars = new VariableSeq();
+            var newvars = new List<Variable>();
             foreach (Variable v in node.LocVars)
             {
                 if (varsRead.localsUsed.Contains(v.Name))

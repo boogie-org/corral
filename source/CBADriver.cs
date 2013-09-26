@@ -110,10 +110,10 @@ namespace cba
                 var traceProgCons = new RestrictToTrace(cp1.input.getProgram(), tinfo);
                 ErrorTrace.fillInContextSwitchInfo(trace1);
                 traceProgCons.addTrace(trace1);
-
+                
                 pout =
                     new PersistentCBAProgram(traceProgCons.getProgram(),
-                        traceProgCons.getUniqueName(cp1.getInput().mainProcName),
+                        traceProgCons.getFirstNameInstance(cp1.getInput().mainProcName),
                         cp1.getInput().contextBound,
                         ConcurrencyMode.FixedContext);
 

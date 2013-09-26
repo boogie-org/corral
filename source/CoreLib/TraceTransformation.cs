@@ -35,7 +35,7 @@ namespace cba
     public abstract class ProgramTrans
     {
         // A map from src Cmd to dest Cmds
-        protected Dictionary<Cmd, CmdSeq> srcDestMap;
+        protected Dictionary<Cmd, List<Cmd>> srcDestMap;
 
         // The set of all Cmds in Dest
         HashSet<Cmd> allDestCmds;
@@ -48,7 +48,7 @@ namespace cba
 
         public ProgramTrans()
         {
-            srcDestMap = new Dictionary<Cmd, CmdSeq>();
+            srcDestMap = new Dictionary<Cmd, List<Cmd>>();
             allDestCmds = new HashSet<Cmd>();
             dup = new FixedDuplicator(true);
             processed = false;
@@ -57,7 +57,7 @@ namespace cba
         // Store a program transformation. It makes sure that
         // all Cmd in dest are unaliased to anything before
         // inserted into the destination program
-        public void addTrans(Cmd src, ref CmdSeq dest)
+        public void addTrans(Cmd src, ref List<Cmd> dest)
         {
             // Make dest unaliased
             for (int i = 0; i < dest.Length; i++)
@@ -111,7 +111,7 @@ namespace cba
             dict[key].addInstrTrans(itrans);
         }
 
-        public void setIdentity(string procName, string blockName, CmdSeq cmds)
+        public void setIdentity(string procName, string blockName, List<Cmd> cmds)
         {
             var key = new Duple<string, string>(procName, blockName);
             if (dict.ContainsKey(key))
@@ -184,7 +184,7 @@ namespace cba
         }
 
         // set to the identity transformation
-        public void setIdentity(CmdSeq cmds)
+        public void setIdentity(List<Cmd> cmds)
         {
             trans.Clear();
             foreach (Cmd c in cmds)
@@ -280,19 +280,19 @@ namespace cba
             }
         }
 
-        public InstrTrans(Cmd _from, CmdSeq _to, int ci)
+        public InstrTrans(Cmd _from, List<Cmd> _to, int ci)
         {
             initialize(_from, _to, ci);
         }
 
-        public InstrTrans(Cmd _from, CmdSeq _to)
+        public InstrTrans(Cmd _from, List<Cmd> _to)
         {
             initialize(_from, _to, -1);
         }
 
         public InstrTrans(Cmd _from, Cmd _to)
         {
-            var temp = new CmdSeq();
+            var temp = new List<Cmd>();
             temp.Add(_to);
             initialize(_from, temp, 0);
         }
@@ -305,7 +305,7 @@ namespace cba
             correspondingInstr = 0;
         }
 
-        private void initialize(Cmd _from, CmdSeq _to, int ci) 
+        private void initialize(Cmd _from, List<Cmd> _to, int ci) 
         {
             to = new List<InstrType>();
             correspondingInstr = ci;
@@ -459,9 +459,9 @@ namespace cba
 
         public void addTrans(string procName,
             string fromBlock, int fromNum, Cmd from,
-            string toBlock, int toNum, CmdSeq to)
+            string toBlock, int toNum, List<Cmd> to)
         {
-            Debug.Assert(to.Length == 1);
+            Debug.Assert(to.Count == 1);
 
             if (!dict.ContainsKey(procName))
             {

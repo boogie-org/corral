@@ -10,6 +10,7 @@ using cba;
 
 namespace StaticAnalysis
 {
+    // TODO: update to support the type bv32 as well
     class ConstantProp : IWeight
     {
         public static Program program = null;
@@ -181,7 +182,7 @@ namespace StaticAnalysis
         private ConstantProp ApplyCall(CallCmd cmd)
         {
             // this is just like havoc
-            var havoc = new IdentifierExprSeq();
+            var havoc = new List<IdentifierExpr>();
             cmd.Outs.Iter(ie => havoc.Add(ie));
             cmd.Proc.Modifies.OfType<IdentifierExpr>().Iter(ie => havoc.Add(ie));
 
@@ -206,7 +207,7 @@ namespace StaticAnalysis
             var subst = new Dictionary<string, Value>();
 
             domainG.Iter(g => subst.Add(g.Name, val[g.Name]));
-            for (int i = 0; i < summary.impl.InParams.Length; i++)
+            for (int i = 0; i < summary.impl.InParams.Count; i++)
             {
                 var formal = summary.impl.InParams[i];
                 var actual = Value.GetTop();
@@ -259,13 +260,17 @@ namespace StaticAnalysis
             if (lexpr != null)
             {
                 // TODO: insert check for Boolean literals
-                return Value.GetSingleton(lexpr.asBigNum.ToInt);
+                if(lexpr.Val is Microsoft.Basetypes.BigNum)
+                    return Value.GetSingleton(lexpr.asBigNum.ToInt);
+                if (lexpr.Val is BvConst)
+                    return Value.GetSingleton((lexpr.Val as BvConst).Value.ToInt);
+                return Value.GetTop();
             }
 
             // 0 - c
             var nexpr = expr as NAryExpr;
             if (nexpr != null
-                && nexpr.Args.Length == 1
+                && nexpr.Args.Count == 1
                 && nexpr.Fun is UnaryOperator
                 && (nexpr.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Neg)
             {
@@ -274,8 +279,8 @@ namespace StaticAnalysis
                     return Value.GetSingleton(0 - e1.asBigNum.ToInt);
             }
 
-            if (nexpr != null 
-                && nexpr.Args.Length == 2
+            if (nexpr != null
+                && nexpr.Args.Count == 2
                 && nexpr.Fun is BinaryOperator
                 && (nexpr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Sub)
             {

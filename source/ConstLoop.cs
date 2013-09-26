@@ -305,9 +305,9 @@ namespace cba
         private void HandleNonDeterminism()
         {
             var detChoice = new Function(Token.NoToken, "detChoice__cl",
-                new VariableSeq(
+                new List<Variable> {
                     new Formal(Token.NoToken,
-                        new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true)),
+                        new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true) },
                 new Formal(Token.NoToken,
                     new TypedIdent(Token.NoToken, "y", Microsoft.Boogie.Type.Int), false));
 
@@ -319,7 +319,7 @@ namespace cba
 
                 var ret = corralNondet.OutParams[0] as Variable;
                 var c1 = Expr.Eq(Expr.Ident(ret), new NAryExpr(Token.NoToken,
-                    new FunctionCall(detChoice), new ExprSeq(Expr.Ident(nonDetCounter))));
+                    new FunctionCall(detChoice), new List<Expr>{Expr.Ident(nonDetCounter)}));
                 var c2 = Expr.Eq(Expr.Ident(nonDetCounter),
                     Expr.Add(new OldExpr(Token.NoToken, Expr.Ident(nonDetCounter)),
                     Expr.Literal(1)));
@@ -337,7 +337,7 @@ namespace cba
                     .Iter(impl =>
                         impl.Blocks.Iter(blk =>
                             {
-                                for (int i = 0; i < blk.Cmds.Length; i++)
+                                for (int i = 0; i < blk.Cmds.Count; i++)
                                 {
                                     var cc = blk.Cmds[i] as CallCmd;
                                     if (cc == null) continue;
@@ -559,16 +559,16 @@ namespace cba
             var assumeAllocEq = new Func<string, AssumeCmd>(s => BoogieAstFactory.MkAssumeVarEqVar(alloc, allocVars[s]));
             var assumeAllocGt = new Func<string, AssumeCmd>(s => BoogieAstFactory.MkAssumeVarGtVar(alloc, allocVars[s]));
 
-            var ieSeq = new IdentifierExprSeq();
+            var ieSeq = new List<IdentifierExpr>();
             loopGlobals.Iter(v => ieSeq.Add(new IdentifierExpr(Token.NoToken, v)));
             Cmd havocGlobals = new HavocCmd(Token.NoToken, ieSeq);
-            if (ieSeq.Length == 0) havocGlobals = BoogieAstFactory.MkAssume(Expr.True);
+            if (ieSeq.Count == 0) havocGlobals = BoogieAstFactory.MkAssume(Expr.True);
 
-            ieSeq = new IdentifierExprSeq();
+            ieSeq = new List<IdentifierExpr>();
             impl.LocVars.OfType<Variable>().Iter(v => ieSeq.Add(new IdentifierExpr(Token.NoToken, v)));
             allFormals.Iter(v => ieSeq.Add(new IdentifierExpr(Token.NoToken, v)));
             Cmd havocLocals = new HavocCmd(Token.NoToken, ieSeq);
-            if (ieSeq.Length == 0) havocLocals = BoogieAstFactory.MkAssume(Expr.True);
+            if (ieSeq.Count == 0) havocLocals = BoogieAstFactory.MkAssume(Expr.True);
 
             // init cmds
             var initCmds = impl.Blocks[0].Cmds;
@@ -584,7 +584,7 @@ namespace cba
             var body0b = CreateLoopBodyCopy(impl, "_copy0b");
 
             // in-formals-copy := rec-call-in-params
-            var assignInFormalsCopy = new CmdSeq();
+            var assignInFormalsCopy = new List<Cmd>();
             var recCall = body0[recCallBlock[impl.Name]].Cmds.Last() as CallCmd;
             Debug.Assert(recCall.callee == impl.Name);
             impl.InParams
@@ -595,7 +595,7 @@ namespace cba
             // assume init
             var head0 = body0[loopBodyStartBlock[impl.Name]];
             var head0Cmds = head0.Cmds;
-            head0.Cmds = new CmdSeq(BoogieAstFactory.MkAssume(initExpr));
+            head0.Cmds = new List<Cmd>{BoogieAstFactory.MkAssume(initExpr)};
             head0.Cmds.Add(assumeCnt("a"));
             head0.Cmds.Add(assumeAllocEq("a1"));
             head0.Cmds.AddRange(head0Cmds);
@@ -764,11 +764,11 @@ namespace cba
 
             var renameLabels = new Action<GotoCmd>(gc =>
                 {
-                    var nSeq = new StringSeq();
+                    var nSeq = new List<String>();
                     gc.labelNames.OfType<string>()
                         .Iter(s => nSeq.Add(s + suffix));
                     gc.labelNames = nSeq;
-                    gc.labelTargets = new BlockSeq();
+                    gc.labelTargets = new List<Block>();
                 });
 
             // rename goto labels
@@ -949,7 +949,7 @@ namespace cba
             rBlocks.Iter(blk =>
                 {
                     var gc = BoogieAstFactory.MkGotoCmd(nb.Label);
-                    gc.labelTargets = new BlockSeq();
+                    gc.labelTargets = new List<Block>();
                     gc.labelTargets.Add(nb);
                     blk.TransferCmd = gc;
                 });
@@ -1039,7 +1039,7 @@ namespace cba
             // check entry, exit blocks
             var g1 = impl.Blocks[0].TransferCmd as GotoCmd;
             if (g1 == null) return false;
-            if (g1.labelNames.Length != 2) return false;
+            if (g1.labelNames.Count != 2) return false;
             if (g1.labelNames[0] == impl.Blocks[0].Label || g1.labelNames[1] == impl.Blocks[0].Label) return false;
             if (!IsExitBlock(g1.labelNames[0], impl) && !IsExitBlock(g1.labelNames[1], impl)) return false;
             if (IsExitBlock(g1.labelNames[0], impl))
@@ -1073,7 +1073,7 @@ namespace cba
                 CbaLiveVariableAnalysis.ComputeLiveVariables(caller, inProg);
                 foreach (var blk in caller.Blocks)
                 {
-                    for (int i = 0; i < blk.Cmds.Length; i++)
+                    for (int i = 0; i < blk.Cmds.Count; i++)
                     {
                         var cc = blk.Cmds[i] as CallCmd;
                         if (cc == null || cc.callee != impl.Name)
@@ -1089,7 +1089,7 @@ namespace cba
             }
 
             var dead = new HashSet<string>();
-            for (int i = 0; i < impl.OutParams.Length; i++)
+            for (int i = 0; i < impl.OutParams.Count; i++)
             {
                 var formal = impl.OutParams[i];
                 if (liveFormalNum.Contains(i))
@@ -1155,7 +1155,7 @@ namespace cba
         {
             var block = impl.Blocks.First(blk => blk.Label == label);
             if (block == null) return false;
-            if (block.Cmds.Length != 0) return false;
+            if (block.Cmds.Count != 0) return false;
             if (!(block.TransferCmd is ReturnCmd)) return false;
             return true;
         }
@@ -1227,11 +1227,11 @@ namespace cba
             if (impl.Blocks.Count != 3) return false;
             var g1 = impl.Blocks[0].TransferCmd as GotoCmd;
             if (g1 == null) return false;
-            if (g1.labelNames.Length != 2) return false;
+            if (g1.labelNames.Count != 2) return false;
             if (g1.labelNames[0] == impl.Blocks[0].Label || g1.labelNames[1] == impl.Blocks[0].Label) return false;
-            if (impl.Blocks[1].Cmds.Length != 0 && impl.Blocks[2].Cmds.Length != 0) return false;
+            if (impl.Blocks[1].Cmds.Count != 0 && impl.Blocks[2].Cmds.Count != 0) return false;
             if (!(impl.Blocks[1].TransferCmd is ReturnCmd) || !(impl.Blocks[2].TransferCmd is ReturnCmd)) return false;
-            if (impl.Blocks[2].Cmds.Length != 0) return false;
+            if (impl.Blocks[2].Cmds.Count != 0) return false;
             return true;
         }
 
@@ -1513,7 +1513,7 @@ namespace cba
         public static HashSet<Variable> GetLiveVarsAfter(Program program, Implementation impl, Block block, int cmdPos)
         {
             var liveVarsAfter = initLiveVars(block, impl, program);
-            for (int i = block.Cmds.Length - 1; i > cmdPos; i--)
+            for (int i = block.Cmds.Count - 1; i > cmdPos; i--)
             {
                 var cc = block.Cmds[i] as CallCmd;
                 if (cc != null)
@@ -1552,8 +1552,8 @@ namespace cba
                 Contract.Assert(block != null);
                 HashSet<Variable/*!*/>/*!*/ liveVarsAfter = initLiveVars(block, impl, program);
 
-                CmdSeq cmds = block.Cmds;
-                int len = cmds.Length;
+                List<Cmd> cmds = block.Cmds;
+                int len = cmds.Count;
                 for (int i = len - 1; i >= 0; i--)
                 {
                     var cc = cmds[i] as CallCmd;
@@ -1699,8 +1699,8 @@ namespace cba
             else if (cmd is StateCmd)
             {
                 StateCmd/*!*/ stCmd = (StateCmd)cce.NonNull(cmd);
-                CmdSeq/*!*/ cmds = cce.NonNull(stCmd.Cmds);
-                int len = cmds.Length;
+                List<Cmd>/*!*/ cmds = cce.NonNull(stCmd.Cmds);
+                int len = cmds.Count;
                 for (int i = len - 1; i >= 0; i--)
                 {
                     Propagate(cmds[i], liveSet);
@@ -1745,8 +1745,8 @@ namespace cba
             corralNondet = BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, "corral_nondet");
             if (corralNondet == null)
             {
-                var proc = BoogieAstFactory.MkProc("corral_nondet", new VariableSeq(), new VariableSeq(
-                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true)));
+                var proc = BoogieAstFactory.MkProc("corral_nondet", new List<Variable>(), new List<Variable>(new Variable[] {
+                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true)}));
 
                 p.TopLevelDeclarations.Add(proc);
                 corralNondet = proc as Procedure;
@@ -1760,16 +1760,16 @@ namespace cba
 
         private void runPassBlock(string impl, Block block)
         {
-            for (int i = 0; i < block.Cmds.Length; i++)
+            for (int i = 0; i < block.Cmds.Count; i++)
             {
                 var cmd = block.Cmds[i] as HavocCmd;
                 if (cmd == null) continue;
-                if (cmd.Vars.Length != 1) continue;
+                if (cmd.Vars.Count != 1) continue;
 
                 var v = cmd.Vars[0].Decl;
                 if (!v.TypedIdent.Type.IsInt) continue;
 
-                var cc = new CallCmd(Token.NoToken, "corral_nondet", new ExprSeq(), cmd.Vars);
+                var cc = new CallCmd(Token.NoToken, "corral_nondet", new List<Expr>(), cmd.Vars);
                 cc.Proc = corralNondet;
 
                 block.Cmds[i] = cc;
@@ -1937,10 +1937,10 @@ namespace cba
             if (recFunc == traceName)
                 ret++;
 
-            for (int numBlock = 0; numBlock < trace.Trace.Length; numBlock++)
+            for (int numBlock = 0; numBlock < trace.Trace.Count; numBlock++)
             {
                 Block b = trace.Trace[numBlock];
-                for (int numInstr = 0; numInstr < b.Cmds.Length; numInstr++)
+                for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
                 {
                     Cmd c = b.Cmds[numInstr];
                     var loc = new TraceLocation(numBlock, numInstr);
@@ -1994,7 +1994,7 @@ namespace cba
 
                 // av := true
                 var init = BoogieAstFactory.MkVarEqConst(av, true);
-                var initCmds = new CmdSeq();
+                var initCmds = new List<Cmd>();
                 initCmds.Add(init);
                 initCmds.AddRange(impl.Blocks[0].Cmds);
                 impl.Blocks[0].Cmds = initCmds;
@@ -2002,8 +2002,8 @@ namespace cba
                 // av := false
                 foreach (var blk in impl.Blocks)
                 {
-                    var newCmds = new CmdSeq();
-                    for (int i = 0; i < blk.Cmds.Length; i++)
+                    var newCmds = new List<Cmd>();
+                    for (int i = 0; i < blk.Cmds.Count; i++)
                     {
                         var cc = blk.Cmds[i] as CallCmd;
                         if (cc != null && cc.callee == kvp.Key)

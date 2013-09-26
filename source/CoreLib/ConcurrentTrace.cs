@@ -154,13 +154,13 @@ namespace cba
         {
             var ret = new List<Block>();
 
-            var curr = new CmdSeq();
+            var curr = new List<Cmd>();
             var label = block.Label;
 
             var origCmds = block.Cmds;
             var origTransfer = block.TransferCmd;
 
-            if (origCmds.Length == 0)
+            if (origCmds.Count == 0)
             {
                 ret.Add(block);
                 return ret;
@@ -170,13 +170,13 @@ namespace cba
             // the list of cmds up to (and excluding):
             //   -- The first cmd with source info that is not the 0^th cmd
             var cnt = 0;
-            for (cnt = 0; cnt < origCmds.Length; cnt++)
+            for (cnt = 0; cnt < origCmds.Count; cnt++)
             {
                 if (hasSourceInfo(origCmds[cnt]) && cnt != 0) break;
                 curr.Add(origCmds[cnt]);
             }
 
-            if (cnt == origCmds.Length)
+            if (cnt == origCmds.Count)
             {
                 ret.Add(block);
                 return ret;
@@ -187,16 +187,16 @@ namespace cba
             block.TransferCmd = BoogieAstFactory.MkGotoCmd(label);
             ret.Add(block);
 
-            curr = new CmdSeq();
+            curr = new List<Cmd>();
             
             // Now for the rest of the cmds
-            while (cnt < origCmds.Length)
+            while (cnt < origCmds.Count)
             {
                 Debug.Assert(hasSourceInfo(origCmds[cnt]));
                 curr.Add(origCmds[cnt]);
                 cnt++;
 
-                for (; cnt < origCmds.Length; cnt++)
+                for (; cnt < origCmds.Count; cnt++)
                 {
                     if (hasSourceInfo(origCmds[cnt])) break;
                     curr.Add(origCmds[cnt]);
@@ -205,7 +205,7 @@ namespace cba
                 ret.Add(new Block(Token.NoToken, label, curr, BoogieAstFactory.MkGotoCmd(next)));
 
                 label = next;
-                curr = new CmdSeq();
+                curr = new List<Cmd>();
             }
 
             ret.Last().TransferCmd = origTransfer;
@@ -217,7 +217,7 @@ namespace cba
         {
             foreach (var blk in implementation.Blocks)
             {
-                CmdSeq nseq = new CmdSeq();
+                List<Cmd> nseq = new List<Cmd>();
                 foreach (Cmd cmd in blk.Cmds)
                 {
                     string file;

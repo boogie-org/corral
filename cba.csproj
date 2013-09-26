@@ -93,6 +93,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>references\Core.dll</HintPath>
     </Reference>
+    <Reference Include="ExecutionEngine">
+      <HintPath>references\ExecutionEngine.dll</HintPath>
+    </Reference>
     <Reference Include="Graph, Version=1.0.21126.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>references\Graph.dll</HintPath>
@@ -146,6 +149,10 @@
     <ProjectReference Include="source\CoreLib\CoreLib.csproj">
       <Project>{437B3C57-A7E7-4D99-A027-4BB4E5105E7A}</Project>
       <Name>CoreLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="source\ExplainError\ExplainError.csproj">
+      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
+      <Name>ExplainError</Name>
     </ProjectReference>
     <ProjectReference Include="source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532B8A9-8CC2-4D7F-9D5E-7669841B6871}</Project>

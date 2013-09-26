@@ -105,10 +105,10 @@ namespace BctCleanup
         }
 
         private static void replaceFECalls(Program prog) {
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_begin", new TypeVariableSeq(), new VariableSeq(), new VariableSeq(), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq()));
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_end", new TypeVariableSeq(), new VariableSeq(), new VariableSeq(), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq()));
+          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_begin", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_end", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
           Formal id = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "id", Microsoft.Boogie.Type.Int), false);
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_getThreadID", new TypeVariableSeq(), new VariableSeq(), new VariableSeq(id), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq()));
+          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_getThreadID", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(new Variable[] { id }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
           HashSet<Declaration> declsToRemove = new HashSet<Declaration>();
           foreach (Declaration decl in prog.TopLevelDeclarations) {
             Procedure proc = decl as Procedure;
@@ -119,7 +119,7 @@ namespace BctCleanup
             Implementation impl = decl as Implementation;
             if (impl == null) continue;
             foreach (Block b in impl.Blocks) {
-              CmdSeq newCmds = new CmdSeq();
+              List<Cmd> newCmds = new List<Cmd>();
               foreach (Cmd c in b.Cmds) {
                 CallCmd cc = c as CallCmd;
                 if (cc == null) {
@@ -158,16 +158,16 @@ namespace BctCleanup
             }
 
             // Find all initializers
-            CmdSeq newCmds = new CmdSeq();
+            List<Cmd> newCmds = new List<Cmd>();
             foreach (var decl in prog.TopLevelDeclarations)
             {
                 var impl = decl as Implementation;
                 if (impl == null) continue;
                 if (impl.Name.EndsWith("cctor"))
                 {
-                    if (impl.InParams.Length == 0)
+                    if (impl.InParams.Count == 0)
                     {
-                        newCmds.Add(new CallCmd(Token.NoToken, impl.Name, new ExprSeq(), new IdentifierExprSeq()));
+                        newCmds.Add(new CallCmd(Token.NoToken, impl.Name, new List<Expr>(), new List<IdentifierExpr>()));
                     }
                 }
             }

@@ -229,7 +229,7 @@ namespace cba
 
             if (node.Name == LanguageSemantics.getThreadIDName())
             {
-                Debug.Assert(node.OutParams.Length == 1);
+                Debug.Assert(node.OutParams.Count == 1);
                 if (node.OutParams[0].TypedIdent.Type.IsBv)
                 {
                     threadIdType = node.OutParams[0].TypedIdent.Type;

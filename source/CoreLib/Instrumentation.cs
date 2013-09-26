@@ -44,7 +44,7 @@ namespace cba
         public static CallCmd getFixedContextProc(int i)
         {
             var name = getFixedContextProcName(i);
-            return new CallCmd(Token.NoToken, name, new ExprSeq(), new IdentifierExprSeq());
+            return new CallCmd(Token.NoToken, name, new List<Expr>(), new List<IdentifierExpr>());
         }
 
         public static int getFixedContextValue(Cmd c)
@@ -70,7 +70,7 @@ namespace cba
         public static CallCmd getFixedRaiseExceptionProc()
         {
             var name = getFixedRaiseExceptionProcName();
-            return new CallCmd(Token.NoToken, name, new ExprSeq(), new IdentifierExprSeq());
+            return new CallCmd(Token.NoToken, name, new List<Expr>(), new List<IdentifierExpr>());
         }
 
         public static bool isFixedRaiseExceptionProc(Cmd c)
@@ -389,7 +389,7 @@ namespace cba
 
             // Change the "modifies" list: replace each "to-instrument" global variable
             // with all its K copies
-            IdentifierExprSeq mods = new IdentifierExprSeq();
+            List<IdentifierExpr> mods = new List<IdentifierExpr>();
             var copies = new Dictionary<string, List<GlobalVariable>>();
 
             foreach (IdentifierExpr ie in proc.Modifies)
@@ -515,7 +515,7 @@ namespace cba
             int fixedContext = 0;
 
             // These two represent the current Block being constructed
-            CmdSeq curr;
+            List<Cmd> curr;
             string curr_label;
 
             // Gotta start things off by inserting a contextSwitch 
@@ -524,7 +524,7 @@ namespace cba
 
             foreach (Block block in impl.Blocks)
             {
-                curr = new CmdSeq();
+                curr = new List<Cmd>();
                 curr_label = block.Label;
 
                 // This block will result in a block with the same name
@@ -549,7 +549,7 @@ namespace cba
                         curr.Add(ContextSwitchCmd()); //impl.Name, curr_label, 0));
                     }
                     curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                    curr = new CmdSeq();
+                    curr = new List<Cmd>();
                 }
                 first_block = false;
 
@@ -592,7 +592,7 @@ namespace cba
 
                         curr.Add(ContextSwitchCmd(impl, block.Label, incnt, cmd));
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
 
                         continue;
                     }
@@ -605,7 +605,7 @@ namespace cba
 
                         curr.Add(ContextSwitchCmd());
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
 
                         continue;
                     }
@@ -619,7 +619,7 @@ namespace cba
                         curr.Add(BoogieAstFactory.MkVarEqExpr(mgr.raiseException, Expr.Not(Expr.Ident(mgr.inAtomicBlock))));
 
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
 
                         continue;
                     }
@@ -683,7 +683,7 @@ namespace cba
 
                             curr.Add(ContextSwitchCmd(/*impl.Name, block.Label, incnt*/));
                             curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                            curr = new CmdSeq();
+                            curr = new List<Cmd>();
                         }
                         else
                         {
@@ -696,13 +696,13 @@ namespace cba
                         // cmd reads/writes to a global variable. Duplicate it K times.
                         
                         curr_label = addBasicInstrumentation(impl.Name, block.Label, incnt, cmd, instrumented, curr, curr_label, fixedContext);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                     if (isCall && hasBody && !isAsyncCall)
                     {
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                     // Add a context switch if:
@@ -721,7 +721,7 @@ namespace cba
                         }
 
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
                     
                 }
@@ -791,7 +791,7 @@ namespace cba
 
             foreach (var blk in impl.Blocks)
             {
-                if (blk.Cmds.Length == 0) continue;
+                if (blk.Cmds.Count == 0) continue;
                 
 
                 var acmd = blk.Cmds[0] as AssumeCmd;
@@ -806,14 +806,14 @@ namespace cba
                 var gc = unique_pred.TransferCmd as GotoCmd;
                 Debug.Assert(gc != null);
 
-                if (gc.labelNames.Length != 2) continue;
+                if (gc.labelNames.Count != 2) continue;
 
                 var lab2 = gc.labelNames[0];
                 if (lab2 == blk.Label) lab2 = gc.labelNames[1];
                 Debug.Assert(lab2 != blk.Label);
 
                 var block2 = nameBlockMap[lab2];
-                if (block2.Cmds.Length == 0) continue;
+                if (block2.Cmds.Count == 0) continue;
                 var acmd2 = block2.Cmds[0] as AssumeCmd;
                 if (acmd2 == null) continue;
 
@@ -832,7 +832,7 @@ namespace cba
             foreach (var blk in impl.Blocks)
             {
                 if (!blk.widenBlock) continue;
-                if (blk.Cmds.Length == 0) continue;
+                if (blk.Cmds.Count == 0) continue;
                 var acmd = blk.Cmds[0] as AssumeCmd;
                 if (acmd == null || !QKeyValue.FindBoolAttribute(acmd.Attributes, "do_re")) continue;
                 Debug.Assert(acmd.Attributes.Key == "do_re");
@@ -897,12 +897,12 @@ namespace cba
             annotateBlockingAssumes(impl);
 
             // These two represent the current Block being constructed
-            CmdSeq curr;
+            List<Cmd> curr;
             string curr_label;
 
             foreach (Block block in impl.Blocks)
             {
-                curr = new CmdSeq();
+                curr = new List<Cmd>();
                 curr_label = block.Label;
 
                 // This block will result in a block with the same name
@@ -916,7 +916,7 @@ namespace cba
                 if (block.widenBlock && !InstrumentationConfig.cooperativeYield)
                 {
                     curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                    curr = new CmdSeq();
+                    curr = new List<Cmd>();
                 }
 
                 foreach (Cmd cmd in block.Cmds)
@@ -946,7 +946,7 @@ namespace cba
                         {
                             curr.Add(ContextSwitchCmd());
                             curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                            curr = new CmdSeq();
+                            curr = new List<Cmd>();
                         }
 
                         curr.Add(BoogieAstFactory.MkVarEqConst(mgr.inAtomicBlock, true));
@@ -972,7 +972,7 @@ namespace cba
                         addedTrans(impl.Name, block.Label, incnt, cmd, curr_label, curr);
 
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
 
                         continue;
                     }
@@ -985,7 +985,7 @@ namespace cba
 
                         curr.Add(BoogieAstFactory.MkVarEqExpr(mgr.raiseException, Expr.Not(Expr.Ident(mgr.inAtomicBlock))));
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
 
                         continue;
                     }
@@ -1027,7 +1027,7 @@ namespace cba
                     if (assumecmd != null && QKeyValue.FindBoolAttribute(assumecmd.Attributes, "do_re") && !InstrumentationConfig.cooperativeYield)
                     {
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                     // if cmd does not refer to a "to-instrument" global variable, then don't
@@ -1050,7 +1050,7 @@ namespace cba
                         (policy.isRecCall(impl.Name, (cmd as CallCmd).callee) || InstrumentationConfig.raiseExceptionBeforeAllProcedures))
                     {
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                     bool hasGlobals = policy.hasGlobalVarsToInstrument(cmd);
@@ -1066,14 +1066,14 @@ namespace cba
                             if (!InstrumentationConfig.cooperativeYield)
                             {
                                 curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
-                                curr = new CmdSeq();
+                                curr = new List<Cmd>();
                             }
                             else
                             {
                                 // raiseException := (!mgr.errorVar && !inAotmicBlock)
                                 curr.Add(BoogieAstFactory.MkVarEqExpr(mgr.raiseException, Expr.And(Expr.Not(Expr.Ident(mgr.errorVar)), Expr.Not(Expr.Ident(mgr.inAtomicBlock)))));
                                 curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                                curr = new CmdSeq();
+                                curr = new List<Cmd>();
                             }
                         }
                         else
@@ -1089,13 +1089,13 @@ namespace cba
 
                         // cmd reads/writes to a global variable. Duplicate it K times.
                         curr_label = addBasicInstrumentation(impl.Name, block.Label, incnt, cmd, instrumented, curr, curr_label, fixedContext);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                     if (isCall && hasBody && !isAsyncCall)
                     {
                         curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label);
-                        curr = new CmdSeq();
+                        curr = new List<Cmd>();
                     }
 
                 }
@@ -1110,11 +1110,11 @@ namespace cba
 
         // Record the fact that we added instruction corresponding to "in" as the last instruction
         // of "curr"
-        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, CmdSeq curr)
+        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, List<Cmd> curr)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
             cseq.Add(curr.Last());
-            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Length - 1, cseq);
+            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Count - 1, cseq);
         }
 
         // Duplicates the cmd K times.
@@ -1142,7 +1142,7 @@ namespace cba
 
         private string addBasicInstrumentation(
             string procName, string blockName, int currCount, Cmd cmd,
-            List<Block> instrumented, CmdSeq curr, string curr_label,
+            List<Block> instrumented, List<Cmd> curr, string curr_label,
             int fixedContext)
         {
             if (cmd is AssumeCmd && policy.mode != ConcurrencyMode.FixedContext)
@@ -1168,7 +1168,7 @@ namespace cba
             // Make K copies of this cmd.
             // Make up K new labels
             List<Cmd> copies = new List<Cmd>();
-            StringSeq labels = new StringSeq();
+            List<String> labels = new List<String>();
 
             for (int i = 0; i < K; i++)
             {
@@ -1209,7 +1209,7 @@ namespace cba
                 // assume(k == i)
                 AssumeCmd acmd = BoogieAstFactory.MkAssumeVarEqConst(mgr.vark, i);
 
-                CmdSeq cs = new CmdSeq();
+                List<Cmd> cs = new List<Cmd>();
                 cs.Add(acmd);
                 cs.Add(copies[i]);
                 addedTrans(procName, blockName, currCount, cmd, labels[i], cs);
@@ -1223,7 +1223,7 @@ namespace cba
 
         private string addBasicInstrumentationFixedContext(
             string procName, string blockName, int currCount, Cmd cmd,
-            List<Block> instrumented, CmdSeq curr, string curr_label,
+            List<Block> instrumented, List<Cmd> curr, string curr_label,
             int fixedContext)
         {
             FixedDuplicator dup = new FixedDuplicator(true);
@@ -1258,7 +1258,7 @@ namespace cba
             // assume(k == i)
             AssumeCmd acmd = BoogieAstFactory.MkAssumeVarEqConst(mgr.vark, fixedContext);
 
-            CmdSeq cs = new CmdSeq();
+            List<Cmd> cs = new List<Cmd>();
             cs.Add(acmd);
             cs.Add(copy);
             addedTrans(procName, blockName, currCount, cmd, label, cs);
@@ -1280,7 +1280,7 @@ namespace cba
 
         private string addBasicInstrumentationAssume(
             string procName, string blockName, int currCount, AssumeCmd cmd,
-            List<Block> instrumented, CmdSeq curr, string curr_label,
+            List<Block> instrumented, List<Cmd> curr, string curr_label,
             int fixedContext)
         {
             FixedDuplicator dup = new FixedDuplicator(true);
@@ -1331,12 +1331,12 @@ namespace cba
         // Inputs: the list of blocks being constructed; the current block being constructed.
         // End current block and adds two new blocks.
         // Returns "lab".
-        private string addRaiseExceptionInstrumentation(List<Block> instrumented, CmdSeq curr, string curr_label)
+        private string addRaiseExceptionInstrumentation(List<Block> instrumented, List<Cmd> curr, string curr_label)
         {
             return addRaiseExceptionInstrumentation(instrumented, curr, curr_label, false);
         }
 
-        private string addRaiseExceptionInstrumentation(List<Block> instrumented, CmdSeq curr, string curr_label, bool havocFlag)
+        private string addRaiseExceptionInstrumentation(List<Block> instrumented, List<Cmd> curr, string curr_label, bool havocFlag)
         {
             if (!InstrumentationConfig.addRaiseException)
             {
@@ -1354,7 +1354,7 @@ namespace cba
             string lbl1 = getNewLabel();
             string lbl2 = getNewLabel();
 
-            StringSeq ssp = new StringSeq();
+            List<String> ssp = new List<String>();
             ssp.Add(lbl1);
             ssp.Add(lbl2);
             instrumented.Add(new Block(Token.NoToken, curr_label, curr, new GotoCmd(Token.NoToken, ssp)));
@@ -1372,12 +1372,12 @@ namespace cba
             // assume(raiseException == false)
             AssumeCmd acmd_re_false = BoogieAstFactory.MkAssumeVarEqConst(mgr.raiseException, false);
 
-            curr = new CmdSeq();
+            curr = new List<Cmd>();
             curr.Add(acmd_re_true);
             instrumented.Add(new Block(Token.NoToken, lbl1, curr, new ReturnCmd(Token.NoToken)));
             blocksThatRaiseException.Add(lbl1);
 
-            curr = new CmdSeq();
+            curr = new List<Cmd>();
             curr.Add(acmd_re_false);
             instrumented.Add(new Block(Token.NoToken, lbl2, curr, BoogieAstFactory.MkGotoCmd(common_label)));
 
@@ -1406,7 +1406,7 @@ namespace cba
             // (leave finished and numRounds uninitialized, by design)
             // assume Mem__1 == Mem_s_1 ...
 
-            var starting_cmd = new CmdSeq();
+            var starting_cmd = new List<Cmd>();
 
             starting_cmd.Add(BoogieAstFactory.MkVarEqConst(mgr.vark, 0));
             starting_cmd.Add(BoogieAstFactory.MkVarEqConst(mgr.errorVar, true));
@@ -1421,7 +1421,7 @@ namespace cba
 
             starting_cmd.AddRange(mgr.constructInitAssumes(K, policy));
 
-            var commandsAdded = starting_cmd.Length;
+            var commandsAdded = starting_cmd.Count;
             starting_cmd.AddRange(blocks[0].Cmds);
 
             blocks[0] = new Block(blocks[0].tok, blocks[0].Label, starting_cmd, blocks[0].TransferCmd);
@@ -1466,7 +1466,7 @@ namespace cba
             // assert(errorVar)
             // return
 
-            CmdSeq curr = new CmdSeq();
+            List<Cmd> curr = new List<Cmd>();
             curr.AddRange(mgr.constructChecker(K, policy));
 
             // assert(errorVar)
@@ -1578,7 +1578,7 @@ namespace cba
                     var pos = findAtomicBegin(blockMap[c]);
                     if (pos == -1)
                     {
-                        ret.UnionWith(getVars(blockMap[c], 0, blockMap[c].Cmds.Length));
+                        ret.UnionWith(getVars(blockMap[c], 0, blockMap[c].Cmds.Count));
                         stack.Push(c);
                     }
                     else
@@ -1593,7 +1593,7 @@ namespace cba
         private static int findAtomicBegin(Block block)
         {
             int ret = -1;
-            for (int i = block.Cmds.Length - 1; i >= 0; i--)
+            for (int i = block.Cmds.Count - 1; i >= 0; i--)
             {
                 if (BoogieUtil.checkIsCall(LanguageSemantics.atomicBeginProcName(), block.Cmds[i] as Cmd))
                 {
@@ -1610,7 +1610,7 @@ namespace cba
 
         private static HashSet<string> getVarsAfter(Block block, int cnt)
         {
-            return getVars(block, cnt, block.Cmds.Length);
+            return getVars(block, cnt, block.Cmds.Count);
         }
 
         private static HashSet<string> getVars(Block block, int start, int end)
@@ -1906,7 +1906,7 @@ namespace cba
         public override Block VisitBlock(Block block)
         {
             // The new list of commands that we will construct
-            CmdSeq lcmds = new CmdSeq();
+            List<Cmd> lcmds = new List<Cmd>();
 
             // index into block.Cmds
             int inCnt = -1;
@@ -2040,11 +2040,11 @@ namespace cba
 
         // Record the fact that we added instruction corresponding to "in" as the last instruction
         // of "curr"
-        private void addedTrans(string procName, string blk, int inCnt, Cmd inCmd, CmdSeq curr)
+        private void addedTrans(string procName, string blk, int inCnt, Cmd inCmd, List<Cmd> curr)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
             cseq.Add(curr.Last());
-            tinfo.addTrans(procName, blk, inCnt, inCmd, blk, curr.Length - 1, cseq);
+            tinfo.addTrans(procName, blk, inCnt, inCmd, blk, curr.Count - 1, cseq);
         }
     }
 
@@ -2113,7 +2113,7 @@ namespace cba
             GlobalVarsUsed usesg = new GlobalVarsUsed();
 
             // The new list of commands that we will construct
-            CmdSeq lcmds = new CmdSeq();
+            List<Cmd> lcmds = new List<Cmd>();
 
             foreach (Cmd cmd in block.Cmds)
             {
@@ -2151,13 +2151,13 @@ namespace cba
                 // The callee
                 Procedure callee = ccmd.Proc;
                 // This is the list of commands for saving the arguments
-                CmdSeq saveArgs = new CmdSeq();
+                List<Cmd> saveArgs = new List<Cmd>();
                 // This is the new list of arguments
                 List<Expr> newArgs = new List<Expr>();
                 // This is the new list of returns
                 List<IdentifierExpr> newReturns = new List<IdentifierExpr>();
                 // This is the list of commands for restoring return values
-                CmdSeq restoreReturns = new CmdSeq();
+                List<Cmd> restoreReturns = new List<Cmd>();
 
                 // Go through the arguments of the call
                 int argcount = 0;
@@ -2215,7 +2215,7 @@ namespace cba
                 }
 
                 // Now add to lcmds: saveArgs; newcall command; restoreReturns
-                var newCmds = new CmdSeq();
+                var newCmds = new List<Cmd>();
                 newCmds.AddRange(saveArgs);
                 CallCmd newcallcmd = new CallCmd(ccmd.tok, ccmd.Proc.Name, newArgs, newReturns, ccmd.Attributes, ccmd.IsAsync);
                 newcallcmd.Proc = callee; // Temporary hack to avoid doing "Resolve"
@@ -2223,7 +2223,7 @@ namespace cba
                 newCmds.Add(newcallcmd);
                 newCmds.AddRange(restoreReturns);
 
-                tinfo.add(implName, block.Label, new InstrTrans(cmd, newCmds, saveArgs.Length));
+                tinfo.add(implName, block.Label, new InstrTrans(cmd, newCmds, saveArgs.Count));
                 lcmds.AddRange(newCmds);
             }
 
@@ -2359,26 +2359,26 @@ namespace cba
                 inp.TopLevelDeclarations.Add(
                     new Procedure(
                         Token.NoToken, LanguageSemantics.assertNotReachableName(),
-                        new TypeVariableSeq(), new VariableSeq(), new VariableSeq(),
-                        new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq()));
+                        new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
+                        new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
 
             }
             else
             {
                 // Delete all annotations of corral_assert_not_reachable (otherwise we can get type errors)
                 var assertProc = BoogieUtil.findProcedureDecl(inp.TopLevelDeclarations, LanguageSemantics.assertNotReachableName());
-                assertProc.Modifies = new IdentifierExprSeq();
-                assertProc.Requires = new RequiresSeq();
-                assertProc.Ensures = new EnsuresSeq();
+                assertProc.Modifies = new List<IdentifierExpr>();
+                assertProc.Requires = new List<Requires>();
+                assertProc.Ensures = new List<Ensures>();
             }
 
             // Make all requires and ensures free
             foreach (var proc in inp.TopLevelDeclarations.OfType<Procedure>())
             {
                 // Make all requires free
-                proc.Requires = new RequiresSeq(proc.Requires.OfType<Requires>().Select(r => new Requires(r.tok, true, r.Condition, null, r.Attributes)).ToArray());
+                proc.Requires = new List<Requires>(proc.Requires.OfType<Requires>().Select(r => new Requires(r.tok, true, r.Condition, null, r.Attributes)).ToArray());
                 // Make all ensures free
-                proc.Ensures = new EnsuresSeq(proc.Ensures.OfType<Ensures>().Select(r => new Ensures(r.tok, true, r.Condition, null, r.Attributes)).ToArray());
+                proc.Ensures = new List<Ensures>(proc.Ensures.OfType<Ensures>().Select(r => new Ensures(r.tok, true, r.Condition, null, r.Attributes)).ToArray());
             }
 
             return inp;
@@ -2390,7 +2390,7 @@ namespace cba
 
             foreach (Block block in node.Blocks)
             {
-                var currCmds = new CmdSeq();
+                var currCmds = new List<Cmd>();
                 var currLabel = block.Label;
 
                 foreach (Cmd cmd in block.Cmds)
@@ -2469,7 +2469,7 @@ namespace cba
         }
 
         // forAssert: 0 for assert, 1 for requires, 2 for ensures
-        private void branchForAssert(Expr aexpr, ref string currLabel, ref CmdSeq currCmds, List<Block> newBlocks, int forAssert)
+        private void branchForAssert(Expr aexpr, ref string currLabel, ref List<Cmd> currCmds, List<Block> newBlocks, int forAssert)
         {
             var acallcmd = new CallCmd(Token.NoToken, LanguageSemantics.assertNotReachableName(), new List<Expr>(), new List<IdentifierExpr>());
 
@@ -2490,7 +2490,7 @@ namespace cba
 
             // lab1
             currLabel = lab1;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(aexpr)));
             currCmds.Add(acallcmd);
@@ -2505,7 +2505,7 @@ namespace cba
 
             // lab2
             currLabel = lab2;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, aexpr));
 
@@ -2513,12 +2513,12 @@ namespace cba
 
             // lab3
             currLabel = lab3;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
         }
 
         private void recordNotReachableProcLocation(string procName, Block block)
         {
-            for (int i = 0; i < block.Cmds.Length; i++)
+            for (int i = 0; i < block.Cmds.Count; i++)
             {
                 var cmd = block.Cmds[i];
                 if (cmd is CallCmd && (cmd as CallCmd).Proc != null)
@@ -2681,6 +2681,21 @@ namespace cba
         }
     }
 
+    public class CallVisitor : FixedVisitor
+    {
+        Action<CallCmd> action;
+        public CallVisitor(Action<CallCmd> action)
+        {
+            this.action = action;
+        }
+
+        public override Cmd VisitCallCmd(CallCmd node)
+        {
+            action(node);
+            return base.VisitCallCmd(node);
+        }
+    }
+
     // Set up a single-threaded program for Stratified Inlining
     public class SequentialInstrumentation : CompilerPass
     {
@@ -2715,22 +2730,18 @@ namespace cba
             var callGraph = new Dictionary<string, HashSet<string>>();
 
             // call graph
-            foreach (var decl in program.TopLevelDeclarations)
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
-                var impl = decl as Implementation;
-                if (impl == null) continue;
                 callGraph.Add(impl.Name, new HashSet<string>());
-                foreach (var blk in impl.Blocks)
-                {
-                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                var vs = new CallVisitor(cmd => 
                     {
                         callGraph[impl.Name].Add(cmd.callee);
                         if (hasAsyncAnnotation(cmd))
                         {
                             asyncCallProcs.Add(impl.Name);
                         }
-                    }
-                }
+                    });
+                vs.VisitImplementation(impl);
             }
 
             // find reachable procedures
@@ -2836,7 +2847,7 @@ namespace cba
                 var instrumented = new List<Block>();
                 foreach (var blk in impl.Blocks)
                 {
-                    var currCmds = new CmdSeq();
+                    var currCmds = new List<Cmd>();
                     var currLabel = blk.Label;
 
                     tinfo.addTrans(impl.Name, blk.Label, blk.Label);
@@ -2868,7 +2879,7 @@ namespace cba
                             addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
 
                             currLabel = addInstr(instrumented, currCmds, currLabel);
-                            currCmds = new CmdSeq();
+                            currCmds = new List<Cmd>();
 
                             continue;
                         }
@@ -2880,7 +2891,7 @@ namespace cba
                             addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
 
                             currLabel = addInstr(instrumented, currCmds, currLabel);
-                            currCmds = new CmdSeq();
+                            currCmds = new List<Cmd>();
 
                             continue;
                         }
@@ -2891,7 +2902,7 @@ namespace cba
                             currCmds.Add(cmd);
                             addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
                             currLabel = addInstr(instrumented, currCmds, currLabel);
-                            currCmds = new CmdSeq();
+                            currCmds = new List<Cmd>();
                             continue;
                         }
 
@@ -2946,12 +2957,12 @@ namespace cba
             newProc.Name += "_SeqInstr";
             newMain.Proc = newProc;
 
-            var mainIns = new ExprSeq();
+            var mainIns = new List<Expr>();
             foreach (Variable v in newMain.InParams)
             {
                 mainIns.Add(Expr.Ident(v));
             }
-            var mainOuts = new IdentifierExprSeq();
+            var mainOuts = new List<IdentifierExpr>();
             foreach (Variable v in newMain.OutParams)
             {
                 mainOuts.Add(Expr.Ident(v));
@@ -2960,7 +2971,7 @@ namespace cba
             var callMain = new CallCmd(Token.NoToken, program.mainProcName, mainIns, mainOuts);
             callMain.Proc = origMain.Proc;
 
-            var cmds = new CmdSeq();
+            var cmds = new List<Cmd>();
             cmds.Add(BoogieAstFactory.MkVarEqConst(assertsPassed, true));
             cmds.Add(callMain);            
             cmds.Add(new AssertCmd(Token.NoToken, Expr.Ident(assertsPassed)));
@@ -3014,12 +3025,12 @@ namespace cba
         // End current block and adds two new blocks.
         // Returns "lab".
 
-        private string addInstr(List<Block> instrumented, CmdSeq curr, string curr_label)
+        private string addInstr(List<Block> instrumented, List<Cmd> curr, string curr_label)
         {
             string lbl1 = getNewLabel();
             string lbl2 = getNewLabel();
 
-            StringSeq ssp = new StringSeq(lbl1, lbl2);
+            List<String> ssp = new List<String>{lbl1, lbl2};
             instrumented.Add(new Block(Token.NoToken, curr_label, curr, new GotoCmd(Token.NoToken, ssp)));
 
             string common_label = getNewLabel();
@@ -3028,11 +3039,11 @@ namespace cba
             // assume (assertsPassed)
             AssumeCmd cmd2 = new AssumeCmd(Token.NoToken, Expr.Ident(assertsPassed));
 
-            curr = new CmdSeq();
+            curr = new List<Cmd>();
             curr.Add(cmd1);
             instrumented.Add(new Block(Token.NoToken, lbl1, curr, new ReturnCmd(Token.NoToken)));
 
-            curr = new CmdSeq();
+            curr = new List<Cmd>();
             curr.Add(cmd2);
             instrumented.Add(new Block(Token.NoToken, lbl2, curr, BoogieAstFactory.MkGotoCmd(common_label)));
 
@@ -3049,11 +3060,11 @@ namespace cba
         
         // Record the fact that we added instruction corresponding to "in" as the last instruction
         // of "curr"
-        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, CmdSeq curr)
+        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, List<Cmd> curr)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
             cseq.Add(curr.Last());
-            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Length - 1, cseq);
+            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Count - 1, cseq);
         }
     }
 }

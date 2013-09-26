@@ -62,7 +62,7 @@ namespace cba
             GlobalVarsUsed usesg = new GlobalVarsUsed();
 
             // The new list of commands that we will construct
-            CmdSeq lcmds = new CmdSeq();
+            List<Cmd> lcmds = new List<Cmd>();
 
             foreach (Cmd cmd in block.Cmds)
             {
@@ -90,7 +90,7 @@ namespace cba
                 // Get ready to instrument
 
                 // This is the list of locals to havoc (for the arguments)
-                IdentifierExprSeq havocArgs = new IdentifierExprSeq();
+                List<IdentifierExpr> havocArgs = new List<IdentifierExpr>();
 
                 // Go through the arguments of the call
                 for (int i = 0, n = ccmd.Ins.Count; i < n; i++)

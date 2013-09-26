@@ -135,13 +135,13 @@ namespace cba
                 //
 
                 var lab = getNewLabel();
-                var targets1 = new StringSeq();
+                var targets1 = new List<String>();
                 targets1.Add(lab);
                 targets1.Add(impl.Blocks[0].Label);
 
-                var blk1 = new Block(Token.NoToken, getNewLabel(), new CmdSeq(), new GotoCmd(Token.NoToken, targets1));
+                var blk1 = new Block(Token.NoToken, getNewLabel(), new List<Cmd>(), new GotoCmd(Token.NoToken, targets1));
                 
-                var blk2cmds = new CmdSeq();
+                var blk2cmds = new List<Cmd>();
                 blk2cmds.Add(new AssertCmd(Token.NoToken, Expr.Literal(false)));
 
                 var blk2 = new Block(Token.NoToken, lab, blk2cmds, new ReturnCmd(Token.NoToken));
@@ -150,7 +150,7 @@ namespace cba
                 // TODO: This works with the CBA reduction??
                 foreach (var blk in impl.Blocks)
                 {
-                    for (int i = 0, n = blk.Cmds.Length; i < n; i++)
+                    for (int i = 0, n = blk.Cmds.Count; i < n; i++)
                     {
                         if (blk.Cmds[i] is AssertCmd)
                         {

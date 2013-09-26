@@ -80,7 +80,7 @@ namespace cba
         public static Function getBvAdd()
         {
             if (BvAdd != null) return BvAdd;
-            var args = new VariableSeq();
+            var args = new List<Variable>();
 
             args.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.GetBvType(32)), true));
             args.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", Microsoft.Boogie.Type.GetBvType(32)), true));
@@ -97,7 +97,7 @@ namespace cba
         public static Function getBvGt()
         {
             if (BvGt != null) return BvGt;
-            var args = new VariableSeq();
+            var args = new List<Variable>();
 
             args.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.GetBvType(32)), true));
             args.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", Microsoft.Boogie.Type.GetBvType(32)), true));
@@ -125,7 +125,7 @@ namespace cba
             }
             else
             {
-                var args = new ExprSeq();
+                var args = new List<Expr>();
                 args.Add(Expr.Ident(v1));
                 args.Add(Expr.Ident(v2));
 
@@ -142,7 +142,7 @@ namespace cba
             }
             else
             {
-                var args = new ExprSeq();
+                var args = new List<Expr>();
                 args.Add(Expr.Ident(v1));
                 args.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(c), 32));
 
@@ -165,7 +165,7 @@ namespace cba
             }
             else
             {
-                var args = new ExprSeq();
+                var args = new List<Expr>();
                 args.Add(Expr.Ident(v1));
                 args.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(1), 32));
                 

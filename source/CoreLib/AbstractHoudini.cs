@@ -1,4 +1,5 @@
 ﻿using System;
+
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -47,7 +48,7 @@ namespace CoreLib {
             this.impl2Summary = new Dictionary<string, ISummaryElement>();
             this.name2Impl = BoogieUtil.nameImplMapping(program);
 
-            this.vcgen = new VCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+            this.vcgen = new VCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
             this.prover = ProverInterface.CreateProver(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, CommandLineOptions.Clo.ProverKillTime);
             this.reporter = new AbstractHoudiniErrorReporter();
 
@@ -258,7 +259,7 @@ namespace CoreLib {
 
         private void attachEnsures(Implementation impl)
         {
-            VariableSeq functionInterfaceVars = new VariableSeq();
+            List<Variable> functionInterfaceVars = new List<Variable>();
             foreach (Variable v in vcgen.program.GlobalVariables())
             {
                 functionInterfaceVars.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "", v.TypedIdent.Type), true));
@@ -280,7 +281,7 @@ namespace CoreLib {
             var function = new Function(Token.NoToken, impl.Name + summaryPredSuffix, functionInterfaceVars, returnVar);
             prover.Context.DeclareFunction(function, "");
 
-            ExprSeq exprs = new ExprSeq();
+            List<Expr> exprs = new List<Expr>();
             foreach (Variable v in vcgen.program.GlobalVariables())
             {
                 Contract.Assert(v != null);
@@ -311,7 +312,7 @@ namespace CoreLib {
         private void GenVC(Implementation impl)
         {
             ModelViewInfo mvInfo;
-            System.Collections.Hashtable label2absy;
+            Dictionary<int, Absy> label2absy;
 
             vcgen.ConvertCFG2DAG(impl);
             vcgen.PassifyImpl(impl, out mvInfo);
@@ -320,7 +321,7 @@ namespace CoreLib {
             var vcexpr = vcgen.GenerateVC(impl, null, out label2absy, prover.Context);
 
             // Create a macro so that the VC can sit with the theorem prover
-            Macro macro = new Macro(Token.NoToken, impl.Name + "Macro", new VariableSeq(), new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "", Bpl.Type.Bool), false));
+            Macro macro = new Macro(Token.NoToken, impl.Name + "Macro", new List<Variable>(), new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "", Bpl.Type.Bool), false));
             prover.DefineMacro(macro, vcexpr);
 
             // Store VC

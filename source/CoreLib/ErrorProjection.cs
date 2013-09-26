@@ -184,7 +184,7 @@ namespace cba
             foreach (var str in candidates)
             {
                 var impl = nameImplMap[str];
-                var ncmds = new CmdSeq();
+                var ncmds = new List<Cmd>();
                 ncmds.Add(BoogieAstFactory.MkVarEqConst(procVars[str], false));
                 ncmds.AddRange(impl.Blocks[0].Cmds);
 
@@ -197,7 +197,7 @@ namespace cba
             //    (We assume that main only has one assert)
 
             var mainImpl = nameImplMap[pprogram.mainProcName];
-            var newCmds = new CmdSeq();
+            var newCmds = new List<Cmd>();
             foreach (var str in candidates)
             {
                 newCmds.Add(BoogieAstFactory.MkVarEqConst(procVars[str], true));
@@ -238,7 +238,7 @@ namespace cba
             foreach (var str in candidates)
             {
                 newLabs.Add(str, getNewLabel());
-                var tcmds = new CmdSeq();
+                var tcmds = new List<Cmd>();
                 
                 tcmds.Add(new AssertCmd(Token.NoToken, Expr.Or(Expr.Ident(procVars[str]), assertCmd.Expr)));
 
@@ -249,8 +249,8 @@ namespace cba
             // change blkWithAssert to include only commands upto the assert
             // Add the rest of commands to a new block
             found = false;
-            newCmds = new CmdSeq();
-            var newBlk = new Block(Token.NoToken, restLab, new CmdSeq(), blkWithAssert.TransferCmd);
+            newCmds = new List<Cmd>();
+            var newBlk = new Block(Token.NoToken, restLab, new List<Cmd>(), blkWithAssert.TransferCmd);
             foreach (Cmd cmd in blkWithAssert.Cmds)
             {
                 if (cmd is AssertCmd)
@@ -268,7 +268,7 @@ namespace cba
                 }
             }
             blkWithAssert.Cmds = newCmds;
-            var targets = new StringSeq(newLabs.Values.ToArray());
+            var targets = new List<String>(newLabs.Values.ToArray());
             blkWithAssert.TransferCmd = new GotoCmd(Token.NoToken, targets);
 
             mainImpl.Blocks.Add(newBlk);
@@ -296,7 +296,7 @@ namespace cba
                 var impl = decl as Implementation;
                 foreach (Block blk in impl.Blocks)
                 {
-                    for (int i = 0; i < blk.Cmds.Length; i++)
+                    for (int i = 0; i < blk.Cmds.Count; i++)
                     {
                         if (isCall(blk.Cmds[i], procsToRemove))
                         {

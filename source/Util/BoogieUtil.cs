@@ -494,7 +494,7 @@ namespace cba.Util
 
             var arg1 = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", bvtype), true);
             var arg2 = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", bvtype), true);
-            var args = new VariableSeq();
+            var args = new List<Variable>();
             args.Add(arg1);
             args.Add(arg2);
 
@@ -620,7 +620,7 @@ namespace cba.Util
             {
                 Expr temp1 = Expr.Ident(v1);
                 Expr temp2 = Expr.Ident(v2);
-                var args = new ExprSeq();
+                var args = new List<Expr>();
                 args.Add(temp1);
                 args.Add(temp2);
                 var fun = getBVOperation("bvugt", v1.TypedIdent.Type.BvBits);
@@ -719,7 +719,7 @@ namespace cba.Util
         // havoc v
         public static HavocCmd MkHavocVar(Variable v)
         {
-            IdentifierExprSeq tmp = new IdentifierExprSeq();
+            List<IdentifierExpr> tmp = new List<IdentifierExpr>();
             tmp.Add(Expr.Ident(v));
             return new HavocCmd(Token.NoToken, tmp);
         }
@@ -743,7 +743,7 @@ namespace cba.Util
         // goto lbl
         public static GotoCmd MkGotoCmd(string lab)
         {
-            StringSeq ss = new StringSeq();
+            List<String> ss = new List<String>();
             ss.Add(lab);
             return new GotoCmd(Token.NoToken, ss);
         }
@@ -751,7 +751,7 @@ namespace cba.Util
         // goto lab1, lab2
         public static GotoCmd MkGotoCmd(string lab1, string lab2)
         {
-            StringSeq ss = new StringSeq();
+            List<String> ss = new List<String>();
             ss.Add(lab1);
             ss.Add(lab2);
             return new GotoCmd(Token.NoToken, ss);
@@ -763,7 +763,7 @@ namespace cba.Util
             BoundVariable x = new BoundVariable(Token.NoToken, 
                 new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int));
 
-            VariableSeq vs = new VariableSeq();
+            List<Variable> vs = new List<Variable>();
             vs.Add(x);
 
             List<Expr> args = new List<Expr>();
@@ -781,7 +781,7 @@ namespace cba.Util
             BoundVariable x = new BoundVariable(Token.NoToken,
                 new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int));
 
-            VariableSeq vs = new VariableSeq();
+            List<Variable> vs = new List<Variable>();
             vs.Add(x);
 
             List<Expr> args = new List<Expr>();
@@ -799,7 +799,7 @@ namespace cba.Util
             BoundVariable x = new BoundVariable(Token.NoToken,
                 new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int));
 
-            VariableSeq vs = new VariableSeq();
+            List<Variable> vs = new List<Variable>();
             vs.Add(x);
 
             List<Expr> args = new List<Expr>();
@@ -818,7 +818,7 @@ namespace cba.Util
             BoundVariable x = new BoundVariable(Token.NoToken,
                 new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int));
 
-            VariableSeq vs = new VariableSeq();
+            List<Variable> vs = new List<Variable>();
             vs.Add(x);
 
             List<Expr> args = new List<Expr>();
@@ -868,37 +868,37 @@ namespace cba.Util
         public static Microsoft.Boogie.Type MkMapType(
             Microsoft.Boogie.Type src, Microsoft.Boogie.Type dest)
         {
-            return new MapType(Token.NoToken, new TypeVariableSeq(), 
-                new TypeSeq(new Microsoft.Boogie.Type[] { src }), dest);
+            return new MapType(Token.NoToken, new List<TypeVariable>(),
+                new List<Microsoft.Boogie.Type>(new Microsoft.Boogie.Type[] { src }), dest);
         }
 
-        public static Declaration MkProc(string name, VariableSeq ins, VariableSeq outs)
+        public static Declaration MkProc(string name, List<Variable> ins, List<Variable> outs)
         {
             return new Procedure(
-                Token.NoToken, name, new TypeVariableSeq(), ins, outs, 
-                new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+                Token.NoToken, name, new List<TypeVariable>(), ins, outs, 
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
         }
         public static Declaration MkProc(string name, 
             IEnumerable<Variable> ins, IEnumerable<Variable> outs)
         {
             return MkProc(name, 
-                new VariableSeq(ins.ToArray()),
-                new VariableSeq(outs.ToArray()));
+                new List<Variable>(ins.ToArray()),
+                new List<Variable>(outs.ToArray()));
         }
 
-        public static List<Declaration> MkImpl(string name, VariableSeq ins, VariableSeq outs, 
-            VariableSeq locals, IEnumerable<Block> blocks)
+        public static List<Declaration> MkImpl(string name, List<Variable> ins, List<Variable> outs, 
+            List<Variable> locals, IEnumerable<Block> blocks)
         {
             var pr = MkProc(name, ins, outs);
             var im = new Implementation(
-                Token.NoToken, name, new TypeVariableSeq(),
+                Token.NoToken, name, new List<TypeVariable>(),
                 ins, outs, locals, new List<Block>(blocks));
             im.Proc = pr as Procedure;
             return new List<Declaration>(new Declaration[] { pr, im });
         }
 
-        public static List<Declaration> MkImpl(string name, VariableSeq ins, VariableSeq outs,
-            VariableSeq locals, IEnumerable<Cmd> cs)
+        public static List<Declaration> MkImpl(string name, List<Variable> ins, List<Variable> outs,
+            List<Variable> locals, IEnumerable<Cmd> cs)
         {
             return MkImpl(name, ins, outs, locals, new Block[] { MkBlock(cs) });
         }
@@ -1005,23 +1005,23 @@ namespace cba.Util
         /**
          * Block constructors.
          */
-        public static Block MkBlock(CmdSeq cs, TransferCmd tx)
+        public static Block MkBlock(List<Cmd> cs, TransferCmd tx)
         {
             return new Block(Token.NoToken, uniqueLabel(), cs, tx);
         }
         public static Block MkBlock(IEnumerable<Cmd> cs, IEnumerable<String> tx)
         {
             return MkBlock(
-                new CmdSeq(cs.ToArray()), 
-                new GotoCmd(Token.NoToken, new StringSeq(tx.ToArray())));
+                new List<Cmd>(cs.ToArray()), 
+                new GotoCmd(Token.NoToken, new List<String>(tx.ToArray())));
         }        
-        public static Block MkBlock(CmdSeq cs)
+        public static Block MkBlock(List<Cmd> cs)
         {
             return MkBlock(cs, new ReturnCmd(Token.NoToken));
         }
         public static Block MkBlock(IEnumerable<Cmd> cs)
         {
-            return MkBlock(new CmdSeq(cs.ToArray()));
+            return MkBlock(new List<Cmd>(cs.ToArray()));
         }
         public static Block MkBlock(Cmd c)
         {
@@ -1029,7 +1029,7 @@ namespace cba.Util
         }
         public static Block MkBlock()
         {
-            return MkBlock(new CmdSeq());
+            return MkBlock(new List<Cmd>());
         }
 
         /*
@@ -1045,9 +1045,9 @@ namespace cba.Util
             return result;
         }
 
-        public static CmdSeq CloneCmdSeq(CmdSeq cmdseq)
+        public static List<Cmd> CloneCmdSeq(List<Cmd> cmdseq)
         {
-            CmdSeq result = new CmdSeq(cmdseq);
+            List<Cmd> result = new List<Cmd>(cmdseq);
             return result;
         }
         public static TransferCmd CloneTransferCmd(TransferCmd cmd)
@@ -1068,9 +1068,9 @@ namespace cba.Util
             return new ReturnCmd(CloneToken(cmd.tok));
         }
 
-        public static StringSeq CloneStringSeq(StringSeq seq)
+        public static List<String> CloneStringSeq(List<String> seq)
         {
-            StringSeq result = new StringSeq();
+            List<String> result = new List<String>();
             foreach (string str in seq)
                 result.Add(str.Clone() as String);
             return result;
@@ -1098,7 +1098,7 @@ namespace cba.Util
 
             bs.Last().TransferCmd = 
                 new GotoCmd(Token.NoToken, 
-                    new StringSeq(new String[]{cs.First().Label}));
+                    new List<String>(new String[]{cs.First().Label}));
         }
 
         /**
@@ -1207,7 +1207,7 @@ namespace cba.Util
             else if (expr is NAryExpr)
             {
                 NAryExpr nexpr = expr as NAryExpr;
-                for (int i=0;i<nexpr.Args.Length;i++)
+                for (int i=0;i<nexpr.Args.Count;i++)
                 {
                     ret.AddRange(extractVars(nexpr.Args[i]));
                 }
@@ -1279,10 +1279,10 @@ namespace cba.Util
             Block exitBlock = null;
             if (impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd).Count() != 1)
             {
-                exitBlock = new Block(Token.NoToken, "exit$block$ssa", new CmdSeq(), new ReturnCmd(Token.NoToken));
+                exitBlock = new Block(Token.NoToken, "exit$block$ssa", new List<Cmd>(), new ReturnCmd(Token.NoToken));
                 foreach (var blk in impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd))
                 {
-                    blk.TransferCmd = new GotoCmd(Token.NoToken, new BlockSeq(exitBlock));
+                    blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block>{exitBlock});
                 }
                 impl.Blocks.Add(exitBlock);
             } else {
@@ -1471,7 +1471,7 @@ namespace cba.Util
                 if (dict == null || dict.Count() == 0)
                     continue;
 
-                var ncmds = new CmdSeq();
+                var ncmds = new List<Cmd>();
                 foreach (var vtup in dict)
                 {
                     var v = vtup.Key;
@@ -1493,7 +1493,7 @@ namespace cba.Util
             // For x_3 := phi(x_1, x_2), push "x_3 := x_1" and "x_3 := x_2" to the definitions of x_1 and x_2
             foreach (var blk in impl.Blocks)
             {
-                var ncmds = new CmdSeq();
+                var ncmds = new List<Cmd>();
                 foreach (Cmd cmd in blk.Cmds)
                 {
                     ncmds.Add(cmd);
@@ -1522,7 +1522,7 @@ namespace cba.Util
                         return false;
                     });
 
-                blk.Cmds = new CmdSeq(blk.Cmds.OfType<Cmd>().Where(c => !isPhi(c)).ToArray());
+                blk.Cmds = new List<Cmd>(blk.Cmds.OfType<Cmd>().Where(c => !isPhi(c)).ToArray());
             }
 
             phiProcsDecl.Clear();
@@ -1562,15 +1562,15 @@ namespace cba.Util
             var inParams = inVersions.Select(i => new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x_" + i, outV.TypedIdent.Type), true));
             var outParam = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x_" + outVersion, outV.TypedIdent.Type), false);
 
-            var proc = new Procedure(Token.NoToken, "phiNode$" + phiProcsDecl.Count, new TypeVariableSeq(),
-                new VariableSeq(inParams.ToArray()), new VariableSeq(outParam), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+            var proc = new Procedure(Token.NoToken, "phiNode$" + phiProcsDecl.Count, new List<TypeVariable>(),
+                new List<Variable>(inParams.ToArray()), new List<Variable>(new Variable[] { outParam }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
             phiProcsDecl.Add(proc);
 
             Expr expr = Expr.False;
             inParams.Iter(i => expr = Expr.Or(expr, Expr.Eq(Expr.Ident(outParam), Expr.Ident(i))));
             proc.Ensures.Add(new Ensures(true, expr));
 
-            var callCmd = new CallCmd(Token.NoToken, proc.Name, new ExprSeq(inVersionVars.Select(x => Expr.Ident(x)).ToArray()), new IdentifierExprSeq(Expr.Ident(outV)));
+            var callCmd = new CallCmd(Token.NoToken, proc.Name, new List<Expr>(inVersionVars.Select(x => Expr.Ident(x)).ToArray()), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(outV) }));
             callCmd.Proc = proc;
             callCmd.Attributes = attr;
 
@@ -1622,7 +1622,7 @@ namespace cba.Util
                         defsOut[v] = defsIn[v];
                     }
                 }
-                var nhvars = new IdentifierExprSeq();
+                var nhvars = new List<IdentifierExpr>();
                 foreach (var ie in (cmd as HavocCmd).Vars.OfType<IdentifierExpr>())
                 {
                     if (defsOut.ContainsKey(ie.Decl))

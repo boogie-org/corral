@@ -43,7 +43,7 @@ namespace cba
                 {
                     return run(args);
                     //return runCompress(args);
-                }
+                } 
                 catch (InvalidInput e)
                 {
                     Console.WriteLine();
@@ -68,13 +68,13 @@ namespace cba
                     Console.WriteLine();
                     Console.WriteLine("Stopping: {0}", e.Message);
                     return 1;
-                }
+                } 
                 catch (OutOfMemoryException e)
                 {
                     Console.WriteLine();
                     Console.WriteLine("Stopping: {0}", e.Message);
                     return 1;
-                }
+                } 
             }
 
         }
@@ -205,7 +205,8 @@ namespace cba
                 "/removeEmptyBlocks:0 /coalesceBlocks:0 /noinfer " +
                 //"/z3opt:RELEVANCY=0  " +                
                 "/typeEncoding:m " +
-                "/vc:i";
+                "/vc:i " + 
+                "/subsumption:0 ";
 
             InstrumentationConfig.UseOldInstrumentation = false;
             VariableSlicing.UseSimpleSlicing = false;
@@ -463,6 +464,33 @@ namespace cba
                 BoogieVerify.removeAsserts = false;
                 var err = new List<BoogieErrorTrace>();
                 init.Typecheck();
+                /*
+                CommandLineOptions.Install(new CommandLineOptions());
+                CommandLineOptions.Clo.PrintInstrumented = true;
+                CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
+                CommandLineOptions.Clo.StratifiedInliningVerbose = config.verboseMode;
+                CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
+                CommandLineOptions.Clo.ExpandLambdas = false;
+                CommandLineOptions.Clo.Parse(new string[] { "/stratifiedInline:1", "/extractLoops", "/noinfer",
+                "/recursionBound:1", "/useArrayTheory", "/vc:i",
+                "/z3opt:ARRAY_WEAK=true", "/z3opt:ARRAY_EXTENSIONAL=false", "/proverLog:out1"
+                });
+                ExecutionEngine.printer = new ConsolePrinter();
+                //ExecutionEngine.ProcessFiles(new List<string> { config.inputFile }, false);
+                //throw new NormalExit("Done");
+                init = ExecutionEngine.ParseBoogieProgram(new List<string> { config.inputFile }, false);
+                LinearTypechecker lt;
+                ExecutionEngine.ResolveAndTypecheck(init, config.inputFile, out lt);
+                ExecutionEngine.EliminateDeadVariablesAndInline(init);
+
+                var checkers = new List<Checker>();
+                var vcgen = new VC.StratifiedVCGen(init, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, checkers);
+                var errors = new List<Counterexample>();
+                var outcome = vcgen.VerifyImplementation(BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, "main_SeqInstr"), out errors, "unknown");
+                if (errors == null || errors.Count == 0) Console.WriteLine("Verified");
+                else Console.WriteLine("Errors");
+                throw new NormalExit("Done"); */
+
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
                 BoogieVerify.Verify(init, out err);
@@ -473,7 +501,7 @@ namespace cba
                     foreach (var trace in err.OfType<BoogieAssertErrorTrace>())
                     {
                         Console.WriteLine("{0} did not verify", trace.impl.Name);
-                        trace.cex.Print(0);
+                        trace.cex.Print(0, Console.Out);
                     }
                 }
 
@@ -557,11 +585,17 @@ namespace cba
             ModSetCollector.DoModSetAnalysis(init);
 
             // Now we can typecheck
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
             if (BoogieUtil.TypecheckProgram(init, config.inputFile))
             {
                 BoogieUtil.PrintProgram(init, "error.bpl");
                 throw new InvalidProg("Cannot typecheck " + config.inputFile);
             }
+            CommandLineOptions.Clo.DoModSetAnalysis = false;
+
+            // inline procedures that have that annotation
+            InlineProcedures(init);
+            //BoogieUtil.PrintProgram(init, "temp.bpl");
 
             // thread-local variables are always tracked
             var globals = BoogieUtil.GetGlobalVariables(init);
@@ -587,6 +621,14 @@ namespace cba
             ProgTransformation.PersistentProgram.FreeParserMemory();
             
             return inputProg;
+        }
+
+        private static void InlineProcedures(Program program)
+        {
+            var si = CommandLineOptions.Clo.StratifiedInlining;
+            CommandLineOptions.Clo.StratifiedInlining = 0;
+            ExecutionEngine.EliminateDeadVariablesAndInline(program);
+            CommandLineOptions.Clo.StratifiedInlining = si;
         }
 
         // Stats: LOC on trace and number of branches
@@ -690,7 +732,7 @@ namespace cba
             // Save program; remove source info (because there can be lots of it)
             var programForDefectTrace = (new FixedDuplicator(true)).VisitProgram(program);
             var sinfo = new ModifyTrans();
-            if(config.rootCause == 0)
+            if(config.rootCause < 0)
                 sinfo = PrintSdvPath.DeleteSourceInfo(program);
 
             var init = new PersistentCBAProgram(program, newMain, 1);
@@ -762,6 +804,9 @@ namespace cba
                 if (iterCnt == 1 && GlobalConfig.InferPass != null)
                 {
                     var tmp_abs = abs;
+                    if (config.disableStaticAnalysis)
+                        ContractInfer.disableStaticAnalysis = true;
+
                     ciPass = new ContractInfer(GlobalConfig.InferPass);
                     if (config.houdiniTimeout != -1) ContractInfer.HoudiniTimeout = config.houdiniTimeout; // milliseconds
                     else ContractInfer.HoudiniTimeout = 60000; // milliseconds
@@ -779,7 +824,7 @@ namespace cba
                     }
 
                     // Infer min. loop bounds
-                    var bounds = LoopBound.Compute(abs.getCBAProgram(), 10);
+                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
@@ -841,7 +886,7 @@ namespace cba
 
                 var ptrace =
                     new PersistentCBAProgram(traceProgCons.getProgram(),
-                        traceProgCons.getUniqueName(curr.mainProcName),
+                        traceProgCons.getFirstNameInstance(curr.mainProcName),
                         curr.contextBound, ConcurrencyMode.AnyInterleaving);
 
                 //////////////////////////
@@ -972,7 +1017,7 @@ namespace cba
                         var lab2 = "at$block$new2";
                         var lab3 = "at$block$new3";
 
-                        var ncmds = new CmdSeq();
+                        var ncmds = new List<Cmd>();
                         foreach (var cmd in blk.Cmds.OfType<Cmd>())
                         {
                             var acmd = cmd as AssertCmd;
@@ -983,8 +1028,8 @@ namespace cba
                                 var currBlock = new Block(Token.NoToken, blk.Label, ncmds, BoogieAstFactory.MkGotoCmd(lab1, lab2));
                                 nblks.Add(currBlock);
 
-                                var blk1 = new Block(Token.NoToken, lab1, new CmdSeq(), BoogieAstFactory.MkGotoCmd(lab3));
-                                var blk2 = new Block(Token.NoToken, lab2, new CmdSeq(), BoogieAstFactory.MkGotoCmd(lab3));
+                                var blk1 = new Block(Token.NoToken, lab1, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
+                                var blk2 = new Block(Token.NoToken, lab2, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
 
                                 blk1.Cmds.Add(BoogieAstFactory.MkAssume(Expr.Not(expr)));
                                 blk1.Cmds.Add(BoogieAstFactory.MkAssert(Expr.False));
@@ -994,7 +1039,7 @@ namespace cba
                                 nblks.Add(blk1);
                                 nblks.Add(blk2);
 
-                                ncmds = new CmdSeq();
+                                ncmds = new List<Cmd>();
                             }
                             else
                             {
@@ -1016,7 +1061,7 @@ namespace cba
                                 QKeyValue.FindStringAttribute((cmd as AssertCmd).Attributes, "sourcefile") != null &&
                                 QKeyValue.FindStringAttribute((cmd as AssertCmd).Attributes, "sourcefile") == "?"
                                 );
-                            blk.Cmds = new CmdSeq(blk.Cmds.OfType<Cmd>().Where(cmd => !FilterCmd(cmd)).ToArray());
+                            blk.Cmds = new List<Cmd>(blk.Cmds.OfType<Cmd>().Where(cmd => !FilterCmd(cmd)).ToArray());
                         }
                     }
 
@@ -1028,7 +1073,7 @@ namespace cba
                 var traceProgCons = new RestrictToTrace(progWithPrintCmds.getCBAProgram(), tinfo);
                 traceProgCons.addTrace(buggyTrace);
                 var tprog = traceProgCons.getProgram();
-                var witness = new PersistentCBAProgram(tprog, traceProgCons.getUniqueName(newMain), 0);
+                var witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
 
                 // make sure variables to record are scalar and globals
                 var toRecord = new HashSet<string>();
@@ -1068,7 +1113,7 @@ namespace cba
                         // Annotate program
                         tprog = witness.getCBAProgram();
                         sdvAnnotateDefectTrace(tprog, config);
-                        witness = new PersistentCBAProgram(tprog, traceProgCons.getUniqueName(newMain), 0);
+                        witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
 
                         BoogieVerify.options = ConfigManager.pathVerifyOptions;
                         var concretize = new SDVConcretizePathPass();
@@ -1082,9 +1127,9 @@ namespace cba
 
                         if (config.explainError > 1)
                             witness.writeToFile("corral_witness.bpl");
-                        /*
+
                         tprog = witness.getCBAProgram();
-                        
+
                         ExplainError.STATUS status;
                         Dictionary<string, string> complexObj;
 
@@ -1145,7 +1190,7 @@ namespace cba
                                 aliasingExplanation += str.Replace(' ', '_');
                             }
                         }
-                        */
+
                     }
                 }
                 catch (Exception e)
@@ -1247,7 +1292,7 @@ namespace cba
                     ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(), null);
                     ac.Attributes.Params.Add(impl.Name);
 
-                    var nc = new CmdSeq();
+                    var nc = new List<Cmd>();
                     nc.Add(ac);
                     nc.AddRange(impl.Blocks[0].Cmds);
                     impl.Blocks[0].Cmds = nc;
@@ -1261,7 +1306,7 @@ namespace cba
                 // Insert "indirect" annotation
                 foreach (var blk in impl.Blocks)
                 {
-                    for (int i = 0; i < blk.Cmds.Length - 1; i++)
+                    for (int i = 0; i < blk.Cmds.Count - 1; i++)
                     {
                         var c1 = blk.Cmds[i] as AssumeCmd;
                         var c2 = blk.Cmds[i + 1] as AssumeCmd;
@@ -1286,7 +1331,7 @@ namespace cba
             {
                 foreach (var blk in impl.Blocks)
                 {
-                    var ncmds = new CmdSeq();
+                    var ncmds = new List<Cmd>();
                     foreach (Cmd cmd in blk.Cmds)
                     {
                         ncmds.Add(cmd);
@@ -1341,7 +1386,7 @@ namespace cba
             {
                 foreach (var blk in impl.Blocks)
                 {
-                    var newcmds = new CmdSeq();
+                    var newcmds = new List<Cmd>();
                     tinfo.addTrans(impl.Name, blk.Label, blk.Label);
                     var incnt = -1;
                     foreach (var cmd in blk.Cmds.OfType<Cmd>())
@@ -1349,7 +1394,7 @@ namespace cba
                         incnt ++;
 
                         newcmds.Add(cmd);
-                        tinfo.addTrans(impl.Name, blk.Label, incnt, cmd, blk.Label, newcmds.Length - 1, new CmdSeq(cmd));
+                        tinfo.addTrans(impl.Name, blk.Label, incnt, cmd, blk.Label, newcmds.Count - 1, new List<Cmd>{cmd});
 
                         var acmd = cmd as AssertCmd;
                         if (acmd == null) continue;
@@ -1384,7 +1429,7 @@ namespace cba
             var newBlocks = new List<Block>();
             foreach (var blk in oldMainImpl.Blocks)
             {
-                var currCmds = new CmdSeq();
+                var currCmds = new List<Cmd>();
                 var currLabel = blk.Label;
 
                 tinfo.addTrans(oldMainImpl.Name, blk.Label, blk.Label);
@@ -1408,13 +1453,13 @@ namespace cba
                     if (!(actualCmd is AssertCmd) || BoogieUtil.isAssertTrue(actualCmd))
                     {
                         currCmds.Add(actualCmd);
-                        tinfo.addTrans(oldMainImpl.Name, blk.Label, incnt, cmd, currLabel, currCmds.Length - 1, new CmdSeq(currCmds.Last() as Cmd));
+                        tinfo.addTrans(oldMainImpl.Name, blk.Label, incnt, cmd, currLabel, currCmds.Count - 1, new List<Cmd>{currCmds.Last() as Cmd});
                         continue;
                     }
 
                     // av := expr
                     currCmds.Add(BoogieAstFactory.MkVarEqExpr(assertVarFormal, (actualCmd as AssertCmd).Expr));
-                    tinfo.addTrans(oldMainImpl.Name, blk.Label, incnt, cmd, currLabel, currCmds.Length - 1, new CmdSeq(currCmds.Last() as Cmd));
+                    tinfo.addTrans(oldMainImpl.Name, blk.Label, incnt, cmd, currLabel, currCmds.Count - 1, new List<Cmd>{currCmds.Last() as Cmd});
 
                     // create three blocks
                     var lab1 = BoogieAstFactory.uniqueLabel();
@@ -1426,16 +1471,16 @@ namespace cba
 
                     // lab1: assume !av; return;
                     newBlocks.Add(new Block(Token.NoToken, lab1,
-                        new CmdSeq(BoogieAstFactory.MkAssume(Expr.Not(Expr.Ident(assertVarFormal)))),
+                        new List<Cmd>{BoogieAstFactory.MkAssume(Expr.Not(Expr.Ident(assertVarFormal)))},
                         new ReturnCmd(Token.NoToken)));
 
                     // lab2: assume av; goto lab3
                     newBlocks.Add(new Block(Token.NoToken, lab2,
-                        new CmdSeq(BoogieAstFactory.MkAssume(Expr.Ident(assertVarFormal))),
+                        new List<Cmd>{BoogieAstFactory.MkAssume(Expr.Ident(assertVarFormal))},
                         BoogieAstFactory.MkGotoCmd(lab3)));
 
                     currLabel = lab3;
-                    currCmds = new CmdSeq();
+                    currCmds = new List<Cmd>();
                 }
                 newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, blk.TransferCmd));
             }
@@ -1450,7 +1495,7 @@ namespace cba
                 oldMainProc.Modifies, oldMainProc.Ensures);
 
             var newMainImpl = new Implementation(Token.NoToken, "fakeMain", oldMainImpl.TypeParameters,
-                oldMainImpl.InParams, oldMainImpl.OutParams, new VariableSeq(), new List<Block>());
+                oldMainImpl.InParams, oldMainImpl.OutParams, new List<Variable>(), new List<Block>());
 
             newMainImpl.AddAttribute("entrypoint");
 
@@ -1468,7 +1513,7 @@ namespace cba
             var callMain = new CallCmd(Token.NoToken, oldMainProc.Name, ins, outs);
             callMain.Proc = oldMainProc;
 
-            var cmds = new CmdSeq(callMain, new AssertCmd(Token.NoToken, Expr.Ident(assertVarFormal)));
+            var cmds = new List<Cmd>{callMain, new AssertCmd(Token.NoToken, Expr.Ident(assertVarFormal))};
             newMainImpl.Blocks.Add(new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken)));
             newMainImpl.Proc = newMainProc;
 
@@ -1562,8 +1607,8 @@ namespace cba
         private static HashSet<string> findTemplates(Program program, Configs config)
         {
             var templateVarNames = new HashSet<Variable>();
-            EnsuresSeq ens = new EnsuresSeq();
-            RequiresSeq req = new RequiresSeq();
+            List<Ensures> ens = new List<Ensures>();
+            List<Requires> req = new List<Requires>();
             var extra = new HashSet<string>();
 
             var newDecls = new List<Declaration>();

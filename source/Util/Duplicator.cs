@@ -51,7 +51,7 @@ namespace cba.Util
         {
             return base.VisitBlock((Block)node.Clone());
         }
-        public override BlockSeq VisitBlockSeq(BlockSeq blockSeq)
+        public override List<Block> VisitBlockSeq(List<Block> blockSeq)
         {
             return base.VisitBlockSeq(blockSeq);
         }
@@ -77,7 +77,7 @@ namespace cba.Util
         {
             return base.VisitChoice((Choice)node.Clone());
         }
-        public override CmdSeq VisitCmdSeq(CmdSeq cmdSeq)
+        public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
         {
             return base.VisitCmdSeq(cmdSeq);
         }
@@ -110,9 +110,9 @@ namespace cba.Util
         {
             return base.VisitExpr((Expr)node.Clone());
         }
-        public override ExprSeq VisitExprSeq(ExprSeq list)
+        public override List<Expr> VisitExprSeq(List<Expr> list)
         {
-            return base.VisitExprSeq(new ExprSeq(list));
+            return base.VisitExprSeq(new List<Expr>(list));
         }
         public override ForallExpr VisitForallExpr(ForallExpr node)
         {
@@ -142,9 +142,9 @@ namespace cba.Util
         {
             return base.VisitIdentifierExpr((IdentifierExpr)node.Clone());
         }
-        public override IdentifierExprSeq VisitIdentifierExprSeq(IdentifierExprSeq identifierExprSeq)
+        public override List<IdentifierExpr> VisitIdentifierExprSeq(List<IdentifierExpr> identifierExprSeq)
         {
-            return base.VisitIdentifierExprSeq(new IdentifierExprSeq(identifierExprSeq));
+            return base.VisitIdentifierExprSeq(new List<IdentifierExpr>(identifierExprSeq));
         }
         public override Implementation VisitImplementation(Implementation node)
         {
@@ -191,13 +191,17 @@ namespace cba.Util
         {
             return base.VisitRE((RE)node.Clone());
         }
-        public override RESeq VisitRESeq(RESeq reSeq)
+        public override List<RE> VisitRESeq(List<RE> reSeq)
         {
-            return base.VisitRESeq(new RESeq(reSeq));
+            return base.VisitRESeq(new List<RE>(reSeq));
         }
         public override ReturnCmd VisitReturnCmd(ReturnCmd node)
         {
             return base.VisitReturnCmd((ReturnCmd)node.Clone());
+        }
+        public override ReturnExprCmd VisitReturnExprCmd(ReturnExprCmd node)
+        {
+            return base.VisitReturnExprCmd((ReturnExprCmd)node.Clone());
         }
         public override Sequential VisitSequential(Sequential node)
         {
@@ -232,9 +236,9 @@ namespace cba.Util
         {
             return node;
         }
-        public override VariableSeq VisitVariableSeq(VariableSeq variableSeq)
+        public override List<Variable> VisitVariableSeq(List<Variable> variableSeq)
         {
-            return base.VisitVariableSeq(new VariableSeq(variableSeq));
+            return base.VisitVariableSeq(new List<Variable>(variableSeq));
         }
         public override Cmd VisitAssertRequiresCmd(AssertRequiresCmd node)
         {
@@ -251,6 +255,37 @@ namespace cba.Util
         public override Requires VisitRequires(Requires node)
         {
             return base.VisitRequires((Requires)node.Clone());
+        }
+        public override Expr VisitCodeExpr(CodeExpr node)
+        {
+            var clone = (CodeExpr)node.Clone();
+            clone.Blocks = new List<Block>(node.Blocks);
+            clone.LocVars = new List<Variable>(node.LocVars);
+
+            clone = (CodeExpr)base.VisitCodeExpr(clone);
+            
+
+            // Before returning, fix up the resolved goto targets
+            Dictionary<Block, Block> subst = new Dictionary<Block, Block>();
+            for (int i = 0; i < node.Blocks.Count; i++)
+            {
+                subst.Add(node.Blocks[i], clone.Blocks[i]);
+            }
+            foreach (Block/*!*/ b in clone.Blocks)
+            {
+                GotoCmd g = b.TransferCmd as GotoCmd;
+                if (g != null)
+                {
+                    List<Block> targets = new List<Block>();
+                    foreach (Block t in g.labelTargets)
+                    {
+                        Block nt = subst[t];
+                        targets.Add(nt);
+                    }
+                    g.labelTargets = targets;
+                }
+            }
+            return clone;
         }
     }
 
@@ -310,9 +345,9 @@ namespace cba.Util
             return base.VisitCallCmd(newNode);
         }
 
-        public override BlockSeq VisitBlockSeq(BlockSeq blockSeq)
+        public override List<Block> VisitBlockSeq(List<Block> blockSeq)
         {
-            return base.VisitBlockSeq(new BlockSeq(blockSeq));
+            return base.VisitBlockSeq(new List<Block>(blockSeq));
         }
 
         public override List<Block> VisitBlockList(List<Block> blocks)
@@ -335,19 +370,19 @@ namespace cba.Util
             return ndelcs;
         }
 
-        public override CmdSeq VisitCmdSeq(CmdSeq cmdSeq)
+        public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
         {
-            var ret = new CmdSeq();
+            var ret = new List<Cmd>();
             foreach (Cmd c in cmdSeq)
             {
-                ret.Add(this.Visit(c));
+                ret.Add(this.Visit(c) as Cmd);
             }
             return ret;
         }
 
-        public override RequiresSeq VisitRequiresSeq(RequiresSeq requiresSeq)
+        public override List<Requires> VisitRequiresSeq(List<Requires> requiresSeq)
         {
-            RequiresSeq ret = new RequiresSeq();
+            List<Requires> ret = new List<Requires>();
             foreach (Requires r in requiresSeq)
             {
                 ret.Add(VisitRequires(r));
@@ -355,10 +390,10 @@ namespace cba.Util
             return ret;
         } 
 
-        public override EnsuresSeq VisitEnsuresSeq(EnsuresSeq ensuresSeq)
+        public override List<Ensures> VisitEnsuresSeq(List<Ensures> ensuresSeq)
         {
-            EnsuresSeq ret = new EnsuresSeq();
-            for (int i = 0, n = ensuresSeq.Length; i < n; i++)
+            List<Ensures> ret = new List<Ensures>();
+            for (int i = 0, n = ensuresSeq.Count; i < n; i++)
                 ret.Add(this.VisitEnsures(ensuresSeq[i]));
             return ret;
         }
@@ -385,7 +420,7 @@ namespace cba.Util
         public override GotoCmd VisitGotoCmd(GotoCmd node)
         {
             var gc = (GotoCmd)node.Clone();
-            gc.labelNames = new StringSeq();
+            gc.labelNames = new List<System.String>();
             gc.labelNames.AddRange(node.labelNames);
             return gc;
         }
@@ -404,7 +439,7 @@ namespace cba.Util
             node.doingExpansion = false;
             return base.VisitFunction(node);
         }
-        
+
         public QKeyValue CopyAttr(QKeyValue ls)
         {
             if (ls == null) return null;

@@ -386,7 +386,7 @@ namespace cba
             // For each block, check if the first statement is "assume raiseException"
             foreach (var blk in mainImpl.Blocks)
             {
-                if (blk.Cmds.Length == 0)
+                if (blk.Cmds.Count == 0)
                     continue;
 
                 var cmd = blk.Cmds[0];
@@ -419,7 +419,7 @@ namespace cba
                  * an assignment for the return value. Note that once raiseException has been raised,
                  * no return value is needed.
                  */
-                while (b.Cmds.Length <= 1)
+                while (b.Cmds.Count <= 1)
                 {
                     var next = getSingleSucc(b.TransferCmd);
                     if (next == null)
@@ -446,7 +446,7 @@ namespace cba
                 return null;
 
             var gcmd = tcmd as GotoCmd;
-            if (gcmd.labelNames.Length != 1)
+            if (gcmd.labelNames.Count != 1)
                 return null;
             return gcmd.labelNames[0];
         }
@@ -528,7 +528,7 @@ namespace cba
                 //Console.WriteLine(curr.impl.Name + ": " + curr.label);
 
                 // Reached the end of the current block?
-                if (curr.count == curr.block.Cmds.Length)
+                if (curr.count == curr.block.Cmds.Count)
                 {
                     ecount++;
                     icount = 0;
@@ -562,7 +562,7 @@ namespace cba
 
                     if (tc is GotoCmd)
                     {
-                        StringSeq targets = (tc as GotoCmd).labelNames;
+                        List<String> targets = (tc as GotoCmd).labelNames;
                         string target = matchInlinedLabelNames(targets, traceLabels[ecount]);
                         curr = new WorkItemR(curr.impl, target);
                         ret.addBlock(new ErrorTraceBlock(curr.label));
@@ -622,7 +622,7 @@ namespace cba
             return blk.Cmds[cnt].info;
         }
 
-        private static string matchInlinedLabelNames(StringSeq strs, string inlined)
+        private static string matchInlinedLabelNames(List<String> strs, string inlined)
         {
             bool found = false;
             string ret = "";
@@ -825,12 +825,12 @@ namespace cba
             var ensures = impl.Proc.Ensures;
             var requires = impl.Proc.Requires;
 
-            impl.Proc.Ensures = new EnsuresSeq();
-            impl.Proc.Requires = new RequiresSeq();
+            impl.Proc.Ensures = new List<Ensures>();
+            impl.Proc.Requires = new List<Requires>();
 
-            var reqCmds = new CmdSeq();
-            var ensCmds = new CmdSeq();
-            var newLocs = new VariableSeq();
+            var reqCmds = new List<Cmd>();
+            var ensCmds = new List<Cmd>();
+            var newLocs = new List<Variable>();
 
             var substOld = new SubstOldVars();
             foreach(Ensures e in ensures) {
@@ -875,13 +875,13 @@ namespace cba
     {
         private bool insideOldExpr;
         public Dictionary<string, LocalVariable> varMap;
-        public CmdSeq initLocVars;
+        public List<Cmd> initLocVars;
 
         public SubstOldVars()
         {
             insideOldExpr = false;
             varMap = new Dictionary<string, LocalVariable>();
-            initLocVars = new CmdSeq();
+            initLocVars = new List<Cmd>();
         }
 
         public override Expr VisitOldExpr(OldExpr node)

@@ -326,7 +326,7 @@ namespace CoreLib {
     }
           
     public StratifiedInlining(Program program, string logFilePath, bool appendLogFile) :
-        base (program, logFilePath, appendLogFile)
+        base (program, logFilePath, appendLogFile, new List<Checker>())
     {
         stats = new Stats();
         implName2SVC = new Dictionary<string, Stack<StratifiedVC>>();
@@ -1110,7 +1110,7 @@ namespace CoreLib {
     
     private Absy Label2Absy(string procName, string label) {
         int id = int.Parse(label);
-        Hashtable l2a = si.implName2StratifiedInliningInfo[procName].label2absy;
+        var l2a = si.implName2StratifiedInliningInfo[procName].label2absy;
         return (Absy)l2a[id];
     }
     
@@ -1126,7 +1126,7 @@ namespace CoreLib {
         //cex.PrintModel();
     
         if (CommandLineOptions.Clo.StratifiedInliningVerbose > 2)
-        cex.Print(6);
+        cex.Print(6, Console.Out);
     
         if (underapproximationMode && cex != null) {
             callback.OnCounterexample(cex, null);
@@ -1137,7 +1137,7 @@ namespace CoreLib {
     private Counterexample NewTrace(StratifiedVC svc, List<Absy> absyList, Model model) {
         // assume that the assertion is in the last place??
         AssertCmd assertCmd = (AssertCmd)absyList[absyList.Count - 1];
-        BlockSeq trace = new BlockSeq();
+        List<Block> trace = new List<Block>();
         var calleeCounterexamples = new Dictionary<TraceLocation, CalleeCounterexampleInfo>();
         for (int j = 0; j < absyList.Count - 1; j++) {
         Block b = (Block)absyList[j];
@@ -1157,7 +1157,7 @@ namespace CoreLib {
                     calleeAbsyList.Add(Label2Absy(scs.callSite.calleeName, label));
                 }
                 var calleeCounterexample = NewTrace(si.attachedVC[scs], calleeAbsyList, model);
-                calleeCounterexamples[new TraceLocation(trace.Length - 1, scs.callSite.numInstr)] =
+                calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                 new CalleeCounterexampleInfo(calleeCounterexample, new List<object>());
             }
             }
@@ -1202,7 +1202,7 @@ namespace CoreLib {
                     }
                 }
             }
-            calleeCounterexamples[new TraceLocation(trace.Length - 1, scs.callSite.numInstr)] =
+            calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                 new CalleeCounterexampleInfo(null, args);
             }
         }

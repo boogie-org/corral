@@ -80,10 +80,11 @@ namespace cba.Util
             allErrors = new List<BoogieErrorTrace>();
             timedOut = new List<string>();
             Debug.Assert(program != null);
-
+            
             // Make a copy of the input program
             var duper = new FixedDuplicator(true);
-            var origProg = new Dictionary<string, Implementation>();
+            var origProg = new Dictionary<string, Implementation>(); 
+            
             if (needErrorTraces)
             {
                 foreach (var decl in program.TopLevelDeclarations)
@@ -95,10 +96,11 @@ namespace cba.Util
                     }
                 }
             }
-
+            
             if (removeAsserts)
                 RemoveAsserts(program);
             
+
             // Set options
             options.Set();
 
@@ -138,7 +140,7 @@ namespace cba.Util
                   CommandLineOptions.Clo.UseLabels = oldUseLabels;
                 }
                 else
-                    vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+                   vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
             }
             catch (ProverException e)
             {
@@ -303,7 +305,7 @@ namespace cba.Util
                 {
                     var isReturn = (blk.TransferCmd is ReturnCmd);
                     var assertPos = -2;
-                    for (int i = 0; i < blk.Cmds.Length; i++)
+                    for (int i = 0; i < blk.Cmds.Count; i++)
                     {
                         if (BoogieUtil.isAssertTrue(blk.Cmds[i]))
                             continue;
@@ -323,7 +325,7 @@ namespace cba.Util
 
                     if (isReturn)
                     {
-                        if (assertPos != blk.Cmds.Length - 1)
+                        if (assertPos != blk.Cmds.Count - 1)
                         {
                             //throw new InternalError("return is not preceeded by an assert");
                             blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
@@ -350,14 +352,14 @@ namespace cba.Util
             {
                 foreach (var blk in main.Blocks.Where(blk => blk.TransferCmd is ReturnCmd))
                 {
-                    Debug.Assert(blk.Cmds.Length > 0);
+                    Debug.Assert(blk.Cmds.Count > 0);
                     var acmd = blk.Cmds.Last() as AssumeCmd;
                     Debug.Assert(acmd != null);
                     Debug.Assert(QKeyValue.FindBoolAttribute(acmd.Attributes, "OldAssert"));
                     var expr = acmd.Expr as NAryExpr;
                     Debug.Assert(expr != null);
                     Debug.Assert(expr.Fun is UnaryOperator);
-                    blk.Cmds[blk.Cmds.Length - 1] = new AssertCmd(Token.NoToken, expr.Args[0]);
+                    blk.Cmds[blk.Cmds.Count - 1] = new AssertCmd(Token.NoToken, expr.Args[0]);
                 }
             }
 
@@ -382,7 +384,7 @@ namespace cba.Util
             VC.StratifiedVCGenBase vcgen = null;
             try
             {
-                vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+                vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
             }
             catch (ProverException)
             {
@@ -478,10 +480,10 @@ namespace cba.Util
 
             var originalBlocks = BoogieUtil.labelBlockMapping(origProg[currProc]);
 
-            var newBlocks = new BlockSeq();
+            var newBlocks = new List<Block>();
             var newCalleeTraces = new Dictionary<TraceLocation, CalleeCounterexampleInfo>();
 
-            for (int numBlock = 0; numBlock < trace.Trace.Length; numBlock++)
+            for (int numBlock = 0; numBlock < trace.Trace.Count; numBlock++)
             {
                 Block b = trace.Trace[numBlock];
 
@@ -496,7 +498,7 @@ namespace cba.Util
 
                     //Log.Out(Log.Normal, "Could not find block " + b.Label);
                     //b.Emit(new TokenTextWriter(Console.Out), 0);
-                    for (int numInstr = 0; numInstr < b.Cmds.Length; numInstr++)
+                    for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
                     {
                         if (trace.calleeCounterexamples.ContainsKey(new TraceLocation(numBlock, numInstr)))
                         {
@@ -513,7 +515,7 @@ namespace cba.Util
                     // of the block
                     newBlocks.Add(ib);
                     var calleeTraces = new List<Duple<string, CalleeCounterexampleInfo>>();
-                    for (int numInstr = 0; numInstr < b.Cmds.Length; numInstr++)
+                    for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
                     {
                         var loc = new TraceLocation(numBlock, numInstr);
                         if (trace.calleeCounterexamples.ContainsKey(loc))
@@ -533,7 +535,7 @@ namespace cba.Util
 
                     // Check consistency and map calleeTraces to the actual call instructions
                     var currCount = 0;
-                    for (int numInstr = 0; numInstr < ib.Cmds.Length; numInstr++)
+                    for (int numInstr = 0; numInstr < ib.Cmds.Count; numInstr++)
                     {
                         Cmd c = ib.Cmds[numInstr];
 
@@ -562,7 +564,7 @@ namespace cba.Util
                         // TODO: Fix when the failing assert is not the last statement of the block
                         //Debug.Assert(cc.Proc.Name == calleeTraces[currCount].fst);
 
-                        newCalleeTraces.Add(new TraceLocation(newBlocks.Length - 1, numInstr), calleeTraces[currCount].snd);
+                        newCalleeTraces.Add(new TraceLocation(newBlocks.Count - 1, numInstr), calleeTraces[currCount].snd);
                         currCount++;
                     }
                 }
@@ -688,14 +690,14 @@ namespace cba.Util
 
         private static void printLabels(Counterexample cex, TokenTextWriter ttw, int indent)
         {
-            for (int numBlock = 0; numBlock < cex.Trace.Length; numBlock++)
+            for (int numBlock = 0; numBlock < cex.Trace.Count; numBlock++)
             {
                 Block b = cex.Trace[numBlock];
 
                 printIndent(ttw, indent);
                 ttw.WriteLine(b.Label);
 
-                for (int numInstr = 0; numInstr < b.Cmds.Length; numInstr++)
+                for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
                 {
                     Cmd c = b.Cmds[numInstr];
                     var loc = new TraceLocation(numBlock, numInstr);
@@ -753,18 +755,18 @@ namespace cba.Util
                 allLabels.Add(b.Label);
             }
 
-            CmdSeq clist = new CmdSeq();
-            StringSeq prev_labels = null;
+            List<Cmd> clist = new List<Cmd>();
+            List<String> prev_labels = null;
             foreach (Block b in cex.Trace)
             {
                 //b.Emit(new TokenTextWriter(Console.Out), 0);
                 if (prev_labels != null)
                 {
-                    if (!prev_labels.Has(b.Label))
+                    if (!prev_labels.Contains(b.Label))
                     {
                         // This means that we went through a fake block
                         // inserted by boogie verifier
-                        Debug.Assert(!allLabels.Any(x => prev_labels.Has(x)));
+                        Debug.Assert(!allLabels.Any(x => prev_labels.Contains(x)));
                     }
                 }
 
@@ -785,7 +787,7 @@ namespace cba.Util
                 }
                 else
                 {
-                    prev_labels = new StringSeq();
+                    prev_labels = new List<String>();
                 }
             }
 

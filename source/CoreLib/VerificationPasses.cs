@@ -181,11 +181,11 @@ namespace cba
             Procedure intDecl = BoogieUtil.findProcedureDecl(program.TopLevelDeclarations, recordIntArgProc);
             if (intDecl == null)
             {
-                var inv = new VariableSeq();
+                var inv = new List<Variable>();
                 inv.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true));
 
-                intDecl = new Procedure(Token.NoToken, recordIntArgProc, new TypeVariableSeq(), inv, new VariableSeq(), new RequiresSeq(),
-                    new IdentifierExprSeq(), new EnsuresSeq());
+                intDecl = new Procedure(Token.NoToken, recordIntArgProc, new List<TypeVariable>(), inv, new List<Variable>(), new List<Requires>(),
+                    new List<IdentifierExpr>(), new List<Ensures>());
 
                 program.TopLevelDeclarations.Add(intDecl);
             }
@@ -193,11 +193,11 @@ namespace cba
             Procedure boolDecl = BoogieUtil.findProcedureDecl(program.TopLevelDeclarations, recordBoolArgProc);
             if (boolDecl == null)
             {
-                var inv = new VariableSeq();
+                var inv = new List<Variable>();
                 inv.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), true));
 
-                boolDecl = new Procedure(Token.NoToken, recordBoolArgProc, new TypeVariableSeq(), inv, new VariableSeq(), new RequiresSeq(),
-                    new IdentifierExprSeq(), new EnsuresSeq());
+                boolDecl = new Procedure(Token.NoToken, recordBoolArgProc, new List<TypeVariable>(), inv, new List<Variable>(), new List<Requires>(),
+                    new List<IdentifierExpr>(), new List<Ensures>());
 
                 program.TopLevelDeclarations.Add(boolDecl);
             }
@@ -218,18 +218,18 @@ namespace cba
                 // record constants at the beginning of main
                 if (impl.Name == mainProcName && constantsToRecord.Any())
                 {
-                    var ncmds = new CmdSeq();
+                    var ncmds = new List<Cmd>();
                     foreach (var v in constantsToRecord)
                     {
                         CallCmd rc = null;
                         if (v.TypedIdent.Type.IsInt)
                         {
-                            rc = new CallCmd(Token.NoToken, recordIntArgProc, new ExprSeq(Expr.Ident(v)), new IdentifierExprSeq());
+                            rc = new CallCmd(Token.NoToken, recordIntArgProc, new List<Expr>{Expr.Ident(v)}, new List<IdentifierExpr>());
                             rc.Proc = intDecl;
                         }
                         else
                         {
-                            rc = new CallCmd(Token.NoToken, recordBoolArgProc, new ExprSeq(Expr.Ident(v)), new IdentifierExprSeq());
+                            rc = new CallCmd(Token.NoToken, recordBoolArgProc, new List<Expr>{Expr.Ident(v)}, new List<IdentifierExpr>());
                             rc.Proc = boolDecl;
                         }
                         ncmds.Add(rc);
@@ -240,7 +240,7 @@ namespace cba
 
                 foreach (var block in impl.Blocks)
                 {
-                    var newCmds = new CmdSeq();
+                    var newCmds = new List<Cmd>();
                     bool changed = false;
                     foreach (Cmd cmd in block.Cmds)
                     {
@@ -279,18 +279,18 @@ namespace cba
             Debug.Assert(v != null);
             if (!v.TypedIdent.Type.IsInt && !v.TypedIdent.Type.IsBool) return null;
 
-            var ins = new ExprSeq();
+            var ins = new List<Expr>();
             ins.Add(Expr.Ident(v));
 
             CallCmd rc = null;
             if (v.TypedIdent.Type.IsInt)
             {
-                rc = new CallCmd(Token.NoToken, recordIntArgProc, ins, new IdentifierExprSeq());
+                rc = new CallCmd(Token.NoToken, recordIntArgProc, ins, new List<IdentifierExpr>());
                 rc.Proc = intDecl;
             }
             else
             {
-                rc = new CallCmd(Token.NoToken, recordBoolArgProc, ins, new IdentifierExprSeq());
+                rc = new CallCmd(Token.NoToken, recordBoolArgProc, ins, new List<IdentifierExpr>());
                 rc.Proc = boolDecl;
             }
 
@@ -310,7 +310,7 @@ namespace cba
             var ret = new ErrorTrace(procName);
 
             // All blocks, except the last are complete blocks
-            for (int i = 0, n = btrace.Trace.Length - 1; i < n; i++)
+            for (int i = 0, n = btrace.Trace.Count - 1; i < n; i++)
             {
                 var blk = btrace.Trace[i];
                 var etblk = new ErrorTraceBlock(blk.Label);
@@ -318,7 +318,7 @@ namespace cba
 
                 ErrorTraceInstr lastInstr = null;
 
-                for(int numInstr = 0; numInstr < blk.Cmds.Length; numInstr ++) 
+                for (int numInstr = 0; numInstr < blk.Cmds.Count; numInstr++) 
                 {
                     Cmd c = blk.Cmds[numInstr];
                     var loc = new TraceLocation(i, numInstr);
@@ -410,13 +410,13 @@ namespace cba
 
             // The last block has the failing assertion -- we assume this assertion
             // to be the last one of the block
-            var lastBlk = btrace.Trace[btrace.Trace.Length - 1];
-            var lastBlkLen = lastBlk.Cmds.Length - 1;
+            var lastBlk = btrace.Trace[btrace.Trace.Count - 1];
+            var lastBlkLen = lastBlk.Cmds.Count - 1;
             
             if (!completeTrace)
             {
                 lastBlkLen = -1;
-                for (int i = lastBlk.Cmds.Length - 1; i >= 0; i--)
+                for (int i = lastBlk.Cmds.Count - 1; i >= 0; i--)
                 {
                     if (lastBlk.Cmds[i] is AssertCmd)
                     {
@@ -437,7 +437,7 @@ namespace cba
             for (int i = 0; i <= lastBlkLen; i++)
             {
                 var c = lastBlk.Cmds[i];
-                var loc = new TraceLocation(btrace.Trace.Length - 1, i);
+                var loc = new TraceLocation(btrace.Trace.Count - 1, i);
                 ErrorTraceInstr instr = null;
                 if (btrace.calleeCounterexamples.ContainsKey(loc))
                 {
@@ -654,7 +654,7 @@ namespace cba
         public bool ExtractLoops;
 
         public static int HoudiniTimeout = -1;
-
+        public static bool disableStaticAnalysis = false;
         public static string runAbsHoudiniConfig = null;
         public static bool runAbsHoudini
         {
@@ -703,7 +703,7 @@ namespace cba
             staticAnalysisConstants = new HashSet<string>();
         }
 
-        public ContractInfer(HashSet<Variable> templateVars, RequiresSeq req, EnsuresSeq ens, int InlineDepth,
+        public ContractInfer(HashSet<Variable> templateVars, List<Requires> req, List<Ensures> ens, int InlineDepth,
             int unroll)
         {
             this.templates = new List<EExpr>();
@@ -777,7 +777,7 @@ namespace cba
 
             foreach (var kvp in globals.Concat(formals))
             {
-                if (!tv.TypedIdent.Type.Equals(kvp.Value.TypedIdent.Type, new TypeVariableSeq(), new TypeVariableSeq()))
+                if (!tv.TypedIdent.Type.Equals(kvp.Value.TypedIdent.Type, new List<TypeVariable>(), new List<TypeVariable>()))
                     continue;
 
                 if (kvp.Value is Constant) continue;
@@ -1026,7 +1026,7 @@ namespace cba
             var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
             foreach (var blk in mainImpl.Blocks)
             {
-                for (int i = 0; i < blk.Cmds.Length; i++)
+                for (int i = 0; i < blk.Cmds.Count; i++)
                 {
                     var acmd = blk.Cmds[i] as AssertCmd;
                     if (acmd == null) continue;
@@ -1101,6 +1101,7 @@ namespace cba
         private void DoStaticAnalysis(CBAProgram program)
         {
             //BoogieUtil.PrintProgram(program, "StaticIn.bpl");
+            if (disableStaticAnalysis) return;
 
             StaticAnalysis.ConstantProp.program = program;
             var rhs = new StaticAnalysis.RHS(program, new StaticAnalysis.ConstantProp());
@@ -1189,7 +1190,7 @@ namespace cba
             var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
             foreach (var blk in mainImpl.Blocks)
             {
-                for (int i = 0; i < blk.Cmds.Length; i++)
+                for (int i = 0; i < blk.Cmds.Count; i++)
                 {
                     var acmd = blk.Cmds[i] as AssertCmd;
                     if (acmd == null) continue;
@@ -1263,7 +1264,8 @@ namespace cba
             }
             else
             {
-                Houdini houdini = new Houdini(program);
+                var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                Houdini houdini = new Houdini(program, houdiniStats);
                 HoudiniOutcome outcome = houdini.PerformHoudiniInference();
                 Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
                 outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
@@ -1457,29 +1459,29 @@ namespace cba
             // Make sure that procs without a body don't modify globals
             foreach (var proc in p.TopLevelDeclarations.OfType<Procedure>().Where(proc => procsWithoutBody.Contains(proc.Name)))
             {
-                if(proc.Modifies.Length > 0 && !proc.Name.Contains("HAVOC_malloc"))
+                if (proc.Modifies.Count > 0 && !proc.Name.Contains("HAVOC_malloc"))
                     throw new InvalidInput("Produce Bug Witness: Procedure " + proc.Name + " modifies globals");
             }
 
             // Add the boogie_si_record_int procedure
             var inpVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
-            var inpArgs = new VariableSeq();
+            var inpArgs = new List<Variable>();
             inpArgs.Add(inpVar);
 
-            var reProc = new Procedure(Token.NoToken, recordProcName, new TypeVariableSeq(), inpArgs, new VariableSeq(), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+            var reProc = new Procedure(Token.NoToken, recordProcName, new List<TypeVariable>(), inpArgs, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
 
             // Add a procedure to fake initialization of local variables
             var outVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
-            var reLocProc = new Procedure(Token.NoToken, initLocProcName, new TypeVariableSeq(),
-                new VariableSeq(), new VariableSeq(outVar), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+            var reLocProc = new Procedure(Token.NoToken, initLocProcName, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVar }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
             procsWithoutBody.Add(reLocProc.Name);
 
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
-                var ncmds = new CmdSeq();
+                var ncmds = new List<Cmd>();
                 foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsInt))
                 {
-                    var cc = new CallCmd(Token.NoToken, initLocProcName, new ExprSeq(), new IdentifierExprSeq(Expr.Ident(loc)));
+                    var cc = new CallCmd(Token.NoToken, initLocProcName, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
                     cc.Proc = reLocProc;
                     ncmds.Add(cc);
                 }
@@ -1538,7 +1540,7 @@ namespace cba
                     .Iter(s => allocConstants[s] = implName);
             }
 
-            program = new PersistentCBAProgram(rtprog, rt.getUniqueName(p.mainProcName), p.contextBound);
+            program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
 
             // Lets inline it all
             var inlp = new InliningPass(1);
@@ -1555,11 +1557,11 @@ namespace cba
 
         private void instrument(Block block)
         {
-            var newCmds = new CmdSeq();
+            var newCmds = new List<Cmd>();
             foreach (Cmd cmd in block.Cmds)
             {
                 newCmds.Add(cmd);
-                if (cmd is HavocCmd && ((cmd as HavocCmd).Vars.Length > 1 || !(cmd as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt))
+                if (cmd is HavocCmd && ((cmd as HavocCmd).Vars.Count > 1 || !(cmd as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt))
                 {
                     Console.WriteLine("{0}", cmd);
                     throw new InvalidInput("Produce Bug Witness: Havoc cmd found");
@@ -1769,7 +1771,7 @@ namespace cba
         {
             foreach (var blk in impl.Blocks)
             {
-                for (int i = 0; i < blk.Cmds.Length; i++)
+                for (int i = 0; i < blk.Cmds.Count; i++)
                 {
                     var cmd = blk.Cmds[i] as AssignCmd;
                     if (cmd == null) continue;
@@ -1782,7 +1784,7 @@ namespace cba
                     var rhs = cmd.Rhss[0] as NAryExpr;
                     if (rhs == null) continue;
                     if (rhs.Fun.FunctionName != "MapStore") continue;
-                    if (rhs.Args.Length != 3) continue;
+                    if (rhs.Args.Count != 3) continue;
                     var arg1 = rhs.Args[0] as IdentifierExpr;
                     if (arg1 == null) continue;
 
@@ -1792,7 +1794,7 @@ namespace cba
                     blk.Cmds[i] = BoogieAstFactory.MkMapAssign(arg1.Decl, rhs.Args[1], rhs.Args[2]);
                 }
 
-                for (int i = 0; i < blk.Cmds.Length; i++)
+                for (int i = 0; i < blk.Cmds.Count; i++)
                 {
                     var cmd = blk.Cmds[i] as AssignCmd;
                     if (cmd == null) continue;

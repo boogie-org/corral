@@ -420,7 +420,7 @@ namespace cba
                     if (procsWithAsserts.Contains(proc.Name))
                         continue;
 
-                    if (proc.OutParams.Length > 0)
+                    if (proc.OutParams.Count > 0)
                         continue;
 
                     var modifiesShared = false;
@@ -768,7 +768,7 @@ namespace cba
                         var pimpl = nameImplMap[pred];
                         foreach (var blk in pimpl.Blocks)
                         {
-                            var newcmds = new CmdSeq();
+                            var newcmds = new List<Cmd>();
                             foreach (var cmd in blk.Cmds)
                             {
                                 var ccmd = cmd as CallCmd;
@@ -790,7 +790,7 @@ namespace cba
                         var impl = implCopies[Tuple.Create(name, i)];
                         foreach (var blk in impl.Blocks)
                         {
-                            var newcmds = new CmdSeq();
+                            var newcmds = new List<Cmd>();
                             foreach (var cmd in blk.Cmds)
                             {
                                 var ccmd = cmd as CallCmd;
@@ -954,7 +954,7 @@ namespace cba
             var afBlocks = new HashSet<string>();
             foreach (var blk in impl.Blocks)
             {
-                if (blk.Cmds.Length == 0) continue;
+                if (blk.Cmds.Count == 0) continue;
                 var acmd = blk.Cmds[0] as AssumeCmd;
                 if (acmd == null) continue;
                 var le = acmd.Expr as LiteralExpr;
@@ -969,13 +969,13 @@ namespace cba
                 newBlocks.Add(blk);
                 var gc = blk.TransferCmd as GotoCmd;
                 if (gc == null) continue;
-                var ss = new StringSeq();
+                var ss = new List<String>();
                 foreach (var t in gc.labelNames)
                 {
                     if (afBlocks.Contains(t)) continue;
                     ss.Add(t);
                 }
-                if (ss.Length > 0)
+                if (ss.Count > 0)
                 {
                     blk.TransferCmd = new GotoCmd(gc.tok, ss);
                 }

@@ -202,9 +202,9 @@ namespace cba.Util
         }
 
 
-        public static VariableSeq MapToVariableSeq(this List<Variable> l, Converter<Variable, Variable> f)
+        public static List<Variable> MapToVariableSeq(this List<Variable> l, Converter<Variable, Variable> f)
         {
-            var vs = new VariableSeq();
+            var vs = new List<Variable>();
             foreach (var v in l)
                 vs.Add(f(v));
             return vs;
@@ -222,19 +222,19 @@ namespace cba.Util
             return new HDuple<List<T>>(y, n);
         }
 
-        public static VariableSeq ToVariableSeq(this IEnumerable<Variable> l)
+        public static List<Variable> ToVariableSeq(this IEnumerable<Variable> l)
         {
             if (l == null)
                 return null;
-            var vs = new VariableSeq();
+            var vs = new List<Variable>();
             foreach (var v in l)
                 vs.Add(v);
             return vs;
         }
 
-        public static ExprSeq ToExprSeq(this List<Expr> l)
+        public static List<Expr> ToExprSeq(this List<Expr> l)
         {
-            var es = new ExprSeq();
+            var es = new List<Expr>();
             foreach (var e in l)
                 es.Add(e);
             return es;

@@ -755,7 +755,7 @@ namespace cba
         Dictionary<string, IRefinementToken> invTokenVarMap;
         Dictionary<Duple<string, string>, IRefinementToken> varTokenMap;
         HashSet<string> varsToInstrument;
-        VariableSeq localVarsToAdd;
+        List<Variable> localVarsToAdd;
 
         public FullVariableAbstraction(CBAProgram program, HashSet<IRefinementToken> tracked,
             HashSet<IRefinementToken> dontTrack, RefinementState refinementState)
@@ -801,7 +801,7 @@ namespace cba
         {
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
-                localVarsToAdd = new VariableSeq();
+                localVarsToAdd = new List<Variable>();
                 doTransformation(impl);
                 impl.LocVars.AddRange(localVarsToAdd);
             }
@@ -829,7 +829,7 @@ namespace cba
         {
             // Gather list of blocks with "assume false" as the first statement
             var blocks = impl.Blocks
-                .Where(blk => blk != impl.Blocks[0] && blk.Cmds.Length > 0 && BoogieUtil.isAssumeFalse(blk.Cmds[0]));
+                .Where(blk => blk != impl.Blocks[0] && blk.Cmds.Count > 0 && BoogieUtil.isAssumeFalse(blk.Cmds[0]));
 
             var toPrune = new HashSet<string>();
             blocks.Iter(blk => toPrune.Add(blk.Label));
@@ -848,7 +848,7 @@ namespace cba
             foreach (var blk in impl.Blocks.Filter(blk => blk.TransferCmd is GotoCmd))
             {
                 var gc = blk.TransferCmd as GotoCmd;
-                var ss = new StringSeq();
+                var ss = new List<String>();
 
                 gc.labelNames
                     .OfType<string>()
@@ -891,11 +891,11 @@ namespace cba
             var blocksWithAsserts = new List<Block>();
             foreach (var blk in oldMainImpl.Blocks)
             {
-                for (int i = 0; i < blk.Cmds.Length; i++)
+                for (int i = 0; i < blk.Cmds.Count; i++)
                 {
                     if (blk.Cmds[i] is AssertCmd)
                     {
-                        if (i != blk.Cmds.Length - 1 || !(blk.TransferCmd is ReturnCmd))
+                        if (i != blk.Cmds.Count - 1 || !(blk.TransferCmd is ReturnCmd))
                             return oldMainImpl;
                         blocksWithAsserts.Add(blk);
                     }
@@ -906,8 +906,8 @@ namespace cba
             // We can do instrumentation
             foreach (var blk in blocksWithAsserts)
             {
-                var acmd = blk.Cmds[blk.Cmds.Length - 1] as AssertCmd;
-                blk.Cmds[blk.Cmds.Length - 1] = BoogieAstFactory.MkVarEqExpr(assertVar, acmd.Expr);
+                var acmd = blk.Cmds[blk.Cmds.Count - 1] as AssertCmd;
+                blk.Cmds[blk.Cmds.Count - 1] = BoogieAstFactory.MkVarEqExpr(assertVar, acmd.Expr);
             }
 
             // remove "entrypoint" from old main
@@ -920,7 +920,7 @@ namespace cba
                 oldMainProc.Modifies, oldMainProc.Ensures);
 
             var newMainImpl = new Implementation(Token.NoToken, "fakeMain", oldMainImpl.TypeParameters,
-                oldMainImpl.InParams, oldMainImpl.OutParams, new VariableSeq(), new List<Block>());
+                oldMainImpl.InParams, oldMainImpl.OutParams, new List<Variable>(), new List<Block>());
 
             newMainImpl.AddAttribute("entrypoint");
 
@@ -941,7 +941,7 @@ namespace cba
             var cmd = new CallCmd(Token.NoToken, oldMainProc.Name, ins, outs);
             cmd.Proc = oldMainProc;
 
-            var cmds = new CmdSeq();
+            var cmds = new List<Cmd>();
             cmds.Add(BoogieAstFactory.MkVarEqConst(assertVar, true));
             cmds.Add(cmd);
             cmds.Add(new AssertCmd(Token.NoToken, Expr.Ident(assertVar)));
@@ -991,7 +991,7 @@ namespace cba
             var newBlocks = new List<Block>();
             foreach (var block in impl.Blocks)
             {
-                var currCmds = new CmdSeq();
+                var currCmds = new List<Cmd>();
                 var currLabel = block.Label;
 
                 foreach (Cmd cmd in block.Cmds)
@@ -1029,7 +1029,7 @@ namespace cba
                         var expr = getAllTrackedExpr(varsUsed.globalsUsed, impl.Name);
 
                         // block 1
-                        currCmds = new CmdSeq();
+                        currCmds = new List<Cmd>();
                         currLabel = label1;
 
                         currCmds.Add(new AssumeCmd(Token.NoToken, expr));
@@ -1037,7 +1037,7 @@ namespace cba
                         newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(endlabel)));
 
                         // block 2
-                        currCmds = new CmdSeq();
+                        currCmds = new List<Cmd>();
                         currLabel = label2;
 
                         currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(expr)));
@@ -1047,7 +1047,7 @@ namespace cba
                         }
                         newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(endlabel)));
 
-                        currCmds = new CmdSeq();
+                        currCmds = new List<Cmd>();
                         currLabel = endlabel;
                         continue;
                     }
@@ -1080,7 +1080,7 @@ namespace cba
                         addChoice3(ref newBlocks, acmd, choice3, ref currLabel, ref currCmds, endLabel);
 
                         currLabel = endLabel;
-                        currCmds = new CmdSeq();
+                        currCmds = new List<Cmd>();
 
                         continue;
                     }
@@ -1092,7 +1092,7 @@ namespace cba
             impl.Blocks = newBlocks;
         }
 
-        private void addChoice1(ref List<Block> newBlocks, Expr choice, ref string currLabel, ref CmdSeq currCmds, string endLabel)
+        private void addChoice1(ref List<Block> newBlocks, Expr choice, ref string currLabel, ref List<Cmd> currCmds, string endLabel)
         {
             if (choice == Expr.True) return;
 
@@ -1102,18 +1102,18 @@ namespace cba
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(label1, label2)));
 
             currLabel = label1;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(choice)));
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(endLabel)));
 
             currLabel = label2;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, choice));
         }
 
-        private void addChoice2(ref List<Block> newBlocks, AssignCmd cmd, Expr choice, ref string currLabel, ref CmdSeq currCmds, string endLabel)
+        private void addChoice2(ref List<Block> newBlocks, AssignCmd cmd, Expr choice, ref string currLabel, ref List<Cmd> currCmds, string endLabel)
         {
             if (choice == Expr.True) return;
 
@@ -1123,20 +1123,20 @@ namespace cba
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(label1, label2)));
 
             currLabel = label1;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(choice)));
             currCmds.Add(BoogieAstFactory.MkHavocVar(cmd.Lhss[0].DeepAssignedVariable));
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(endLabel)));
 
             currLabel = label2;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, choice));
 
         }
 
-        private void addChoice3(ref List<Block> newBlocks, AssignCmd cmd, Expr choice, ref string currLabel, ref CmdSeq currCmds, string endLabel)
+        private void addChoice3(ref List<Block> newBlocks, AssignCmd cmd, Expr choice, ref string currLabel, ref List<Cmd> currCmds, string endLabel)
         {
             var label1 = getNewLabel();
             var label2 = getNewLabel();
@@ -1146,7 +1146,7 @@ namespace cba
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(label1, label2)));
 
             currLabel = label1;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(choice)));
             if (lhs is SimpleAssignLhs)
@@ -1171,7 +1171,7 @@ namespace cba
             newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds, BoogieAstFactory.MkGotoCmd(endLabel)));
 
             currLabel = label2;
-            currCmds = new CmdSeq();
+            currCmds = new List<Cmd>();
 
             currCmds.Add(new AssumeCmd(Token.NoToken, choice));
             currCmds.Add(cmd);

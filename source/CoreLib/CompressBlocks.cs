@@ -94,7 +94,7 @@ namespace cba
                 var curr = start;
                 tinfo[node.Name].Add(start.Label, new List<Duple<string, int>>());
 
-                CmdSeq newCmds = new CmdSeq();
+                List<Cmd> newCmds = new List<Cmd>();
                 TransferCmd newtc = null;
 
                 do
@@ -102,7 +102,7 @@ namespace cba
                     deletedBlocks.Add(curr.Label);
 
                     newCmds.AddRange(curr.Cmds);
-                    tinfo[node.Name][start.Label].Add(new Duple<string, int>(curr.Label, curr.Cmds.Length));
+                    tinfo[node.Name][start.Label].Add(new Duple<string, int>(curr.Label, curr.Cmds.Count));
 
                     if (hasOneSucc(curr))
                     {

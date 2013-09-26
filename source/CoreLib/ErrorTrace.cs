@@ -1312,12 +1312,12 @@ namespace cba
             {
                 foreach (var block in impl.Blocks)
                 {
-                    var newcmds = new CmdSeq();
+                    var newcmds = new List<Cmd>();
                     foreach (Cmd cmd in block.Cmds)
                     {
                         if (BoogieUtil.isAssertTrue(cmd))
                         {
-                            tinfo.add(impl.Name, block.Label, new InstrTrans(cmd, new CmdSeq()));
+                            tinfo.add(impl.Name, block.Label, new InstrTrans(cmd, new List<Cmd>()));
                         }
                         else
                         {
@@ -1337,8 +1337,8 @@ namespace cba
             var isPrintCmd = new Predicate<Cmd>(cmd =>
                 {
                     var ccmd = cmd as CallCmd;
-                    if (ccmd == null || ccmd.callee != "boogie_si_record_li2bpl_int") return false;
-                    return true;
+                    if (ccmd != null && ccmd.callee.StartsWith("boogie_si_record_li2bpl_")) return true;
+                    return false;
                 }
             );
 
@@ -1347,12 +1347,12 @@ namespace cba
             {
                 foreach (var block in impl.Blocks)
                 {
-                    var newcmds = new CmdSeq();
+                    var newcmds = new List<Cmd>();
                     foreach (Cmd cmd in block.Cmds)
                     {
                         if (isPrintCmd(cmd))
                         {
-                            tinfo.add(impl.Name, block.Label, new InstrTrans(cmd, new CmdSeq()));
+                            tinfo.add(impl.Name, block.Label, new InstrTrans(cmd, new List<Cmd>()));
                         }
                         else
                         {
@@ -1379,7 +1379,7 @@ namespace cba
             {
                 foreach (var blk in impl.Blocks)
                 {
-                    for (int i = 0; i < blk.Cmds.Length; i++)
+                    for (int i = 0; i < blk.Cmds.Count; i++)
                     {
                         var acmd = blk.Cmds[i] as AssertCmd;
                         if (acmd == null) continue;
@@ -1643,6 +1643,14 @@ namespace cba
                 if (cexpr == null || cexpr == "") return;
                 if (info == null || !info.hasIntVar("si_arg")) return;
                 dataValuesCurrent += string.Format("^{0}={1}", cexpr.Replace(' ', '_'), info.getIntVal("si_arg"));
+                return;
+            }
+            if (ccmd != null && ccmd.callee == "boogie_si_record_li2bpl_bv32")
+            {
+                var cexpr = QKeyValue.FindStringAttribute(ccmd.Attributes, "cexpr");
+                if (cexpr == null || cexpr == "") return;
+                if (info == null || !info.hasVar("si_arg")) return;
+                dataValuesCurrent += string.Format("^{0}={1}", cexpr.Replace(' ', '_'), info.getVal("si_arg"));
                 return;
             }
 
@@ -1919,8 +1927,8 @@ namespace cba
     {
         private static Stack<Dictionary<int, ErrorTrace>> traceStack = new Stack<Dictionary<int, ErrorTrace>>();
 
-        public InlineToTrace(InlineCallback cb)
-            :base(cb, -1)
+        public InlineToTrace(Program program, InlineCallback cb)
+            :base(program, cb, -1)
         { }
 
         // Return callCmd -> callee trace
@@ -1980,10 +1988,10 @@ namespace cba
             if (entryPoint.Name != trace.procName)
                 throw new InternalError("InlineToTrace didn't find the entry point for the given trace properly");
 
-            var inliner = new InlineToTrace(null);
+            var inliner = new InlineToTrace(program, null);
 
             traceStack.Push(FindCallsOnTrace(entryPoint, trace));
-            Inliner.ProcessImplementation(program, entryPoint, inliner);
+            Inliner.ProcessImplementation(entryPoint, inliner);
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -1997,9 +2005,9 @@ namespace cba
             }
         }
         
-        protected override List<Block> DoInlineBlocks(List<Block> blocks, Program program, VariableSeq newLocalVars, IdentifierExprSeq newModifies, ref bool inlinedSomething)
+        public override List<Block> DoInlineBlocks(List<Block> blocks, ref bool inlinedSomething)
         {
-            var ret = base.DoInlineBlocks(blocks, program, newLocalVars, newModifies, ref inlinedSomething);
+            var ret = base.DoInlineBlocks(blocks, ref inlinedSomething);
             traceStack.Pop();
             return ret;
         }
@@ -2055,7 +2063,7 @@ namespace cba
             public override GotoCmd VisitGotoCmd(GotoCmd node)
             {
                 var ss = node.labelNames;
-                node.labelNames = new StringSeq();
+                node.labelNames = new List<String>();
                 ss.OfType<string>().Iter(s =>
                     {
                         if (s.StartsWith("inline$"))

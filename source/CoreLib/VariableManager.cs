@@ -105,12 +105,12 @@ namespace cba
                                                                               pinfo.threadIdType));
 
             // Construct type int -> bool
-            TypeSeq ts = new TypeSeq();
+            var ts = new List<Microsoft.Boogie.Type>();
             ts.Add(pinfo.threadIdType);
-            MapType mt = new MapType(Token.NoToken, new TypeVariableSeq(), ts, Microsoft.Boogie.Type.Bool);
+            MapType mt = new MapType(Token.NoToken, new List<TypeVariable>(), ts, Microsoft.Boogie.Type.Bool);
 
             // Construct type int -> int
-            mt = new MapType(Token.NoToken, new TypeVariableSeq(), ts, Microsoft.Boogie.Type.Int);
+            mt = new MapType(Token.NoToken, new List<TypeVariable>(), ts, Microsoft.Boogie.Type.Int);
 
             oldkLocalVars = new Dictionary<string, LocalVariable>();
             oldtidLocalVars = new Dictionary<string, LocalVariable>();
@@ -181,7 +181,7 @@ namespace cba
             //ensures(inAtomicBlock => (old(k) == k && (raiseException == false)))
             //ensures(!assertsPassed && !inAtomicBlock => raiseException)
 
-            IdentifierExprSeq mods = new IdentifierExprSeq();
+            List<IdentifierExpr> mods = new List<IdentifierExpr>();
             mods.Add(new IdentifierExpr(Token.NoToken, vark));
 
             if (InstrumentationConfig.addRaiseException && ContextSwitchRaisesException)
@@ -207,13 +207,13 @@ namespace cba
                 e3 = new Ensures(false, Expr.Imp(Expr.Ident(inAtomicBlock), Expr.Eq(new OldExpr(Token.NoToken, Expr.Ident(vark)), Expr.Ident(vark))));
             }
 
-            EnsuresSeq ensures = new EnsuresSeq();
+            List<Ensures> ensures = new List<Ensures>();
             ensures.Add(e1);
             ensures.Add(e2);
             ensures.Add(e3);
 
-            csProc = new Procedure(Token.NoToken, csProcName, new TypeVariableSeq(), new VariableSeq(), new VariableSeq(),
-                                   new RequiresSeq(), mods, ensures);
+            csProc = new Procedure(Token.NoToken, csProcName, new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
+                                   new List<Requires>(), mods, ensures);
 
             return csProc;
 
@@ -416,9 +416,9 @@ namespace cba
         // assume Mem__2 == Mem_s_2
         // ...
         // assume Mem__{K-1} == Mem_s_{K-1}
-        public CmdSeq constructInitAssumes(int K, InstrumentationPolicy policy)
+        public List<Cmd> constructInitAssumes(int K, InstrumentationPolicy policy)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
 
             for (int i = 1; i < K; i++)
             {
@@ -440,9 +440,9 @@ namespace cba
         // assume Mem__1 == Mem_s_2
         // ...
         // assume Mem__{K-2} == Mem_s_{K-1}
-        public CmdSeq constructChecker(int K, InstrumentationPolicy policy)
+        public List<Cmd> constructChecker(int K, InstrumentationPolicy policy)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
             for (int i = 0; i < K - 1; i++)
             {
                 foreach (var declg in declaredGlobals)

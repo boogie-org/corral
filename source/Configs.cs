@@ -139,6 +139,8 @@ namespace cba
         public HashSet<string> recordValues { get; private set; }
         public bool printAllTraces { get; private set; }
         public int rootCause { get; private set; }
+        public int maxStaticLoopBound { get; private set; }
+        public bool disableStaticAnalysis { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
         {
@@ -296,6 +298,7 @@ namespace cba
             checkStaticAnalysis = false;
             siOnly = false;
             annotations = new List<string>();
+            maxStaticLoopBound = 10;
             NonUniformUnfolding = false;
             FwdBckSearch = 0;
             assertsPassed = "assertsPassed";
@@ -322,6 +325,7 @@ namespace cba
             recordValues = new HashSet<string>();
             printAllTraces = false;
             rootCause = -1;
+            disableStaticAnalysis = false;
         }
 
 
@@ -498,6 +502,10 @@ namespace cba
                 printInstrumented = true;
                 instrumentedFile = split[1];
             }
+            else if (flag == "/disableStaticAnalysis")
+            {
+                disableStaticAnalysis = true;
+            }
             else if (flag.StartsWith("/runHoudini:"))
             {
                 var split = flag.Split(sep);
@@ -523,6 +531,11 @@ namespace cba
             else if (flag.StartsWith("/ann:"))
             {
                 annotations.Add(flag.Substring("/ann:".Length));
+            }
+            else if (flag.StartsWith("/maxStaticLoopBound:"))
+            {
+                var split = flag.Split(sep);
+                maxStaticLoopBound = Int32.Parse(split[1]);
             }
             else if (flag == "/useLocalVarAbs")
             {

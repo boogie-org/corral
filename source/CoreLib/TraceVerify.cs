@@ -93,7 +93,7 @@ namespace cba
                 Block curr = labelToBlock[trace.Blocks[i].blockName];
 
                 Block traceBlock = new Block();
-                traceBlock.Cmds = new CmdSeq();
+                traceBlock.Cmds = new List<Cmd>();
                 traceBlock.Label = addIntToString(trace.Blocks[i].blockName, i); // (The "i" is to deal with loops)
                 if (i != n - 1)
                 {
@@ -106,8 +106,8 @@ namespace cba
                 tinfo.addTrans(newName, trace.Blocks[i].blockName, traceBlock.Label);
 
                 #region Check consistency
-                Debug.Assert(curr.Cmds.Length >= trace.Blocks[i].Cmds.Count);
-                if (trace.Blocks[i].Cmds.Count != curr.Cmds.Length)
+                Debug.Assert(curr.Cmds.Count >= trace.Blocks[i].Cmds.Count);
+                if (trace.Blocks[i].Cmds.Count != curr.Cmds.Count)
                 {
                     Debug.Assert((i == n - 1));
                 }
@@ -118,7 +118,7 @@ namespace cba
                 }
                 else if (curr.TransferCmd is GotoCmd)
                 {
-                    StringSeq targets = (curr.TransferCmd as GotoCmd).labelNames;
+                    List<String> targets = (curr.TransferCmd as GotoCmd).labelNames;
                     // one of these targets should be the next label
                     if (i != n - 1)
                     {
@@ -164,7 +164,7 @@ namespace cba
                     }
 
                     if (addConcretization && c is HavocCmd && curr_instr.info != null && curr_instr.info.hasIntVar("si_arg")
-                        && (c as HavocCmd).Vars.Length > 0 && (c as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt)
+                        && (c as HavocCmd).Vars.Count > 0 && (c as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt)
                     {
                         // concretize havoc-ed variable
                         var val = curr_instr.info.getIntVal("si_arg");
@@ -256,23 +256,23 @@ namespace cba
 
         // Record the fact that we added instruction corresponding to "in" as the last instruction
         // of "curr"
-        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, CmdSeq curr)
+        private void addedTrans(string procName, string inBlk, int inCnt, Cmd inCmd, string outBlk, List<Cmd> curr)
         {
-            CmdSeq cseq = new CmdSeq();
+            List<Cmd> cseq = new List<Cmd>();
             cseq.Add(curr.Last());
-            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Length - 1, cseq);
+            tinfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Count - 1, cseq);
         }
 
         // Return the set of blocks reachable while only going through empty blocks
         private HashSet<string> reachableViaEmptyBlocks(string lab, Dictionary<string, Block> labelBlockMap)
         {
-            StringSeq ss = new StringSeq();
+            List<String> ss = new List<String>();
             ss.Add(lab);
             return reachableViaEmptyBlocks(ss, labelBlockMap);
         }
 
         // Return the set of blocks reachable while only going through empty blocks
-        private HashSet<string> reachableViaEmptyBlocks(StringSeq lab, Dictionary<string, Block> labelBlockMap)
+        private HashSet<string> reachableViaEmptyBlocks(List<String> lab, Dictionary<string, Block> labelBlockMap)
         {
             var stack = new List<Block>();
             var visited = new HashSet<string>();
@@ -292,7 +292,7 @@ namespace cba
 
                 visited.Add(node.Label);
 
-                if (node.Cmds.Length != 0)
+                if (node.Cmds.Count != 0)
                     continue;
 
                 if (node.TransferCmd is GotoCmd)
@@ -324,14 +324,12 @@ namespace cba
         }
 
         // Get the unique string to which str was renamed to by getNewName
-        public string getUniqueName(string str)
+        public string getFirstNameInstance(string str)
         {
             int val;
             if (!usedNames.TryGetValue(str, out val))
             {
                 throw new InternalError("getUniqueName: String not renamed to anything!");
-            } else if(val != 2){
-                throw new InternalError("getUniqueName: name not unique!");
             } else {
                 return str + "_trace_" + 1;
             }
@@ -368,8 +366,8 @@ namespace cba
             // Add declaration for fixing context values
             foreach (var p in newProcsToAdd)
             {
-                var proc = new Procedure(Token.NoToken, p, new TypeVariableSeq(),
-                    new VariableSeq(), new VariableSeq(), new RequiresSeq(), new IdentifierExprSeq(), new EnsuresSeq());
+                var proc = new Procedure(Token.NoToken, p, new List<TypeVariable>(),
+                    new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
                 output.TopLevelDeclarations.Add(proc);
             }
 

@@ -76,7 +76,7 @@ namespace CoreLib
         public override Cmd VisitHavocCmd(HavocCmd node)
         {
             var cmd = base.VisitHavocCmd(node) as HavocCmd;
-            var newVars = new IdentifierExprSeq();
+            var newVars = new List<IdentifierExpr>();
             var seen = new HashSet<string>();
             foreach (IdentifierExpr ie in cmd.Vars)
             {
@@ -119,13 +119,13 @@ namespace CoreLib
                 .OfType<Implementation>()
                 .Iter(Instrument);
 
-            var decl = BoogieAstFactory.MkProc(recordProc, new VariableSeq(BoogieAstFactory.MkFormal("address", Microsoft.Boogie.Type.Int, true)), new VariableSeq());
+            var decl = BoogieAstFactory.MkProc(recordProc, new List<Variable>(new Variable[] { BoogieAstFactory.MkFormal("address", Microsoft.Boogie.Type.Int, true) }), new List<Variable>());
             program.TopLevelDeclarations.Add(decl);
         }
 
         static CallCmd Read(Variable map)
         {
-            var ret = new CallCmd(Token.NoToken, recordProc, new ExprSeq(Expr.Ident(memAccess)), new IdentifierExprSeq());
+            var ret = new CallCmd(Token.NoToken, recordProc, new List<Expr>{Expr.Ident(memAccess)}, new List<IdentifierExpr>());
             var p = new List<object>();
             p.Add(map.Name);
             ret.Attributes = new QKeyValue(Token.NoToken, "read", p, null);
@@ -134,7 +134,7 @@ namespace CoreLib
 
         static CallCmd Write(Variable map)
         {
-            var ret = new CallCmd(Token.NoToken, recordProc, new ExprSeq(Expr.Ident(memAccess)), new IdentifierExprSeq());
+            var ret = new CallCmd(Token.NoToken, recordProc, new List<Expr>{Expr.Ident(memAccess)}, new List<IdentifierExpr>());
             var p = new List<object>();
             p.Add(map.Name);
             ret.Attributes = new QKeyValue(Token.NoToken, "write", p, null);
@@ -143,7 +143,7 @@ namespace CoreLib
 
         static CallCmd RecordScalar(Variable v)
         {
-            var ret = new CallCmd(Token.NoToken, recordProc, new ExprSeq(Expr.Ident(v)), new IdentifierExprSeq());
+            var ret = new CallCmd(Token.NoToken, recordProc, new List<Expr>{Expr.Ident(v)}, new List<IdentifierExpr>());
             var p = new List<object>();
             p.Add(v.Name);
             ret.Attributes = new QKeyValue(Token.NoToken, "scalar", p, null);
@@ -164,7 +164,7 @@ namespace CoreLib
                     else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
                     else newcmds.Add(cmd);
                 }
-                block.Cmds = new CmdSeq();
+                block.Cmds = new List<Cmd>();
                 newcmds.Iter(cmd => block.Cmds.Add(cmd));
             }
 
@@ -271,7 +271,7 @@ namespace CoreLib
 
         public override Expr VisitNAryExpr(NAryExpr node)
         {
-            if (node.Fun is MapSelect && node.Args.Length == 2 && node.Args[0] is IdentifierExpr)
+            if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
             {
                 accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
             }

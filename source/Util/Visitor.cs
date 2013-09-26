@@ -378,7 +378,7 @@ namespace cba.Util
         private List<HDuple<string>> subs;
         private Dictionary<string, Variable> decls;
 
-        public VariableInstanceRenamer(VariableSeq decls)
+        public VariableInstanceRenamer(List<Variable> decls)
         {
             this.subs = new List<HDuple<string>>();
             this.decls = new Dictionary<string, Variable>();
@@ -386,7 +386,7 @@ namespace cba.Util
                 this.decls.Add(v.Name, v);
         }
 
-        public VariableInstanceRenamer(List<HDuple<string>> subs, VariableSeq decls)
+        public VariableInstanceRenamer(List<HDuple<string>> subs, List<Variable> decls)
             : this(decls)
         {
             this.subs = (subs == null ? new List<HDuple<string>>() : subs);
@@ -402,7 +402,7 @@ namespace cba.Util
             this.subs.AddRange(a);
         }
 
-        public void AddDecls(VariableSeq vs)
+        public void AddDecls(List<Variable> vs)
         {
             foreach (Variable v in vs)
                 decls.Add(v.Name, v);

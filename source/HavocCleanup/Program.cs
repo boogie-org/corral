@@ -135,7 +135,7 @@ namespace HavocCleanup
 
             foreach (var blk in impl.Blocks)
             {
-                for (int i = 0; i < blk.Cmds.Length; i++ )
+                for (int i = 0; i < blk.Cmds.Count; i++ )
                 {
                     var ccmd = blk.Cmds[i] as CallCmd;
                     if (ccmd == null || (ccmd.callee != levelCall && ccmd.callee != cpuCall)) continue;
@@ -152,7 +152,7 @@ namespace HavocCleanup
                         var done = false;
                         while (!done)
                         {
-                            for (int j = currCmd; j < currBlk.Cmds.Length && !done; j++)
+                            for (int j = currCmd; j < currBlk.Cmds.Count && !done; j++)
                             {
                                 var tc = currBlk.Cmds[j] as CallCmd;
                                 if (tc == null || !tc.IsAsync) continue;
@@ -164,7 +164,7 @@ namespace HavocCleanup
                             if (!done)
                             {
                                 var gc = currBlk.TransferCmd as GotoCmd;
-                                if (gc == null || gc.labelNames.Length != 1) throw new InternalError("Incorrect hwsw level usage");
+                                if (gc == null || gc.labelNames.Count != 1) throw new InternalError("Incorrect hwsw level usage");
                                 currBlk = labelBlockMap[gc.labelNames[0]];
                                 currCmd = 0;
                             }
@@ -182,7 +182,7 @@ namespace HavocCleanup
                         var done = false;
                         while (!done)
                         {
-                            for (int j = currCmd; j < currBlk.Cmds.Length && !done; j++)
+                            for (int j = currCmd; j < currBlk.Cmds.Count && !done; j++)
                             {
                                 var tc = currBlk.Cmds[j] as CallCmd;
                                 if (tc == null || !tc.IsAsync) continue;
@@ -194,7 +194,7 @@ namespace HavocCleanup
                             if (!done)
                             {
                                 var gc = currBlk.TransferCmd as GotoCmd;
-                                if (gc == null || gc.labelNames.Length != 1) throw new InternalError("Incorrect hwsw cpu usage");
+                                if (gc == null || gc.labelNames.Count != 1) throw new InternalError("Incorrect hwsw cpu usage");
                                 currBlk = labelBlockMap[gc.labelNames[0]];
                                 currCmd = 0;
                             }
