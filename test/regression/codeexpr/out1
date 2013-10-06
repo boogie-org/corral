@@ -1,0 +1,113 @@
+(set-option :print-success false)
+(set-info :smt-lib-version 2.0)
+(set-option :produce-models true)
+(set-option :AUTO_CONFIG false)
+(set-option :MODEL_HIDE_UNUSED_PARTITIONS false)
+(set-option :ASYNC_COMMANDS false)
+(set-option :MODEL_V2 true)
+(set-option :PHASE_SELECTION 0)
+(set-option :RESTART_STRATEGY 0)
+(set-option :RESTART_FACTOR |1.5|)
+(set-option :ARITH_RANDOM_INITIAL_VALUE true)
+(set-option :CASE_SPLIT 3)
+(set-option :DELAY_UNITS true)
+(set-option :DELAY_UNITS_THRESHOLD 16)
+(set-option :NNF_SK_HACK true)
+(set-option :MBQI false)
+(set-option :QI_EAGER_THRESHOLD 100)
+(set-option :QI_COST |"(+ weight generation)"|)
+(set-option :TYPE_CHECK true)
+(set-option :BV_REFLECT true)
+(set-option :MODEL_ON_TIMEOUT true)
+(set-option :ARRAY_WEAK true)
+(set-option :ARRAY_EXTENSIONAL false)
+; done setting options
+
+; Boogie universal background predicate
+; Copyright (c) 2004-2010, Microsoft Corp.
+(set-info :category "industrial")
+(declare-sort |T@U| 0)
+(declare-sort |T@T| 0)
+(declare-fun real_pow (Real Real) Real)
+(declare-fun UOrdering2 (|T@U| |T@U|) Bool)
+(declare-fun UOrdering3 (|T@T| |T@U| |T@U|) Bool)
+
+(declare-fun tickleBool (Bool) Bool)
+(assert (and (tickleBool true) (tickleBool false)))
+(push 1)
+(declare-fun %lbl%+11 () Bool)
+(declare-fun %lbl%+si_fcall_1 () Bool)
+(declare-fun si_control_var_bool_1 () Bool)
+(declare-fun assertsPassed@0 () Bool)
+(declare-fun %lbl%@12 () Bool)
+(declare-fun main_SeqInstr_assertsPassed () Bool)
+(declare-fun main_SeqInstr_g () Int)
+(declare-fun g@0 () Int)
+(declare-fun %lbl%+13 () Bool)
+(declare-fun assertsPassed () Bool)
+(assert (not (let ((start_correct (=> (! (and %lbl%+11 true) :lblpos +11) (=> (and
+(! (and %lbl%+si_fcall_1 si_control_var_bool_1) :lblpos +si_fcall_1)
+(not assertsPassed@0)) (and
+(! (or %lbl%@12 (not (and
+true
+(=> main_SeqInstr_assertsPassed assertsPassed@0)
+(=> assertsPassed@0 main_SeqInstr_assertsPassed)
+(= main_SeqInstr_g g@0)))) :lblneg @12)
+(=> (not (and
+true
+(=> main_SeqInstr_assertsPassed assertsPassed@0)
+(=> assertsPassed@0 main_SeqInstr_assertsPassed)
+(= main_SeqInstr_g g@0))) true))))))
+(let ((PreconditionGeneratedEntry_correct (=> (! (and %lbl%+13 true) :lblpos +13) (=> assertsPassed start_correct))))
+PreconditionGeneratedEntry_correct))))
+(push 1)
+(assert (not si_control_var_bool_1))
+(check-sat)
+(pop 1)
+(check-sat)
+(labels)
+(get-model)
+(declare-fun %lbl%+19 () Bool)
+(declare-fun %lbl%+14 () Bool)
+(declare-fun %lbl%@15 () Bool)
+(declare-fun assertsPassed@1_si_1 () Bool)
+(declare-fun %lbl%+18 () Bool)
+(declare-fun %lbl%+20 () Bool)
+(declare-fun %lbl%+16 () Bool)
+(declare-fun assertsPassed@0_si_0 () Bool)
+(declare-fun %lbl%+17 () Bool)
+(declare-fun %lbl%+21 () Bool)
+(assert (and
+true
+(=> si_control_var_bool_1 (not (let ((SeqInstr_2_correct (=> (! (and %lbl%+19 true) :lblpos +19) true)))
+(let ((GeneratedUnifiedExit_correct (=> (! (and %lbl%+14 true) :lblpos +14) (and
+(! (or %lbl%@15 (not (and
+true
+(= g@0 0)
+(=> assertsPassed@0 assertsPassed@1_si_1)
+(=> assertsPassed@1_si_1 assertsPassed@0)))) :lblneg @15)
+(=> (not (and
+true
+(= g@0 0)
+(=> assertsPassed@0 assertsPassed@1_si_1)
+(=> assertsPassed@1_si_1 assertsPassed@0))) true)))))
+(let ((SeqInstr_1_correct (=> (! (and %lbl%+18 true) :lblpos +18) (=> (not false) (=> (and
+(=> assertsPassed@1_si_1 false)
+(=> false assertsPassed@1_si_1)) GeneratedUnifiedExit_correct)))))
+(let ((assert_rewrite_dummy_block_0_correct (=> (! (and %lbl%+20 true) :lblpos +20) (=> (not (not (let ((A_correct (not (= 0 0))))
+A_correct))) (and
+SeqInstr_1_correct
+SeqInstr_2_correct)))))
+(let ((assert_rewrite_dummy_block_2_correct (=> (! (and %lbl%+16 true) :lblpos +16) (=> (and
+(=> assertsPassed@1_si_1 assertsPassed@0_si_0)
+(=> assertsPassed@0_si_0 assertsPassed@1_si_1)) GeneratedUnifiedExit_correct))))
+(let ((assert_rewrite_dummy_block_1_correct (=> (! (and %lbl%+17 true) :lblpos +17) (=> (not (let ((A_correct@@0 (not (= 0 0))))
+A_correct@@0)) (=> (and
+(=> assertsPassed@0_si_0 true)
+(=> true assertsPassed@0_si_0)) assert_rewrite_dummy_block_2_correct)))))
+(let ((anon0_correct (=> (! (and %lbl%+21 true) :lblpos +21) (=> true (and
+assert_rewrite_dummy_block_0_correct
+assert_rewrite_dummy_block_1_correct)))))
+anon0_correct)))))))))))
+(check-sat)
+(pop 1)

@@ -1,0 +1,44 @@
+Running transformation pass 1: Rewriting asserts
+Running transformation pass 2: Rewriting calls
+Running transformation pass 3: Pruning program
+Running transformation pass 4: SequentialInstrumentation
+Verifying program while tracking: {assertsPassed}
+Running transformation pass 5: Variable Slicing
+Running transformation pass 6: Some verification pass
+Verifying implementation main_SeqInstr
+  [0.2031384 s]  
+Errors
+1 counterexamples.
+Program has a potential bug: Running transformation pass 7: Variable Slicing
+Running transformation pass 8: Some verification pass
+Verifying implementation main_SeqInstr_trace_1
+  [0.0220149 s]  
+Correct
+0 counterexamples.
+False bug
+Running transformation pass 9: Variable Slicing
+Running transformation pass 10: Some verification pass
+Verifying implementation main_SeqInstr_trace_1
+  [0.0083951 s]  
+Correct
+0 counterexamples.
+Running transformation pass 11: Variable Slicing
+  [0.0110076 s]  
+Verifying program while tracking: {assertsPassed, g}
+Running transformation pass 12: Variable Slicing
+Running transformation pass 13: Some verification pass
+Verifying implementation main_SeqInstr
+  [0.0090031 s]  
+Correct
+0 counterexamples.
+Program has no bugs
+
+Boogie verification time: 0.25 s
+Time spent reading-writing programs: 0.02 s
+
+Time spent checking a program (2): 0.43 s
+Time spent checking a path (3): 0.14 s
+
+Number of procedures inlined: 2
+Number of variables tracked: 2
+Total Time: 0.9678006 s
