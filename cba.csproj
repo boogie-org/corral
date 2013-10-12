@@ -197,7 +197,6 @@
   </Target>
   -->
   <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
+    <PostBuildEvent>copy $(ProjectDir)\references\UnivBackPred2.smt2 $(TargetDir)</PostBuildEvent>
   </PropertyGroup>
 </Project>
