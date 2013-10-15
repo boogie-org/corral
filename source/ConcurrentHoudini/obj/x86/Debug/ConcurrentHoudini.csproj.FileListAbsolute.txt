@@ -1,0 +1,5 @@
+C:\Users\akashl\Documents\work\corral\source\ConcurrentHoudini\obj\x86\Debug\ConcurrentHoudini.csprojResolveAssemblyReference.cache
+C:\Users\akashl\Documents\work\corral\bin\Debug\ConcurrentHoudini.exe
+C:\Users\akashl\Documents\work\corral\bin\Debug\ConcurrentHoudini.pdb
+C:\Users\akashl\Documents\work\corral\source\ConcurrentHoudini\obj\x86\Debug\ConcurrentHoudini.exe
+C:\Users\akashl\Documents\work\corral\source\ConcurrentHoudini\obj\x86\Debug\ConcurrentHoudini.pdb
