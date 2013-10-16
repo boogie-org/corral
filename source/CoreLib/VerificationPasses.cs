@@ -655,6 +655,7 @@ namespace cba
 
         public static int HoudiniTimeout = -1;
         public static bool disableStaticAnalysis = false;
+        public static bool checkAsserts = false;
         public static string runAbsHoudiniConfig = null;
         public static bool runAbsHoudini
         {
@@ -777,7 +778,7 @@ namespace cba
 
             foreach (var kvp in globals.Concat(formals))
             {
-                if (!tv.TypedIdent.Type.Equals(kvp.Value.TypedIdent.Type, new List<TypeVariable>(), new List<TypeVariable>()))
+                if (tv.TypedIdent.Type.ToString() !=  kvp.Value.TypedIdent.Type.ToString())
                     continue;
 
                 if (kvp.Value is Constant) continue;
@@ -1135,6 +1136,8 @@ namespace cba
                     {
                         if (eexpr.IsEnsures) proc.Ensures.Add(new Ensures(Token.NoToken, true, eexpr.expr, "", attr));
                         if (eexpr.IsRequires) proc.Ensures.Add(new Ensures(Token.NoToken, true, addOld(eexpr.expr), "", attr));
+                        if (checkAsserts)
+                            if (eexpr.IsRequires) proc.Requires.Add(new Requires(Token.NoToken, true, eexpr.expr, "", attr));
                     }
                 }
 
@@ -1164,6 +1167,8 @@ namespace cba
                     {
                         if (eexpr.IsEnsures) proc.Ensures.Add(new Ensures(Token.NoToken, true, expr, "", attr));
                         if (eexpr.IsRequires) proc.Ensures.Add(new Ensures(Token.NoToken, true, addOld(expr), "", attr));
+                        if (checkAsserts)
+                            if (eexpr.IsRequires) proc.Requires.Add(new Requires(Token.NoToken, true, expr, "", attr));
                     }
                 }
 
@@ -1186,18 +1191,38 @@ namespace cba
                 impl.Attributes = BoogieUtil.removeAttr("verify", impl.Attributes);
             }
 
-            // get rid of assert in main
-            var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            foreach (var blk in mainImpl.Blocks)
+            if (!checkAsserts)
             {
-                for (int i = 0; i < blk.Cmds.Count; i++)
+                // get rid of assert in main
+                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+                foreach (var blk in mainImpl.Blocks)
                 {
-                    var acmd = blk.Cmds[i] as AssertCmd;
-                    if (acmd == null) continue;
-                    var le = acmd.Expr as LiteralExpr;
-                    if (le != null && le.IsTrue) continue;
-                    blk.Cmds[i] = new AssumeCmd(Token.NoToken, Expr.True);
+                    for (int i = 0; i < blk.Cmds.Count; i++)
+                    {
+                        var acmd = blk.Cmds[i] as AssertCmd;
+                        if (acmd == null) continue;
+                        var le = acmd.Expr as LiteralExpr;
+                        if (le != null && le.IsTrue) continue;
+                        blk.Cmds[i] = new AssumeCmd(Token.NoToken, Expr.True);
+                    }
                 }
+            }
+            else
+            {
+                // Guard assert with an existential Boolean
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks.Iter(blk =>
+                {
+                    for (int i = 0; i < blk.Cmds.Count; i++)
+                    {
+                        var acmd = blk.Cmds[i] as AssertCmd;
+                        if (acmd == null) continue;
+                        var le = acmd.Expr as LiteralExpr;
+                        if (le != null && le.IsTrue) continue;
+                        blk.Cmds[i] = new AssumeCmd(Token.NoToken, acmd.Expr);
+                    }
+                }));
+
             }
 
             // Add old summaries
@@ -1243,7 +1268,8 @@ namespace cba
 
             var time3 = DateTime.Now;
 
-            //program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
+            if(checkAsserts)
+                program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
 
             inline(program);
             BoogieUtil.TypecheckProgram(program, "error.bpl");
@@ -1736,7 +1762,7 @@ namespace cba
         public override CBAProgram runCBAPass(CBAProgram p)
         {
             // Remove unreachable procedures
-            if (RemoveUnreachable) pruneProcs(p);
+            if (RemoveUnreachable) pruneProcs(p, p.mainProcName);
 
             // normalize commands
             if (normalizeStatements) p.TopLevelDeclarations.OfType<Implementation>().Iter(normalizeImpl);
@@ -1815,7 +1841,7 @@ namespace cba
         }
 
         // Prune by removing procedures that are not called
-        private void pruneProcs(CBAProgram program)
+        public static void pruneProcs(Program program, string mainProcName)
         {
             var edges = new Dictionary<string, HashSet<string>>();
             foreach (var decl in program.TopLevelDeclarations)
@@ -1834,7 +1860,7 @@ namespace cba
                 }
             }
             var reachable = new HashSet<string>();
-            reachable.Add(program.mainProcName);
+            reachable.Add(mainProcName);
 
             var delta = new HashSet<string>(reachable);
             while (delta.Count != 0)
