@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BctCleanup", "source\BctCle
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExplainError", "source\ExplainError\ExplainError.csproj", "{2417259E-803F-4017-A3B4-5F3C87470D2E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConcurrentHoudini", "source\ConcurrentHoudini\ConcurrentHoudini.csproj", "{529AC312-BB91-4154-8BA3-7CA8743E0434}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|.NET = Debug|.NET
@@ -202,6 +204,30 @@ Global
 		{2417259E-803F-4017-A3B4-5F3C87470D2E}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{2417259E-803F-4017-A3B4-5F3C87470D2E}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{2417259E-803F-4017-A3B4-5F3C87470D2E}.Release|x86.ActiveCfg = Release|Any CPU
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|.NET.ActiveCfg = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|x86.ActiveCfg = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Debug|x86.Build.0 = Debug|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|.NET.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|Any CPU.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|Mixed Platforms.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|Mixed Platforms.Build.0 = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|x86.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.HWSW|x86.Build.0 = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|.NET.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|Any CPU.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|Mixed Platforms.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|Mixed Platforms.Build.0 = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|x86.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Internal|x86.Build.0 = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|.NET.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|Any CPU.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|Mixed Platforms.Build.0 = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|x86.ActiveCfg = Release|x86
+		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
