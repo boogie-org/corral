@@ -25,6 +25,18 @@ namespace ConcurrentHoudini
             {
                 local = true;
             }
+            else if (arg == "/noTid")
+            {
+                noTid = true;
+            }
+            else if (arg == "/noPerm")
+            {
+                noPerm = true;
+            }
+            else if (arg == "/instantiate")
+            {
+                instantiateTemplates = true;
+            }
             else if (arg.StartsWith("/idempotent:"))
             {
             }
@@ -84,6 +96,9 @@ namespace ConcurrentHoudini
 
         public static bool dbg;
         static bool local = false;
+        static bool instantiateTemplates = false;
+        static bool noTid = false;
+        static bool noPerm = false;
         public static Context con = null;
         public static string absDomain = "IA[HoudiniConst]";
 
@@ -100,6 +115,7 @@ namespace ConcurrentHoudini
                 annotatedFileName = null,
                 splitFileName = null,
                 yieldedFileName = null,
+                instantiatedFileName = null,
                 finalFileName = null,
                 mhpFileName = null,
                 hmifFileName = null;
@@ -120,6 +136,7 @@ namespace ConcurrentHoudini
                 yieldedFileName = inFileName + "_yielded";
                 finalFileName = inFileName + "_final";
                 mhpFileName = inFileName + "_mhp";
+                instantiatedFileName = inFileName + "_inst";
             }
             else
             {
@@ -132,6 +149,7 @@ namespace ConcurrentHoudini
                 yieldedFileName = name + "_yielded";
                 finalFileName = name + "_final";
                 mhpFileName = name + "_mhp";
+                instantiatedFileName = name + "_inst";
                 assertsChangedFileName = name + "_assertsInstrumented";
                 tidRewrittenFileName = name + "_tidRewritten";
                 for (int i = 1; i < parts.Count(); ++i)
@@ -146,6 +164,7 @@ namespace ConcurrentHoudini
                     assertsChangedFileName += "." + parts[i];
                     tidRewrittenFileName += "." + parts[i];
                     mhpFileName += "." + parts[i];
+                    instantiatedFileName += "." + parts[i];
                 }
             }
 
@@ -177,6 +196,13 @@ namespace ConcurrentHoudini
             // Remove unreachable procedures
             cba.PruneProgramPass.pruneProcs(program, entry.Name);
             ModSetCollector.DoModSetAnalysis(program);
+
+            if (instantiateTemplates)
+            {
+                var inst = new TemplateInstantiator(program);
+                inst.Instantiate(program);
+                program = BoogieUtil.ReResolve(program, instantiatedFileName);
+            }
 
             if (local)
             {
@@ -285,9 +311,14 @@ namespace ConcurrentHoudini
             if(dbg)
                 Console.WriteLine("Instrumenting: {0}", annotatedFileName);
 
-            program = og.InstrumentTid(program);
+            if(!noTid)
+                program = og.InstrumentTid(program);
+
             program = og.InstrumentAtomicBlocks(program);
-            program = og.InstrumentPermissions(program);
+
+            if(!noPerm)
+                program = og.InstrumentPermissions(program);
+
             program = BoogieUtil.ReResolve(program, annotatedFileName);
 
             // Run OG

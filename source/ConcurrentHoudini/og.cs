@@ -924,4 +924,347 @@ namespace ConcurrentHoudini
             }
         }
     }
+
+
+    public class TemplateInstantiator
+    {
+        public class EExpr
+        {
+            public Expr expr;
+            public int typ;
+            public HashSet<string> mustMod;
+            public HashSet<string> mustNotMod;
+            public QKeyValue annotations;
+
+            public bool IsFree
+            {
+                get
+                {
+                    return (typ == 0 || typ == 2 || typ == 4);
+                }
+            }
+
+            public bool IsRequires
+            {
+                get
+                {
+                    return (typ == 2 || typ == 3);
+                }
+            }
+
+            public bool IsEnsures
+            {
+                get
+                {
+                    return (typ == 0 || typ == 1);
+                }
+            }
+
+            public bool IsYield
+            {
+                get
+                {
+                    return (typ == 4 || typ == 5);
+                }
+            }
+
+            private EExpr()
+            {
+                this.expr = null;
+                typ = 0;
+                mustMod = new HashSet<string>();
+                mustNotMod = new HashSet<string>();
+            }
+
+            public EExpr(Expr expr, bool isEnsures)
+                : this()
+            {
+                this.expr = expr;
+                typ = isEnsures ? 1 : 3;
+            }
+
+            public EExpr(Ensures ens)
+                : this()
+            {
+                this.expr = ens.Condition;
+
+                if (ens.Free) typ = 0;
+                else typ = 1;
+
+                if (QKeyValue.FindBoolAttribute(ens.Attributes, "yields"))
+                {
+                    if (ens.Free) typ = 4;
+                    else typ = 5;
+                }
+
+                processAnnotations(ens.Attributes);
+            }
+
+            public EExpr(Requires req)
+                : this()
+            {
+                this.expr = req.Condition;
+                if (req.Free) typ = 2;
+                else typ = 3;
+                processAnnotations(req.Attributes);
+            }
+
+            private void processAnnotations(QKeyValue attr)
+            {
+                annotations = attr;
+
+                for (; attr != null; attr = attr.Next)
+                {
+                    if (attr.Params.Count != 1)
+                        continue;
+                    if (!(attr.Params[0] is string))
+                        continue;
+
+                    var v = (string)attr.Params[0];
+
+                    switch (attr.Key)
+                    {
+                        case "mustmod": mustMod.Add(v);
+                            break;
+                        case "mustnotmod": mustNotMod.Add(v);
+                            break;
+                    }
+
+                }
+            }
+
+            public bool Match(Procedure proc)
+            {
+                var mods = new HashSet<string>();
+                proc.Modifies.OfType<IdentifierExpr>()
+                    .Iter(ie => mods.Add(ie.Name));
+
+                if (!mustMod.IsSubsetOf(mods)) return false;
+                if (mustNotMod.Intersection(mods).Any()) return false;
+                return true;
+            }
+
+        }
+
+        // Template
+        public HashSet<Variable> templateVars;
+        public HashSet<Function> templateFunctions;
+        public List<EExpr> templates;
+        private HashSet<string> templateVarNames;
+        
+        // Other info
+        Dictionary<string, Variable> globals;
+
+        // created existential functions
+        List<Function> newExistentialFunctions;
+
+        public TemplateInstantiator(Program program)
+        {
+            this.templates = new List<EExpr>();
+            this.templateVars = new HashSet<Variable>();
+            this.templateFunctions = new HashSet<Function>();
+            this.templateVarNames = new HashSet<string>();
+            this.globals = new Dictionary<string, Variable>();
+            this.newExistentialFunctions = new List<Function>();
+
+            // Find the template variables
+            program.TopLevelDeclarations.OfType<GlobalVariable>()
+                .Where(g => QKeyValue.FindBoolAttribute(g.Attributes, "template"))
+                .Iter(g => templateVars.Add(g));
+
+            // Find the template functions
+            program.TopLevelDeclarations.OfType<Function>()
+                .Where(f => QKeyValue.FindBoolAttribute(f.Attributes, "template"))
+                .Iter(f => templateFunctions.Add(f));
+
+            // Now the template expressions
+            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, "template")))
+            {
+                foreach (var req in proc.Requires)
+                    templates.Add(new EExpr(req));
+
+                foreach (var ens in proc.Ensures)
+                    templates.Add(new EExpr(ens));
+            }
+
+            templateVars.Iter(v => templateVarNames.Add(v.Name));
+
+            // Gather globals
+            program.TopLevelDeclarations
+                .OfType<Variable>()
+                .Where(v => !QKeyValue.FindBoolAttribute(v.Attributes, "template"))
+                .Iter(c => globals.Add(c.Name, c));
+
+        }
+
+        private List<Expr> InstantiateTemplate(Expr template,
+            Dictionary<string, Variable> globals, Dictionary<string, Variable> formals)
+        {
+            var ret = new List<Expr>();
+
+            var dup = new FixedDuplicator();
+            var gused = new GlobalVarsUsed();
+            gused.VisitExpr(template);
+
+            if (gused.globalsUsed.Any(g => !globals.ContainsKey(g) && !templateVarNames.Contains(g)))
+                return ret;
+
+            var templateVarUsed = gused.globalsUsed.Intersection(templateVarNames);
+            if (templateVarUsed.Count == 0)
+            {
+                ret.Add(dup.VisitExpr(template));
+                return ret;
+            }
+
+            Debug.Assert(templateVarUsed.Count == 1, "Can only handle 1 template variable per expression");
+            var tvName = templateVarUsed.First();
+            var tv = templateVars.First(v => v.Name == tvName);
+
+            var includeFormalIn = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalIn");
+            var includeFormalOut = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalOut");
+            var includeGlobals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeGlobals");
+
+            if (!includeFormalIn && !includeFormalOut && !includeGlobals)
+            {
+                includeFormalIn = true;
+                includeFormalOut = true;
+                includeGlobals = true;
+            }
+
+            var onlyMatchVar = QKeyValue.FindStringAttribute(tv.Attributes, "match");
+            System.Text.RegularExpressions.Regex matchRegEx = null;
+            if (onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
+
+            foreach (var kvp in globals.Concat(formals))
+            {
+                if (tv.TypedIdent.Type.ToString() != kvp.Value.TypedIdent.Type.ToString())
+                    continue;
+
+                if (kvp.Value is Constant) continue;
+                if (matchRegEx != null && !matchRegEx.IsMatch(kvp.Key)) continue;
+                if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
+                if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
+                if (!includeGlobals && kvp.Value is GlobalVariable) continue;
+
+                var subst = new Dictionary<string, Variable>();
+                subst.Add(tvName, kvp.Value);
+
+                var e = dup.VisitExpr(template);
+                e = (new VarSubstituter(subst, globals)).VisitExpr(e);
+                ret.Add(e);
+            }
+
+            return ret;
+        }
+
+
+        // create new existential functions for the template ones
+        private Expr InstantiateFunctions(Expr expr)
+        {
+            var fs = new FunctionSubstituter(new Func<Function, Function>(f => GetNewFunction(f)));
+            return fs.VisitExpr(expr);
+        }
+
+        private static int Counter = 0;
+        private Function GetNewFunction(Function func)
+        {
+            if (!templateFunctions.Contains(func))
+                return null;
+
+            var dup = new FixedDuplicator();
+            var f = dup.VisitFunction(func);
+
+            f.Name += Counter.ToString();
+            f.Attributes = BoogieUtil.removeAttr("template", f.Attributes);
+
+            newExistentialFunctions.Add(f);
+
+            Counter++;
+            return f;
+        }
+
+        public void Instantiate(Program program)
+        {
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(Instantiate);
+
+            program.TopLevelDeclarations.AddRange(newExistentialFunctions);
+
+            program.TopLevelDeclarations.RemoveAll(decl => QKeyValue.FindBoolAttribute(decl.Attributes, "template"));
+        }
+
+        public void Instantiate(Implementation impl)
+        {
+            var proc = impl.Proc;
+            var entry = QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint");
+
+            var formals = new Dictionary<string, Variable>();
+            proc.InParams.OfType<Formal>()
+                .Iter(f => formals.Add(f.Name, f));
+            proc.OutParams.OfType<Formal>()
+                .Iter(f => formals.Add(f.Name, f));
+
+            foreach (var template in templates)
+            {
+                var allExprs = InstantiateTemplate(template.expr, globals, formals);
+                allExprs = allExprs.Map(new Converter<Expr, Expr>(InstantiateFunctions));
+
+                // Now add the expressions in the right place
+                foreach (var expr in allExprs)
+                {
+                    if (template.IsEnsures && !entry) proc.Ensures.Add(new Ensures(template.IsFree, expr));
+                    if (template.IsRequires && !entry) proc.Requires.Add(new Requires(template.IsFree, expr));
+                    if (template.IsYield)
+                    {
+                        foreach (var blk in impl.Blocks)
+                        {
+                            var ncmds = new List<Cmd>();
+                            foreach (var cmd in blk.Cmds)
+                            {
+                                ncmds.Add(cmd);
+                                if (cmd is YieldCmd)
+                                {
+                                    ncmds.Add(new AssertCmd(Token.NoToken, expr));
+                                }
+                            }
+                            blk.Cmds = ncmds;
+                        }
+                    }
+
+                }
+            }
+
+        }
+
+    }
+
+    public class FunctionSubstituter : FixedVisitor
+    {
+        private Func<Function, Function> funcs;
+
+        public FunctionSubstituter(Func<Function, Function> funcs)
+        {
+            this.funcs = funcs;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            if (node.Fun is FunctionCall)
+            {
+                var fc = node.Fun as FunctionCall;
+                if (fc.Func != null)
+                {
+                    var nf = funcs(fc.Func);
+                    if (nf != null)
+                        node.Fun = new FunctionCall(nf);
+                }
+            }
+
+            return base.VisitNAryExpr(node);
+        }
+
+    }
+
+
 }
