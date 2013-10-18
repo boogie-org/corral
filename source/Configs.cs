@@ -615,7 +615,7 @@ namespace cba
             }
             else if (flag == "/break")
             {
-                System.Diagnostics.Debugger.Break();
+                System.Diagnostics.Debugger.Launch();
             }
             else if (flag == "/si")
             {

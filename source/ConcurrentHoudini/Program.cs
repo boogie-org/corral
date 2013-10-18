@@ -15,7 +15,7 @@ namespace ConcurrentHoudini
             sep[0] = ':';
             if (arg.StartsWith("/break"))
             {
-                System.Diagnostics.Debugger.Break();
+                System.Diagnostics.Debugger.Launch();
             }
             else if (arg.StartsWith("/dbg"))
             {
