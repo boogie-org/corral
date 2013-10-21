@@ -162,11 +162,20 @@ namespace ConcurrentHoudini
                 foreach (var blk in impl.Blocks)
                 {
                     var ncmds = new List<Cmd>();
-                    foreach (Cmd cmd in blk.Cmds)
+                    for(int i = 0; i < blk.Cmds.Count; i++)
                     {
+                        var cmd = blk.Cmds[i];
                         if (cmd is YieldCmd)
                         {
                             ncmds.Add(cmd);
+                            // gather the associated asserts first
+                            int j = i + 1;
+                            while (j < blk.Cmds.Count && blk.Cmds[j] is AssertCmd)
+                            {
+                                ncmds.Add(blk.Cmds[j]);
+                                j++;
+                            }
+                            i = j - 1;
                             if(isEntry) afunc = MkExistentialFuncPerm();
                             ncmds.Add(new AssertCmd(Token.NoToken, MkCandidate(afunc, MkAssumeFull(permOut))));
                             ncmds.Add(new AssumeCmd(Token.NoToken, MkAssumeNonEmpty(permOut)));
@@ -180,10 +189,10 @@ namespace ConcurrentHoudini
 
                             var ccmd = cmd as CallCmd;
                             // replace permOut with permOut2 in the arguments
-                            for (int i = 0; i < ccmd.Ins.Count; i++)
+                            for (int j = 0; j < ccmd.Ins.Count; j++)
                             {
-                                if (ccmd.Ins[i] is IdentifierExpr && (ccmd.Ins[i] as IdentifierExpr).Name == permOut.Name)
-                                    ccmd.Ins[i] = Expr.Ident(permOut2);
+                                if (ccmd.Ins[j] is IdentifierExpr && (ccmd.Ins[j] as IdentifierExpr).Name == permOut.Name)
+                                    ccmd.Ins[j] = Expr.Ident(permOut2);
                             }
 
                             ncmds.Add(cmd);
@@ -438,8 +447,9 @@ namespace ConcurrentHoudini
                     var currLabel = blk.Label;
                     var currCmds = new List<Cmd>();
 
-                    foreach (Cmd cmd in blk.Cmds)
+                    for(int i = 0; i < blk.Cmds.Count; i++)
                     {
+                        var cmd = blk.Cmds[i];
                         var ccmd = cmd as CallCmd;
                         if (ccmd != null && ccmd.callee == Driver.con.atomicBegProc)
                         {
@@ -463,6 +473,17 @@ namespace ConcurrentHoudini
                             if (!(cmd is YieldCmd))
                             {
                                 currCmds.Add(BoogieAstFactory.MkAssert(ccmd.Ins[0]));
+                            }
+                            else
+                            {
+                                int j = i + 1;
+                                // Gather the associated asserts to this yield
+                                while (j < blk.Cmds.Count && blk.Cmds[j] is AssertCmd)
+                                {
+                                    currCmds.Add(blk.Cmds[j]);
+                                    j++;
+                                }
+                                i = j - 1;
                             }
 
                             newBlocks.Add(new Block(Token.NoToken, lab1, currCmds, BoogieAstFactory.MkGotoCmd(lab2)));

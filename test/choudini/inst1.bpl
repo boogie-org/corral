@@ -4,7 +4,6 @@ var x: int;
 procedure corral_atomic_begin();
 procedure corral_atomic_end();
 procedure corral_getThreadID() returns (x:int);
-procedure corral_yield(x:bool);
 function CHThreadId() returns (x:int);
 
 
