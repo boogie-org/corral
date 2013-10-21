@@ -205,6 +205,9 @@ namespace ConcurrentHoudini
 
             // Remove unreachable procedures
             cba.PruneProgramPass.pruneProcs(program, entry.Name);
+            // Extract loops
+            program.ExtractLoops();
+
             ModSetCollector.DoModSetAnalysis(program);
 
             if (pruneAsserts)

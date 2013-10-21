@@ -1367,14 +1367,18 @@ namespace ConcurrentHoudini
             var entry = QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint");
 
             var formals = new Dictionary<string, Variable>();
+            var formalIns = new Dictionary<string, Variable>();
+
             proc.InParams.OfType<Formal>()
                 .Iter(f => formals.Add(f.Name, f));
             proc.OutParams.OfType<Formal>()
                 .Iter(f => formals.Add(f.Name, f));
+            proc.InParams.OfType<Formal>()
+                .Iter(f => formalIns.Add(f.Name, f));
 
             foreach (var template in templates)
             {
-                var allExprs = InstantiateTemplate(template.expr, globals, formals);
+                var allExprs = InstantiateTemplate(template.expr, globals, template.IsRequires ? formalIns : formals);
                 allExprs = allExprs.Map(new Converter<Expr, Expr>(InstantiateFunctions));
 
                 // Now add the expressions in the right place
