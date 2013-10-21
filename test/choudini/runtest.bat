@@ -9,3 +9,9 @@ for %%f in (t1.bpl t2.bpl t3.bpl t5.bpl t6.bpl) do (
   %BGEXE% %* %%f
 )
 
+for %%f in (inst1.bpl) do (
+  echo.
+  echo -------------------- %%f --------------------
+  %BGEXE% %* %%f /instantiate
+)
+

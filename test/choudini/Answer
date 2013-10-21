@@ -80,3 +80,29 @@ function {:existential true} {:inline} Inv3(a: bool) : bool
 {
   a
 }
+
+-------------------- inst1.bpl --------------------
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f0(a: bool) : bool
+{
+  false
+}
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f1(a: bool) : bool
+{
+  false
+}
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f2(a: bool) : bool
+{
+  a
+}
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f3(a: bool) : bool
+{
+  a
+}
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f4(a: bool) : bool
+{
+  a
+}
+function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f5(a: bool) : bool
+{
+  a
+}

@@ -429,7 +429,6 @@ namespace ConcurrentHoudini
             // -- Initialize InAtomicBlock for entry procedures to async calls
             // -- corral_atomic_begin and corral_atomic_end
             // -- disable yields
-            // -- convert corral_yield(expr) to "yield; assert expr;"
 
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => asyncProcs.Contains(impl.Name))
@@ -461,7 +460,7 @@ namespace ConcurrentHoudini
                             currCmds.Add(BoogieAstFactory.MkVarEqConst(ab, false));
                             continue;
                         }
-                        if ((cmd is YieldCmd) || (ccmd != null && ccmd.callee == Driver.con.yieldProc))
+                        if (cmd is YieldCmd)
                         {
                             var lab1 = getNewLabel();
                             var lab2 = getNewLabel();
@@ -470,21 +469,16 @@ namespace ConcurrentHoudini
                             currCmds = new List<Cmd>();
                             currCmds.Add(BoogieAstFactory.MkAssumeVarEqConst(ab, false));
                             currCmds.Add(new YieldCmd(Token.NoToken));
-                            if (!(cmd is YieldCmd))
+
+                            int j = i + 1;
+                            // Gather the associated asserts to this yield
+                            while (j < blk.Cmds.Count && blk.Cmds[j] is AssertCmd)
                             {
-                                currCmds.Add(BoogieAstFactory.MkAssert(ccmd.Ins[0]));
+                                currCmds.Add(blk.Cmds[j]);
+                                j++;
                             }
-                            else
-                            {
-                                int j = i + 1;
-                                // Gather the associated asserts to this yield
-                                while (j < blk.Cmds.Count && blk.Cmds[j] is AssertCmd)
-                                {
-                                    currCmds.Add(blk.Cmds[j]);
-                                    j++;
-                                }
-                                i = j - 1;
-                            }
+                            i = j - 1;
+
 
                             newBlocks.Add(new Block(Token.NoToken, lab1, currCmds, BoogieAstFactory.MkGotoCmd(lab2)));
 
@@ -528,17 +522,12 @@ namespace ConcurrentHoudini
                         .Where(cmd => cmd.IsAsync)
                         .Iter(cmd => asyncProcs.Add(cmd.callee))));
 
-            var yieldProc = YieldProcDecl();
-            var callYield = new CallCmd(Token.NoToken, yieldProc.Name, new List<Expr>(), new List<IdentifierExpr>());
-            callYield.Proc = yieldProc;
-            program.TopLevelDeclarations.Add(yieldProc);
-
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 if (asyncProcs.Contains(impl.Name))
                 {
                     // insert yield at beginning
-                    var ncmds = new List<Cmd>{callYield};
+                    var ncmds = new List<Cmd>{new YieldCmd(Token.NoToken)};
                     ncmds.AddRange(impl.Blocks[0].Cmds);
                     impl.Blocks[0].Cmds = ncmds;
                 }
@@ -553,7 +542,7 @@ namespace ConcurrentHoudini
                         gu.Visit(cmd);
                         if (gu.globalsUsed.Intersection(modGlobals).Any())
                         {
-                            ncmds.Add(callYield);
+                            ncmds.Add(new YieldCmd(Token.NoToken));
                         }
                         ncmds.Add(cmd);
                     }
@@ -561,28 +550,185 @@ namespace ConcurrentHoudini
 
                 }
             }
-            var yieldImpl = YieldProcImpl();
-            yieldImpl.Proc = yieldProc;
-            program.TopLevelDeclarations.Add(yieldImpl);
 
             return program;
         }
 
-        static Procedure YieldProcDecl()
+        // Replace corral_yield(e) with "yield; assert e"
+        public static Program RemoveCorralYield(Program program, string corral_yield)
         {
-            var proc = new Procedure(Token.NoToken, "TmpYieldProc", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
-                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-            proc.AddAttribute("inline", Expr.Literal(1));
-            return proc;
+            var cy = program.TopLevelDeclarations.OfType<Procedure>()
+                .FirstOrDefault(proc => proc.Name == corral_yield);
+            if (cy == null) return program;
+
+            if (cy.InParams.Count != 1)
+                throw new Exception("ConcurrentHoudini expects that corral_yield has 1 argument");
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in blk.Cmds)
+                    {
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null || ccmd.callee != cy.Name)
+                        {
+                            ncmds.Add(cmd);
+                            continue;
+                        }
+                        ncmds.Add(new YieldCmd(Token.NoToken));
+                        ncmds.Add(cba.Util.BoogieAstFactory.MkAssert(ccmd.Ins[0]));
+                    }
+                    blk.Cmds = ncmds;
+                }
+            }
+
+            return program;
         }
 
-        static Implementation YieldProcImpl()
+
+        // Add guards to add assertions
+        public static Program GuardAsserts(Program program)
         {
-            var impl = new Implementation(Token.NoToken, "TmpYieldProc", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
-                new List<Variable>(), new List<Block>(), null);
-            impl.Blocks.Add(new Block(Token.NoToken, "start", new List<Cmd>{new YieldCmd(Token.NoToken)}, new ReturnCmd(Token.NoToken)));
-            return impl;
+            int counter = 0;
+            var GetExistentialFunc = new Func<Function>(() =>
+                {
+                    var name = "AssertGuard" + (counter++).ToString();
+                    var ret = new Function(Token.NoToken, name, new List<Variable>(),
+                        BoogieAstFactory.MkFormal("x", btype.Bool, false));
+                    ret.AddAttribute("existential", Expr.Literal(true));
+                    ret.AddAttribute("absdomain", "IA[HoudiniConst]");
+                    ret.AddAttribute("assertGuard");
+                    return ret;
+                });
+
+            var impls = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impls.Add(impl.Name));
+
+            var newFuncs = new List<Function>();
+
+            // Guard requires and ensures
+            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+            {
+                if (QKeyValue.FindBoolAttribute(proc.Attributes, "template"))
+                    continue;
+
+                foreach (var req in proc.Requires)
+                {
+                    if (req.Free) continue;
+                    var func = GetExistentialFunc();
+                    req.Condition = Expr.Or(new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr>()), req.Condition);
+                    req.Attributes = new QKeyValue(Token.NoToken, "guarded", new List<object>(), req.Attributes);
+                    newFuncs.Add(func);
+                }
+
+                if (impls.Contains(proc.Name))
+                {
+                    foreach (var ens in proc.Ensures)
+                    {
+                        if (ens.Free) continue;
+                        var func = GetExistentialFunc();
+                        ens.Condition = Expr.Or(new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr>()), ens.Condition);
+                        ens.Attributes = new QKeyValue(Token.NoToken, "guarded", new List<object>(), ens.Attributes);
+                        newFuncs.Add(func);
+                    }
+                }
+            }
+
+            // Guard assertions
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
+                    {
+                        var func = GetExistentialFunc();
+                        cmd.Expr = Expr.Or(new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr>()), cmd.Expr);
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "guarded", new List<object>(), cmd.Attributes);
+                        newFuncs.Add(func);
+                   }
+                }
+            }
+
+            program.TopLevelDeclarations.AddRange(newFuncs);
+            return BoogieUtil.ReResolve(program);
         }
+
+        // Convert proved asserts to assumes
+        public static Program PruneProvedAsserts(Program program, Func<string,bool> proved)
+        {
+            var mineExpr = new Func<Expr, Tuple<Expr, bool>>(inexpr =>
+                {
+                    var expr = inexpr as NAryExpr;
+                    Debug.Assert(expr != null);
+                    Debug.Assert(expr.Fun is BinaryOperator && (expr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or);
+                    var func = expr.Args[0] as NAryExpr;
+                    Debug.Assert(func != null);
+                    Debug.Assert(func.Fun is FunctionCall);
+                    var prune = proved((func.Fun as FunctionCall).FunctionName);
+                    return Tuple.Create(expr.Args[1], prune);
+                });
+
+            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+            {
+                for (int i = 0; i < proc.Requires.Count; i++)
+                {
+                    var req = proc.Requires[i];
+                    if (!QKeyValue.FindBoolAttribute(req.Attributes, "guarded"))
+                    {
+                        proc.Requires[i] = new Requires(req.tok, true, req.Condition, req.Comment, req.Attributes);
+                        continue;
+                    }
+
+                    var me = mineExpr(req.Condition);
+                    proc.Requires[i] = new Requires(req.tok, me.Item2, me.Item1, req.Comment, BoogieUtil.removeAttr("guarded", req.Attributes));
+                }
+
+                for (int i = 0; i < proc.Ensures.Count; i++)
+                {
+                    var ens = proc.Ensures[i];
+                    if (!QKeyValue.FindBoolAttribute(ens.Attributes, "guarded"))
+                    {
+                        proc.Ensures[i] = new Ensures(ens.tok, true, ens.Condition, ens.Comment, ens.Attributes);
+                        continue;
+                    }
+
+                    var me = mineExpr(ens.Condition);
+                    proc.Ensures[i] = new Ensures(ens.tok, me.Item2, me.Item1, null, BoogieUtil.removeAttr("guarded", ens.Attributes));
+                }
+            }
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    for (int i = 0; i < blk.Cmds.Count; i++)
+                    {
+                        var acmd = blk.Cmds[i] as AssertCmd;
+                        if (acmd == null) continue;
+
+                        if (!QKeyValue.FindBoolAttribute(acmd.Attributes, "guarded"))
+                        {
+                            blk.Cmds[i] = new AssumeCmd(acmd.tok, acmd.Expr);
+                            continue;
+                        }
+
+                        var me = mineExpr(acmd.Expr);
+                        if (me.Item2)
+                            blk.Cmds[i] = new AssumeCmd(acmd.tok, me.Item1);
+                        else
+                            blk.Cmds[i] = new AssertCmd(acmd.tok, me.Item1);
+                    }
+                }
+
+            }
+
+            return BoogieUtil.ReResolve(program);
+        }
+
+
 
         // Convert requires and ensures to "assumes"
         public static Program RemoveRequiresAndEnsures(Program program)

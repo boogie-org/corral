@@ -37,8 +37,13 @@ namespace ConcurrentHoudini
             {
                 instantiateTemplates = true;
             }
-            else if (arg.StartsWith("/idempotent:"))
+            else if (arg == "/injectYields")
             {
+                injectYields = true;
+            }
+            else if (arg == "/pruneAsserts")
+            {
+                pruneAsserts = true;
             }
             else
             {
@@ -96,9 +101,18 @@ namespace ConcurrentHoudini
 
         public static bool dbg;
         static bool local = false;
-        static bool instantiateTemplates = false;
+
+        // Inject templates
+        static bool instantiateTemplates = false; 
+        // Do not instrument for tid 
         static bool noTid = false;
+        // Do not instrument for permissions (simple MHP analysis)
         static bool noPerm = false;
+        // Convert original asserts to assumes
+        static bool pruneAsserts = false;
+        // Inject yields at each global access
+        static bool injectYields = false;
+
         public static Context con = null;
         public static string absDomain = "IA[HoudiniConst]";
 
@@ -109,7 +123,6 @@ namespace ConcurrentHoudini
             string
                 inFileName = null,
                 unrolledFileName = null,
-                assertsChangedFileName = null,
                 tidRewrittenFileName = null,
                 expandedFileName = null,
                 annotatedFileName = null,
@@ -129,7 +142,6 @@ namespace ConcurrentHoudini
                 unrolledFileName = inFileName + "_unrolled";
                 hmifFileName = inFileName + "_hmif";
                 expandedFileName = inFileName + "_expanded";
-                assertsChangedFileName = inFileName + "_assertsInstrumented";
                 tidRewrittenFileName = inFileName + "_tidRewritten";
                 annotatedFileName = inFileName + "_annotated";
                 splitFileName = inFileName + "_split";
@@ -150,7 +162,6 @@ namespace ConcurrentHoudini
                 finalFileName = name + "_final";
                 mhpFileName = name + "_mhp";
                 instantiatedFileName = name + "_inst";
-                assertsChangedFileName = name + "_assertsInstrumented";
                 tidRewrittenFileName = name + "_tidRewritten";
                 for (int i = 1; i < parts.Count(); ++i)
                 {
@@ -161,7 +172,6 @@ namespace ConcurrentHoudini
                     splitFileName += "." + parts[i];
                     yieldedFileName += "." + parts[i];
                     finalFileName += "." + parts[i];
-                    assertsChangedFileName += "." + parts[i];
                     tidRewrittenFileName += "." + parts[i];
                     mhpFileName += "." + parts[i];
                     instantiatedFileName += "." + parts[i];
@@ -197,100 +207,14 @@ namespace ConcurrentHoudini
             cba.PruneProgramPass.pruneProcs(program, entry.Name);
             ModSetCollector.DoModSetAnalysis(program);
 
+            if (pruneAsserts)
+                program = og.GuardAsserts(program);
+
             if (instantiateTemplates)
             {
                 var inst = new TemplateInstantiator(program);
                 inst.Instantiate(program);
                 program = BoogieUtil.ReResolve(program, instantiatedFileName);
-            }
-
-            if (local)
-            {
-                ExecutionEngine.EliminateDeadVariablesAndInline(program);
-
-                // Extract loops
-                program.ExtractLoops();
-
-                /*
-                var procs = new HashSet<string>();
-                var globals = new HashSet<string>();
-
-                program.TopLevelDeclarations.OfType<GlobalVariable>()
-                    .Where(g => cba.LanguageSemantics.isShared(g.Name))
-                    .Iter(g => globals.Add(g.Name));
-
-                program.TopLevelDeclarations.OfType<Procedure>()
-                    .Iter(proc => procs.Add(proc.Name));
-                */
-                
-                // Gather template variables
-                var templateVarNames = new HashSet<Variable>();
-                List<Ensures> ens = new List<Ensures>();
-                List<Requires> req = new List<Requires>();
-                var extra = new HashSet<string>();
-
-                var newDecls = new List<Declaration>();
-                foreach (var decl in program.TopLevelDeclarations)
-                {
-                    if (!QKeyValue.FindBoolAttribute(decl.Attributes, "template"))
-                    {
-                        newDecls.Add(decl);
-                        continue;
-                    }
-                    if (decl is GlobalVariable)
-                    {
-                        templateVarNames.Add((decl as Variable));
-                    }
-                    else if (decl is Procedure)
-                    {
-                        var proc = decl as Procedure;
-
-                        proc.Ensures.OfType<Ensures>()
-                            .Iter(e => ens.Add(e));
-
-                        proc.Requires.OfType<Requires>()
-                            .Iter(r => req.Add(r));
-                    }
-
-                }
-                foreach (Ensures en in ens)
-                {
-                    var gu = new GlobalVarsUsed();
-                    gu.VisitEnsures(en);
-                    extra.UnionWith(gu.globalsUsed);
-                }
-                foreach (Requires re in req)
-                {
-                    var gu = new GlobalVarsUsed();
-                    gu.VisitRequires(re);
-                    extra.UnionWith(gu.globalsUsed);
-                }
-                foreach (var t in templateVarNames)
-                {
-                    extra.Remove(t.Name);
-                }
-
-                program.TopLevelDeclarations = newDecls;
-                if (extra.Any())
-                {
-                    throw new ConcurrentHoudiniException("Cannot do local abstraction when template has global variables");
-                }
-
-                // Abstract global variables
-                var abstractVariables = new cba.VariableSlicing(new cba.VarSet(), new cba.ModifyTrans());
-                program = abstractVariables.VisitProgram(program);
-
-                // Add candidates, try to prove as many asserts as we can
-                var ci = new cba.ContractInfer(templateVarNames, req, ens, 0, -1);
-                ci.printHoudiniQuery = "h.bpl";
-                cba.ContractInfer.disableStaticAnalysis = true;
-                cba.ContractInfer.checkAsserts = true;
-
-                var outp = ci.run(new cba.PersistentCBAProgram(program, entry.Name, 0));
-                program = outp.getProgram();
-
-                BoogieUtil.PrintProgram(program, finalFileName);
-                return;
             }
 
             var sp = new SplitThreads(con, dbg);
@@ -307,6 +231,17 @@ namespace ConcurrentHoudini
 
             program = findHowManyInstances(program);
             program = BoogieUtil.ReResolve(program, splitFileName);
+
+            if (dbg)
+                Console.WriteLine("Injecting yields");
+
+            // Get rid of corral_yield
+            program = og.RemoveCorralYield(program, con.yieldProc);
+
+            if(injectYields)
+                program = og.InsertYields(program);
+
+            BoogieUtil.PrintProgram(program, yieldedFileName);
 
             if(dbg)
                 Console.WriteLine("Instrumenting: {0}", annotatedFileName);
@@ -369,21 +304,32 @@ namespace ConcurrentHoudini
 
             var answer = abs.GetAssignment();
 
+            var provedAsserts = new Dictionary<string, bool>();
+            answer.Where(func => QKeyValue.FindBoolAttribute(func.Attributes, "assertGuard"))
+                .Iter(func => {
+                    var le = func.Body as LiteralExpr;
+                    System.Diagnostics.Debug.Assert(le != null);
+                    provedAsserts.Add(func.Name, le.IsFalse);
+                });
+
             // remove injected existential functions
-            answer = answer.Where(func => !QKeyValue.FindBoolAttribute(func.Attributes, "chignore"));
+            answer = answer.Where(func => !QKeyValue.FindBoolAttribute(func.Attributes, "chignore")
+                && !QKeyValue.FindBoolAttribute(func.Attributes, "assertGuard"));
 
             using (var tt = new TokenTextWriter(Console.Out))
                 answer.ToList().ForEach(func => func.Emit(tt, 0));
 
+
             if(dbg)
                 Console.WriteLine("Injecting invariants back into the original program: {0}", finalFileName);
 
-            program = BoogieUtil.ReadAndOnlyResolve(inFileName);
+            program = BoogieUtil.ReadAndOnlyResolve(yieldedFileName);
             // remove existential functions
             program.TopLevelDeclarations.RemoveAll(decl => (decl is Function) && QKeyValue.FindBoolAttribute((decl as Function).Attributes, "existential"));
             program.TopLevelDeclarations.AddRange(answer);
-            // massage corral_yield
-            program = MassageCorralYield(program);
+
+            program = og.PruneProvedAsserts(program, f => provedAsserts[f] );
+
             // Remove ensures and requires
             program = og.RemoveRequiresAndEnsures(program);
             // Remove tid func

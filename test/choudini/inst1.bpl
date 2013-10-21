@@ -15,6 +15,7 @@ procedure {:entrypoint} main()
 
   yield;
   x := x + 1;
+  assert x >= 0;
 
 }
 
