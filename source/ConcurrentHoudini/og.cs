@@ -644,6 +644,8 @@ namespace ConcurrentHoudini
                 {
                     foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
                     {
+                        if (cmd.Expr is LiteralExpr && (cmd.Expr as LiteralExpr).IsTrue) continue;
+
                         var func = GetExistentialFunc();
                         cmd.Expr = Expr.Or(new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr>()), cmd.Expr);
                         cmd.Attributes = new QKeyValue(Token.NoToken, "guarded", new List<object>(), cmd.Attributes);
@@ -708,6 +710,7 @@ namespace ConcurrentHoudini
                     {
                         var acmd = blk.Cmds[i] as AssertCmd;
                         if (acmd == null) continue;
+                        if ((acmd.Expr is LiteralExpr) && (acmd.Expr as LiteralExpr).IsTrue) continue;
 
                         if (!QKeyValue.FindBoolAttribute(acmd.Attributes, "guarded"))
                         {
