@@ -133,6 +133,7 @@ namespace cba
 
         public int explainError { get; private set; }
         public int explainErrorTimeout { get; private set; }
+        public int explainErrorFilters { get; private set; }
 
         public bool trainSummaries { get; private set; }
 
@@ -322,6 +323,7 @@ namespace cba
 
             explainError = 0;
             explainErrorTimeout = 0;
+            explainErrorFilters = 0;
             recordValues = new HashSet<string>();
             printAllTraces = false;
             rootCause = -1;
@@ -419,6 +421,8 @@ namespace cba
                 explainError = Int32.Parse(split[1]);
                 if (split.Length == 3)
                     explainErrorTimeout = Int32.Parse(split[2]);
+                if (split.Length == 4)
+                    explainErrorFilters = Int32.Parse(split[3]);
                 useProverEvaluate = true;
             }
             else if (flag.StartsWith("/recursionBound:"))

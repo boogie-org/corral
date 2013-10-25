@@ -1134,7 +1134,7 @@ namespace cba
                         Dictionary<string, string> complexObj;
 
                         var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
-                            .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout,
+                            .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
                             out status, out complexObj);
                         
                         if (status == ExplainError.STATUS.TIMEOUT)
