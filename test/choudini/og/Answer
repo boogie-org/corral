@@ -1,0 +1,84 @@
+
+-------------------- foo.bpl --------------------
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(12,3): og_init
+    og__tmp.bpl(158,3): inline$Impl_YieldChecker_PC$0$L0
+
+-------------------- bar.bpl --------------------
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(82,3): og_init
+    og__tmp.bpl(155,3): inline$Impl_YieldChecker_PC$0$L0
+
+-------------------- one.bpl --------------------
+Warning: No entrypoint given
+Verified
+
+-------------------- parallel1.bpl --------------------
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(12,3): og_init
+    og__tmp.bpl(135,3): inline$Proc_YieldChecker_PC$0$L0
+Execution trace:
+    og__tmp.bpl(12,3): og_init
+    og__tmp.bpl(154,3): inline$Impl_YieldChecker_PC$0$L0
+
+-------------------- parallel3.bpl --------------------
+Verified
+
+-------------------- linear-set.bpl --------------------
+Verified
+
+-------------------- linear-set2.bpl --------------------
+Verified
+
+-------------------- FlanaganQadeer.bpl --------------------
+Verified
+
+-------------------- DeviceCacheSimplified.bpl --------------------
+Verified
+
+-------------------- parallel2.bpl --------------------
+Verified
+
+-------------------- parallel4.bpl --------------------
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(51,3): og_init
+    og__tmp.bpl(51,3): og_init$1
+
+-------------------- parallel5.bpl --------------------
+Verified
+
+-------------------- parallel6.bpl --------------------
+Warning: No entrypoint given
+Verified
+
+-------------------- parallel7.bpl --------------------
+Warning: No entrypoint given
+Verified
+
+-------------------- akash.bpl --------------------
+Warning: No entrypoint given
+Verified
+
+-------------------- t1.bpl --------------------
+Warning: No entrypoint given
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(163,3): og_init
+    og__tmp.bpl(291,3): inline$Impl_YieldChecker_A$0$L1
+
+-------------------- new1.bpl --------------------
+Verified
+
+-------------------- perm.bpl --------------------
+Verified
+
+-------------------- async.bpl --------------------
+Some assert failed while running AbsHoudini, aborting
+Execution trace:
+    og__tmp.bpl(15,3): og_init
+    og__tmp.bpl(15,3): og_init$1
+    og__tmp.bpl(70,3): inline$Proc_YieldChecker_P$1$L0

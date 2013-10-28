@@ -29,9 +29,9 @@ namespace ConcurrentHoudini
             {
                 noTid = true;
             }
-            else if (arg == "/noPerm")
+            else if (arg == "/perm")
             {
-                noPerm = true;
+                instrumentPermissions = true;
             }
             else if (arg == "/instantiate")
             {
@@ -44,6 +44,22 @@ namespace ConcurrentHoudini
             else if (arg == "/pruneAsserts")
             {
                 pruneAsserts = true;
+            }
+            else if (arg == "/splitThreads")
+            {
+                splitThreads = true;
+            }
+            else if (arg == "/extractLoops")
+            {
+                extractLoops = true;
+            }
+            else if (arg == "/corral")
+            {
+                splitThreads = true;
+                extractLoops = true;
+                instrumentPermissions = true;
+                //pruneAsserts = true;
+                //instantiateTemplates = true;
             }
             else
             {
@@ -92,7 +108,7 @@ namespace ConcurrentHoudini
         static void printUsageMessage()
         {
             string msg =
-                "Usage: ConcurrentHoudini.exe [/dbg][/break][/idempotent:{true,false}][/main:<entry_func_name>] inputfile";
+                "Usage: ConcurrentHoudini.exe inputfile [/flags]";
             Console.Write(msg);
             Console.WriteLine();
         }
@@ -106,12 +122,16 @@ namespace ConcurrentHoudini
         static bool instantiateTemplates = false; 
         // Do not instrument for tid 
         static bool noTid = false;
-        // Do not instrument for permissions (simple MHP analysis)
-        static bool noPerm = false;
+        // Instrument for permissions (simple MHP analysis)
+        static bool instrumentPermissions = false;
         // Convert original asserts to assumes
         static bool pruneAsserts = false;
         // Inject yields at each global access
         static bool injectYields = false;
+        // Extract loops
+        static bool extractLoops;
+        // Split threads based on entry point
+        static bool splitThreads;
 
         public static Context con = null;
         public static string absDomain = "IA[HoudiniConst]";
@@ -178,6 +198,8 @@ namespace ConcurrentHoudini
                 }
             }
 
+            var tmpFileName = "og__tmp.bpl";
+
             ExecutionEngine.printer = new ConsolePrinter();
             //CommanLineOptions will control how boogie parses the program and gives us the IR
             CommandLineOptions.Install(new CommandLineOptions());
@@ -199,14 +221,21 @@ namespace ConcurrentHoudini
                 .FirstOrDefault();
 
             if (entry == null)
-                throw new Exception("Entrypoint not found");
-
-            con.entryFunc = entry.Name;
+            {
+                Console.WriteLine("Warning: No entrypoint given");
+                con.entryFunc = null;
+            }
+            else
+            {
+                con.entryFunc = entry.Name;
+            }
 
             // Remove unreachable procedures
-            cba.PruneProgramPass.pruneProcs(program, entry.Name);
+            cba.PruneProgramPass.pruneProcs(program, con.entryFunc);
+
             // Extract loops
-            program.ExtractLoops();
+            if(extractLoops)
+                program.ExtractLoops();
 
             ModSetCollector.DoModSetAnalysis(program);
 
@@ -217,7 +246,7 @@ namespace ConcurrentHoudini
             {
                 var inst = new TemplateInstantiator(program);
                 inst.Instantiate(program);
-                program = BoogieUtil.ReResolve(program, instantiatedFileName);
+                program = BoogieUtil.ReResolve(program, dbg ? instantiatedFileName : tmpFileName);
             }
 
             var sp = new SplitThreads(con, dbg);
@@ -226,17 +255,17 @@ namespace ConcurrentHoudini
             var split = new Converter<Program, Program>(sp.split);
             var findHowManyInstances = new Converter<Program, Program>(hmif.Compute);
 
-            if(dbg)
-              Console.WriteLine("Splitting procedures on thread entry: {0}", splitFileName);
+            if (entry != null && splitThreads)
+            {
+                if (dbg)
+                    Console.WriteLine("Splitting procedures on thread entry: {0}", splitFileName);
 
-            program = split(program);
-            program = BoogieUtil.ReResolve(program, hmifFileName);
+                program = split(program);
+                program = BoogieUtil.ReResolve(program, dbg ? hmifFileName : tmpFileName);
 
-            program = findHowManyInstances(program);
-            program = BoogieUtil.ReResolve(program, splitFileName);
-
-            if (dbg)
-                Console.WriteLine("Injecting yields");
+                program = findHowManyInstances(program);
+                program = BoogieUtil.ReResolve(program, dbg ? splitFileName : tmpFileName);
+            }
 
             // Get rid of corral_yield
             program = og.RemoveCorralYield(program, con.yieldProc);
@@ -244,7 +273,7 @@ namespace ConcurrentHoudini
             if(injectYields)
                 program = og.InsertYields(program);
 
-            BoogieUtil.PrintProgram(program, yieldedFileName);
+            var yieldedProgram = new ProgTransformation.PersistentProgram(program);
 
             if(dbg)
                 Console.WriteLine("Instrumenting: {0}", annotatedFileName);
@@ -254,10 +283,10 @@ namespace ConcurrentHoudini
 
             program = og.InstrumentAtomicBlocks(program);
 
-            if(!noPerm)
+            if(instrumentPermissions)
                 program = og.InstrumentPermissions(program);
 
-            program = BoogieUtil.ReResolve(program, annotatedFileName);
+            program = BoogieUtil.ReResolve(program, dbg ? annotatedFileName : tmpFileName);
 
             // Run OG
             if(dbg)
@@ -280,7 +309,7 @@ namespace ConcurrentHoudini
             //ExecutionEngine.printer.WriteTrailer(stats);
             //return;
 
-            program = BoogieUtil.ReResolve(program, expandedFileName);
+            program = BoogieUtil.ReResolve(program, dbg ? expandedFileName : tmpFileName);
 
             // Run Abs
             if(dbg)
@@ -305,6 +334,8 @@ namespace ConcurrentHoudini
                 return;
             }
 
+            Console.WriteLine("Verified");
+
             var answer = abs.GetAssignment();
 
             var provedAsserts = new Dictionary<string, bool>();
@@ -326,7 +357,8 @@ namespace ConcurrentHoudini
             if(dbg)
                 Console.WriteLine("Injecting invariants back into the original program: {0}", finalFileName);
 
-            program = BoogieUtil.ReadAndOnlyResolve(yieldedFileName);
+            program = yieldedProgram.getProgram();
+
             // remove existential functions
             program.TopLevelDeclarations.RemoveAll(decl => (decl is Function) && QKeyValue.FindBoolAttribute((decl as Function).Attributes, "existential"));
             program.TopLevelDeclarations.AddRange(answer);

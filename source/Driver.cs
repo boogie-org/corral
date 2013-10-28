@@ -505,6 +505,8 @@ namespace cba
                     }
                 }
 
+                Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+
                 throw new NormalExit("Done");
             }
             #endregion

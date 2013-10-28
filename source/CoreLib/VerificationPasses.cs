@@ -1843,6 +1843,9 @@ namespace cba
         // Prune by removing procedures that are not called
         public static void pruneProcs(Program program, string mainProcName)
         {
+            if (mainProcName == null)
+                return;
+
             var edges = new Dictionary<string, HashSet<string>>();
             foreach (var decl in program.TopLevelDeclarations)
             {
@@ -1856,6 +1859,11 @@ namespace cba
                         var ccmd = cmd as CallCmd;
                         if (ccmd == null) continue;
                         edges[impl.Name].Add(ccmd.callee);
+                        while (ccmd.InParallelWith != null)
+                        {
+                            ccmd = ccmd.InParallelWith;
+                            edges[impl.Name].Add(ccmd.callee);
+                        }
                     }
                 }
             }

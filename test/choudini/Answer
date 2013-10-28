@@ -1,11 +1,13 @@
 
 -------------------- t1.bpl --------------------
+Verified
 function {:existential true} {:inline} Assert() : bool
 {
   false
 }
 
 -------------------- t2.bpl --------------------
+Verified
 function {:existential true} {:inline} Assert() : bool
 {
   false
@@ -32,6 +34,7 @@ function {:existential true} {:inline} Inv5(x: bool) : bool
 }
 
 -------------------- t3.bpl --------------------
+Verified
 function {:existential true} {:absdomain "PredicateAbs"} {:inline} Inv1(x: bool, x2: bool) : bool
 {
   x && !x2
@@ -54,6 +57,7 @@ function {:existential true} {:absdomain "PredicateAbs"} {:inline} Inv5(x: bool,
 }
 
 -------------------- t5.bpl --------------------
+Verified
 function {:existential true} {:absdomain "ConstantProp"} {:inline} Inv1(a: bool) : bool
 {
   a
@@ -68,6 +72,7 @@ function {:existential true} {:absdomain "ConstantProp"} {:inline} Inv3(a: bool)
 }
 
 -------------------- t6.bpl --------------------
+Verified
 function {:existential true} {:inline} Inv1(a: bool) : bool
 {
   a
@@ -82,6 +87,7 @@ function {:existential true} {:inline} Inv3(a: bool) : bool
 }
 
 -------------------- inst1.bpl --------------------
+Verified
 function {:existential true} {:absdomain "IA[ConstantProp]"} {:inline} f0(a: bool) : bool
 {
   false

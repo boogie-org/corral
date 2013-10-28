@@ -918,6 +918,20 @@ namespace cba.Util
             return new Formal(Token.NoToken, new TypedIdent(Token.NoToken, name, t), incoming);
         }
 
+        public static Variable MkVarCopy(string name, Variable v)
+        {
+            if (v is GlobalVariable)
+                return MkGlobal(name, v.TypedIdent.Type);
+            if (v is LocalVariable)
+                return MkLocal(name, v.TypedIdent.Type);
+            if (v is Formal)
+                return MkFormal(name, v.TypedIdent.Type, (v as Formal).InComing);
+            if (v is Constant)
+                return new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                    name, v.TypedIdent.Type));
+            Debug.Assert(false);
+            return null;
+        }
 
         public static Expr MkEqual(Variable v, int n)
         {

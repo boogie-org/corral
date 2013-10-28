@@ -539,6 +539,8 @@ namespace cba.Util
             if (node.Proc != null)
                 node.Proc = this.VisitProcedure(node.Proc);
             //node = (Implementation) this.VisitDeclWithFormals(node); // do this first or last?
+            node.InParams = this.VisitVariableSeq(node.InParams);
+            node.OutParams = this.VisitVariableSeq(node.OutParams);
             return node;
         }
 

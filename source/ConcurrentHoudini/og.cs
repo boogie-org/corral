@@ -19,6 +19,9 @@ namespace ConcurrentHoudini
         // where i is a unique index for that thread
         public static Program InstrumentPermissions(Program program)
         {
+            if (Driver.con.entryFunc == null)
+                return program;
+
             // map type: [int] bool;
             var settype = BoogieAstFactory.MkMapType(btype.Int, btype.Bool);
 
@@ -158,7 +161,7 @@ namespace ConcurrentHoudini
                 if(id >= 0)
                    impl.Proc.Requires.Add(new Requires(true, BoogieAstFactory.MkMapAccessExpr(permIn, Expr.Literal(id))));
 
-                var callSplit = new CallCmd(Token.NoToken, "Split", new List<Expr>{Expr.Ident(permOut)}, new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(permOut), Expr.Ident(permOut2) }));
+                var callSplit = new CallCmd(Token.NoToken, "SplitPerm", new List<Expr>{Expr.Ident(permOut)}, new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(permOut), Expr.Ident(permOut2) }));
                 foreach (var blk in impl.Blocks)
                 {
                     var ncmds = new List<Cmd>();
@@ -215,7 +218,7 @@ namespace ConcurrentHoudini
             // Insert the Split procedure as a string
             BoogieUtil.PrintProgram(program, "temp_rar.bpl");
             System.IO.File.AppendAllText("temp_rar.bpl",
-                string.Format(@"{0}procedure Split({{:linear ""Perm""}} xls: [int]bool) returns ({{:linear ""Perm""}} xls1: [int]bool, {{:linear ""Perm""}} xls2: [int]bool);" +
+                string.Format(@"{0}procedure SplitPerm({{:linear ""Perm""}} xls: [int]bool) returns ({{:linear ""Perm""}} xls1: [int]bool, {{:linear ""Perm""}} xls2: [int]bool);" +
             "{0}ensures xls == {1}(xls1, xls2) && xls1 != {2}(false) && xls2 != {2}(false);{0}", Environment.NewLine, mapunion.Name, mapconstbool.Name));
 
             program = BoogieUtil.ReadAndOnlyResolve("temp_rar.bpl");
@@ -257,6 +260,16 @@ namespace ConcurrentHoudini
 
         public static Program InstrumentTid(Program program)
         {
+            // check if we even need to instrument for tid or not
+            if (!program.TopLevelDeclarations.OfType<Procedure>()
+                .Any(proc => proc.Name == Driver.con.corralTidProc)
+                &&
+                !program.TopLevelDeclarations.OfType<Function>()
+                .Any(func => func.Name == Driver.con.tidFunc))
+            {
+                return program;
+            }
+
             // Get hold of all implementations
             var impls = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -404,6 +417,14 @@ namespace ConcurrentHoudini
 
         public static Program InstrumentAtomicBlocks(Program program)
         {
+            // check if we need to instrument here or not
+            if (!program.TopLevelDeclarations.OfType<Procedure>()
+                .Any(proc => proc.Name == Driver.con.atomicBegProc ||
+                proc.Name == Driver.con.atomicEndProc))
+            {
+                return program;
+            }
+
             // Get hold of all implementations
             var impls = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Implementation>()

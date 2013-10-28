@@ -244,14 +244,6 @@ namespace ConcurrentHoudini
                 proc.Attributes = threadEntryAttr;
             }
 
-            if (dbg)
-            {
-                Console.WriteLine("Split Threads Output:");
-                using (Microsoft.Boogie.TokenTextWriter writer = new Microsoft.Boogie.TokenTextWriter(System.Console.Out))
-                    originalProgram.Emit(writer);
-                Console.WriteLine();
-            }
-
             return originalProgram;    
         }
 
