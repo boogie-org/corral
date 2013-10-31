@@ -24,6 +24,7 @@ namespace ExplainError
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
         private static bool verbose = false;
         private static bool onlySlicAssumes = false;
+        private static bool ignoreAllAssumes = false; //default = false
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
@@ -56,17 +57,33 @@ namespace ExplainError
         static public Dictionary<string, string> complexCExprs; //list of let exprs for displaying concisely
 
         //this will be invoked from corral
-        public static List<string> Go(Implementation impl, Program pr, int tmout, out STATUS status, out Dictionary<string,string> complexCExprsRet)
+        /// <summary>
+        /// explainErrorFilters is used to control any options to filter
+        ///    0 : reserved for default SDV options 
+        ///    1 : {ignoreAllAssumes, !onlyDisplayAliasingInPre, !onlyDisplayMapExpressions, !dontDisplayComparisonWithConsts}
+        /// </summary>
+        /// <param name="impl"></param>
+        /// <param name="pr"></param>
+        /// <param name="tmout"></param>
+        /// <param name="explainErrorFilters"></param>
+        /// <param name="status"></param>
+        /// <param name="complexCExprsRet"></param>
+        /// <returns></returns>
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, out STATUS status, out Dictionary<string,string> complexCExprsRet)
         {
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
             /////////////////////////////////////
             //override teh default options
             verbose = false;
-            onlySlicAssumes = true; //changing it to false makese several stackoverflowexns, timeouts with little gain
+            onlySlicAssumes = true; //changing it to false makese several stackoverflowexns, timeouts with little 
             onlyDisplayAliasingInPre = true;
             onlyDisplayMapExpressions = true;
             dontDisplayComparisonsWithConsts = true;
+            if (explainErrorFilters == 1) //using it for memory safety rootcause
+            {
+                ignoreAllAssumes = true; onlyDisplayAliasingInPre = false; onlyDisplayMapExpressions = false; dontDisplayComparisonsWithConsts = false;
+            }
             showBoogieExprs = false;
             complexCExprsRet = null;
             timeout = tmout > 0 ? tmout : MAX_TIMEOUT;
@@ -86,7 +103,7 @@ namespace ExplainError
         {
             STATUS status;
             Dictionary<string, string> tmp;
-            return Go(impl, pr, tmout, out status, out tmp);
+            return Go(impl, pr, tmout, 0, out status, out tmp);
         }
         public static List<string> Go(Implementation impl)
         {
@@ -606,6 +623,7 @@ namespace ExplainError
         }
         private static bool ContainsSlicAttribute(AssumeCmd assumeCmd)
         {
+            if (ignoreAllAssumes) return false;
             return (!onlySlicAssumes || QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic"));
         }
 
