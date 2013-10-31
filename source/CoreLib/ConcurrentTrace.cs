@@ -264,86 +264,36 @@ namespace cba
             line = -1;
             keepCmd = true;
 
-            var acmd = cmd as AssertCmd;
+            var acmd = cmd as PredicateCmd;
             if (acmd == null)
             {
                 return false;
             }
 
-            file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourceFile");
-            if (file == null) file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile");
-            line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceLine", -1);
-            if (line == -1) line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceline", -1);
+            var attr = BoogieUtil.getAttr("sourceloc", acmd.Attributes);
 
-            if (file == null || line == -1) return false;
-            
+            if (attr != null && attr.Count == 3)
+            {
+                file = attr[0] as string;
+                var tt = attr[1] as LiteralExpr;
+                if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
+                    line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;                
+            }
+            else
+            {
+                file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourceFile");
+                if (file == null) file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile");
+                line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceLine", -1);
+                if (line == -1) line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceline", -1);
+            }
+
+            if (file == null || line == -1)
+                return false;            
+
             if (acmd.Expr is LiteralExpr && (acmd.Expr as LiteralExpr).IsTrue)
                 keepCmd = false;
 
             return true;
-        }
-
-        // Gathers source info from comments "// c$$file(n)"
-        public static void gatherCSourceLineInfo(string origInFile)
-        {
-            throw new InternalError("Use of this method is deprecated");
-
-            // Read the orignal file gathering a mapping: 
-            //   {bpl proc name, bpl block name} -> {C file, line num}
-            mapCTrace = new Dictionary<Duple<string, string>, Duple<string, string>>();
-            StreamReader reader = new StreamReader(origInFile);
-            var reProc = new System.Text.RegularExpressions.Regex(@"procedure\s*(\S*)\(.*\).*");
-            var reLine = new System.Text.RegularExpressions.Regex(@"//\s*([a-zA-Z]\$\$.*)");
-            var reSplitLine = new System.Text.RegularExpressions.Regex(@"([a-zA-Z])(\$\$)(.*)\(([0-9]*)\)");
-            var reBlock = new System.Text.RegularExpressions.Regex(@"(.*):");
-
-            string currProc = null;
-            string currBlock = null;
-            while (reader.Peek() >= 0)
-            {
-                string line = reader.ReadLine();
-
-                var match = reProc.Match(line);
-                if (match.Success)
-                {
-                    currProc = match.Result("$1");
-                    //Console.WriteLine(currProc);
-                    continue;
-                }
-
-                match = reLine.Match(line);
-                if (match.Success)
-                {
-                    var cloc = match.Result("$1");
-                    //Console.WriteLine(cloc);
-
-                    match = reSplitLine.Match(cloc);
-                    var s1 = match.Result("$1:\\$3");
-                    var s2 = match.Result("$4");
-                    //Console.WriteLine(s1);
-                    //Console.WriteLine(s2);
-
-                    // Get the block
-                    if (reader.Peek() >= 0)
-                    {
-                        line = reader.ReadLine();
-                        match = reBlock.Match(line);
-                        currBlock = match.Result("$1");
-
-                        // Record
-                        if (currProc != null)
-                        {
-                            mapCTrace.Add(
-                                new Duple<string, string>(currProc, currBlock),
-                                new Duple<string, string>(s1, s2));
-                        }
-                    }
-
-                    continue;
-                }
-
-            }
-            reader.Close();
         }
 
         // Print an interleaved trace, using the execution context information present

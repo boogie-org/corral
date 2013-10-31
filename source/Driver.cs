@@ -1398,10 +1398,10 @@ namespace cba
                         newcmds.Add(cmd);
                         tinfo.addTrans(impl.Name, blk.Label, incnt, cmd, blk.Label, newcmds.Count - 1, new List<Cmd>{cmd});
 
-                        var acmd = cmd as AssertCmd;
+                        var acmd = cmd as PredicateCmd;
                         if (acmd == null) continue;
 
-                        if (QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile") != null)
+                        if (QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile") != null || BoogieUtil.checkAttrExists("sourceloc", acmd.Attributes))
                         {
                             var par = new List<object>();
                             par.Add("corral_capture");

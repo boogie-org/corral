@@ -178,6 +178,16 @@ namespace cba.Util
         }
 
         // Is there a Key called "name"
+        public static List<object> getAttr(string name, QKeyValue attr)
+        {
+            for (; attr != null; attr = attr.Next)
+            {
+                if (attr.Key == name) return attr.Params;
+            }
+            return null;
+        }
+
+        // Is there a Key called "name"
         public static bool checkAttrExists(string name, QKeyValue attr)
         {
             for (; attr != null; attr = attr.Next)
