@@ -88,8 +88,6 @@ namespace cba
 
         public int timeout { get; private set; }
 
-        public int printCoverage { get; private set; }
-
         public string printFinalProg { get; private set; }
 
         public string boogieOpts { get; private set; }
@@ -274,7 +272,6 @@ namespace cba
             memLimit = 0;
             recursionBound = -1;
             timeout = 0;
-            printCoverage = 0;
             boogieOpts = " ";
             printFinalProg = null;
             refinementAlgo = "tttt";
@@ -595,14 +592,6 @@ namespace cba
             else if (flag == "/printProgress")
             {
                 printProgress = true;
-            }
-            else if (flag == "/coverage")
-            {
-                printCoverage = 1;
-            }
-            else if (flag == "/coverage:i")
-            {
-                printCoverage = 2;
             }
             else if (flag == "/cloops")
             {

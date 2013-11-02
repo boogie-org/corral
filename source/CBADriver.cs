@@ -259,7 +259,6 @@ namespace cba
 
         static DateTime startTime = DateTime.Now;
 
-        static Process coverageReporter = null;
         static ContractInfer ci = null;
 
         public static void Initialize(Configs config)
@@ -316,8 +315,6 @@ namespace cba
         {
             Debug.Assert(!verifyingPath && !verifyingProg);
 
-            coverageReporter = CommandLineOptions.Clo.coverageReporter;
-            CommandLineOptions.Clo.coverageReporter = null;
             ci = GlobalConfig.InferPass;
             GlobalConfig.InferPass = null;
 
@@ -339,7 +336,6 @@ namespace cba
             Debug.Assert(verifyingPath);
             verifyingPath = false;
 
-            CommandLineOptions.Clo.coverageReporter = coverageReporter;
             GlobalConfig.InferPass = ci;
             BoogieVerify.recordTempTime = false;
             //CommandLineOptions.Clo.ModelViewFile = null;

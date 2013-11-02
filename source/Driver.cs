@@ -140,57 +140,6 @@ namespace cba
 
             boogieOptions += string.Format("/recursionBound:{0} ", config.recursionBound);
 
-            #region Coverage reporter
-            string cr = null;
-            if (config.printCoverage > 0)
-            {
-                cr = System.Environment.GetEnvironmentVariable("POIROT_COVERAGE_REPORTER");
-                if (cr == null)
-                {
-                    throw new UsageError("Must set the environment variable POIROT_COVERAGE_REPORTER to the coverage reporter directory");
-                }
-                cr = cr + @"\CoverageGraph.exe";
-                if (!System.IO.File.Exists(cr))
-                {
-                    throw new UsageError("Coverage reporter not found at location:" + cr);
-                }
-            }
-
-            // create a process for displaying coverage information
-            Process coverageProcess = null;
-            ProcessStartInfo coverageProcessInfo = null;
-
-            if (cr != null)
-            {
-                coverageProcess = new Process();
-                coverageProcessInfo = new ProcessStartInfo();
-                coverageProcessInfo.CreateNoWindow = true;
-                coverageProcessInfo.FileName = cr;
-                coverageProcessInfo.RedirectStandardInput = true;
-                coverageProcessInfo.RedirectStandardOutput = true;
-                coverageProcessInfo.RedirectStandardError = false;
-                coverageProcessInfo.UseShellExecute = false;
-                if (config.printCoverage == 2)
-                {
-                    coverageProcessInfo.Arguments = "interactive";
-                }
-                coverageProcess.StartInfo = coverageProcessInfo;
-                try
-                {
-                    coverageProcess.Start();
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    coverageProcess.Dispose();
-                    coverageProcess = null;
-                }
-            }
-            if (coverageProcess != null)
-            {
-                CommandLineOptions.Clo.coverageReporter = coverageProcess;
-            }
-            #endregion
-
             var startTime = DateTime.Now;
 
             // Initialize Boogie
@@ -419,19 +368,6 @@ namespace cba
             #endregion
 
             Log.Close();
-
-            #region Coverage reporter
-            if (coverageProcess != null)
-            {
-                coverageProcess.StandardInput.WriteLine("done");
-
-                do
-                {
-                    coverageProcess.WaitForExit(100);
-                    coverageProcess.StandardInput.WriteLine();
-                } while (!coverageProcess.HasExited);
-            }
-            #endregion
 
             return 0;
         }

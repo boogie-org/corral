@@ -292,7 +292,7 @@ namespace ConcurrentHoudini
             if(dbg)
                 Console.WriteLine("Running OG: {0}", expandedFileName);
 
-            LinearTypechecker linearTypechecker;
+            LinearTypeChecker linearTypechecker;
             var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker);
 
             if (oc != PipelineOutcome.ResolvedAndTypeChecked)
