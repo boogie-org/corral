@@ -123,6 +123,7 @@ namespace ExplainError
                 if (CheckNecessaryDisjuncts(ref preDisjuncts))
                 {
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
+                    Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preDisjuncts)); //print boogie exprs
                     returnStatus = STATUS.SUCCESS;
                 }
                 else
