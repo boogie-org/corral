@@ -657,30 +657,53 @@ namespace cba
 
     }
 
-    public class AddUniqueCallIds : FixedVisitor
+    public class AddUniqueCallIds
     {
-        private int counter;
-        HashSet<CallCmd> visited;
+        private static int counter = 0;
+        public Dictionary<int, Tuple<string, string, int>> callIdToLocation;
 
         public AddUniqueCallIds()
         {
-            counter = 0;
-            visited = new HashSet<CallCmd>();
+            callIdToLocation = new Dictionary<int, Tuple<string, string, int>>();
         }
 
-        public override Cmd VisitCallCmd(CallCmd node)
+        public void VisitProgram(Program program)
         {
-            if(visited.Contains(node)) return node;
-            visited.Add(node);
-
-            var attr = new List<object>();
-            attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(counter)));
-            counter ++;
-
-            node.Attributes = BoogieUtil.removeAttr("si_unique_call", node.Attributes);
-            node.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, node.Attributes);
-            return node;
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                VisitImplementation(impl);
         }
+
+        public void VisitImplementation(Implementation impl)
+        {
+            foreach (var block in impl.Blocks)
+            {
+                var callcnt = 0;
+                for (int i = 0; i < block.Cmds.Count; i++)
+                {
+                    var cc = block.Cmds[i] as CallCmd;
+                    if (cc == null) continue;
+
+                    var attr = new List<object>();
+                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(counter)));
+
+                    cc.Attributes = BoogieUtil.removeAttr("si_old_unique_call", cc.Attributes);
+                    var oldAttr = BoogieUtil.getAttr("si_unique_call", cc.Attributes);
+                    if (oldAttr != null)
+                    {
+                        cc.Attributes = BoogieUtil.removeAttr("si_unique_call", cc.Attributes);
+                        cc.Attributes.AddLast(new QKeyValue(Token.NoToken, "si_old_unique_call", oldAttr, null));
+                    }
+
+                    cc.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, cc.Attributes);
+                    callIdToLocation.Add(counter, Tuple.Create(impl.Name, block.Label, callcnt));
+
+                    callcnt++;
+                    counter++;
+                }
+            }
+
+        }
+
     }
 
     public class ExtractRecursionPass : CompilerPass
@@ -900,6 +923,9 @@ namespace cba
 
             if (addUniqueCallLabels)
             {
+                // annotate calls with a unique number
+                var addIds = new AddUniqueCallIds();
+
                 // Loop unrolling is done for procs with irreducible loops.
                 // This simply copies Cmd objects. Duplicate them to remove
                 // aliasing
@@ -912,11 +938,9 @@ namespace cba
                     {
                         blk.Cmds = dup.VisitCmdSeq(blk.Cmds);
                     }
+                    addIds.VisitImplementation(impl);
                 }
-
-                // annotate calls with a unique number
-                var addIds = new AddUniqueCallIds();
-                addIds.VisitProgram(p);
+                
             }
 
             info = new Dictionary<string, Dictionary<string, string>>();

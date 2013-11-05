@@ -675,7 +675,7 @@ namespace cba
 
             var init = new PersistentCBAProgram(program, newMain, 1);
             var curr = init;
-
+            
             var passes = new List<CompilerPass>();
 
             // prune
@@ -1054,7 +1054,7 @@ namespace cba
                         witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
 
                         BoogieVerify.options = ConfigManager.pathVerifyOptions;
-                        var concretize = new SDVConcretizePathPass();
+                        var concretize = new SDVConcretizePathPass(addIds.callIdToLocation);
                         witness = concretize.run(witness);
 
                         if (concretize.success)
@@ -1123,7 +1123,8 @@ namespace cba
                             }
                             foreach (var s in allocConstants.Where(a => concretize.allocConstants.ContainsKey(a)))
                             {
-                                var str = string.Format("^   {0} was allocated in {1}", s, concretize.allocConstants[s]);
+                                var str = string.Format("^   {0} was allocated in procedure {1} block {2} cmd {3}", s, concretize.allocConstants[s].Item1,
+                                    concretize.allocConstants[s].Item2, concretize.allocConstants[s].Item3);
                                 Console.WriteLine("{0}", str);
                                 aliasingExplanation += str.Replace(' ', '_');
                             }

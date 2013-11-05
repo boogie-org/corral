@@ -1461,15 +1461,17 @@ namespace cba
         public bool success;
         readonly string recordProcName = "boogie_si_record_sdvcp_int";
         readonly string initLocProcName = "init_locals_nondet__tmp";
-        public Dictionary<string, string> allocConstants;
+        public Dictionary<string, Tuple<string, string, int>> allocConstants;
+        Dictionary<int, Tuple<string, string, int>> callIdToLocation;
 
         private HashSet<string> procsWithoutBody;
 
-        public SDVConcretizePathPass()
+        public SDVConcretizePathPass(Dictionary<int, Tuple<string, string, int>> callIdToLocation)
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
-            allocConstants = new Dictionary<string, string>();
+            allocConstants = new Dictionary<string, Tuple<string, string, int>>();
+            this.callIdToLocation = callIdToLocation;
         }
         
         public override CBAProgram runCBAPass(CBAProgram p)
@@ -1547,8 +1549,18 @@ namespace cba
             RestrictToTrace.addConcretization = false;
             RestrictToTrace.addConcretizationAsConstants = false;
 
-            // Build a map of where the alloc constants are from
             var rtprog = rt.getProgram();
+
+            // Build a map of where the alloc constants are from
+            foreach (var kvp in rt.allocConstantToCall)
+            {
+                var allocConst = kvp.Key;
+                var callId = kvp.Value;
+                Debug.Assert(callIdToLocation.ContainsKey(callId));
+                allocConstants.Add(allocConst, callIdToLocation[callId]);
+            }
+
+            /*
             foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())
             {
                 // strip _trace from the impl name
@@ -1565,7 +1577,7 @@ namespace cba
                 vu.varsUsed.Where(s => s.StartsWith("alloc_"))
                     .Iter(s => allocConstants[s] = implName);
             }
-
+            */
             program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
 
             // Lets inline it all

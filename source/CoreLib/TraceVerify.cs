@@ -31,6 +31,7 @@ namespace cba
         // Add concretization assignments
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
+        public Dictionary<string, int> allocConstantToCall;
 
         public RestrictToTrace(Program p, InsertionTrans t)
         {
@@ -44,6 +45,7 @@ namespace cba
             tinfo = t;
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
+            allocConstantToCall = new Dictionary<string, int>();
         }
 
         private string addIntToString(string s, int i)
@@ -213,6 +215,10 @@ namespace cba
                                 traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqVar(cc.Outs[0].Decl, constant));
                                 output.TopLevelDeclarations.Add(constant);
                                 output.TopLevelDeclarations.Add(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
+
+                                var id = QKeyValue.FindIntAttribute(cc.Attributes, "si_old_unique_call", -1); // hack to get around multiple unique calls labels
+                                if (id == -1) id = QKeyValue.FindIntAttribute(cc.Attributes, "si_unique_call", -1);
+                                if (id != -1) allocConstantToCall.Add(constant.Name, id);
                             }
 
                         }
