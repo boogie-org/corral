@@ -31,6 +31,7 @@ namespace cba.Util
         public static bool assertsPassedIsInt = false;
         public static bool fwdBckInRef = false;
         public static bool deepAsserts = false;
+        public static bool useDuality = false;
 
         // TODO: move this elsewhere
         public static bool refinementRun = false;
@@ -49,11 +50,11 @@ namespace cba.Util
         // But we ensure that the set of error traces returned (if any) correspond
         // to the original input program.
         public static ReturnStatus Verify(Program program,
-                                          out List<BoogieErrorTrace> allErrors)
+                                          out List<BoogieErrorTrace> allErrors, bool isCBA = false)
         {
             var to = new List<string>();
 
-            ReturnStatus ret = BoogieVerify.Verify(program, true, out allErrors, out to);
+            ReturnStatus ret = BoogieVerify.Verify(program, true, out allErrors, out to, isCBA);
 
             if (to.Count != 0)
                 throw new InternalError("Z3 ran out of resources");
@@ -76,7 +77,8 @@ namespace cba.Util
         public static ReturnStatus Verify(Program program,
                                           bool needErrorTraces,
                                           out List<BoogieErrorTrace> allErrors,
-                                          out List<string> timedOut)
+                                          out List<string> timedOut,
+                                          bool isCBA = false)
         {
             ReturnStatus ret = ReturnStatus.OK;
             allErrors = new List<BoogieErrorTrace>();
@@ -330,7 +332,13 @@ namespace cba.Util
 
             //// ---------- Verify ----------------------------------------------------------------
 
-            VC.StratifiedVCGenBase vcgen = null;
+            var mains = new List<Implementation>(
+                program.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")));
+
+
+            VC.VCGen vcgen = null;
             try
             {
                 Debug.Assert(CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed);
@@ -342,18 +350,23 @@ namespace cba.Util
                   CommandLineOptions.Clo.UseLabels = oldUseLabels;
                 }
                 else
-                   vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                   // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+
+
+                    if (!useDuality || !isCBA || !needErrorTraces || options.StratifiedInlining > 1 || mains.Count > 1)
+                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
+                    else
+                    {
+                        CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
+                        CommandLineOptions.Clo.FixedPointEngine = "duality";
+                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                    }
             }
             catch (ProverException e)
             {
                 Log.WriteLine(Log.Error, "ProverException: {0}", e.Message);
                 return ReturnStatus.OK;
             }
-
-            var mains = new List<Implementation>(
-                program.TopLevelDeclarations
-                .OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")));
 
             if (!mains.Any())
                 throw new InternalError("No entrypoint found");
@@ -483,10 +496,12 @@ namespace cba.Util
             {
                 CallTreeSize = (vcgen as StratifiedVCGen).numInlined;
             }
-            else
+            else if (vcgen is CoreLib.StratifiedInlining)
             {
                 CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
             }
+            else
+                CallTreeSize = 0;
 
             if (options.CallTree != null)
             {

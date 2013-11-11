@@ -136,7 +136,7 @@ namespace cba
             BoogieVerify.ReturnStatus ret;
             if (needErrorTraces)
             {
-                ret = BoogieVerify.Verify(p as Program, out counterexamples);
+                ret = BoogieVerify.Verify(p as Program, out counterexamples, true /* isCBA */);
             }
             else
             {

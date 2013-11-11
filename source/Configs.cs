@@ -140,6 +140,7 @@ namespace cba
         public int rootCause { get; private set; }
         public int maxStaticLoopBound { get; private set; }
         public bool disableStaticAnalysis { get; private set; }
+	public bool useDuality { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
         {
@@ -673,6 +674,10 @@ namespace cba
                  * context switches are only added where explictly specified by a dummy call to corral_yield. 
                  **/
                 cooperativeYield = true;
+            }
+            else if (flag == "/useDuality")
+            {
+                useDuality = true;
             }
             else
             {

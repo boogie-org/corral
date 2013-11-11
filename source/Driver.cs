@@ -88,6 +88,8 @@ namespace cba
             Configs config = Configs.parseCommandLine(args);
             CommandLineOptions.Install(new CommandLineOptions());
 
+            BoogieVerify.useDuality = config.useDuality;
+
             #region Set global flags
             ////////////////////////////////////////////////////
             // Set global configs
@@ -164,7 +166,11 @@ namespace cba
             if (GlobalConfig.useArrayTheory)
                 boogieOptions += " /useArrayTheory";
             else
-                boogieOptions += " /useArrayTheory /z3opt:ARRAY_WEAK=true /z3opt:ARRAY_EXTENSIONAL=false ";
+            {
+                // KLM: remove direct setting of Z3 options, since these depend on Z3 version...
+                boogieOptions += " /useArrayTheory /weakArrayTheory ";
+                // was: boogieOptions += " /useArrayTheory /z3opt:ARRAY_WEAK=true /z3opt:ARRAY_EXTENSIONAL=false ";
+            }
 
             if (config.printBoogieFlags)
                 Console.WriteLine("Using Boogie flags: {0}", boogieOptions);

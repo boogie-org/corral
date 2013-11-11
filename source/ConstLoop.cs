@@ -435,8 +435,9 @@ namespace cba
 
             if (!GlobalConfig.useArrayTheory)
             {
-                CommandLineOptions.Clo.Z3Options.Remove("ARRAY_WEAK=true");
-                CommandLineOptions.Clo.Z3Options.Remove("ARRAY_EXTENSIONAL=false");
+                CommandLineOptions.Clo.WeakArrayTheory = false; // z3 no longer supports options below
+                // CommandLineOptions.Clo.Z3Options.Remove("ARRAY_WEAK=true");
+                // CommandLineOptions.Clo.Z3Options.Remove("ARRAY_EXTENSIONAL=false");
             }
             var to = CommandLineOptions.Clo.ProverKillTime;
             CommandLineOptions.Clo.ProverKillTime = 5;
@@ -474,8 +475,9 @@ namespace cba
             // Reset options
             if (!GlobalConfig.useArrayTheory)
             {
-                CommandLineOptions.Clo.Z3Options.Add("ARRAY_WEAK=true");
-                CommandLineOptions.Clo.Z3Options.Add("ARRAY_EXTENSIONAL=false");
+                CommandLineOptions.Clo.WeakArrayTheory = true; // z3 no longer supports options below
+                // CommandLineOptions.Clo.Z3Options.Add("ARRAY_WEAK=true");
+                // CommandLineOptions.Clo.Z3Options.Add("ARRAY_EXTENSIONAL=false");
             }
             CommandLineOptions.Clo.ProverKillTime = to;
 
