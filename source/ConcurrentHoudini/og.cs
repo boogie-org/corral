@@ -572,6 +572,7 @@ namespace ConcurrentHoudini
                 }
             }
 
+            ModSetCollector.DoModSetAnalysis(program);
             return program;
         }
 
