@@ -4,6 +4,8 @@ copy %1\Basetypes.dll .
 copy %1\Basetypes.pdb .
 copy %1\CodeContractsExtender.dll .
 copy %1\CodeContractsExtender.pdb .
+copy %1\Concurrency.dll .
+copy %1\Concurrency.pdb .
 copy %1\Core.dll .
 copy %1\Core.pdb .
 copy %1\ExecutionEngine.dll .

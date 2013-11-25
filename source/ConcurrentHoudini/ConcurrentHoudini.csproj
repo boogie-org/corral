@@ -46,6 +46,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\references\CodeContractsExtender.dll</HintPath>
     </Reference>
+    <Reference Include="Concurrency">
+      <HintPath>..\..\references\Concurrency.dll</HintPath>
+    </Reference>
     <Reference Include="Core, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\references\Core.dll</HintPath>
