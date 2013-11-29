@@ -961,6 +961,7 @@ namespace cba
                 allProcs.Add(impl.Name);
                 if(impl.Proc is LoopProcedure) {
                     loopProcs.Add(impl.Name);
+                    impl.Proc.AddAttribute("LoopProcedure");
                 }
             }
             
@@ -968,6 +969,7 @@ namespace cba
             //{
                 //removeAssumeFalseBlocks(impl);
             //}
+
 
             return p;
         }

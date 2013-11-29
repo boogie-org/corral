@@ -2786,7 +2786,7 @@ namespace cba
             return ccmd.IsAsync;
         }
 
-        private HashSet<string> procsWithAsserts(CBAProgram program)
+        public static HashSet<string> procsWithAsserts(Program program)
         {
             var pwa = new HashSet<string>();
 

@@ -644,6 +644,29 @@ namespace cba
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
 
+            // set up entry point
+            if (config.mainProcName != null)
+            {
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes));
+                var ep = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, config.mainProcName);
+                if (ep == null)
+                    throw new InvalidInput(string.Format("Entrypoint {0} not found", config.mainProcName));
+                ep.AddAttribute("entrypoint");
+            }
+            else
+            {
+                var eps = program.TopLevelDeclarations.OfType<Implementation>()
+                    .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
+                var epsCount = eps.Count();
+                if (epsCount == 0)
+                    throw new InvalidInput("No entrypoint specified");
+                if (epsCount > 1)
+                    throw new InvalidInput("Multiple entrypoints specified");
+                var ep = eps.First();
+                config.mainProcName = ep.Name;
+            }
+
             // annotate calls with a unique number
             var addIds = new AddUniqueCallIds();
             addIds.VisitProgram(program);
@@ -659,8 +682,10 @@ namespace cba
             var refinementState = new GlobalRefinementState(program, initialTrackedVars);
 
             // Add a new main (for the assert)
-            InsertionTrans mainTrans;
-            var newMain = AddFakeMain(program, BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, config.mainProcName), out mainTrans);
+            InsertionTrans mainTrans = null;
+            var newMain = config.mainProcName;
+            if (!config.deepAsserts)
+                newMain = AddFakeMain(program, BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, config.mainProcName), out mainTrans);
 
             // Capture state
             InsertionTrans captureTrans = new InsertionTrans();
@@ -676,12 +701,12 @@ namespace cba
             // Save program; remove source info (because there can be lots of it)
             var programForDefectTrace = (new FixedDuplicator(true)).VisitProgram(program);
             var sinfo = new ModifyTrans();
-            if(config.rootCause < 0)
+            if (config.rootCause < 0)
                 sinfo = PrintSdvPath.DeleteSourceInfo(program);
 
             var init = new PersistentCBAProgram(program, newMain, 1);
             var curr = init;
-            
+
             var passes = new List<CompilerPass>();
 
             // prune
@@ -693,20 +718,17 @@ namespace cba
             passes.Add(prune);
 
             // extract loops
-            if (GlobalConfig.InferPass != null)
-            {
-                var elPass = new ExtractLoopsPass(true);
-                curr = elPass.run(curr);
-                CommandLineOptions.Clo.ExtractLoops = false;
-                passes.Add(elPass);
+            var elPass = new ExtractLoopsPass(true);
+            curr = elPass.run(curr);
+            CommandLineOptions.Clo.ExtractLoops = false;
+            passes.Add(elPass);
 
-                if (GlobalConfig.detectConstantLoops)
-                {
-                    List<ConstLoop> cloops;
-                    curr = PruneConstLoops(curr, out cloops);
-                    cloops.Iter(c => cloopsTime += c.lastRun);
-                    passes.AddRange(cloops);
-                }
+            if (GlobalConfig.detectConstantLoops)
+            {
+                List<ConstLoop> cloops;
+                curr = PruneConstLoops(curr, out cloops);
+                cloops.Iter(c => cloopsTime += c.lastRun);
+                passes.AddRange(cloops);
             }
 
             // Delete print commands, so they are not part of the
@@ -744,6 +766,15 @@ namespace cba
                     throw new NormalExit("Printed instrumented file to " + GlobalConfig.instrumentedFile);
                 }
 
+                DeepAssertRewrite da = null;
+                if (config.deepAsserts)
+                {
+                    //abs.writeToFile("ttin.bpl");
+                    da = new DeepAssertRewrite();
+                    abs = da.run(abs);
+                    //abs.writeToFile("ttout.bpl");
+                }
+
                 ContractInfer ciPass = null;
                 if (iterCnt == 1 && GlobalConfig.InferPass != null)
                 {
@@ -757,7 +788,7 @@ namespace cba
                     ciPass.ExtractLoops = false;
                     abs = ciPass.run(abs);
                     Console.WriteLine("Houdini took {0} seconds", ciPass.lastRun.TotalSeconds.ToString("F2"));
-                    
+
                     // add summaries to the original program
                     curr = ciPass.addSummaries(curr);
 
@@ -785,7 +816,7 @@ namespace cba
                 if (ConstLoop.aggressive)
                 {
                     abs = PruneConstLoopsNoCounter(abs, ref cLoopHistory, out cloops);
-                    cloops.Iter(c => cloopsTime += c.lastRun);                   
+                    cloops.Iter(c => cloopsTime += c.lastRun);
                 }
 
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
@@ -795,7 +826,7 @@ namespace cba
                 BoogieVerify.setTimeOut(GlobalConfig.getTimeLeft());
 
                 Console.WriteLine("Verifying program while tracking: {0}", varsToKeep.Variables.Print());
-                
+
                 Stats.beginTime();
                 var verificationPass = new VerificationPass(true);
                 verificationPass.run(abs);
@@ -821,6 +852,7 @@ namespace cba
                 ErrorTrace trace = verificationPass.trace;
                 cloops.Reverse<ConstLoop>().Iter(c => trace = c.mapBackTrace(trace));
                 if (ciPass != null) trace = ciPass.mapBackTrace(trace);
+                if(da != null) trace = da.mapBackTrace(trace);
                 trace = abstraction.mapBackTrace(trace);
 
                 // Restrict the program to the trace
@@ -832,6 +864,11 @@ namespace cba
                     new PersistentCBAProgram(traceProgCons.getProgram(),
                         traceProgCons.getFirstNameInstance(curr.mainProcName),
                         curr.contextBound, ConcurrencyMode.AnyInterleaving);
+
+                //ptrace.writeToFile("ptrace.bpl");
+
+                if (da != null)
+                    ptrace = da.InstrumentTrace(ptrace);
 
                 //////////////////////////
                 // Check concrete trace
@@ -857,8 +894,15 @@ namespace cba
                     }
                     else
                     {
-                        buggyTrace = tinfo.mapBackTrace(pverify.trace);
+                        if (da != null)
+                            buggyTrace = da.InstrumentTraceMapBack(pverify.trace);
+                        else
+                            buggyTrace = pverify.trace;
+
+                        buggyTrace = tinfo.mapBackTrace(buggyTrace);
+
                     }
+                    //PrintProgramPath.print(curr, buggyTrace, "tmp");
                     break;
                 }
                 Console.WriteLine("False bug");
@@ -878,8 +922,8 @@ namespace cba
                 Stats.beginTime();
                 BoogieVerify.options = refinementVerifyOptions;
                 refinementState.setAllVars(ptrace.allVars);
-                var refinement = new GeneralRefinementScheme(new SequentialProgVerifier(), true, 
-                    ptrace, refinementState, config.tryDroppingForRefinement);               
+                var refinement = new GeneralRefinementScheme(new SequentialProgVerifier(), true,
+                    ptrace, refinementState, config.tryDroppingForRefinement);
                 refinement.doRefinement();
                 Stats.endTime(ref Stats.pathVerificationTime);
 
@@ -888,7 +932,7 @@ namespace cba
                 //CommandLineOptions.Clo.UseLabels = ul;
             }
             var endTime = DateTime.Now;
-            
+
             Stats.printStats();
 
             Console.WriteLine("CLoops Time: {0} s", cloopsTime.TotalSeconds.ToString("F2"));
@@ -915,11 +959,14 @@ namespace cba
                 Console.WriteLine("Program has bugs");
 
                 //PrintProgramPath.print(curr, buggyTrace, "temp0");
+
                 var sw = new Stopwatch();
                 sw.Start();
 
                 // Bring back print cmds
                 buggyTrace = printinfo.mapBackTrace(buggyTrace);
+
+                //PrintProgramPath.print(progWithPrintCmds, buggyTrace, "temp1");
 
                 if (config.rootCause >= 0)
                 {
@@ -935,7 +982,7 @@ namespace cba
                     CommandLineOptions.Clo.InlineDepth = config.rootCause;
                     CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
                     InliningPass.InlineToDepth(rc);
-                    
+
                     CommandLineOptions.Clo.InlineDepth = idepth;
                     CommandLineOptions.Clo.ProcedureInlining = ioptions;
 
@@ -991,7 +1038,7 @@ namespace cba
                             }
                         }
 
-                        nblks.Add(new Block(Token.NoToken, lab3, ncmds, blk.TransferCmd));                        
+                        nblks.Add(new Block(Token.NoToken, lab3, ncmds, blk.TransferCmd));
                     }
                     impl.Blocks = nblks;
 
@@ -1035,7 +1082,7 @@ namespace cba
                 BoogieVerify.options = ConfigManager.pathVerifyOptions;
                 var getValuePass = new VerificationPass(true, toRecord);
                 getValuePass.run(witness);
-                
+
                 if (!getValuePass.success)
                 {
                     buggyTrace = tinfo.mapBackTrace(getValuePass.trace);
@@ -1080,7 +1127,7 @@ namespace cba
                         var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
                             .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
                             out status, out complexObj);
-                        
+
                         if (status == ExplainError.STATUS.TIMEOUT)
                         {
                             Console.WriteLine("ExplainError timed out");
@@ -1148,6 +1195,7 @@ namespace cba
                 sw.Stop();
                 Console.WriteLine("Data value generation took: {0} s", sw.Elapsed.TotalSeconds.ToString("F2"));
 
+
                 passes.Reverse<CompilerPass>()
                                    .Iter(cp => buggyTrace = cp.mapBackTrace(buggyTrace));
 
@@ -1159,7 +1207,7 @@ namespace cba
                     //PrintProgramPath.print(init, bug, "temp0");
 
                     bugT = captureTrans.mapBackTrace(bugT);
-                    bugT = mainTrans.mapBackTrace(bugT);
+                    if(mainTrans != null) bugT = mainTrans.mapBackTrace(bugT);
                     // knock off fakeMain
                     ErrorTrace tempt = null;
                     bugT.Blocks.Iter(blk =>

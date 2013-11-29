@@ -286,6 +286,8 @@ namespace cba
                             if (cinst.hasCalledTrace)
                             {
                                 inst = new CallInstr(cinst.callee, mapBackTrace(cinst.calleeTrace), cinst.asyncCall, cinst.info);
+                                if (!(inst as CallInstr).calleeTrace.returns)
+                                    done = true;
                             }
                         }
 

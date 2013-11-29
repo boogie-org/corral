@@ -117,6 +117,8 @@ namespace cba
         public bool catchAllExceptions { get; private set; }
         public List<string> specialVars { get; private set; }
 
+        public bool deepAsserts { get; private set; }
+
         public bool cooperativeYield { get; private set; }
         public bool unifyMaps { get; private set; }
 
@@ -326,6 +328,8 @@ namespace cba
             printAllTraces = false;
             rootCause = -1;
             disableStaticAnalysis = false;
+
+            deepAsserts = false;
         }
 
 
@@ -614,6 +618,10 @@ namespace cba
             else if (flag == "/si")
             {
                 siOnly = true;
+            }
+            else if (flag == "/deepAsserts")
+            {
+                deepAsserts = true;
             }
             else if (flag.StartsWith("/z3opt"))
             {

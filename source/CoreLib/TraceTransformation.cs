@@ -251,7 +251,13 @@ namespace cba
                 if (count + it.Size > tblock.Cmds.Count)
                     break;
 
-                ret.addInstr(it.mapBackTrace(tblock.Cmds, count, tinfo));
+                var inst = it.mapBackTrace(tblock.Cmds, count, tinfo);
+                ret.addInstr(inst);
+                
+                // Are we done?
+                if(inst is CallInstr && (inst as CallInstr).calleeTrace != null &&
+                    !(inst as CallInstr).calleeTrace.returns)
+                    break;
 
                 count += it.Size;
                 trans_index++;

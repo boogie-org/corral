@@ -356,6 +356,46 @@ namespace cba
             addInstr(instr);
         }
 
+        public bool checkSanity()
+        {
+            var calleeAllReturn = true;
+            for(int j = 0; j < Blocks.Count; j++)
+            {
+                var blk = Blocks[j];
+                for (int i = 0; i < blk.Cmds.Count; i++)
+                {
+                    var cinst = blk.Cmds[i] as CallInstr;
+                    if (cinst == null || cinst.calleeTrace == null) continue;
+                    if (!cinst.calleeTrace.checkSanity())
+                        return false;
+                    if (!cinst.calleeTrace.returns && (i != blk.Cmds.Count - 1 || j != Blocks.Count - 1))
+                        return false;
+                    if (!cinst.calleeTrace.returns)
+                        calleeAllReturn = false;
+                }
+            }
+            if (returns && !calleeAllReturn)
+                return false;
+
+            return true;
+        }
+
+        public ErrorTrace findTrace(string callee)
+        {
+            if (procName == callee) return this;
+            foreach (var blk in Blocks)
+            {
+                foreach (var inst in blk.Cmds.OfType<CallInstr>().Where(i => i.calleeTrace != null))
+                {
+                    if (inst.callee == callee)
+                        return inst.calleeTrace;
+                    var ret = inst.calleeTrace.findTrace(callee);
+                    if (ret != null) return ret;
+                }
+            }
+            return null;
+        }
+
         public void printTrace(TokenTextWriter ttw)
         {
             if (ttw == null)

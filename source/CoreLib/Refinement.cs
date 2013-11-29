@@ -816,7 +816,7 @@ namespace cba
                 boolVars.Add(t.Name);
             }
 
-            addFakeMain(program, BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName));
+            //addFakeMain(program, BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName));
 
             program.TopLevelDeclarations
                 .OfType<Implementation>()

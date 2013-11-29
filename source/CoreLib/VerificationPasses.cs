@@ -1778,17 +1778,17 @@ namespace cba
 
             // normalize commands
             if (normalizeStatements) p.TopLevelDeclarations.OfType<Implementation>().Iter(normalizeImpl);
-
+ 
             // Re-do modset analysis
             ModSetCollector.DoModSetAnalysis(p);
-
+            
             // Eliminate local variables that are never used (i.e., their value is never read)
             varEliminator = new UnReadVarEliminator();
             varEliminator.run(p);
 
             // Eliminate dead variables -- does not change the program.
             UnusedVarEliminator.Eliminate(p); 
-
+            
             // Compress basic blocks
             if(compressBlocks!=null)
               compressBlocks.VisitProgram(p);
@@ -1952,6 +1952,452 @@ namespace cba
             return varEliminator.mapBackTrace(trace);
 
             //return trace;
+        }
+    }
+
+    public class DeepAssertRewrite : CompilerPass
+    {
+        string origMain;
+        Dictionary<string, string> firstBlockToImpl;
+        
+        // newBlock -> <origBlock, Proc>
+        Dictionary<string, Tuple<string, string>> blockToOrig;
+        
+        // continue blocks
+        HashSet<string> assertContinueBlocks;
+        HashSet<string> callContinueBlocks;
+
+        // exit blocks
+        HashSet<string> exitBlocks; // for assert
+        HashSet<string> callInlinedBlocks; // for calls
+
+        public DeepAssertRewrite()
+        {
+            origMain = null;
+            firstBlockToImpl = new Dictionary<string, string>();
+            blockToOrig = new Dictionary<string, Tuple<string, string>>();
+            assertContinueBlocks = new HashSet<string>();
+            callContinueBlocks = new HashSet<string>();
+            exitBlocks = new HashSet<string>();
+            callInlinedBlocks = new HashSet<string>();
+        }
+
+        public override CBAProgram runCBAPass(CBAProgram program)
+        {
+            // Prepare for stratified inlining with assertions
+            var procsThatCannotReachAssert = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            procsThatCannotReachAssert.ExceptWith(SequentialInstrumentation.procsWithAsserts(program));
+
+            // loopy guys cannot reach asserts
+            program.TopLevelDeclarations.OfType<LoopProcedure>()
+                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
+                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+
+            // Make copies of all procedures that can reach assert
+            var implCopy = new Dictionary<string, Implementation>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => !procsThatCannotReachAssert.Contains(impl.Name))
+                .Iter(impl => implCopy.Add(impl.Name,
+                    (new FixedDuplicator(true)).VisitImplementation(impl)));
+
+            // Disable assertions in the original procedures
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl =>
+                    impl.Blocks.Iter(blk =>
+                    {
+                        for (int i = 0; i < blk.Cmds.Count; i++)
+                        {
+                            var ac = blk.Cmds[i] as AssertCmd;
+                            if (ac != null) blk.Cmds[i] = new AssumeCmd(ac.tok, ac.Expr);
+                        }
+                    }));
+
+            // Identify main
+            var main = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+            if (main == null)
+                main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+
+            var mainName = main.Name;
+            origMain = main.Name;
+
+            // delete entrypoint attribute
+            main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);
+
+            // rename stuff
+            implCopy.Values
+                .Where(impl => impl.Name != mainName)
+                .Iter(impl => RenameImpl(impl));
+
+            // Add all procedures to main
+            var implToFirstBlock = new Dictionary<string, Block>();
+            implCopy.Values
+                .Iter(impl => implToFirstBlock.Add(impl.Name, impl.Blocks[0]));
+
+            var mainCopy = implCopy[mainName];
+            mainCopy.Blocks.Iter(blk => blockToOrig.Add(blk.Label, Tuple.Create(blk.Label, origMain)));
+
+            mainCopy.AddAttribute("entrypoint");
+
+            // Merge impls
+            foreach (var impl in implCopy.Values)
+            {
+                if (impl.Name == mainName)
+                    continue;
+                // union locals
+                mainCopy.LocVars.AddRange(impl.LocVars);
+                // formals have already been substituted by locals
+                mainCopy.LocVars.AddRange(impl.OutParams);
+                mainCopy.LocVars.AddRange(impl.InParams);
+
+                mainCopy.Blocks.AddRange(impl.Blocks);
+            }
+
+            // Block return in main
+            foreach (var blk in mainCopy.Blocks.Where(b => b.TransferCmd is ReturnCmd))
+                blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
+
+            // Change name of new main
+            mainCopy.Name = "new" + mainCopy.Name;
+
+            // Edit procedure calls in the copied impls
+            var newLabCnt = 0;
+            var GetNewLabel = new Func<string>(() =>
+            {
+                return "sia_lab" + (newLabCnt++);
+            });
+
+            var GetExitBlock = new Func<Block>(() =>
+                new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(), new ReturnCmd(Token.NoToken)));
+
+            var newBlocks1 = new List<Block>();
+            var newBlocks2 = new List<Block>();
+
+            foreach (var blk in mainCopy.Blocks)
+            {
+                var currBlock = new Block(blk.tok, blk.Label, new List<Cmd>(), null);
+
+                foreach (var cmd in blk.Cmds)
+                {
+                    var acmd = cmd as AssertCmd;
+                    if (acmd != null && !(acmd.Expr is LiteralExpr && (acmd.Expr as LiteralExpr).IsTrue))
+                    {
+                        // split for assertion
+                        var lab = GetNewLabel();
+                        var nblk = new Block(Token.NoToken, lab, new List<Cmd>(), null);
+                        var eb = GetExitBlock();
+
+                        // Finish current block
+                        currBlock.TransferCmd = new GotoCmd(Token.NoToken, new List<Block> { nblk, eb });
+                        eb.Cmds.Add(new AssertCmd(acmd.tok, acmd.Expr));
+                        nblk.Cmds.Add(new AssumeCmd(acmd.tok, acmd.Expr));
+
+                        newBlocks2.Add(eb);
+                        newBlocks1.Add(currBlock);
+                        currBlock = nblk;
+
+                        assertContinueBlocks.Add(nblk.Label);
+                        exitBlocks.Add(eb.Label);
+
+                        continue;
+                    }
+
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd != null && implToFirstBlock.ContainsKey(ccmd.callee))
+                    {
+                        var lab = GetNewLabel();
+                        var afBlk = new Block(Token.NoToken, lab, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(implToFirstBlock[ccmd.callee].Label));
+                        callInlinedBlocks.Add(afBlk.Label);
+
+                        // formal-in := actuals
+                        for (int i = 0; i < implCopy[ccmd.callee].InParams.Count; i++)
+                        {
+                            var formal = implCopy[ccmd.callee].InParams[i];
+                            var actual = ccmd.Ins[i];
+                            afBlk.Cmds.Add(BoogieAstFactory.MkVarEqExpr(formal, actual));
+                        }
+
+                        lab = GetNewLabel();
+                        var nblk = new Block(Token.NoToken, lab, new List<Cmd>(), null);
+
+                        // Finish current block
+                        currBlock.TransferCmd = new GotoCmd(Token.NoToken, new List<Block> { nblk, afBlk });
+                        newBlocks1.Add(currBlock);
+                        newBlocks1.Add(afBlk);
+
+                        nblk.Cmds.Add(ccmd);
+
+                        callContinueBlocks.Add(nblk.Label);
+
+                        currBlock = nblk;
+                        continue;
+                    }
+
+                    currBlock.Cmds.Add(cmd);
+                }
+
+                currBlock.TransferCmd = blk.TransferCmd;
+                newBlocks1.Add(currBlock);
+            }
+
+            mainCopy.Blocks = newBlocks1;
+            mainCopy.Blocks.AddRange(newBlocks2);
+
+            implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+
+            // detect loops
+            var l2b = BoogieUtil.labelBlockMapping(mainCopy);
+            var color = new Dictionary<Block, int>();
+            mainCopy.Blocks.Iter(b => color.Add(b, 0));
+            var Succ = new Func<Block, IEnumerable<Block>>(b =>
+            {
+                var succ = new List<Block>();
+                var gc = b.TransferCmd as GotoCmd;
+                if (gc == null) return succ;
+                gc.labelNames.Iter(s => succ.Add(l2b[s]));
+                return succ;
+            });
+            var parentTree = new Dictionary<Block, Block>();
+            var cycle = new List<Block>();
+            // DFS
+            try
+            {
+                DFS(mainCopy.Blocks[0], null, Succ, color, parentTree, cycle);
+            }
+            catch (Exception)
+            {
+                var firstBlockToImpl = new Dictionary<string, string>();
+                implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+
+                cycle.Reverse();
+                cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
+                    .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
+                throw;
+            }
+
+            // Add new main back to the program
+            program.TopLevelDeclarations.Add(mainCopy);
+
+            // add decl for newmain
+            var origMainDecl = program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => proc.Name == mainName)
+                .FirstOrDefault();
+            var newMainDecl = (new Duplicator()).VisitProcedure(origMainDecl);
+            newMainDecl.Name = mainCopy.Name;
+            mainCopy.Proc = newMainDecl;
+            program.TopLevelDeclarations.Add(newMainDecl);
+
+            return program;
+        }
+
+        public override ErrorTrace mapBackTrace(ErrorTrace trace)
+        {
+            // This transformation is: rename blocks, instrument calls, instrument assertions
+            var ret = mapBackTraceRec(trace, 0, origMain);
+            //PrintProgramPath.print(input, ret, "tr");
+            return ret;
+        }
+
+        private ErrorTrace mapBackTraceRec(ErrorTrace trace, int currBlockNum, string procName)
+        {
+            var ret = new ErrorTrace(procName);
+            var first = true;
+
+            while (currBlockNum < trace.Blocks.Count)
+            {
+                var currBlock = trace.Blocks[currBlockNum];
+
+                if (!first && firstBlockToImpl.ContainsKey(currBlock.blockName))
+                {
+                    var callee = firstBlockToImpl[currBlock.blockName];
+                    var calleeTrace = mapBackTraceRec(trace, currBlockNum, callee);
+                    var blk = ret.Blocks.Last();
+                    blk.Cmds.Add(new CallInstr(calleeTrace));
+                    return ret;
+                }
+
+                // what kind of block is this?
+                if (blockToOrig.ContainsKey(currBlock.blockName))
+                {
+                    Debug.Assert(blockToOrig[currBlock.blockName].Item2 == ret.procName);
+                    var blk = new ErrorTraceBlock(blockToOrig[currBlock.blockName].Item1);
+                    currBlock.Cmds.Iter(c => blk.Cmds.Add(c));
+                    ret.Blocks.Add(blk);
+                }
+                else if (assertContinueBlocks.Contains(currBlock.blockName))
+                {
+                    var blk = ret.Blocks.Last();
+                    currBlock.Cmds.Iter(c => blk.Cmds.Add(c));
+                }
+                else if (callContinueBlocks.Contains(currBlock.blockName))
+                {
+                    var blk = ret.Blocks.Last();
+                    currBlock.Cmds.Iter(c => blk.Cmds.Add(c));
+                }
+                else if (exitBlocks.Contains(currBlock.blockName))
+                {
+                    var blk = ret.Blocks.Last();
+                    currBlock.Cmds.Iter(c => blk.Cmds.Add(c));
+                }
+                else if (callInlinedBlocks.Contains(currBlock.blockName))
+                {
+                    // skip this block
+                }
+                else
+                {
+                    Debug.Assert(false);
+                }
+
+                currBlockNum++;
+                first = false;
+            }
+            return ret;
+        }
+
+
+        private static void DFS(Block root, Block parent, Func<Block, IEnumerable<Block>> Succ, Dictionary<Block, int> color, Dictionary<Block, Block> parentTree, List<Block> cycle)
+        {
+            if (color[root] == 2)
+                return;
+
+            if (color[root] == 1)
+            {
+                Console.WriteLine("Cycle found");
+                while (root != parent)
+                {
+                    cycle.Add(parent);
+                    parent = parentTree[parent];
+                }
+                cycle.Add(root);
+                throw new Exception("");
+            }
+
+            parentTree[root] = parent;
+
+            color[root] = 1;
+
+            var succs = Succ(root);
+            foreach (var s in succs)
+                DFS(s, root, Succ, color, parentTree, cycle);
+
+            color[root] = 2;
+        }
+
+
+        // Rename basic blocks, local variables
+        // Add "havoc locals" at the beginning
+        // block return
+        private void RenameImpl(Implementation impl)
+        {
+            var origImpl = (new FixedDuplicator(true)).VisitImplementation(impl);
+            var origBlocks = BoogieUtil.labelBlockMapping(origImpl);
+
+            // create new locals
+            var newLocals = new Dictionary<string, Variable>();
+            foreach (var l in impl.LocVars.Concat(impl.InParams).Concat(impl.OutParams))
+            {
+                // substitute even formal variables with LocalVariables. This is fine
+                // because we finally just merge all implemnetations together
+                var nl = BoogieAstFactory.MkLocal(l.Name + "_" + impl.Name + "_copy", l.TypedIdent.Type);
+                newLocals.Add(l.Name, nl);
+            }
+
+            // rename locals
+            var subst = new VarSubstituter(newLocals, new Dictionary<string, Variable>());
+            subst.VisitImplementation(impl);
+
+            // Rename blocks 
+            foreach (var blk in impl.Blocks)
+            {
+                var newName = impl.Name + "_" + blk.Label;
+                blockToOrig.Add(newName, Tuple.Create(origBlocks[blk.Label].Label, origImpl.Name));
+                blk.Label = newName;
+
+                if (blk.TransferCmd is GotoCmd)
+                {
+                    var gc = blk.TransferCmd as GotoCmd;
+                    gc.labelNames = new List<string>(
+                        gc.labelNames.Select(lab => impl.Name + "_" + lab));
+                }
+
+                if (blk.TransferCmd is ReturnCmd)
+                {
+                    // block return
+                    blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
+                }
+            }
+
+            /*
+            // havoc locals -- not necessary
+            if (newLocals.Count > 0)
+            {
+                var ies = new List<IdentifierExpr>();
+                newLocals.Values.Iter(v => ies.Add(Expr.Ident(v)));
+                impl.Blocks[0].Cmds.Insert(0, new HavocCmd(Token.NoToken, ies));
+            }
+             */
+        }
+
+        // Instrument deep asserts in a trace
+        public PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
+        {
+            var program = ptrace.getProgram();
+            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, ptrace.mainProcName);
+
+            var av = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
+                "DA_assertVar", Microsoft.Boogie.Type.Bool));
+
+            // convert "assert e" to "DA_assertVar := e"
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    for (int i = 0; i < blk.Cmds.Count; i++)
+                    {
+                        if (blk.Cmds[i] is AssertCmd && !BoogieUtil.isAssertTrue(blk.Cmds[i]))
+                        {
+                            blk.Cmds[i] = BoogieAstFactory.MkVarEqExpr(av, (blk.Cmds[i] as AssertCmd).Expr);
+                        }
+                    }
+
+                }
+            }
+
+            // DA_assertVar := true
+            var sblk = new Block(Token.NoToken, "newMainStartBlk__0", new List<Cmd>(),
+                BoogieAstFactory.MkGotoCmd(main.Blocks[0].Label));
+
+            sblk.Cmds.Add(BoogieAstFactory.MkVarEqConst(av, true));
+            var nblks = main.Blocks;
+            main.Blocks = new List<Block>();
+            main.Blocks.Add(sblk);
+            main.Blocks.AddRange(nblks);
+
+            // assert DA_assertVar
+            main.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
+                .Iter(blk => blk.Cmds.Add(BoogieAstFactory.MkAssert(Expr.Ident(av))));
+
+            program.TopLevelDeclarations.Add(av);
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Proc.Modifies.Add(Expr.Ident(av)));
+
+            return new PersistentCBAProgram(program, ptrace.mainProcName, ptrace.contextBound);
+        }
+
+        // Inverse for InstrumentTrace
+        public ErrorTrace InstrumentTraceMapBack(ErrorTrace trace)
+        {
+            // get rid of first block of main and the last assert
+            Debug.Assert(trace.Blocks[0].blockName == "newMainStartBlk__0");
+            trace.Blocks.RemoveAt(0);
+            var lastBlk = trace.Blocks.Last();
+            lastBlk.Cmds.RemoveAt(lastBlk.Cmds.Count - 1);
+            return trace;
         }
     }
 }
