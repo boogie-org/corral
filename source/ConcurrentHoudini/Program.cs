@@ -242,6 +242,9 @@ namespace ConcurrentHoudini
             if (pruneAsserts)
                 program = og.GuardAsserts(program);
 
+            if (injectYields)
+                program = og.InsertYields(program);
+
             if (instantiateTemplates)
             {
                 var inst = new TemplateInstantiator(program);
@@ -270,8 +273,6 @@ namespace ConcurrentHoudini
             // Get rid of corral_yield
             program = og.RemoveCorralYield(program, con.yieldProc);
 
-            if(injectYields)
-                program = og.InsertYields(program);
 
             var yieldedProgram = new ProgTransformation.PersistentProgram(program);
 

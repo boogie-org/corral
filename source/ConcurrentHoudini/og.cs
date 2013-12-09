@@ -115,6 +115,10 @@ namespace ConcurrentHoudini
             var MkCandidate = new Func<Function, Expr, Expr>((func, expr) =>
                 Expr.Or(new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr>()), expr));
 
+            // procs that can do async
+            var transitiveAsyncProcs = ReachableFuncs(program, asyncProcs);
+
+
             var newFuncs = new HashSet<Function>();
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -122,14 +126,14 @@ namespace ConcurrentHoudini
                 var permIn = addVar.getInVar(permVarNamePrefix, proc.Name);
                 var permOut = addVar.getVar(permVarNamePrefix, proc.Name);
                 
-                bool isEntry = QKeyValue.FindBoolAttribute(proc.Attributes, "entrypoint");
+                bool canAsync = transitiveAsyncProcs.Contains(impl.Name);
 
                 // free requires permIn != mapconstbool(false);
                 proc.Requires.Add(new Requires(true, MkAssumeNonEmpty(permIn)));
 
                 // TODO: assert that main cannot be called
                 // free requires permIn == mapconstbool(true); for main
-                if (isEntry)
+                if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
                     proc.Requires.Add(new Requires(true, MkAssumeFull(permIn)));
 
                 if (!asyncProcs.Contains(impl.Name))
@@ -140,8 +144,16 @@ namespace ConcurrentHoudini
                     newFuncs.Add(func);
                 }
 
-                // One candidate Boolean per procedure, except the entrypoint
+
+                // One candidate Boolean per procedure
                 var afunc = MkExistentialFuncPerm();
+                newFuncs.Add(afunc);
+
+                proc.Requires.Add(new Requires(false, MkCandidate(afunc, MkAssumeFull(permIn))));
+
+                if (canAsync) afunc = MkExistentialFuncPerm();
+                if (!asyncProcs.Contains(impl.Name)) proc.Ensures.Add(new Ensures(false, MkCandidate(afunc, MkAssumeFull(permOut))));
+                newFuncs.Add(afunc);
 
                 // On each yield, add:
                 //   assert foo() || permOut == mapconstbool(true)
@@ -179,7 +191,7 @@ namespace ConcurrentHoudini
                                 j++;
                             }
                             i = j - 1;
-                            if(isEntry) afunc = MkExistentialFuncPerm();
+                            if(canAsync) afunc = MkExistentialFuncPerm();
                             ncmds.Add(new AssertCmd(Token.NoToken, MkCandidate(afunc, MkAssumeFull(permOut))));
                             ncmds.Add(new AssumeCmd(Token.NoToken, MkAssumeNonEmpty(permOut)));
                             if (id >= 0) ncmds.Add(assumeSingleInstance);
@@ -224,6 +236,42 @@ namespace ConcurrentHoudini
             program = BoogieUtil.ReadAndOnlyResolve("temp_rar.bpl");
 
             return program;
+        }
+
+        // return the list of procedures that can reach a procedure in "targets"
+        private static HashSet<string> ReachableFuncs(Program program, HashSet<string> targets)
+        {
+            
+            // get backward call graph
+            var callGraph = new Dictionary<string, HashSet<string>>();
+
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(block => block.Cmds.OfType<CallCmd>()
+                        .Iter(cmd =>
+                        {
+                            var iter = cmd;
+                            while (iter != null)
+                            {
+                                if (!callGraph.ContainsKey(iter.callee))
+                                    callGraph.Add(iter.callee, new HashSet<string>());
+                                callGraph[iter.callee].Add(impl.Name);
+                                iter = iter.InParallelWith;
+                            }
+                        })));
+
+            var ret = new HashSet<string>();
+            var delta = new HashSet<string>();
+            delta.UnionWith(targets);
+            ret.UnionWith(targets);
+            while (delta.Any())
+            {
+                var next = new HashSet<string>();
+                delta.Where(c => callGraph.ContainsKey(c)).Iter(c => next.UnionWith(callGraph[c]));
+                delta = next.Difference(ret);
+                ret.UnionWith(next);
+            }
+            return ret;
         }
 
         // return:
@@ -1404,35 +1452,40 @@ namespace ConcurrentHoudini
             foreach (var template in templates)
             {
                 var allExprs = InstantiateTemplate(template.expr, globals, template.IsRequires ? formalIns : formals);
-                allExprs = allExprs.Map(new Converter<Expr, Expr>(InstantiateFunctions));
+                var dup = new Converter<Expr, Expr>(expr => (new FixedDuplicator(true).VisitExpr(expr)));
 
-                // Now add the expressions in the right place
-                foreach (var expr in allExprs)
+                if (template.IsEnsures && !entry)
                 {
-                    if (template.IsEnsures && !entry) proc.Ensures.Add(new Ensures(template.IsFree, expr));
-                    if (template.IsRequires && !entry) proc.Requires.Add(new Requires(template.IsFree, expr));
-                    if (template.IsYield)
+                    var allExprsInstantiated = allExprs.Map(new Converter<Expr, Expr>(InstantiateFunctions));
+                    allExprsInstantiated.Iter(expr =>
+                        proc.Ensures.Add(new Ensures(template.IsFree, expr)));
+                }
+                else if (template.IsRequires && !entry)
+                {
+                    var allExprsInstantiated = allExprs.Map(new Converter<Expr, Expr>(InstantiateFunctions));
+                    allExprsInstantiated.Iter(expr =>
+                        proc.Requires.Add(new Requires(template.IsFree, expr)));
+                }
+                else if (template.IsYield)
+                {
+                    foreach (var blk in impl.Blocks)
                     {
-                        foreach (var blk in impl.Blocks)
+                        var ncmds = new List<Cmd>();
+                        foreach (var cmd in blk.Cmds)
                         {
-                            var ncmds = new List<Cmd>();
-                            foreach (var cmd in blk.Cmds)
+                            ncmds.Add(cmd);
+                            if (cmd is YieldCmd)
                             {
-                                ncmds.Add(cmd);
-                                if (cmd is YieldCmd)
-                                {
-                                    ncmds.Add(new AssertCmd(Token.NoToken, expr));
-                                }
+                                var allExprsInstantiated = allExprs.Map(dup).Map(new Converter<Expr, Expr>(InstantiateFunctions));
+                                allExprsInstantiated.Iter(expr =>
+                                    ncmds.Add(new AssertCmd(Token.NoToken, expr)));
                             }
-                            blk.Cmds = ncmds;
                         }
+                        blk.Cmds = ncmds;
                     }
-
                 }
             }
-
         }
-
     }
 
     public class FunctionSubstituter : FixedVisitor
