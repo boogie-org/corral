@@ -1257,7 +1257,10 @@ namespace cba.Util
     // Type of phi function encoding "x3 = phi(x1,x2)"
     // Modeled: left as an uninterpreted function such that (x3 == x1 || x3 == x2)
     // Verifiable: x3 := x2 and x3 := x1 pushed up towards the definitions of x2 and x1
-    public enum PhiFunctionEncoding { Verifiable, Modeled };
+    // Passifiable: one after which assignments can be converted to assumes. This is
+    //              currently not implemented. It requires appropriate placement
+    //              of assignments for the phi function
+    public enum PhiFunctionEncoding { Verifiable, Modeled, Passifiable };
 
     public class SSA
     {
@@ -1272,6 +1275,8 @@ namespace cba.Util
             this.encoding = encoding;
             this.phiProcsDecl = new List<Procedure>();
             this.typesToInstrument = typesToInstrument;
+            if (encoding == PhiFunctionEncoding.Passifiable)
+                throw new NotImplementedException();
         }
 
         public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)

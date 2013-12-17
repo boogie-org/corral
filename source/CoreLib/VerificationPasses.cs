@@ -1866,17 +1866,11 @@ namespace cba
                 edges.Add(impl.Name, new HashSet<string>());
                 foreach (var blk in impl.Blocks)
                 {
-                    foreach (Cmd cmd in blk.Cmds)
-                    {
-                        var ccmd = cmd as CallCmd;
-                        if (ccmd == null) continue;
-                        edges[impl.Name].Add(ccmd.callee);
-                        while (ccmd.InParallelWith != null)
-                        {
-                            ccmd = ccmd.InParallelWith;
-                            edges[impl.Name].Add(ccmd.callee);
-                        }
-                    }
+                    blk.Cmds.OfType<CallCmd>()
+                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
+                    blk.Cmds.OfType<ParCallCmd>()
+                        .Iter(pcmd => pcmd.CallCmds
+                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
                 }
             }
             var reachable = new HashSet<string>();

@@ -571,7 +571,8 @@ namespace cba
         {
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            ExecutionEngine.EliminateDeadVariablesAndInline(program);
+            ExecutionEngine.EliminateDeadVariables(program);
+            ExecutionEngine.Inline(program);
             CommandLineOptions.Clo.StratifiedInlining = si;
         }
 

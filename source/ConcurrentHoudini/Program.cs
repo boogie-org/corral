@@ -294,12 +294,13 @@ namespace ConcurrentHoudini
                 Console.WriteLine("Running OG: {0}", expandedFileName);
 
             LinearTypeChecker linearTypechecker;
-            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker);
+            MoverTypeChecker moverTypeChecker;
+            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
 
             if (oc != PipelineOutcome.ResolvedAndTypeChecked)
                 throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.errorCount, annotatedFileName));
 
-            var ogTransform = new OwickiGriesTransform(linearTypechecker);
+            var ogTransform = new OwickiGriesTransform(linearTypechecker, moverTypeChecker);
             ogTransform.Transform();
             var eraser = new LinearEraser();
             eraser.VisitProgram(program);
@@ -316,7 +317,8 @@ namespace ConcurrentHoudini
             if(dbg)
                 Console.WriteLine("Running abs houdini on {0}", expandedFileName);
 
-            ExecutionEngine.EliminateDeadVariablesAndInline(program);
+            ExecutionEngine.EliminateDeadVariables(program);
+            ExecutionEngine.Inline(program);
 
             CommandLineOptions.Clo.ContractInfer = true;
             CommandLineOptions.Clo.AbstractHoudini = absDomain;

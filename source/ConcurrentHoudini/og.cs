@@ -245,20 +245,23 @@ namespace ConcurrentHoudini
             // get backward call graph
             var callGraph = new Dictionary<string, HashSet<string>>();
 
+            var processCallCmd = new Action<CallCmd,Implementation>((cmd,impl) =>
+                {
+                    if (!callGraph.ContainsKey(cmd.callee))
+                        callGraph.Add(cmd.callee, new HashSet<string>());
+                    callGraph[cmd.callee].Add(impl.Name);
+                });
+
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impl.Blocks
                     .Iter(block => block.Cmds.OfType<CallCmd>()
-                        .Iter(cmd =>
-                        {
-                            var iter = cmd;
-                            while (iter != null)
-                            {
-                                if (!callGraph.ContainsKey(iter.callee))
-                                    callGraph.Add(iter.callee, new HashSet<string>());
-                                callGraph[iter.callee].Add(impl.Name);
-                                iter = iter.InParallelWith;
-                            }
-                        })));
+                        .Iter(cmd => processCallCmd(cmd,impl))));
+
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(block => block.Cmds.OfType<ParCallCmd>()
+                        .Iter(pcmd => pcmd.CallCmds
+                            .Iter(cmd => processCallCmd(cmd, impl)))));
 
             var ret = new HashSet<string>();
             var delta = new HashSet<string>();

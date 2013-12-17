@@ -24,7 +24,6 @@ copy %1\VCExpr.dll .
 copy %1\VCExpr.pdb .
 copy %1\VCGeneration.dll .
 copy %1\VCGeneration.pdb .
-copy %1\UnivBackPred2.smt2 .
 REM ------ other boogie files
 copy %1\boogie.exe .
 copy %1\boogie.pdb .
