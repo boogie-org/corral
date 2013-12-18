@@ -1774,7 +1774,7 @@ namespace cba
         public override CBAProgram runCBAPass(CBAProgram p)
         {
             // Remove unreachable procedures
-            if (RemoveUnreachable) pruneProcs(p, p.mainProcName);
+            if (RemoveUnreachable) BoogieUtil.pruneProcs(p, p.mainProcName);
 
             // normalize commands
             if (normalizeStatements) p.TopLevelDeclarations.OfType<Implementation>().Iter(normalizeImpl);
@@ -1852,54 +1852,6 @@ namespace cba
             }
         }
 
-        // Prune by removing procedures that are not called
-        public static void pruneProcs(Program program, string mainProcName)
-        {
-            if (mainProcName == null)
-                return;
-
-            var edges = new Dictionary<string, HashSet<string>>();
-            foreach (var decl in program.TopLevelDeclarations)
-            {
-                var impl = decl as Implementation;
-                if (impl == null) continue;
-                edges.Add(impl.Name, new HashSet<string>());
-                foreach (var blk in impl.Blocks)
-                {
-                    blk.Cmds.OfType<CallCmd>()
-                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
-                    blk.Cmds.OfType<ParCallCmd>()
-                        .Iter(pcmd => pcmd.CallCmds
-                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
-                }
-            }
-            var reachable = new HashSet<string>();
-            reachable.Add(mainProcName);
-
-            var delta = new HashSet<string>(reachable);
-            while (delta.Count != 0)
-            {
-                var nf = new HashSet<string>();
-                foreach (var n in delta)
-                {
-                    if (edges.ContainsKey(n)) nf.UnionWith(edges[n]);
-                }
-                delta = nf.Difference(reachable);
-                reachable.UnionWith(nf);
-            }
-
-            var allProcs = new HashSet<string>(edges.Keys);
-            var toRemove = allProcs.Difference(reachable);
-
-            var newDecls = new List<Declaration>();
-            foreach (var decl in program.TopLevelDeclarations)
-            {
-                if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
-                if (decl is Implementation && toRemove.Contains((decl as Implementation).Name)) continue;
-                newDecls.Add(decl);
-            }
-            program.TopLevelDeclarations = newDecls;
-        }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
         {

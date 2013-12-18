@@ -231,7 +231,7 @@ namespace ConcurrentHoudini
             }
 
             // Remove unreachable procedures
-            cba.PruneProgramPass.pruneProcs(program, con.entryFunc);
+            BoogieUtil.pruneProcs(program, con.entryFunc);
 
             // Extract loops
             if(extractLoops)
