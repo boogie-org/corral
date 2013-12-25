@@ -1268,37 +1268,55 @@ namespace cba
 
             var time3 = DateTime.Now;
 
-            if(checkAsserts)
-                program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
-
-            inline(program);
-            BoogieUtil.TypecheckProgram(program, "error.bpl");
-
-            if (printHoudiniQuery != null)
-                BoogieUtil.PrintProgram(program, printHoudiniQuery);
-
-            AbstractHoudini absHoudini = null;
             var trueConstants = new HashSet<string>();
+            AbstractHoudini absHoudini = null;
+            var programProcs = new List<Procedure>();
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => programProcs.Add(proc));
 
-            if (runAbsHoudini)
+            try
             {
-                PredicateAbs.Initialize(program);
-                absHoudini = new AbstractHoudini(program);
-                absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
-                // Abstract houdini sets a prover option for the time limit. Get rid of that now
-                CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+                if (checkAsserts)
+                    program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
+
+                inline(program);
+                BoogieUtil.TypecheckProgram(program, "error.bpl");
+
+                if (printHoudiniQuery != null)
+                    BoogieUtil.PrintProgram(program, printHoudiniQuery);
+
+
+                if (runAbsHoudini)
+                {
+                    PredicateAbs.Initialize(program);
+                    absHoudini = new AbstractHoudini(program);
+                    absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
+                    // Abstract houdini sets a prover option for the time limit. Get rid of that now
+                    CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+                }
+                else
+                {
+                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                    Houdini houdini = new Houdini(program, houdiniStats);
+                    HoudiniOutcome outcome = houdini.PerformHoudiniInference();
+                    Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
+                    outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                    var time4 = DateTime.Now;
+                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    houdini = null;
+                }
             }
-            else
+            catch (OutOfMemoryException)
             {
-                var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                Houdini houdini = new Houdini(program, houdiniStats);
-                HoudiniOutcome outcome = houdini.PerformHoudiniInference();
-                Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
-                outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
-                Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
-                var time4 = DateTime.Now;
-                Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
-                houdini = null;
+                Console.WriteLine("Houdini ran out of memory; trusting static analysis");
+                trueConstants.UnionWith(staticAnalysisConstants);
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl =>
+                    {
+                        impl.Blocks = new List<Block>();
+                        impl.OriginalBlocks = new List<Block>();
+                    });
             }
 
             CommandLineOptions.Clo.InlineDepth = -1;
@@ -1340,7 +1358,7 @@ namespace cba
             // Record new summaries
             if (runAbsHoudini)
             {
-                foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+                foreach (var proc in programProcs)
                 {
                     var summary = absHoudini.GetSummary(program, proc);
                     if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
@@ -1348,7 +1366,7 @@ namespace cba
                 }
             }
 
-            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+            foreach (var proc in programProcs)
             {
                 if (!info.ContainsKey(proc.Name)) continue;
 
