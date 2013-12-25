@@ -691,7 +691,11 @@ namespace cba
                     if (oldAttr != null)
                     {
                         cc.Attributes = BoogieUtil.removeAttr("si_unique_call", cc.Attributes);
-                        cc.Attributes.AddLast(new QKeyValue(Token.NoToken, "si_old_unique_call", oldAttr, null));
+                        var newattr = new QKeyValue(Token.NoToken, "si_old_unique_call", oldAttr, null);
+                        if(cc.Attributes == null)
+                            cc.Attributes = newattr;
+                        else 
+                            cc.Attributes.AddLast(newattr);
                     }
 
                     cc.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, cc.Attributes);
@@ -733,6 +737,8 @@ namespace cba
             var sccs = new StronglyConnectedComponents<string>(graph.Nodes, preds, succs);
             sccs.Compute();
 
+            //var dotFileCnt = 1;
+
             // For each SCC, compute backedges
             foreach (var scc in sccs)
             {
@@ -746,15 +752,21 @@ namespace cba
 
                 // pick source
                 var sccProcs = new HashSet<string>(scc);
-                var src = scc.FirstOrDefault(proc => graph.Predecessors(proc).Any(pred => sccProcs.Contains(pred)));
+                var src = scc.FirstOrDefault(proc => graph.Predecessors(proc).Any(pred => !sccProcs.Contains(pred)));
                 if (src == null) src = scc.First();
 
                 var grey = new HashSet<string>();
                 var black = new HashSet<string>();
                 grey.Add(src);
 
-                var backEdges = dfs(graph, src, sccProcs, grey, black);   
-             
+                backedges = new HashSet<Tuple<string, string>>();
+                dfsTreeParent = new Dictionary<string, string>();
+                someCycles = new List<HashSet<string>>();
+
+                dfs(graph, src, sccProcs, grey, black);
+
+                InferWhatToCut(graph, scc);
+
                 // create copies
                 var procCopies = new Dictionary<Tuple<string, int>, Procedure>();
                 var implCopies = new Dictionary<Tuple<string, int>, Implementation>();
@@ -823,8 +835,9 @@ namespace cba
                                     continue;
                                 }
                                 var cnt = i;
-                                if (backEdges.Contains(Tuple.Create(name, ccmd.callee)))
+                                if (CutEdge(name, ccmd.callee))
                                     cnt--;
+
                                 if (cnt < 0)
                                 {
                                     newcmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
@@ -846,26 +859,199 @@ namespace cba
             return program;
         }
 
-        public HashSet<Tuple<string, string>> dfs(Graph<string> graph, string src, 
+        private bool isAcyclic(Graph<string> graph, HashSet<string> domain)
+        {
+            var oldb = backedges;
+            var oldd = dfsTreeParent;
+            var olds = someCycles;
+
+            var ret = true;
+            var black = new HashSet<string>();
+
+            foreach (var d in domain)
+            {
+                if (black.Contains(d)) continue;
+
+                backedges = new HashSet<Tuple<string, string>>();
+                dfsTreeParent = new Dictionary<string, string>();
+                someCycles = new List<HashSet<string>>();
+
+                var grey = new HashSet<string>();
+                grey.Add(d);
+                dfs(graph, d, domain, grey, black);
+
+                if (backedges.Any())
+                {
+                    ret = false;
+                    break;
+                }
+            }
+
+            backedges = oldb;
+            dfsTreeParent = oldd;
+            someCycles = olds;
+
+            return ret;
+        }
+
+        private void PrintDot(Graph<string> graph, IEnumerable<string> scc, string src, string filename)
+        {
+            var dotty = new System.IO.StreamWriter(filename);
+            dotty.WriteLine("digraph SCC {");
+            dotty.WriteLine("node [shape=box];");                
+
+            var red = new HashSet<string>();
+            var sccProcs = new HashSet<string>(scc);
+
+            // print nodes
+            foreach (var s in scc)
+            {
+                var color = "black";
+                var ins = graph.Nodes.Where(n => !sccProcs.Contains(n))
+                    .Where(n => graph.Successors(n).Any(ns => ns == s));
+                var insInstance = ins.FirstOrDefault();
+
+                if (insInstance != null)
+                    color = "red";
+
+                if (s == src && color == "black")
+                    color = "green";
+                if (s == src && color == "red")
+                    color = "blue";
+
+                var label = s;
+                label += (insInstance == null) ? "" : ("  " + insInstance);
+
+                if (color == "red") red.Add(s);
+
+                dotty.WriteLine("{0} [label = \"{1}\", color={2}]", s, label, color);
+            }
+
+            foreach (var s in scc)
+            {
+                foreach (var sp in graph.Successors(s).Where(t => sccProcs.Contains(t)))
+                {
+                    var label = "";
+                    if (backedges.Contains(Tuple.Create(s, sp)))
+                        label = "backedge";
+                    dotty.WriteLine("{0} -> {1} [ label = \"{2}\" color=black ]", s, sp, label);
+                }
+            }
+
+            dotty.WriteLine("};");
+            dotty.WriteLine();
+            dotty.Close();
+        }
+
+        HashSet<Tuple<string, string>> backedges;
+        Dictionary<string, string> dfsTreeParent;
+        List<HashSet<string>> someCycles;
+        HashSet<string> smallcutset;
+
+        private void InferWhatToCut(Graph<string> graph, IEnumerable<string> scc)
+        {
+            Debug.Assert(backedges != null);
+            smallcutset = null;
+
+            //someCycles.Iter(c => Console.WriteLine("Cycle: {0}", c.Print()));
+
+            // If small number of backedges, then done
+            if (backedges.Count <= 2)
+                return;
+
+            var cutset = new HashSet<string>();
+            var weight = new Dictionary<int, HashSet<string>>();
+            backedges.Iter(tup => cutset.Add(tup.Item2));
+ 
+            // how many cycles does s appear in?
+            foreach (var s in cutset)
+            {
+                var cnt = 0;
+                someCycles.Where(c => c.Contains(s)).Iter(c => cnt++);
+                if (!weight.ContainsKey(cnt))
+                    weight.Add(cnt, new HashSet<string>());
+                weight[cnt].Add(s);
+            }
+
+
+            // take the highest-weight nodes
+
+            smallcutset = new HashSet<string>();
+            var cycleCnt = someCycles.Count;
+
+            // Is there a cutset of size 1?
+            if (weight.ContainsKey(cycleCnt) && weight[cycleCnt].Count > 0)
+            {
+                smallcutset.Add(weight[cycleCnt].First());
+            }
+            else
+            {
+                // Is there a cutset of size 2?
+                for (int i = cycleCnt; i >= 0; i++)
+                {
+                    if (!weight.ContainsKey(i)) continue;
+                    foreach (var s in weight[i])
+                    {
+                        if (smallcutset.Contains(s)) continue;
+                        if (smallcutset.Count >= 2) continue;
+                        smallcutset.Add(s);
+                    }
+                }
+            }
+
+            // Is smallcutset a cutset?
+            var domain = new HashSet<string>(scc);
+            domain.ExceptWith(smallcutset);
+            if (isAcyclic(graph, domain))
+            {
+                Console.WriteLine("Found small cutset: {0}", smallcutset.Print());
+                backedges = null;
+            }
+            else
+            {
+                smallcutset = null;
+                Console.WriteLine("Using {0} backedges to cut cycles", backedges.Count);
+            }
+        }
+
+        private bool CutEdge(string src, string tgt)
+        {
+            Debug.Assert(backedges == null || smallcutset == null);
+
+            if (backedges == null)
+                return smallcutset.Contains(tgt);
+            else
+                return backedges.Contains(Tuple.Create(src, tgt));
+        }
+
+        public void dfs(Graph<string> graph, string src, 
             HashSet<string> domain, HashSet<string> grey, HashSet<string> black)
         {
-            var ret = new HashSet<Tuple<string, string>>();
-            
             foreach (var succ in graph.Successors(src))
             {
                 if (!domain.Contains(succ)) continue;
                 if (black.Contains(succ)) continue;
                 if (grey.Contains(succ))
                 {
-                    ret.Add(Tuple.Create(src, succ));
+                    backedges.Add(Tuple.Create(src, succ));
+                    // add cycle
+                    var cycle = new HashSet<string>();
+                    var p = src;
+                    while (p != succ)
+                    {
+                        cycle.Add(p);
+                        p = dfsTreeParent[p];
+                    }
+                    cycle.Add(succ);
+                    someCycles.Add(cycle);
                     continue;
                 }
                 grey.Add(succ);
-                ret.UnionWith(dfs(graph, succ, domain, grey, black));
+                dfsTreeParent.Add(succ, src);
+                dfs(graph, succ, domain, grey, black);
                 grey.Remove(succ);
                 black.Add(succ);
             }
-            return ret;
         }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
