@@ -300,8 +300,7 @@ namespace ConcurrentHoudini
             if (oc != PipelineOutcome.ResolvedAndTypeChecked)
                 throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.errorCount, annotatedFileName));
 
-            var ogTransform = new OwickiGriesTransform(linearTypechecker, moverTypeChecker);
-            ogTransform.Transform();
+            Concurrency.Transform(linearTypechecker, moverTypeChecker);
             var eraser = new LinearEraser();
             eraser.VisitProgram(program);
 
