@@ -673,6 +673,7 @@ namespace cba
         private ExtractLoopsPass elPass;
         public static bool runHoudini = true;
         public string printHoudiniQuery = null;
+        public static bool supressAsserts = false;
 
         // Named constants: (implName, id) -> set of constants with that id
         Dictionary<Tuple<string, string>, HashSet<string>> namedConstants;
@@ -962,6 +963,29 @@ namespace cba
                 // Unroll loops
                 var inputPrime = elPass.run(input);
                 program = (inputPrime as PersistentCBAProgram).getCBAProgram();
+            }
+
+            // convert asserts to assumes
+            if (supressAsserts)
+            {
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk =>
+                            {
+                                var ncmds = new List<Cmd>();
+                                foreach (var cmd in blk.Cmds)
+                                {
+
+                                    var acmd = cmd as AssertCmd;
+                                    if (acmd == null || BoogieUtil.isAssertTrue(cmd))
+                                    {
+                                        ncmds.Add(cmd);
+                                        continue;
+                                    }
+                                    ncmds.Add(new AssumeCmd(acmd.tok, acmd.Expr));
+                                }
+                                blk.Cmds = ncmds;
+                            }));
             }
 
             ModSetCollector.DoModSetAnalysis(program);

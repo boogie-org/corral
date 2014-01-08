@@ -634,7 +634,9 @@ namespace cba
 
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
             VerificationPass.usePruning = false;
-
+            if (config.deepAsserts)
+                ContractInfer.supressAsserts = true;
+            
             PersistentCBAProgram inputProg = null;
             if (config.printData == 2)
             {
@@ -767,15 +769,6 @@ namespace cba
                     throw new NormalExit("Printed instrumented file to " + GlobalConfig.instrumentedFile);
                 }
 
-                DeepAssertRewrite da = null;
-                if (config.deepAsserts)
-                {
-                    //abs.writeToFile("ttin.bpl");
-                    da = new DeepAssertRewrite();
-                    abs = da.run(abs);
-                    //abs.writeToFile("ttout.bpl");
-                }
-
                 ContractInfer ciPass = null;
                 if (iterCnt == 1 && GlobalConfig.InferPass != null)
                 {
@@ -811,6 +804,15 @@ namespace cba
                     config.trackedVarsSecondary.Iter(s => refinementState.trackVar(s));
                     config.trackedVarsSecondary.Clear();
                     continue;
+                }
+
+                DeepAssertRewrite da = null;
+                if (config.deepAsserts)
+                {
+                    //abs.writeToFile("ttin.bpl");
+                    da = new DeepAssertRewrite();
+                    abs = da.run(abs);
+                    //abs.writeToFile("ttout.bpl");
                 }
 
                 var cloops = new List<ConstLoop>();
