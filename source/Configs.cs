@@ -109,7 +109,7 @@ namespace cba
         public bool checkStaticAnalysis { get; private set; }
         public bool siOnly { get; private set; }
         public List<string> annotations { get; private set; }
-        public int FwdBckSearch { get; private set; }
+        public int FwdBckSearch;
         public string assertsPassed { get; private set; }
         public bool assertsPassedIsInt { get; private set; }
         public bool fwdBckInRef { get; private set; }

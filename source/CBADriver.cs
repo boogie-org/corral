@@ -270,6 +270,7 @@ namespace cba
             progVerifyOptions.CallTree = config.noCallTreeReuse ? null : new Dictionary<string, int>();
             progVerifyOptions.UseProverEvaluate = config.useProverEvaluate;
             progVerifyOptions.StratifiedInliningWithoutModels = progVerifyOptions.UseProverEvaluate ? true : false;
+            progVerifyOptions.useFwdBck = config.FwdBckSearch == 1;
             if (config.staticInlining > 0)
                 progVerifyOptions.StratifiedInlining = 100;
 
@@ -279,6 +280,7 @@ namespace cba
             pathVerifyOptions.newStratifiedInlining = config.newStratifiedInlining;
             pathVerifyOptions.UseProverEvaluate = config.useProverEvaluate;
             pathVerifyOptions.StratifiedInliningWithoutModels = pathVerifyOptions.UseProverEvaluate ? true : false; ;
+            pathVerifyOptions.useFwdBck = false;
             if (config.printData == 2)
             {
                 pathVerifyOptions.StratifiedInliningWithoutModels = false;
@@ -304,6 +306,7 @@ namespace cba
             refinementVerifyOptions.UseProverEvaluate = false;
             refinementVerifyOptions.StratifiedInliningWithoutModels = true;
             refinementVerifyOptions.ModelViewFile = null;
+            refinementVerifyOptions.useFwdBck = false;
         }
 
         public static void AddExtraRecBound(string proc, int bound)

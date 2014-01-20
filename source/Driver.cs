@@ -117,10 +117,8 @@ namespace cba
 
             GlobalConfig.cadeTiming = config.cadeTiming;
 
-            BoogieVerify.fwdBck = config.FwdBckSearch;
             BoogieVerify.assertsPassed = config.assertsPassed;
             BoogieVerify.assertsPassedIsInt = config.assertsPassedIsInt;
-            BoogieVerify.fwdBckInRef = config.fwdBckInRef;
             BoogieVerify.ignoreAssertMethods = new HashSet<string>(config.ignoreAssertMethods);
 
             GeneralRefinementScheme.noInitialPruning = !config.useInitialPruning;
@@ -500,10 +498,10 @@ namespace cba
             if (!GlobalConfig.isSingleThreaded)
             {
                 /* forward/backward approach does not handle multi-threaded programs */
-                if (BoogieVerify.fwdBck == 1)
+                if (config.FwdBckSearch == 1)
                 {
                     Console.WriteLine("Sorry, fwd/bck approach not available for multi-threaded programs. Running fwd approach.");
-                    BoogieVerify.fwdBck = 0;
+                    config.FwdBckSearch = 0;
                 }
 
                 try
@@ -753,7 +751,6 @@ namespace cba
             // Run refinement loop
             while (true)
             {
-                BoogieVerify.refinementRun = false; // D
                 iterCnt++;
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
@@ -876,8 +873,6 @@ namespace cba
                 //////////////////////////
                 // Check concrete trace
                 //////////////////////////
-                BoogieVerify.refinementRun = !BoogieVerify.fwdBckInRef;
-
                 Stats.beginTime();
                 BoogieVerify.options = pathVerifyOptions;
 
@@ -1701,7 +1696,6 @@ namespace cba
 
             while (true)
             {
-                BoogieVerify.refinementRun = false; // D
                 refinementState.Push();
                 PersistentCBAProgram counterexample = null;
 
@@ -1733,7 +1727,6 @@ namespace cba
                 }
 
                 Log.Write("Program has a potential bug: ");
-                BoogieVerify.refinementRun = !BoogieVerify.fwdBckInRef;
 
                 if (GlobalConfig.printAllTraces)
                 {

@@ -35,84 +35,34 @@ namespace CoreLib {
     ****************************************/
     
     /* locates (user-) assertions in the code */
-    class LocateAsserts : cba.Util.FixedVisitor
+    class LocateAsserts 
     {
-        protected Procedure currentProc;
-        private bool entrypointImplem = false;
-        public Procedure mainProc = null;
-        protected List<Procedure> assertLocations;
-    
+   
         public LocateAsserts()
             : base()
         {
-            currentProc = null;
-            assertLocations = new List<Procedure>();
         }
-    
-        /* assert turned into assignments to global var assertsPassed */
-        public override Cmd VisitAssignCmd(AssignCmd node)
-        {
-            if (currentProc != null && !QKeyValue.FindBoolAttribute(currentProc.Attributes, "entrypoint") && !entrypointImplem)
-                foreach (var lhs in node.Lhss)
-                    if (lhs.DeepAssignedVariable.Name == cba.Util.BoogieVerify.assertsPassed)
-                        if (!cba.Util.BoogieVerify.ignoreAssertMethods.Contains(currentProc.Name))
-                            assertLocations.Add(currentProc);
-            return base.VisitAssignCmd(node);
-        }
-    
-        public override Implementation VisitImplementation(Implementation node)
-        {
-            currentProc = node.Proc;
-            entrypointImplem = QKeyValue.FindBoolAttribute(node.Attributes, "entrypoint");
-            return base.VisitImplementation(node);
-        }
-
-        public override Procedure VisitProcedure(Procedure node)
-        {
-            currentProc = node;
-            entrypointImplem = false;
-            return base.VisitProcedure(node);
-        }
-    
+      
         public List<Procedure> VisitIt(Program node)
         {
-            if (cba.Util.BoogieVerify.assertsPassed == "assertsPassed")
+            var assertLocations = new List<Procedure>();
+            foreach (var impl in node.TopLevelDeclarations.OfType<Implementation>())
             {
-                /* if program is already annotated, we know that the asserts are in the procedures modifying assertsPassed */
-                foreach (var decl in node.TopLevelDeclarations)
-                {
-                    if (decl is Implementation && QKeyValue.FindBoolAttribute(decl.Attributes, "entrypoint"))
-                        mainProc = ((Implementation)decl).Proc;
-                    if (decl is Procedure && QKeyValue.FindBoolAttribute(decl.Attributes, "entrypoint"))
-                        mainProc = (Procedure)decl;
+                if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                    continue;
+                if (cba.Util.BoogieVerify.ignoreAssertMethods.Contains(impl.Name))
+                    continue;
 
-                    if (decl is Implementation)
+                impl.Blocks.Iter(block =>
+                    block.Cmds.OfType<AssignCmd>()
+                    .Iter(cmd =>
                     {
-                        Implementation impl = (Implementation)decl;
-                        /* each method containing an assert is annotated with an "modifies assertsPassed" */
-                        foreach (var ens in impl.Proc.Modifies)
-                        {
-                            if (ens.ToString().Contains(cba.Util.BoogieVerify.assertsPassed))
-                                VisitImplementation(impl);
-                        }
-                    }
-                }
+                        foreach (var lhs in cmd.Lhss)
+                            if (lhs.DeepAssignedVariable.Name == cba.Util.BoogieVerify.assertsPassed)
+                                assertLocations.Add(impl.Proc);
+
+                    }));
             }
-            else
-            {
-                foreach (var decl in node.TopLevelDeclarations)
-                {
-                    if (decl is Implementation && QKeyValue.FindBoolAttribute(decl.Attributes, "entrypoint"))
-                        mainProc = ((Implementation)decl).Proc;
-                    if (decl is Procedure && QKeyValue.FindBoolAttribute(decl.Attributes, "entrypoint"))
-                        mainProc = (Procedure)decl;
-                }
-
-                Visit(node);
-            }
-
-            Debug.Assert(mainProc != null);
-
             return assertLocations;
         }
     }
@@ -299,7 +249,11 @@ namespace CoreLib {
     
         LocateAsserts locate = new LocateAsserts();
         assertMethods = locate.VisitIt(prog);
-        mainProc = locate.mainProc;
+        mainProc = prog.TopLevelDeclarations.OfType<Implementation>()
+            .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+            .Select(impl => impl.Proc)
+            .FirstOrDefault();
+
         Debug.Assert(mainProc != null);
     
         /* if no asserts in methods, we don't need fwd/bck, neither callgraph and the associated transformations */
@@ -331,7 +285,7 @@ namespace CoreLib {
         stats = new Stats();
         implName2SVC = new Dictionary<string, Stack<StratifiedVC>>();
 
-        if (cba.Util.BoogieVerify.fwdBck != 0 && !cba.Util.BoogieVerify.refinementRun)
+        if (cba.Util.BoogieVerify.options.useFwdBck)
         {
             procToProc = new Dictionary<string, Procedure>();
             RunInitialAnalyses(program);
@@ -394,7 +348,7 @@ namespace CoreLib {
         /* the forward/backward approach can only be applied for programs with asserts in calls
         * and single-threaded (multi-threaded programs contain a final assert in the main).
         * Otherwise, use forward approach */
-        if (cba.Util.BoogieVerify.fwdBck != 0 && !cba.Util.BoogieVerify.refinementRun && assertMethods.Count > 0)
+        if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
         {
             var ret = VerifyImplementationFwdBck(impl, callback);
             CommandLineOptions.Clo.UseLabels = oldUseLabels;
