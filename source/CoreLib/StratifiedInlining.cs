@@ -301,7 +301,21 @@ namespace CoreLib {
         if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
             stats.print();
     }
-    
+
+    /* depth of the recursion inlined so far */
+    private int MyRecursionDepth(StratifiedCallSite cs)
+    {
+        int i = 0;
+        StratifiedCallSite iter = cs;
+        while (parent.ContainsKey(iter))
+        {
+            iter = parent[iter]; /* previous callsite */
+            if (iter.callSite.calleeName == cs.callSite.calleeName)
+                i++; /* recursion */
+        }
+        return i;
+    }
+
     /* depth of the recursion inlined so far */
     private int RecursionDepth(StratifiedCallSite cs, Implementation mainImpl)
     {
@@ -338,7 +352,196 @@ namespace CoreLib {
         stats.stacksize++;
         prover.Push();
     }
-    
+
+    public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
+    {
+        Outcome outcome = Outcome.Inconclusive;
+
+        while (true)
+        {
+            MacroSI.PRINT_DETAIL("  - underapprox");
+           
+            // underapproximate query
+            Push();
+
+            foreach (StratifiedCallSite cs in openCallSites)
+            {
+                prover.Assert(cs.callSiteExpr, false);
+            }
+            MacroSI.PRINT_DETAIL("    - check");
+            reporter.underapproximationMode = main;
+            outcome = CheckVC(reporter);
+            prover.Pop();
+            MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+            if (outcome != Outcome.Correct) break;
+
+            MacroSI.PRINT_DETAIL("  - overapprox");
+            // overapproximate query
+            Push();
+            foreach (StratifiedCallSite cs in openCallSites)
+            {
+                if (MyRecursionDepth(cs) == CommandLineOptions.Clo.RecursionBound)
+                    prover.Assert(cs.callSiteExpr, false);
+            }
+            MacroSI.PRINT_DETAIL("    - check");
+            reporter.underapproximationMode = false;
+            reporter.callSitesToExpand = new List<StratifiedCallSite>();
+            outcome = CheckVC(reporter);
+            prover.Pop();
+            MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+            if (outcome != Outcome.Errors)
+            {
+                break; // done
+                // TODO: rec bound reached if some call site was blocked
+            }
+            foreach (var scs in reporter.callSitesToExpand)
+            {
+                MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
+                openCallSites.Remove(scs);
+                stats.numInlined++;
+                stats.stratNumInlined++;
+                var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
+                foreach (var newCallSite in svc.CallSites)
+                {
+                    openCallSites.Add(newCallSite);
+                    parent[newCallSite] = scs;
+                }
+                prover.Assert(scs.Attach(svc), true);
+                attachedVC[scs] = svc;
+                if (assertMethods.Contains(svc.info.impl.Proc))
+                    MustNotFail(svc);
+            }
+        }
+        return outcome;
+    }
+
+    public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites, 
+        StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
+    {
+        var outcome = Fwd(openCallSites, reporter, svc.info.impl.Name == mainProc.Name);
+        if (outcome != Outcome.Errors)
+            return outcome;
+        if(svc.info.impl.Name == mainProc.Name)
+            return outcome;
+
+        outcome = Outcome.Correct;
+
+        foreach (var caller in callGraph.callers[svc.info.impl.Proc])
+        {
+            if (backboneRecDepth[caller.Name] == CommandLineOptions.Clo.RecursionBound)
+                continue;
+
+            
+            var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name]);
+            backboneRecDepth[caller.Name]++;
+            var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC, callerVC.id);
+            var callerOpenCallSites = new HashSet<StratifiedCallSite>(openCallSites);
+            callerOpenCallSites.UnionWith(callerVC.CallSites);
+
+            foreach (var cs in callerVC.CallSites.Where(s => s.callSite.calleeName == svc.info.impl.Name))
+            {
+                Push();
+
+                prover.Assert(AttachByEquality(cs, svc), true);
+                prover.Assert(cs.callSiteExpr, true);
+                prover.Assert(callerVC.vcexpr, true);
+                
+                attachedVC[cs] = svc;
+                foreach (var s in svc.CallSites)
+                    parent[s] = cs;
+
+                var ccs = new HashSet<StratifiedCallSite>(callerOpenCallSites);
+                ccs.Remove(cs);
+
+                MacroSI.PRINT_DETAIL("    ~ bck to " + caller.Name);
+
+                outcome = Bck(callerVC, ccs, callerReporter, backboneRecDepth);
+
+                MacroSI.PRINT_DETAIL("    ~ bck to " + caller.Name + " Done");
+
+                attachedVC.Remove(cs);
+                foreach (var s in svc.CallSites)
+                    parent.Remove(s);
+
+                prover.Pop();
+            }
+
+            backboneRecDepth[caller.Name]--;
+
+            if (outcome != Outcome.Correct)
+                break;
+        }
+        return outcome;
+    }
+
+    public Outcome FwdBckVerify(Implementation impl, VerifierCallback callback)
+    {
+        MacroSI.PRINT("Starting forward/backward approach...");
+        Outcome outcome = Outcome.Correct;
+        var backbonedepth = new Dictionary<string, int>();
+        program.TopLevelDeclarations.OfType<Procedure>()
+            .Iter(proc => backbonedepth.Add(proc.Name, 0));
+        mainProc = impl.Proc;
+
+        /* is there a method with assert leading to a real counter-example? */
+        foreach (Procedure assertMethod in assertMethods)
+        {
+            /* if the method is not in the call-graph, it is the fake main initially added */
+            if (!callGraph.callers.ContainsKey(assertMethod))
+                continue;
+
+            Push();
+
+            StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[assertMethod.Name]); ;
+            HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
+            prover.Assert(svc.vcexpr, true);
+
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
+            MustFail(svc);
+
+            outcome = Bck(svc, openCallSites, reporter, backbonedepth);
+
+            prover.Pop();
+
+            /* a bug is found */
+            if (outcome != Outcome.Correct)
+                return outcome;
+
+            MacroSI.PRINT("No bug starting from " + assertMethod.Name + ". Selecting next method (if existing)...");
+        }
+
+        /* none of the methods containing an assert reaches successfully the main -- the program is safe */
+        return Outcome.Correct;
+    }
+
+    void MustFail(StratifiedVC svc)
+    {
+        Debug.Assert(svc.info.interfaceExprVars.Exists(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed)));
+
+        var index = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
+        if (cba.Util.BoogieVerify.assertsPassedIsInt)
+        {
+            Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+            prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), false);
+        }
+        else
+            prover.Assert(svc.interfaceExprVars[index], false);
+    }
+
+    void MustNotFail(StratifiedVC svc)
+    {
+        Debug.Assert(svc.info.interfaceExprVars.Exists(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed)));
+
+        var index = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
+        if (cba.Util.BoogieVerify.assertsPassedIsInt)
+        {
+            Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+            prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), true);
+        }
+        else
+            prover.Assert(svc.interfaceExprVars[index], true);
+    }
+
     /* verification */
     public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
     {
@@ -350,7 +553,8 @@ namespace CoreLib {
         * Otherwise, use forward approach */
         if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
         {
-            var ret = VerifyImplementationFwdBck(impl, callback);
+            //var ret = VerifyImplementationFwdBck(impl, callback);
+            var ret = FwdBckVerify(impl, callback);
             CommandLineOptions.Clo.UseLabels = oldUseLabels;
             return ret;
         }
@@ -1031,11 +1235,11 @@ namespace CoreLib {
     
     class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler {
     StratifiedInlining si;
-    VerifierCallback callback;
+    public VerifierCallback callback;
     StratifiedVC mainVC;
     /* (dynamic) id of the method the closest to top-level */
     public int basis;
-    
+
     public bool underapproximationMode;
     public List<StratifiedCallSite> callSitesToExpand;
     List<Tuple<int, int>> orderedStateIds;
