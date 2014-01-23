@@ -356,6 +356,8 @@ namespace CoreLib {
     public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
     {
         Outcome outcome = Outcome.Inconclusive;
+        var callSitesAttached = new HashSet<StratifiedCallSite>();
+        var parentsAttached = new HashSet<StratifiedCallSite>();
 
         while (true)
         {
@@ -459,9 +461,11 @@ namespace CoreLib {
 
                 MacroSI.PRINT_DETAIL("    ~ bck to " + caller.Name + " Done");
 
-                attachedVC.Remove(cs);
                 foreach (var s in svc.CallSites)
                     parent.Remove(s);
+
+                callerOpenCallSites.Iter(ocs => attachedVC.Remove(ocs));
+
 
                 prover.Pop();
             }
@@ -492,11 +496,14 @@ namespace CoreLib {
 
             Push();
 
+            attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
+
             StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[assertMethod.Name]); ;
             HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
             prover.Assert(svc.vcexpr, true);
 
-            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc, svc.id);
             MustFail(svc);
 
             outcome = Bck(svc, openCallSites, reporter, backbonedepth);
