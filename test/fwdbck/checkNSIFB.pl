@@ -9,7 +9,7 @@ $numArgs = $#ARGV + 1;
 
 $dirsGiven = 0;
 $flags = "";
-$timeout = "" #wlimit.exe /w 60";
+$timeout = ""; #wlimit.exe /w 60";
 @dirs = ("");
 
 for($cnt = 0; $cnt < $numArgs; $cnt++) {
@@ -63,7 +63,7 @@ foreach $line (@files) {
     open(TMP_HANDLE, $file) || die "File $file does not exist\n";
     close (TMP_HANDLE);
 
-    $cmd = "$timeout ..\\..\\..\\..\\..\\corral\\bin\\Debug\\corral.exe /newStratifiedInlining $file /fwdBck /fwdBckInRef /flags:$dir\\config.txt $flags > out";
+    $cmd = "$timeout ..\\..\\bin\\Debug\\corral.exe /newStratifiedInlining $file /fwdBck /fwdBckInRef /flags:$dir\\config.txt $flags > out";
     #print $cmd; print "\n";
     system($cmd);
 
