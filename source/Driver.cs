@@ -502,6 +502,9 @@ namespace cba
                 {
                     Console.WriteLine("Sorry, fwd/bck approach not available for multi-threaded programs. Running fwd approach.");
                     config.FwdBckSearch = 0;
+                    ConfigManager.pathVerifyOptions.useFwdBck = false;
+                    ConfigManager.progVerifyOptions.useFwdBck = false;
+                    ConfigManager.refinementVerifyOptions.useFwdBck = false;
                 }
 
                 try
@@ -516,6 +519,9 @@ namespace cba
             }
 
             #endregion
+
+            // inline procedures that have that annotation
+            InlineProcedures(init);
 
             // Add unique ids on calls -- necessary for reusing call trees
             // across stratified inlining queries. The unique ids are used
@@ -535,8 +541,6 @@ namespace cba
             }
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
-            // inline procedures that have that annotation
-            InlineProcedures(init);
             //BoogieUtil.PrintProgram(init, "temp.bpl");
 
             // thread-local variables are always tracked
