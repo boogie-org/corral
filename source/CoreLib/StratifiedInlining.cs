@@ -560,6 +560,9 @@ namespace CoreLib {
         * Otherwise, use forward approach */
         if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
         {
+            // assert true to flush all one-time axioms, decls, etc
+            prover.Assert(VCExpressionGenerator.True, true);
+
             //var ret = VerifyImplementationFwdBck(impl, callback);
             var ret = FwdBckVerify(impl, callback);
             CommandLineOptions.Clo.UseLabels = oldUseLabels;
