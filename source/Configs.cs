@@ -94,6 +94,7 @@ namespace cba
         public bool cadeTiming { get; private set; }
 
         public bool sdvMode { get; private set; }
+        public bool sdvInstrumentAssert { get; private set; }
 
         public int runHoudini { get; private set; }
         public string runAbsHoudini { get; private set; }
@@ -284,6 +285,7 @@ namespace cba
             printData = 0;
 
             sdvMode = false;
+            sdvInstrumentAssert = false;
 
             runHoudini = -2;
             runAbsHoudini = null;
@@ -462,6 +464,10 @@ namespace cba
             else if (flag == "/sdv")
             {
                 sdvMode = true;
+            }
+            else if (flag == "/sdvInstrumentAssert")
+            {
+                sdvInstrumentAssert = true;
             }
             else if (flag == "/noCallTreeReuse")
             {

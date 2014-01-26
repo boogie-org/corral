@@ -664,12 +664,29 @@ namespace cba
                 var eps = program.TopLevelDeclarations.OfType<Implementation>()
                     .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
                 var epsCount = eps.Count();
-                if (epsCount == 0)
-                    throw new InvalidInput("No entrypoint specified");
                 if (epsCount > 1)
                     throw new InvalidInput("Multiple entrypoints specified");
-                var ep = eps.First();
-                config.mainProcName = ep.Name;
+
+                if (epsCount == 0)
+                {
+                    // look for procedure
+                    var epsp = program.TopLevelDeclarations.OfType<Procedure>()
+                        .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "entrypoint"));
+                    if (epsp.Count() > 1)
+                        throw new InvalidInput("Multiple entrypoints specified");
+                    if (epsp.Count() == 0)
+                        throw new InvalidInput("No entrypoint specified");
+                    config.mainProcName = epsp.First().Name;
+                    var ep = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, config.mainProcName);
+                    if (ep == null)
+                        throw new InvalidInput(string.Format("Entrypoint {0} not found", config.mainProcName));
+                    ep.AddAttribute("entrypoint");
+                }
+                else
+                {
+                    var ep = eps.First();
+                    config.mainProcName = ep.Name;
+                }
             }
 
             // annotate calls with a unique number
@@ -689,7 +706,7 @@ namespace cba
             // Add a new main (for the assert)
             InsertionTrans mainTrans = null;
             var newMain = config.mainProcName;
-            if (!config.deepAsserts)
+            if (!config.deepAsserts && !config.sdvInstrumentAssert)
                 newMain = AddFakeMain(program, BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, config.mainProcName), out mainTrans);
 
             // Capture state
@@ -713,6 +730,15 @@ namespace cba
             var curr = init;
 
             var passes = new List<CompilerPass>();
+
+            // instrument asserts
+            if (config.sdvInstrumentAssert)
+            {
+                var sinstr = new SequentialInstrumentation();
+                curr = sinstr.run(curr);
+                passes.Add(sinstr);
+                config.trackedVars.Add(sinstr.assertsPassedName);
+            }
 
             // prune
             PruneProgramPass.RemoveUnreachable = true;
