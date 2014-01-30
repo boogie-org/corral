@@ -126,9 +126,10 @@ namespace cba
         public bool debugMemAccesses { get; private set; }
 
         public HashSet<string> tryDroppingForRefinement { get; private set; }
-        public bool unfoldRecursion { get; private set; }
+        public string unfoldRecursion { get; private set; }
 
         public int houdiniTimeout { get; private set; }
+        public bool fastRequiresInference { get; private set; }
 
         public bool useProverEvaluate { get; private set; }
 
@@ -317,9 +318,10 @@ namespace cba
 
             tryDroppingForRefinement = new HashSet<string>();
 
-            unfoldRecursion = false;
+            unfoldRecursion = null;
 
             houdiniTimeout = -1;
+            fastRequiresInference = false;
 
             useProverEvaluate = false;
 
@@ -371,7 +373,12 @@ namespace cba
             }
             else if (flag == "/unfoldRecursion")
             {
-                unfoldRecursion = true;
+                unfoldRecursion = "unfolded.bpl";
+            }
+            else if (flag.StartsWith("/unfoldRecursion:"))
+            {
+                var split = flag.Split(sep);
+                unfoldRecursion = split[1];
             }
             else if (flag.StartsWith("/ignoreAssertMethod:"))
             {
@@ -448,6 +455,10 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 houdiniTimeout = Int32.Parse(split[1]);
+            }
+            else if (flag == "/fastRequiresInference")
+            {
+                fastRequiresInference = true;
             }
             else if (flag == "/cadeTiming")
             {

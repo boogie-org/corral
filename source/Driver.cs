@@ -108,6 +108,7 @@ namespace cba
             GlobalConfig.annotations = config.annotations;
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
+            ContractInfer.fastRequiresInference = config.fastRequiresInference;
             if (config.printData == 0 && config.NonUniformUnfolding)
                 config.printData = 1;
 
@@ -383,11 +384,18 @@ namespace cba
             Program init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
 
             #region Early exit options
-            if (config.unfoldRecursion)
+            if (config.unfoldRecursion != null)
             {
                 var urec = new ExtractRecursionPass();
+                if (config.mainProcName == null)
+                {
+                    config.mainProcName = init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                        .Where(nd => QKeyValue.FindBoolAttribute(nd.Attributes, "entrypoint"))
+                        .Select(nd => nd.Name)
+                        .FirstOrDefault();                        
+                }
                 var ttt = urec.run(new PersistentCBAProgram(init, config.mainProcName, 0));
-                ttt.writeToFile("unfolded.bpl");
+                ttt.writeToFile(config.unfoldRecursion);
                 throw new NormalExit("done");
             }
 
@@ -636,8 +644,6 @@ namespace cba
 
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
             VerificationPass.usePruning = false;
-            if (config.deepAsserts)
-                ContractInfer.supressAsserts = true;
             
             PersistentCBAProgram inputProg = null;
             if (config.printData == 2)
@@ -737,7 +743,7 @@ namespace cba
                 var sinstr = new SequentialInstrumentation();
                 curr = sinstr.run(curr);
                 passes.Add(sinstr);
-                config.trackedVars.Add(sinstr.assertsPassedName);
+                refinementState.Add(new AddVarMapping(new VarSet(sinstr.assertsPassedName, "")));
             }
 
             // prune
@@ -1094,6 +1100,27 @@ namespace cba
                 var tprog = traceProgCons.getProgram();
                 var witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
 
+                // Find the stack depth of the last assertion OR assignment to assertsPassed
+                {
+                    var isAssert = new Predicate<Cmd>(cmd =>
+                    {
+                        var acmd = cmd as AssertCmd;
+                        if (acmd != null && !BoogieUtil.isAssertTrue(acmd))
+                            return true;
+                        var ap = passes.OfType<SequentialInstrumentation>().Select(si => si.assertsPassedName)
+                            .FirstOrDefault();
+                        if (ap == null)
+                            ap = config.assertsPassed;
+                        if (ap == null)
+                            return false;
+                        var assign = cmd as AssignCmd;
+                        if (assign == null) return false;
+                        return (assign.Lhss.Any(lhs => lhs.DeepAssignedVariable.Name == ap));
+                    });
+                    var stackD = findLast(tprog, witness.mainProcName, isAssert);
+                    Console.WriteLine("Stack depth: {0}", stackD);
+                }
+
                 // make sure variables to record are scalar and globals
                 var toRecord = new HashSet<string>();
                 tprog.TopLevelDeclarations.OfType<Variable>()
@@ -1267,6 +1294,28 @@ namespace cba
             }
 
             Log.Close();
+        }
+
+        // program should not have recursion -- or too many paths. This is really just meant for
+        // path programs
+        private static int findLast(Program program, string implName, Predicate<Cmd> pred)
+        {
+            var cnt = 0;
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, implName);
+            if(impl == null) return 0;
+            foreach (var blk in impl.Blocks)
+            {
+                foreach (var cmd in blk.Cmds)
+                {
+                    if (pred(cmd)) cnt = Math.Max(cnt, 1);
+                    if (cmd is CallCmd)
+                    {
+                        var c = findLast(program, (cmd as CallCmd).callee, pred);
+                        if (c != 0) cnt = Math.Max(cnt, c + 1);
+                    }
+                }
+            }
+            return cnt;
         }
 
         // Mark "slic" assume statements

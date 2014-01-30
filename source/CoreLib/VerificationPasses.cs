@@ -657,6 +657,7 @@ namespace cba
         public static bool disableStaticAnalysis = false;
         public static bool checkAsserts = false;
         public static string runAbsHoudiniConfig = null;
+        public static bool fastRequiresInference = false;
         public static bool runAbsHoudini
         {
             get
@@ -673,7 +674,6 @@ namespace cba
         private ExtractLoopsPass elPass;
         public static bool runHoudini = true;
         public string printHoudiniQuery = null;
-        public static bool supressAsserts = false;
 
         // Named constants: (implName, id) -> set of constants with that id
         Dictionary<Tuple<string, string>, HashSet<string>> namedConstants;
@@ -965,29 +965,6 @@ namespace cba
                 program = (inputPrime as PersistentCBAProgram).getCBAProgram();
             }
 
-            // convert asserts to assumes
-            if (supressAsserts)
-            {
-                program.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk =>
-                            {
-                                var ncmds = new List<Cmd>();
-                                foreach (var cmd in blk.Cmds)
-                                {
-
-                                    var acmd = cmd as AssertCmd;
-                                    if (acmd == null || BoogieUtil.isAssertTrue(cmd))
-                                    {
-                                        ncmds.Add(cmd);
-                                        continue;
-                                    }
-                                    ncmds.Add(new AssumeCmd(acmd.tok, acmd.Expr));
-                                }
-                                blk.Cmds = ncmds;
-                            }));
-            }
-
             ModSetCollector.DoModSetAnalysis(program);
 
             DoStaticAnalysis(program);
@@ -1215,23 +1192,7 @@ namespace cba
                 impl.Attributes = BoogieUtil.removeAttr("verify", impl.Attributes);
             }
 
-            if (!checkAsserts)
-            {
-                // get rid of assert in main
-                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-                foreach (var blk in mainImpl.Blocks)
-                {
-                    for (int i = 0; i < blk.Cmds.Count; i++)
-                    {
-                        var acmd = blk.Cmds[i] as AssertCmd;
-                        if (acmd == null) continue;
-                        var le = acmd.Expr as LiteralExpr;
-                        if (le != null && le.IsTrue) continue;
-                        blk.Cmds[i] = new AssumeCmd(Token.NoToken, Expr.True);
-                    }
-                }
-            }
-            else
+            if (checkAsserts)
             {
                 // Guard assert with an existential Boolean
                 program.TopLevelDeclarations.OfType<Implementation>()
@@ -1247,6 +1208,26 @@ namespace cba
                     }
                 }));
 
+            }
+            else
+            {
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk =>
+                            {
+                                var ncmds = new List<Cmd>();
+                                foreach (var cmd in blk.Cmds)
+                                {
+                                    var acmd = cmd as AssertCmd;
+                                    if (acmd == null || BoogieUtil.isAssertTrue(cmd))
+                                    {
+                                        ncmds.Add(cmd);
+                                        continue;
+                                    }
+                                    ncmds.Add(new AssumeCmd(acmd.tok, acmd.Expr));
+                                }
+                                blk.Cmds = ncmds;
+                            }));
             }
 
             // Add old summaries
@@ -1303,12 +1284,37 @@ namespace cba
                 if (checkAsserts)
                     program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
 
+                Program origProg = null;
+                var allConstants = new HashSet<string>();
+                var requiresConstants = new HashSet<string>();
+                if (fastRequiresInference)
+                {
+                    // Turn off requires candidates
+                    program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                        .Iter(c => allConstants.Add(c.Name));
+
+                    origProg = BoogieUtil.ReResolve(program);
+                    program.TopLevelDeclarations.OfType<Procedure>()
+                        .Iter(proc =>
+                        {
+                            var uv = new VarsUsed();
+                            uv.VisitRequiresSeq(proc.Requires);
+                            requiresConstants.UnionWith(uv.varsUsed.Intersection(allConstants));
+                            proc.Requires = proc.Requires.Filter(re => re.Free);
+                        });
+                    program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => requiresConstants.Contains(c.Name))
+                        .Iter(c => c.Attributes = BoogieUtil.removeAttr("existential", c.Attributes));
+                }
+
                 inline(program);
                 BoogieUtil.TypecheckProgram(program, "error.bpl");
 
                 if (printHoudiniQuery != null)
                     BoogieUtil.PrintProgram(program, printHoudiniQuery);
 
+                HoudiniOutcome outcome = null;
 
                 if (runAbsHoudini)
                 {
@@ -1322,14 +1328,52 @@ namespace cba
                 {
                     var houdiniStats = new HoudiniSession.HoudiniStatistics();
                     Houdini houdini = new Houdini(program, houdiniStats);
-                    HoudiniOutcome outcome = houdini.PerformHoudiniInference();
+                    outcome = houdini.PerformHoudiniInference();
                     Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
-                    outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+
+                    if (!fastRequiresInference)
+                    {
+                        outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                        Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                    }
+                    var time4 = DateTime.Now;
+                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    houdini = null;
+                }
+                
+                if(fastRequiresInference)
+                {
+                    var newAxioms = new List<Axiom>();
+                    foreach (var b in origProg.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => allConstants.Contains(c.Name) && !requiresConstants.Contains(c.Name)))
+                    {
+                        b.Attributes = BoogieUtil.removeAttr("existential", b.Attributes);
+                        var axiom = Expr.Eq(Expr.Ident(b), Expr.Literal(outcome.assignment[b.Name]));
+                        axiom.Type = Microsoft.Boogie.Type.Bool;
+                        axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
+                        newAxioms.Add(new Axiom(Token.NoToken, axiom));
+                    }
+                    origProg.TopLevelDeclarations.AddRange(newAxioms);
+                    //BoogieUtil.PrintProgram(origProg, "h2.bpl");
+
+                    CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
+                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                    Houdini houdini = new Houdini(origProg, houdiniStats);
+                    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
+                    Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
+                    CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
+
+                    outcome.assignment.Where(kvp => !requiresConstants.Contains(kvp.Key))
+                        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                    outcomeReq.assignment
+                        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+
                     Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
                     var time4 = DateTime.Now;
                     Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
                     houdini = null;
                 }
+                 
             }
             catch (OutOfMemoryException)
             {
@@ -1976,6 +2020,9 @@ namespace cba
             var procsThatCannotReachAssert = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
             procsThatCannotReachAssert.ExceptWith(SequentialInstrumentation.procsWithAsserts(program));
+
+            if (procsThatCannotReachAssert.Contains(program.mainProcName))
+                return program;
 
             // loopy guys cannot reach asserts
             program.TopLevelDeclarations.OfType<LoopProcedure>()

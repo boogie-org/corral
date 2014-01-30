@@ -353,6 +353,14 @@ namespace CoreLib {
         prover.Push();
     }
 
+    /* for measuring Z3 stack */
+    protected void Pop()
+    {
+        stats.stacksize--;
+        prover.Pop();
+
+    }
+
     public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
     {
         Outcome outcome = Outcome.Inconclusive;
@@ -376,7 +384,7 @@ namespace CoreLib {
             MacroSI.PRINT_DETAIL("    - check");
             reporter.underapproximationMode = main;
             outcome = CheckVC(reporter);
-            prover.Pop();
+            Pop();
             MacroSI.PRINT_DETAIL("    - checked: " + outcome);
             if (outcome != Outcome.Correct) break;
 
@@ -395,7 +403,7 @@ namespace CoreLib {
             reporter.underapproximationMode = false;
             reporter.callSitesToExpand = new List<StratifiedCallSite>();
             outcome = CheckVC(reporter);
-            prover.Pop();
+            Pop();
             MacroSI.PRINT_DETAIL("    - checked: " + outcome);
             if (outcome != Outcome.Errors)
             {
@@ -404,7 +412,9 @@ namespace CoreLib {
 
                 break; // done
             }
-            Debug.Assert(reporter.callSitesToExpand.Count > 0);
+            if (reporter.callSitesToExpand.Count == 0)
+                return Outcome.Inconclusive;
+
             foreach (var scs in reporter.callSitesToExpand)
             {
                 MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
@@ -447,6 +457,10 @@ namespace CoreLib {
                 continue;
             }
 
+            // DFS: already exploring the assertMethods elsewhere
+            if (assertMethods.Contains(caller))
+                continue;
+
             var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name]);
             backboneRecDepth[caller.Name]++;
             var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC, callerVC.id);
@@ -481,7 +495,7 @@ namespace CoreLib {
 
                 callerOpenCallSites.Iter(ocs => attachedVC.Remove(ocs));
 
-                prover.Pop();
+                Pop();
 
                 if (outcome == Outcome.Errors)
                     break;
@@ -536,7 +550,7 @@ namespace CoreLib {
 
             outcome = Bck(svc, openCallSites, reporter, backbonedepth);
 
-            prover.Pop();
+            Pop();
 
             /* a bug is found */
             if (outcome == Outcome.Errors)
@@ -560,14 +574,25 @@ namespace CoreLib {
     {
         Debug.Assert(svc.info.interfaceExprVars.Exists(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed)));
 
-        var index = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
-        if (cba.Util.BoogieVerify.assertsPassedIsInt)
-        {
-            Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
-            prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), false);
-        }
-        else
-            prover.Assert(svc.interfaceExprVars[index], false);
+        var indexFirst = svc.info.interfaceExprVars.FindIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
+        var indexLast = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
+
+        var AssertVar = new Action<int,bool>( (index, b) =>
+            {
+                if (cba.Util.BoogieVerify.assertsPassedIsInt)
+                {
+                    Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+                    prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
+                }
+                else
+                    prover.Assert(svc.interfaceExprVars[index], b);
+            });
+
+        // assertVar[First] is not set
+        AssertVar(indexFirst, true);
+
+        // assertVar[Last] is set
+        AssertVar(indexLast, false);
     }
 
     void MustNotFail(StratifiedCallSite scs, StratifiedVC svc)
@@ -656,7 +681,7 @@ namespace CoreLib {
             MacroSI.PRINT_DETAIL("    - check");
             reporter.underapproximationMode = true;
             outcome = CheckVC(reporter);
-            prover.Pop();
+            Pop();
             MacroSI.PRINT_DETAIL("    - checked: " + outcome);
             if (outcome != Outcome.Correct) break;
 
@@ -675,7 +700,7 @@ namespace CoreLib {
             reporter.underapproximationMode = false;
             reporter.callSitesToExpand = new List<StratifiedCallSite>();
             outcome = CheckVC(reporter);
-            prover.Pop();
+            Pop();
             MacroSI.PRINT_DETAIL("    - checked: " + outcome);
             if (outcome != Outcome.Errors)
             {
@@ -701,7 +726,7 @@ namespace CoreLib {
             }
         }
     
-        prover.Pop(); 
+        Pop(); 
         CommandLineOptions.Clo.UseLabels = oldUseLabels;
         return outcome;
     }
@@ -805,7 +830,7 @@ namespace CoreLib {
             reporter.underapproximationMode = false;
             MacroSI.PRINT_DETAIL("    - check");
             outcome = CheckVC(reporter);
-            prover.Pop(); 
+            Pop(); 
     
             MacroSI.PRINT_DETAIL("    - checked: "+outcome);
             if (outcome != Outcome.Correct)
@@ -840,7 +865,7 @@ namespace CoreLib {
             MacroSI.PRINT_DETAIL("    - check");
             outcome = CheckVC(reporter);
 
-            prover.Pop(); 
+            Pop(); 
             MacroSI.PRINT_DETAIL("    - checked: "+outcome);
             if (outcome != Outcome.Errors)
             {
@@ -983,7 +1008,7 @@ namespace CoreLib {
             /* if this method is not the main neither called, then it is safe */
             if (!callGraph.callers.ContainsKey(setOfCS))
             {
-                prover.Pop();
+                Pop();
                 continue;
             }
 
@@ -1099,7 +1124,7 @@ namespace CoreLib {
                         if (outcome == Outcome.Errors)
                             return outcome;
     
-                        prover.Pop();
+                        Pop();
                     }
                 }
         }
@@ -1191,7 +1216,7 @@ namespace CoreLib {
         }
         allBoolVars = ret;
     
-        prover.Pop(); 
+        Pop(); 
         CommandLineOptions.Clo.UseLabels = oldUseLabels;
         return Outcome.Correct;
     }
@@ -1266,7 +1291,7 @@ namespace CoreLib {
         prover.Assert(a, true);
         }
         Outcome ret = CheckVC(reporter);
-        prover.Pop(); 
+        Pop(); 
         return ret;
     }
     
@@ -1300,7 +1325,7 @@ namespace CoreLib {
     StratifiedVC mainVC;
     /* (dynamic) id of the method the closest to top-level */
     public int basis;
-
+    public static TimeSpan ttime = TimeSpan.Zero; 
     public bool underapproximationMode;
     public List<StratifiedCallSite> callSitesToExpand;
     List<Tuple<int, int>> orderedStateIds;
@@ -1334,6 +1359,7 @@ namespace CoreLib {
     }
     
     public override void OnModel(IList<string> labels, Model model) {
+        var start = DateTime.Now;
         List<Absy> absyList = new List<Absy>();
         foreach (var label in labels) {
             absyList.Add(Label2Absy(mainVC.info.impl.Name, label));
@@ -1351,6 +1377,7 @@ namespace CoreLib {
             callback.OnCounterexample(cex, null);
             //this.PrintModel(model);
         }
+        ttime += (DateTime.Now - start);
     }
     
     private Counterexample NewTrace(StratifiedVC svc, List<Absy> absyList, Model model) {
