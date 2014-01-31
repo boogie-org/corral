@@ -956,15 +956,16 @@ namespace cba
                         var ens = new Requires(false, e);
                         ens.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), ens.Attributes);
                         name2Impl[impl.Name].Proc.Requires.Add(ens);
+                        ret[impl.Name].Add(constant.Name, new EExpr(expr, false));
                     }
                     else
                     {
                         var ens = new Ensures(true, addOld(expr));
                         name2Impl[impl.Name].Proc.Ensures.Add(ens);
+                        ret[impl.Name].Add(constant.Name, new EExpr(addOld(expr), true));
                     }
 
                     
-                    ret[impl.Name].Add(constant.Name, new EExpr(expr, true));
                 }
             }
 
