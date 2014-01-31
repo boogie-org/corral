@@ -57,6 +57,26 @@ namespace StaticAnalysis
             return ret;
         }
 
+        // For precondition computation
+        public IWeight Top(Implementation impl)
+        {
+            var domainG = program.TopLevelDeclarations
+                .OfType<GlobalVariable>()
+                .Where(g => g.TypedIdent.Type.IsInt);
+            var domainL = impl.LocVars.OfType<Variable>()
+                .Concat(impl.OutParams.OfType<Variable>())
+                .Concat(impl.InParams.OfType<Variable>())
+                .Where(v => v.TypedIdent.Type.IsInt);
+
+            var ret = new ConstantProp();
+            domainG.Iter(g => ret.val.Add(g.Name, Value.GetTop()));
+            domainL.Iter(l => ret.val.Add(l.Name, Value.GetTop()));
+            ret.impl = impl;
+            ret.isZero = false;
+
+            return ret;
+        }
+
         public bool Combine(IWeight iweight)
         {
             var weight = iweight as ConstantProp;
@@ -127,6 +147,37 @@ namespace StaticAnalysis
             return ApplyCall(cmd, summary as ConstantProp);
         }
 
+        public IWeight ApplyCall(CallCmd cmd, Implementation callee)
+        {
+            if (isZero)
+                return new ConstantProp();
+
+            var domainG = program.TopLevelDeclarations
+                .OfType<GlobalVariable>()
+                .Where(g => g.TypedIdent.Type.IsInt)
+                .Where(g => val.ContainsKey(g.Name));
+
+            var domainL = callee.LocVars.OfType<Variable>()
+                .Concat(callee.OutParams.OfType<Variable>())
+                .Concat(callee.InParams.OfType<Variable>())
+                .Where(v => v.TypedIdent.Type.IsInt);
+
+            var ret = new Dictionary<string, Value>();
+
+            domainG.Iter(g => ret.Add(g.Name, val[g.Name].ForgetVars()));
+            for (int i = 0; i < callee.InParams.Count; i++)
+            {
+                var formal = callee.InParams[i];
+                var actual = Value.GetTop();
+                if (cmd.Ins[i] != null)
+                    actual = Evaluate(cmd.Ins[i]);
+                ret.Add(formal.Name, actual.ForgetVars());
+            }
+            domainL.Where(v => !ret.ContainsKey(v.Name))
+                .Iter(v => ret.Add(v.Name, Value.GetTop()));
+
+            return new ConstantProp(ret, callee);
+        }
 
         private ConstantProp ApplyHavoc(HavocCmd cmd)
         {
@@ -339,6 +390,7 @@ namespace StaticAnalysis
                 .Where(g => val.ContainsKey(g.Name));
 
             var domainL = impl.LocVars.OfType<Variable>()
+                .Concat(impl.InParams.OfType<Variable>())
                 .Concat(impl.OutParams.OfType<Variable>())
                 .Where(v => v.TypedIdent.Type.IsInt)
                 .Where(v => val.ContainsKey(v.Name));
@@ -404,6 +456,17 @@ namespace StaticAnalysis
             constants = new HashSet<int>(that.constants);
             constExprs = new HashSet<Expr>(that.constExprs);
         }
+
+        public Value ForgetVars()
+        {
+            if (isTrue) return this;
+            
+            if (vars.Any() || constExprs.Any())
+                return GetTop();
+
+            return  new Value(this);
+        }
+
 
         public Value Subst(Dictionary<string, Value> subst)
         {

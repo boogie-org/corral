@@ -107,11 +107,44 @@ namespace StaticAnalysis
             computeTime = (DateTime.Now - begin);
         }
 
+        public void ComputePreconditions()
+        {
+            var NameToImpl = new Func<string, Implementation>(name =>
+                BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, name));
+            var main = id2Graph[program.mainProcName];
+            main.UpdatePrecondition(main.precondition.Top(NameToImpl(main.Id)));
+
+            IntraGraph.TopDown = true;
+            var worklist = new SortedSet<IntraGraph>(main);
+            worklist.Add(main);
+
+            var SetPrecondition = new Action<string, IWeight>((name, weight) =>
+                {
+                    var g = id2Graph[name];
+                    var changed = g.UpdatePrecondition(weight);
+                    if(changed) 
+                        worklist.Add(g);
+                });
+
+            while (worklist.Any())
+            {
+                var proc = worklist.First();
+                worklist.Remove(proc);
+                proc.PropagatePrecondition(NameToImpl, SetPrecondition);
+            }
+
+            IntraGraph.TopDown = false;
+        }
+
         public IWeight GetSummary(string procName)
         {
             return id2Graph[procName].summary;
         }
 
+        public IWeight GetPrecondition(string procName)
+        {
+            return id2Graph[procName].precondition;
+        }
     }
 
     class IntraGraph : IComparer<IntraGraph>
@@ -136,6 +169,12 @@ namespace StaticAnalysis
         public IWeight summary { get; private set; }
         // summary changed?
         public bool summaryChanged { get; private set; }
+
+        // precondition
+        public IWeight precondition { get; private set; }
+        // precondition changed?
+        public bool preconditionChanged { get; private set; }
+
         // List of return nodes
         List<Node> returnNodes;
         // Entry node
@@ -159,8 +198,11 @@ namespace StaticAnalysis
             calleeToEdgeSrc = new Dictionary<string, HashSet<Node>>();
             this.iw = iw;
             this.summary = iw.Zero(impl);
+            this.precondition = iw.Zero(impl);
+
             returnNodes = new List<Node>();
             summaryChanged = false;
+            preconditionChanged = false;
             computedBefore = false;
 
             // Create nodes
@@ -270,6 +312,36 @@ namespace StaticAnalysis
 
         }
 
+        public void PropagatePrecondition(Func<string, Implementation> NameToImpl, Action<string, IWeight> SetPrecondition)
+        {
+            foreach (var node in Nodes)
+            {
+                node.weight = iw.Zero(impl);
+            }
+            entryNode.weight = precondition;
+
+            var worklist = new SortedSet<Node>(entryNode);
+            worklist.Add(entryNode);
+
+            while (worklist.Any())
+            {
+                var node = worklist.First();
+                worklist.Remove(node);
+
+                foreach (var edge in node.Successors)
+                {
+                    var c = edge.PropagatePrecondition(ProcSummary, NameToImpl, SetPrecondition);
+                    if (c) worklist.Add(edge.tgt);
+                }
+
+            }
+        }
+
+        public bool UpdatePrecondition(IWeight weight)
+        {
+            return precondition.Combine(weight);
+        }
+
         public override string ToString()
         {
             return Id;
@@ -278,11 +350,22 @@ namespace StaticAnalysis
 
         #region IComparer<IntraGraph> Members
 
+        public static bool TopDown = false;
+
         public int Compare(IntraGraph x, IntraGraph y)
         {
-            var r = x.priority.CompareTo(y.priority);
-            if (r != 0) return r;
-            else return x.Id.CompareTo(y.Id);
+            if (!TopDown)
+            {
+                var r = x.priority.CompareTo(y.priority);
+                if (r != 0) return r;
+                else return x.Id.CompareTo(y.Id);
+            }
+            else
+            {
+                var r = y.priority.CompareTo(x.priority);
+                if (r != 0) return r;
+                else return y.Id.CompareTo(x.Id);
+            }
         }
 
         #endregion
@@ -398,6 +481,30 @@ namespace StaticAnalysis
             return tgt.weight.Combine(weight);
         }
 
+        public bool PropagatePrecondition(Func<string, IWeight> ProcSummary, Func<string, Implementation> NameToImpl,
+            Action<string, IWeight> SetPrecondition)
+        {
+            var weight = src.weight;
+            foreach (var cmd in cmds)
+            {
+                if (cmd is CallCmd)
+                {
+                    var callee = (cmd as CallCmd).callee;
+                    var summary = ProcSummary(callee);
+                    if (summary != null)
+                    {
+                        SetPrecondition(callee,
+                            weight.ApplyCall(cmd as CallCmd, NameToImpl(callee)));
+
+                        weight = weight.Extend(cmd as CallCmd, summary);
+                        continue;
+                    }
+                }
+                weight = weight.Extend(cmd);
+            }
+            return tgt.weight.Combine(weight);
+        }
+
         public override string ToString()
         {
             return string.Format("{0} --> {1}", src, tgt);
@@ -413,10 +520,11 @@ namespace StaticAnalysis
         // Apply transformation
         IWeight Extend(Cmd cmd);
         IWeight Extend(CallCmd cmd, IWeight summary);
+        // For precondition computation
+        IWeight Top(Implementation impl);
+        IWeight ApplyCall(CallCmd cmd, Implementation callee);
         // print on console
         void Print();
     }
-
-    
 
 }

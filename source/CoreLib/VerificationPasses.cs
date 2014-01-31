@@ -655,6 +655,7 @@ namespace cba
 
         public static int HoudiniTimeout = -1;
         public static bool disableStaticAnalysis = false;
+        public static bool inferPreconditions = false;
         public static bool checkAsserts = false;
         public static string runAbsHoudiniConfig = null;
         public static bool fastRequiresInference = false;
@@ -681,6 +682,7 @@ namespace cba
         Dictionary<string, string> dependenciesBetConstants;
 
         private Dictionary<string, IEnumerable<Expr>> staticAnalysisSummaries;
+        private Dictionary<string, IEnumerable<Expr>> staticAnalysisPreconditions;
         private HashSet<string> staticAnalysisConstants;
         public static bool checkStaticAnalysis = false;
 
@@ -702,6 +704,7 @@ namespace cba
             templateVarNames = new HashSet<string>();
             templateVars.Iter(v => templateVarNames.Add(v.Name));
             staticAnalysisSummaries = new Dictionary<string, IEnumerable<Expr>>();
+            staticAnalysisPreconditions = new Dictionary<string, IEnumerable<Expr>>();
             staticAnalysisConstants = new HashSet<string>();
         }
 
@@ -932,6 +935,39 @@ namespace cba
                 }
             }
 
+            foreach (var kvp in staticAnalysisPreconditions)
+            {
+                var impl = name2Impl[kvp.Key];
+                var proc = impl.Proc;
+                if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")) continue;
+                if (!ret.ContainsKey(proc.Name)) ret.Add(proc.Name, new Dictionary<string, EExpr>());
+
+                foreach (var expr in kvp.Value)
+                {
+                    var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "CIC" + cnt.ToString(), Microsoft.Boogie.Type.Bool), false);
+                    constant.AddAttribute("existential", Expr.Literal(true));
+                    constants.Add(constant);
+                    staticAnalysisConstants.Add(constant.Name);
+                    cnt++;
+
+                    if (checkStaticAnalysis)
+                    {
+                        var e = Expr.Imp(Expr.Ident(constant), expr);
+                        var ens = new Requires(false, e);
+                        ens.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), ens.Attributes);
+                        name2Impl[impl.Name].Proc.Requires.Add(ens);
+                    }
+                    else
+                    {
+                        var ens = new Ensures(true, addOld(expr));
+                        name2Impl[impl.Name].Proc.Ensures.Add(ens);
+                    }
+
+                    
+                    ret[impl.Name].Add(constant.Name, new EExpr(expr, true));
+                }
+            }
+
             program.TopLevelDeclarations.AddRange(constants);
 
             return ret;
@@ -1108,14 +1144,23 @@ namespace cba
             StaticAnalysis.ConstantProp.program = program;
             var rhs = new StaticAnalysis.RHS(program, new StaticAnalysis.ConstantProp());
             rhs.Compute();
+            if(inferPreconditions)
+               rhs.ComputePreconditions();
             program.TopLevelDeclarations
                 .OfType<Implementation>()
                 .Iter(impl =>
                     {
                         var summary = rhs.GetSummary(impl.Name) as StaticAnalysis.ConstantProp;
                         staticAnalysisSummaries.Add(impl.Name, summary.ToExpr(true));
+                        if (inferPreconditions)
+                        {
+                            var precondition = rhs.GetPrecondition(impl.Name) as StaticAnalysis.ConstantProp;
+                            staticAnalysisPreconditions.Add(impl.Name, precondition.ToExpr(true));
+                        }
                         //Console.WriteLine("{0}:", impl.Name);
                         //summary.Print(true);
+                        //Console.WriteLine("{0}:", impl.Name);
+                        //precondition.Print(true);
                     });
 
             Console.WriteLine("Static analysis took {0} s", rhs.computeTime.TotalSeconds.ToString("F2"));
