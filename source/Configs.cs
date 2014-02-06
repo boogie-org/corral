@@ -127,6 +127,7 @@ namespace cba
 
         public HashSet<string> tryDroppingForRefinement { get; private set; }
         public string unfoldRecursion { get; private set; }
+        public string daInst { get; private set; }
 
         public int houdiniTimeout { get; private set; }
         public bool fastRequiresInference { get; private set; }
@@ -319,6 +320,7 @@ namespace cba
             tryDroppingForRefinement = new HashSet<string>();
 
             unfoldRecursion = null;
+            daInst = null;
 
             houdiniTimeout = -1;
             fastRequiresInference = false;
@@ -379,6 +381,15 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 unfoldRecursion = split[1];
+            }
+            else if (flag == "/dainst")
+            {
+                daInst = "unfolded.bpl";
+            }
+            else if (flag.StartsWith("/dainst:"))
+            {
+                var split = flag.Split(sep);
+                daInst = split[1];
             }
             else if (flag.StartsWith("/ignoreAssertMethod:"))
             {

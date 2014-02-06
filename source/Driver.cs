@@ -115,7 +115,7 @@ namespace cba
 
             GeneralRefinementScheme.printStats = config.printProgress;
             ContractInfer.runHoudini = !config.summaryComputation;
-            GlobalConfig.addInvariants = 1;
+            GlobalConfig.addInvariants = 2; // AL
 
             GlobalConfig.cadeTiming = config.cadeTiming;
 
@@ -398,6 +398,18 @@ namespace cba
                 var ttt = urec.run(new PersistentCBAProgram(init, config.mainProcName, 0));
                 ttt.writeToFile(config.unfoldRecursion);
                 throw new NormalExit("done");
+            }
+
+            if (config.daInst != null)
+            {
+                var el = new ExtractLoopsPass();
+                var ttt = el.run(new PersistentCBAProgram(init, config.mainProcName, 0));
+                var da = new ConcurrentDeepAssertRewrite();
+                ttt.writeToFile("tmp.bpl");
+                ttt = da.run(ttt);
+                ttt.writeToFile(config.daInst);
+                init = BoogieUtil.ReadAndOnlyResolve(config.daInst);
+                //throw new NormalExit("done");
             }
 
             if (config.unifyMaps)

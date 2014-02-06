@@ -2810,8 +2810,8 @@ namespace cba
                         if (!BoogieUtil.isAssertTrue(cmd))
                         {
                             pwa.Add(impl.Name);
-                        }
-                        break;
+                            break;
+                        }                        
                     }
                 }
             }

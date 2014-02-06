@@ -2481,4 +2481,467 @@ namespace cba
             return trace;
         }
     }
+
+    /* TODO: Unify with DeepAssertRewrite */
+    public class ConcurrentDeepAssertRewrite : CompilerPass
+    {
+        string origMain;
+        Dictionary<string, string> firstBlockToImpl;
+
+        // newBlock -> <origBlock, Proc>
+        Dictionary<string, Tuple<string, string>> blockToOrig;
+
+        // continue blocks
+        HashSet<string> assertContinueBlocks;
+        HashSet<string> callContinueBlocks;
+
+        public ConcurrentDeepAssertRewrite()
+        {
+            origMain = null;
+            firstBlockToImpl = new Dictionary<string, string>();
+            blockToOrig = new Dictionary<string, Tuple<string, string>>();
+            assertContinueBlocks = new HashSet<string>();
+            callContinueBlocks = new HashSet<string>();
+        }
+
+        public override CBAProgram runCBAPass(CBAProgram program)
+        {
+            // Prepare for stratified inlining with assertions
+            var procsThatCannotReachAssert = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            procsThatCannotReachAssert.ExceptWith(procsThatCanSequentiallyReachAsserts(program));
+
+            //if (procsThatCannotReachAssert.Contains(program.mainProcName))
+            //    return program;
+
+            // loopy guys cannot reach asserts
+            program.TopLevelDeclarations.OfType<LoopProcedure>()
+                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
+                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+
+            // Make copies of all procedures that can reach assert
+            var implCopy = new Dictionary<string, Implementation>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => !procsThatCannotReachAssert.Contains(impl.Name))
+                .Iter(impl => implCopy.Add(impl.Name,
+                    (new FixedDuplicator(true)).VisitImplementation(impl)));
+
+            // Disable assertions in the original procedures
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl =>
+                    impl.Blocks.Iter(blk =>
+                    {
+                        for (int i = 0; i < blk.Cmds.Count; i++)
+                        {
+                            var ac = blk.Cmds[i] as AssertCmd;
+                            if (ac != null) blk.Cmds[i] = new AssumeCmd(ac.tok, ac.Expr);
+                        }
+                    }));
+
+            // Identify main
+            var main = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+            if (main == null)
+                main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+
+            // async procs
+            var asyncProcs = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(blk => blk.Cmds.OfType<CallCmd>()
+                        .Where(c => c.IsAsync)
+                        .Iter(c => asyncProcs.Add(c.callee))));
+            asyncProcs.Add(main.Name);
+
+            // flag
+            var flag = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
+                "daFlag", Microsoft.Boogie.Type.Int));
+            // proc To Num
+            var procToNum = new Dictionary<string, int>();
+            foreach (var p in asyncProcs)
+                procToNum.Add(p, procToNum.Count + 1);
+
+            // constants for arguments
+            var argConstants = new List<Constant>();
+            var argCnt = 0;
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>().Where(i => asyncProcs.Contains(i.Name)))
+            {
+                if (impl.InParams.Any(v => !v.TypedIdent.Type.IsInt))
+                    throw new NotImplementedException("Non-int parameters to async procedures not allowed at the moment");
+                argCnt = Math.Max(argCnt, impl.InParams.Count);
+            }
+            Console.WriteLine("Creating {0} constants for async proc arguments", argCnt);
+            for (int i = 0; i < argCnt; i++)
+            {
+                argConstants.Add(new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                    "daArg" + i.ToString(), Microsoft.Boogie.Type.Int)));
+            }
+
+            var mainName = main.Name;
+            origMain = main.Name;
+
+            // delete entrypoint attribute
+            main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);
+            main.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", main.Proc.Attributes);
+
+            // create a new main
+            var newMainProc = new Procedure(Token.NoToken, "fakeMain", new List<TypeVariable>(main.Proc.TypeParameters),
+                new List<Variable>(main.Proc.InParams), new List<Variable>(main.Proc.OutParams), new List<Requires>(main.Proc.Requires),
+                new List<IdentifierExpr>(), new List<Ensures>(main.Proc.Ensures));
+
+            var newMainImpl = new Implementation(Token.NoToken, "fakeMain", new List<TypeVariable>(main.TypeParameters),
+                new List<Variable>(main.InParams), new List<Variable>(main.OutParams), new List<Variable>(), new List<Block>());
+
+            newMainImpl.AddAttribute("entrypoint");
+            newMainProc.AddAttribute("entrypoint");
+
+            // rename stuff
+            implCopy.Values
+                .Iter(impl => RenameImpl(impl));
+
+            // Add all procedures to main
+            var implToFirstBlock = new Dictionary<string, Block>();
+            implCopy.Values
+                .Iter(impl => implToFirstBlock.Add(impl.Name, impl.Blocks[0]));
+
+            // Merge impls
+            foreach (var impl in implCopy.Values)
+            {
+                // union locals
+                newMainImpl.LocVars.AddRange(impl.LocVars);
+                // formals have already been substituted by locals
+                newMainImpl.LocVars.AddRange(impl.OutParams);
+                newMainImpl.LocVars.AddRange(impl.InParams);
+
+                newMainImpl.Blocks.AddRange(impl.Blocks);
+            }
+
+            // Block return in main
+            foreach (var blk in newMainImpl.Blocks.Where(b => b.TransferCmd is ReturnCmd))
+                blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
+
+            // Edit procedure calls in the copied impls
+            var newLabCnt = 0;
+            var GetNewLabel = new Func<string>(() =>
+            {
+                return "sia_lab" + (newLabCnt++);
+            });
+
+            var GetExitBlock = new Func<Block>(() =>
+                new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(), new ReturnCmd(Token.NoToken)));
+
+            var newBlocks1 = new List<Block>();
+            var newBlocks2 = new List<Block>();
+
+            foreach (var blk in newMainImpl.Blocks)
+            {
+                var currBlock = new Block(blk.tok, blk.Label, new List<Cmd>(), null);
+
+                foreach (var cmd in blk.Cmds)
+                {
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd != null && implToFirstBlock.ContainsKey(ccmd.callee) && !ccmd.IsAsync)
+                    {
+                        var lab = GetNewLabel();
+                        var afBlk = new Block(Token.NoToken, lab, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(implToFirstBlock[ccmd.callee].Label));
+
+                        // formal-in := actuals
+                        for (int i = 0; i < implCopy[ccmd.callee].InParams.Count; i++)
+                        {
+                            var formal = implCopy[ccmd.callee].InParams[i];
+                            var actual = ccmd.Ins[i];
+                            afBlk.Cmds.Add(BoogieAstFactory.MkVarEqExpr(formal, actual));
+                        }
+
+                        lab = GetNewLabel();
+                        var nblk = new Block(Token.NoToken, lab, new List<Cmd>(), null);
+
+                        // Finish current block
+                        currBlock.TransferCmd = new GotoCmd(Token.NoToken, new List<Block> { nblk, afBlk });
+                        newBlocks1.Add(currBlock);
+                        newBlocks1.Add(afBlk);
+
+                        nblk.Cmds.Add(ccmd);
+
+                        currBlock = nblk;
+                        continue;
+                    }
+                    currBlock.Cmds.Add(cmd);
+                }
+
+                currBlock.TransferCmd = blk.TransferCmd;
+                newBlocks1.Add(currBlock);
+            }
+
+            newMainImpl.Blocks = newBlocks1;
+            newMainImpl.Blocks.AddRange(newBlocks2);
+
+            implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+
+            // add preamble for the new main
+            //   flag := 0
+            //   async main()
+            //   dispatch to thread entries on flag
+
+            var threadEntryBlocks = new Dictionary<string, Block>();
+            foreach (var p in asyncProcs)
+            {
+                if (!implToFirstBlock.ContainsKey(p))
+                    continue;
+
+                var blk = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(), BoogieAstFactory.MkGotoCmd(implToFirstBlock[p].Label));
+                var pcopy = implCopy[p];
+                blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqConst(flag, procToNum[p]));
+                for (int i = 0; i < pcopy.InParams.Count; i++)
+                    blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqVar(pcopy.InParams[i], argConstants[i]));
+                threadEntryBlocks.Add(p, blk);
+            }
+            var sb = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(),
+                new GotoCmd(Token.NoToken, new List<string>(threadEntryBlocks.Values.Select(b => b.Label))));
+            sb.Cmds.Add(BoogieAstFactory.MkVarEqConst(flag, 0));
+            sb.Cmds.Add(new CallCmd(Token.NoToken, main.Name,
+                new List<Expr>(newMainImpl.InParams.Select(v => Expr.Ident(v))), new List<IdentifierExpr>(newMainImpl.OutParams.Select(v => Expr.Ident(v))), null, true));
+
+            var nb = new List<Block>();
+            nb.Add(sb);
+            nb.AddRange(threadEntryBlocks.Values);
+            nb.AddRange(newMainImpl.Blocks);
+            newMainImpl.Blocks = nb;
+
+            program.TopLevelDeclarations.Add(flag);
+            program.TopLevelDeclarations.AddRange(argConstants);
+
+            // Instrument async in original procedures
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var newBlocks = new List<Block>();
+
+                foreach (var blk in impl.Blocks)
+                {
+                    var currCmds = new List<Cmd>();
+                    var currLabel = blk.Label;
+
+                    foreach (var cmd in blk.Cmds)
+                    {
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null || !ccmd.IsAsync || !implToFirstBlock.ContainsKey(ccmd.callee))
+                        {
+                            currCmds.Add(cmd);
+                            continue;
+                        }
+                        var lab1 = GetNewLabel();
+                        var lab2 = GetNewLabel();
+                        var lab3 = GetNewLabel();
+
+                        // end current block
+                        newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds,
+                            BoogieAstFactory.MkGotoCmd(lab1, lab2)));
+
+                        // lab1: flag := T; set args; goto lab3;
+                        var cmds1 = new List<Cmd>();
+                        cmds1.Add(BoogieAstFactory.MkVarEqConst(flag, procToNum[ccmd.callee]));
+                        for(int i = 0; i < ccmd.Ins.Count; i++) 
+                            cmds1.Add(BoogieAstFactory.MkAssume(Expr.Eq(ccmd.Ins[i], Expr.Ident(argConstants[i]))));
+                        newBlocks.Add(new Block(Token.NoToken, lab1, cmds1, 
+                            BoogieAstFactory.MkGotoCmd(lab3)));
+
+                        // lab2: ccmd
+                        newBlocks.Add(new Block(Token.NoToken, lab2, new List<Cmd>{ccmd},
+                            BoogieAstFactory.MkGotoCmd(lab3)));
+
+                        currLabel = lab3;
+                        currCmds = new List<Cmd>();
+                    }
+                    newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds,
+                        blk.TransferCmd));
+                }
+                impl.Blocks = newBlocks;
+            }
+
+            // detect loops
+            var l2b = BoogieUtil.labelBlockMapping(newMainImpl);
+            var color = new Dictionary<Block, int>();
+            newMainImpl.Blocks.Iter(b => color.Add(b, 0));
+            var Succ = new Func<Block, IEnumerable<Block>>(b =>
+            {
+                var succ = new List<Block>();
+                var gc = b.TransferCmd as GotoCmd;
+                if (gc == null) return succ;
+                gc.labelNames.Iter(s => succ.Add(l2b[s]));
+                return succ;
+            });
+            var parentTree = new Dictionary<Block, Block>();
+            var cycle = new List<Block>();
+            // DFS
+            try
+            {
+                DFS(newMainImpl.Blocks[0], null, Succ, color, parentTree, cycle);
+            }
+            catch (Exception)
+            {
+                var firstBlockToImpl = new Dictionary<string, string>();
+                implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+
+                cycle.Reverse();
+                cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
+                    .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
+                throw;
+            }
+
+            // Add new main back to the program
+            program.TopLevelDeclarations.Add(newMainImpl);
+
+            // add decl for newmain
+            newMainImpl.Proc = newMainProc;
+            program.TopLevelDeclarations.Add(newMainProc);
+
+            return program;
+        }
+
+        public static HashSet<string> procsThatCanSequentiallyReachAsserts(Program program)
+        {
+            var pwa = new HashSet<string>();
+
+            // backward call graph
+            var callGraph = new Dictionary<string, HashSet<string>>();
+
+            program.TopLevelDeclarations.OfType<Procedure>().Iter(
+                proc => callGraph.Add(proc.Name, new HashSet<string>()));
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>().Where(c => !c.IsAsync))
+                    {
+                        callGraph[cmd.callee].Add(impl.Name);
+                    }
+
+                    foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
+                    {
+                        if (!BoogieUtil.isAssertTrue(cmd))
+                        {
+                            pwa.Add(impl.Name);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // find reachable procedures
+            var reachable = new HashSet<string>();
+            reachable.UnionWith(pwa);
+            reachable.Add(LanguageSemantics.assertNotReachableName());
+
+            // Transitive closure
+            var delta = new HashSet<string>(reachable);
+            while (delta.Count != 0)
+            {
+                var nf = new HashSet<string>();
+                foreach (var n in delta)
+                {
+                    if (callGraph.ContainsKey(n)) nf.UnionWith(callGraph[n]);
+                }
+                delta = nf.Difference(reachable);
+                reachable.UnionWith(nf);
+            }
+
+            return reachable;
+        }
+
+
+        public override ErrorTrace mapBackTrace(ErrorTrace trace)
+        {
+            throw new NotImplementedException();
+        }
+
+        private static void DFS(Block root, Block parent, Func<Block, IEnumerable<Block>> Succ, Dictionary<Block, int> color, Dictionary<Block, Block> parentTree, List<Block> cycle)
+        {
+            if (color[root] == 2)
+                return;
+
+            if (color[root] == 1)
+            {
+                Console.WriteLine("Cycle found");
+                while (root != parent)
+                {
+                    cycle.Add(parent);
+                    parent = parentTree[parent];
+                }
+                cycle.Add(root);
+                throw new Exception("");
+            }
+
+            parentTree[root] = parent;
+
+            color[root] = 1;
+
+            var succs = Succ(root);
+            foreach (var s in succs)
+                DFS(s, root, Succ, color, parentTree, cycle);
+
+            color[root] = 2;
+        }
+
+
+        // Rename basic blocks, local variables
+        // Add "havoc locals" at the beginning
+        // block return
+        private void RenameImpl(Implementation impl)
+        {
+            var origImpl = (new FixedDuplicator(true)).VisitImplementation(impl);
+            var origBlocks = BoogieUtil.labelBlockMapping(origImpl);
+
+            // create new locals
+            var newLocals = new Dictionary<string, Variable>();
+            foreach (var l in impl.LocVars.Concat(impl.InParams).Concat(impl.OutParams))
+            {
+                // substitute even formal variables with LocalVariables. This is fine
+                // because we finally just merge all implemnetations together
+                var nl = BoogieAstFactory.MkLocal(l.Name + "_" + impl.Name + "_copy", l.TypedIdent.Type);
+                newLocals.Add(l.Name, nl);
+            }
+
+            // rename locals
+            var subst = new VarSubstituter(newLocals, new Dictionary<string, Variable>());
+            subst.VisitImplementation(impl);
+
+            // Rename blocks 
+            foreach (var blk in impl.Blocks)
+            {
+                var newName = impl.Name + "_" + blk.Label;
+                blockToOrig.Add(newName, Tuple.Create(origBlocks[blk.Label].Label, origImpl.Name));
+                blk.Label = newName;
+
+                if (blk.TransferCmd is GotoCmd)
+                {
+                    var gc = blk.TransferCmd as GotoCmd;
+                    gc.labelNames = new List<string>(
+                        gc.labelNames.Select(lab => impl.Name + "_" + lab));
+                }
+
+                if (blk.TransferCmd is ReturnCmd)
+                {
+                    // block return
+                    blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.False));
+                }
+            }
+
+            /*
+            // havoc locals -- not necessary
+            if (newLocals.Count > 0)
+            {
+                var ies = new List<IdentifierExpr>();
+                newLocals.Values.Iter(v => ies.Add(Expr.Ident(v)));
+                impl.Blocks[0].Cmds.Insert(0, new HavocCmd(Token.NoToken, ies));
+            }
+             */
+        }
+
+    }
+
 }
