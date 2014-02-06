@@ -458,8 +458,8 @@ namespace CoreLib {
             }
 
             // DFS: already exploring the assertMethods elsewhere
-            if (assertMethods.Contains(caller))
-                continue;
+            //if (assertMethods.Contains(caller))
+            //    continue;
 
             var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name]);
             backboneRecDepth[caller.Name]++;
