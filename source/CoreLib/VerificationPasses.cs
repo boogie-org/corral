@@ -2485,7 +2485,9 @@ namespace cba
     /* TODO: Unify with DeepAssertRewrite */
     public class ConcurrentDeepAssertRewrite : CompilerPass
     {
-        string origMain;
+        public string newMainName;
+        public HashSet<string> newVars;
+
         Dictionary<string, string> firstBlockToImpl;
 
         // newBlock -> <origBlock, Proc>
@@ -2497,15 +2499,25 @@ namespace cba
 
         public ConcurrentDeepAssertRewrite()
         {
-            origMain = null;
+            newMainName = null;
             firstBlockToImpl = new Dictionary<string, string>();
             blockToOrig = new Dictionary<string, Tuple<string, string>>();
             assertContinueBlocks = new HashSet<string>();
             callContinueBlocks = new HashSet<string>();
+            newVars = new HashSet<string>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
         {
+            // Identify main
+            var main = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint") ||
+                    QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                .FirstOrDefault();
+            if (main == null && program.mainProcName != null)
+                main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+            SequentialInstrumentation.isSingleThreadProgram(program, main.Name);
+
             // Prepare for stratified inlining with assertions
             var procsThatCannotReachAssert = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
@@ -2541,12 +2553,6 @@ namespace cba
                         }
                     }));
 
-            // Identify main
-            var main = program.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
-                .FirstOrDefault();
-            if (main == null)
-                main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
 
             // async procs
             var asyncProcs = new HashSet<string>();
@@ -2564,6 +2570,7 @@ namespace cba
             var procToNum = new Dictionary<string, int>();
             foreach (var p in asyncProcs)
                 procToNum.Add(p, procToNum.Count + 1);
+            newVars.Add(flag.Name);
 
             // constants for arguments
             var argConstants = new List<Constant>();
@@ -2582,22 +2589,22 @@ namespace cba
             }
 
             var mainName = main.Name;
-            origMain = main.Name;
 
             // delete entrypoint attribute
             main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);
             main.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", main.Proc.Attributes);
 
             // create a new main
-            var newMainProc = new Procedure(Token.NoToken, "fakeMain", new List<TypeVariable>(main.Proc.TypeParameters),
+            var newMainProc = new Procedure(Token.NoToken, "daFakeMain", new List<TypeVariable>(main.Proc.TypeParameters),
                 new List<Variable>(main.Proc.InParams), new List<Variable>(main.Proc.OutParams), new List<Requires>(main.Proc.Requires),
                 new List<IdentifierExpr>(), new List<Ensures>(main.Proc.Ensures));
 
-            var newMainImpl = new Implementation(Token.NoToken, "fakeMain", new List<TypeVariable>(main.TypeParameters),
+            var newMainImpl = new Implementation(Token.NoToken, "daFakeMain", new List<TypeVariable>(main.TypeParameters),
                 new List<Variable>(main.InParams), new List<Variable>(main.OutParams), new List<Variable>(), new List<Block>());
 
             newMainImpl.AddAttribute("entrypoint");
             newMainProc.AddAttribute("entrypoint");
+            newMainName = newMainImpl.Name;
 
             // rename stuff
             implCopy.Values
@@ -2684,9 +2691,12 @@ namespace cba
 
             // add preamble for the new main
             //   flag := 0
-            //   async main()
-            //   dispatch to thread entries on flag
+            //   if(*)
+            //      async main() && dispatch to thread entries on flag
+            //   else
+            //      flag := main && goto main
 
+            var mainCanFail = !procsThatCannotReachAssert.Contains(main.Name);
             var threadEntryBlocks = new Dictionary<string, Block>();
             foreach (var p in asyncProcs)
             {
@@ -2695,19 +2705,34 @@ namespace cba
 
                 var blk = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(), BoogieAstFactory.MkGotoCmd(implToFirstBlock[p].Label));
                 var pcopy = implCopy[p];
-                blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqConst(flag, procToNum[p]));
                 for (int i = 0; i < pcopy.InParams.Count; i++)
                     blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqVar(pcopy.InParams[i], argConstants[i]));
+                blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqConst(flag, procToNum[p]));
                 threadEntryBlocks.Add(p, blk);
             }
-            var sb = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(),
-                new GotoCmd(Token.NoToken, new List<string>(threadEntryBlocks.Values.Select(b => b.Label))));
-            sb.Cmds.Add(BoogieAstFactory.MkVarEqConst(flag, 0));
-            sb.Cmds.Add(new CallCmd(Token.NoToken, main.Name,
+            var sb2 = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(),
+                mainCanFail ? BoogieAstFactory.MkGotoCmd(threadEntryBlocks[main.Name].Label) as TransferCmd : new ReturnCmd(Token.NoToken));
+            if (mainCanFail)
+            {
+                sb2.Cmds.Add(BoogieAstFactory.MkVarEqConst(flag, procToNum[main.Name]));
+            }
+            var gcAll = new GotoCmd(Token.NoToken, new List<string>(threadEntryBlocks.Where(kvp => kvp.Key != main.Name)
+                    .Select(kvp => kvp.Value.Label))) as TransferCmd;
+            if ((gcAll as GotoCmd).labelNames.Count == 0)
+                gcAll = new ReturnCmd(Token.NoToken);
+
+            var sb3 = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(),
+                gcAll);
+            sb3.Cmds.Add(new CallCmd(Token.NoToken, main.Name,
                 new List<Expr>(newMainImpl.InParams.Select(v => Expr.Ident(v))), new List<IdentifierExpr>(newMainImpl.OutParams.Select(v => Expr.Ident(v))), null, true));
 
+            var sb1 = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(),
+                BoogieAstFactory.MkGotoCmd(sb2.Label, sb3.Label));
+            sb1.Cmds.Add(BoogieAstFactory.MkVarEqConst(flag, 0));
+
+
             var nb = new List<Block>();
-            nb.Add(sb);
+            nb.Add(sb1); nb.Add(sb2); nb.Add(sb3);
             nb.AddRange(threadEntryBlocks.Values);
             nb.AddRange(newMainImpl.Blocks);
             newMainImpl.Blocks = nb;
@@ -2741,11 +2766,11 @@ namespace cba
                         newBlocks.Add(new Block(Token.NoToken, currLabel, currCmds,
                             BoogieAstFactory.MkGotoCmd(lab1, lab2)));
 
-                        // lab1: flag := T; set args; goto lab3;
+                        // lab1: set args; flag := T; goto lab3;
                         var cmds1 = new List<Cmd>();
-                        cmds1.Add(BoogieAstFactory.MkVarEqConst(flag, procToNum[ccmd.callee]));
                         for(int i = 0; i < ccmd.Ins.Count; i++) 
                             cmds1.Add(BoogieAstFactory.MkAssume(Expr.Eq(ccmd.Ins[i], Expr.Ident(argConstants[i]))));
+                        cmds1.Add(BoogieAstFactory.MkVarEqConst(flag, procToNum[ccmd.callee]));
                         newBlocks.Add(new Block(Token.NoToken, lab1, cmds1, 
                             BoogieAstFactory.MkGotoCmd(lab3)));
 
@@ -2792,6 +2817,16 @@ namespace cba
                 throw;
             }
 
+            var bwa = new HashSet<Block>();
+            newMainImpl.Blocks
+                .Where(blk => blk.Cmds.OfType<AssertCmd>()
+                    .Any(c => !BoogieUtil.isAssertTrue(c)))
+                .Iter(blk => bwa.Add(blk));
+            if (bwa.All(b => color[b] == 0))
+            {
+                Console.WriteLine("Assert statically not reachable");
+            }
+                    
             // Add new main back to the program
             program.TopLevelDeclarations.Add(newMainImpl);
 

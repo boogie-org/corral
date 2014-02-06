@@ -64,7 +64,7 @@ namespace cba
 
         public bool printProgress { get; private set; }
 
-        public string inputFile { get; private set; }
+        public string inputFile;
         
         private List<string> includeFiles;
 

@@ -402,6 +402,7 @@ namespace cba
 
             if (config.daInst != null)
             {
+                
                 var el = new ExtractLoopsPass();
                 var ttt = el.run(new PersistentCBAProgram(init, config.mainProcName, 0));
                 var da = new ConcurrentDeepAssertRewrite();
@@ -409,6 +410,9 @@ namespace cba
                 ttt = da.run(ttt);
                 ttt.writeToFile(config.daInst);
                 init = BoogieUtil.ReadAndOnlyResolve(config.daInst);
+                config.mainProcName = da.newMainName;
+                config.inputFile = config.daInst;
+                config.trackedVars.UnionWith(da.newVars);
                 //throw new NormalExit("done");
             }
 
