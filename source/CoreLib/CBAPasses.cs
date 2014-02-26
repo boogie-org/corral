@@ -751,7 +751,15 @@ namespace cba
             // For each SCC, compute backedges
             foreach (var scc in sccs)
             {
-                if (scc.Count <= 1) continue;
+                if (scc.Count == 1)
+                {
+                    var onlyProc = scc.First();
+                    if (QKeyValue.FindBoolAttribute(nameImplMap[onlyProc].Attributes, "LoopProcedure"))
+                        continue;
+
+                    if (graph.Successors(onlyProc).All(callee => callee != onlyProc))
+                        continue;
+                }
 
                 Console.Write("Considering SCC: ");
                 scc.Iter(s => Console.Write("{0} ", s));
