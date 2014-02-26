@@ -1594,11 +1594,11 @@ namespace cba
         readonly string recordProcName = "boogie_si_record_sdvcp_int";
         readonly string initLocProcName = "init_locals_nondet__tmp";
         public Dictionary<string, Tuple<string, string, int>> allocConstants;
-        Dictionary<int, Tuple<string, string, int>> callIdToLocation;
+        Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
         private HashSet<string> procsWithoutBody;
 
-        public SDVConcretizePathPass(Dictionary<int, Tuple<string, string, int>> callIdToLocation)
+        public SDVConcretizePathPass(Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation)
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
@@ -1688,8 +1688,9 @@ namespace cba
             {
                 var allocConst = kvp.Key;
                 var callId = kvp.Value;
+                // TODO: fix
                 Debug.Assert(callIdToLocation.ContainsKey(callId));
-                allocConstants.Add(allocConst, callIdToLocation[callId]);
+                allocConstants.Add(allocConst, Tuple.Create(callId.Item1, callIdToLocation[callId].Item1, callIdToLocation[callId].Item2));
             }
 
             /*

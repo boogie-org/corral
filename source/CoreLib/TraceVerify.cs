@@ -31,7 +31,7 @@ namespace cba
         // Add concretization assignments
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
-        public Dictionary<string, int> allocConstantToCall;
+        public Dictionary<string, Tuple<string, string, int>> allocConstantToCall;
 
         public RestrictToTrace(Program p, InsertionTrans t)
         {
@@ -45,7 +45,7 @@ namespace cba
             tinfo = t;
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
-            allocConstantToCall = new Dictionary<string, int>();
+            allocConstantToCall = new Dictionary<string, Tuple<string, string, int>>();
         }
 
         private string addIntToString(string s, int i)
@@ -218,7 +218,9 @@ namespace cba
 
                                 var id = QKeyValue.FindIntAttribute(cc.Attributes, "si_old_unique_call", -1); // hack to get around multiple unique calls labels
                                 if (id == -1) id = QKeyValue.FindIntAttribute(cc.Attributes, "si_unique_call", -1);
-                                if (id != -1) allocConstantToCall.Add(constant.Name, id);
+                                var origProcName = QKeyValue.FindStringAttribute(impl.Attributes, "origRTname");
+                                if (origProcName == null) origProcName = trace.procName;
+                                if (id != -1) allocConstantToCall.Add(constant.Name, Tuple.Create(origProcName, cc.callee, id));
                             }
 
                         }
@@ -255,7 +257,10 @@ namespace cba
 
             output.TopLevelDeclarations.Add(
                 new Implementation(Token.NoToken, newName, impl.TypeParameters,
-                    impl.InParams, impl.OutParams, impl.LocVars, traceBlocks, impl.Attributes));
+                    impl.InParams, impl.OutParams, impl.LocVars, traceBlocks,
+                    QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") == null ?
+                      new QKeyValue(Token.NoToken, "origRTname", new List<object> { impl.Name }, impl.Attributes)
+                    : impl.Attributes));
             
             return newName;
         }

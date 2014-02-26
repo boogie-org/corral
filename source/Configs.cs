@@ -145,7 +145,10 @@ namespace cba
         public int rootCause { get; private set; }
         public int maxStaticLoopBound { get; private set; }
         public bool disableStaticAnalysis { get; private set; }
-	public bool useDuality { get; private set; }
+        public bool useDuality { get; private set; }
+
+        public string prevCorralState { get; private set; }
+        public string dumpCorralState { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
         {
@@ -336,6 +339,8 @@ namespace cba
             disableStaticAnalysis = false;
 
             deepAsserts = false;
+            prevCorralState = null;
+            dumpCorralState = null;
         }
 
 
@@ -494,6 +499,16 @@ namespace cba
             else if (flag == "/noCallTreeReuse")
             {
                 noCallTreeReuse = true;
+            }
+            else if (flag.StartsWith("/dumpCorralState:"))
+            {
+                var split = flag.Split(sep);
+                dumpCorralState = split[1];
+            }
+            else if (flag.StartsWith("/prevCorralState:"))
+            {
+                var split = flag.Split(sep);
+                prevCorralState = split[1];
             }
             else if (flag == "/printInstrumented")
             {

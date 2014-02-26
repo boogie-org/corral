@@ -189,6 +189,8 @@ namespace cba
             var inputProg = GetInputProgram(config);
             if (inputProg == null) return 0;
 
+            CorralState.AbsorbPrevState(config, ConfigManager.progVerifyOptions);
+
             // Rewrite assert commands
             RewriteAssertsPass apass = new RewriteAssertsPass();
             var curr = apass.run(inputProg);
@@ -373,6 +375,7 @@ namespace cba
             }
             #endregion
 
+            CorralState.DumpCorralState(config, ConfigManager.progVerifyOptions.CallTree, refinementState.getVars().Variables);
             Log.Close();
 
             return 0;
@@ -658,6 +661,8 @@ namespace cba
             var progVerifyOptions = ConfigManager.progVerifyOptions;
             var pathVerifyOptions = ConfigManager.pathVerifyOptions;
             var refinementVerifyOptions = ConfigManager.refinementVerifyOptions;
+
+            CorralState.AbsorbPrevState(config, progVerifyOptions);
 
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
             VerificationPass.usePruning = false;
@@ -1310,6 +1315,7 @@ namespace cba
                 am.Close();
             }
 
+            CorralState.DumpCorralState(config, progVerifyOptions.CallTree, varsToKeep.Variables);
             Log.Close();
         }
 

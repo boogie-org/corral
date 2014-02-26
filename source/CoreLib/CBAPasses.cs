@@ -660,11 +660,12 @@ namespace cba
     public class AddUniqueCallIds
     {
         private static int counter = 0;
-        public Dictionary<int, Tuple<string, string, int>> callIdToLocation;
+        // (caller, callee, int) -> (block label, cnt)
+        public Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
         public AddUniqueCallIds()
         {
-            callIdToLocation = new Dictionary<int, Tuple<string, string, int>>();
+            callIdToLocation = new Dictionary<Tuple<string, string, int>, Tuple<string, int>>();
         }
 
         public void VisitProgram(Program program)
@@ -675,6 +676,9 @@ namespace cba
 
         public void VisitImplementation(Implementation impl)
         {
+            // callee -> id
+            var cnt = new Dictionary<string, int>();
+
             foreach (var block in impl.Blocks)
             {
                 var callcnt = 0;
@@ -683,8 +687,11 @@ namespace cba
                     var cc = block.Cmds[i] as CallCmd;
                     if (cc == null) continue;
 
+                    if (!cnt.ContainsKey(cc.callee))
+                        cnt[cc.callee] = 0;
+
                     var attr = new List<object>();
-                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(counter)));
+                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(cnt[cc.callee])));
 
                     cc.Attributes = BoogieUtil.removeAttr("si_old_unique_call", cc.Attributes);
                     var oldAttr = BoogieUtil.getAttr("si_unique_call", cc.Attributes);
@@ -699,7 +706,9 @@ namespace cba
                     }
 
                     cc.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, cc.Attributes);
-                    callIdToLocation.Add(counter, Tuple.Create(impl.Name, block.Label, callcnt));
+                    callIdToLocation.Add(Tuple.Create(impl.Name, cc.callee, cnt[cc.callee]), Tuple.Create(block.Label, callcnt));
+
+                    cnt[cc.callee]++;
 
                     callcnt++;
                     counter++;

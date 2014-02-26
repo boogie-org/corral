@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Boogie;
 using System.Diagnostics;
 using cba.Util;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace cba
 {
@@ -381,4 +383,38 @@ namespace cba
         }
     }
 
+    [Serializable]
+    public class CorralState
+    {
+        public Dictionary<string,int> CallTree;
+        public HashSet<string> TrackedVariables;
+
+        public static void AbsorbPrevState(Configs config, BoogieVerifyOptions progVerifyOptions)
+        {
+            if (config.prevCorralState != null && System.IO.File.Exists(config.prevCorralState))
+            {
+                var serailizer = new BinaryFormatter();
+                FileStream stream = new FileStream(config.prevCorralState, FileMode.Open, FileAccess.Read, FileShare.None);
+                var cs = (CorralState)serailizer.Deserialize(stream);
+                stream.Close();
+
+                progVerifyOptions.CallTree = cs.CallTree;
+                config.trackedVars.UnionWith(cs.TrackedVariables);
+            }
+        }
+
+        public static void DumpCorralState(Configs config, Dictionary<string, int> CallTree, HashSet<string> Vars)
+        {
+            if (config.dumpCorralState != null)
+            {
+                var cs = new CorralState();
+                cs.CallTree = CallTree;
+                cs.TrackedVariables = Vars;
+                BinaryFormatter serializer = new BinaryFormatter();
+                FileStream stream = new FileStream(config.dumpCorralState, FileMode.Create, FileAccess.Write, FileShare.None);
+                serializer.Serialize(stream, cs);
+                stream.Close();
+            }
+        }
+    }
 }
