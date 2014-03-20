@@ -12,7 +12,7 @@ using System.IO;
 
 namespace cba
 {
-    class Driver
+    public class Driver
     {
 
         static int Main(string[] args)
@@ -79,14 +79,8 @@ namespace cba
 
         }
 
-        static int run(string[] args) 
+        public static void Initialize(Configs config)
         {
-            ////////////////////////////////////
-            // Input and initialization phase
-            ////////////////////////////////////
-
-            Configs config = Configs.parseCommandLine(args);
-            CommandLineOptions.Install(new CommandLineOptions());
 
             BoogieVerify.useDuality = config.useDuality;
 
@@ -109,7 +103,7 @@ namespace cba
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
-            if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true; 
+            if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
                 config.printData = 1;
 
@@ -142,8 +136,6 @@ namespace cba
 
             boogieOptions += string.Format("/recursionBound:{0} ", config.recursionBound);
 
-            var startTime = DateTime.Now;
-
             // Initialize Boogie
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
@@ -156,13 +148,13 @@ namespace cba
                 "/removeEmptyBlocks:0 /coalesceBlocks:0 /noinfer " +
                 //"/z3opt:RELEVANCY=0  " +                
                 "/typeEncoding:m " +
-                "/vc:i " + 
+                "/vc:i " +
                 "/subsumption:0 ";
 
             InstrumentationConfig.UseOldInstrumentation = false;
             VariableSlicing.UseSimpleSlicing = false;
             InstrumentationConfig.raiseExceptionBeforeAllProcedures = false;
-            
+
             if (GlobalConfig.useArrayTheory)
                 boogieOptions += " /useArrayTheory";
             else
@@ -177,7 +169,25 @@ namespace cba
 
             if (BoogieUtil.InitializeBoogie(boogieOptions))
                 throw new InternalError("Cannot initialize Boogie");
+        }
 
+        public static int run(string[] args) 
+        {
+            ////////////////////////////////////
+            // Input and initialization phase
+            ////////////////////////////////////
+
+            Configs config = Configs.parseCommandLine(args);
+            CommandLineOptions.Install(new CommandLineOptions());
+
+            if (!System.IO.File.Exists(config.inputFile))
+            {
+                throw new UsageError(string.Format("Input file {0} does not exist", config.inputFile));
+            }
+
+            Initialize(config);
+
+            var startTime = DateTime.Now;
             GlobalConfig.corralStartTime = DateTime.Now;
 
             ////////////////////////////////////
@@ -381,7 +391,7 @@ namespace cba
             return 0;
         }
 
-        private static PersistentCBAProgram GetInputProgram(Configs config)
+        public static PersistentCBAProgram GetInputProgram(Configs config)
         {
             // This is to check the input program for parsing and resolution
             // errors. We check for type errors later
@@ -1760,7 +1770,7 @@ namespace cba
         static int traceCounterDbg = 0;
 
         // Check program "inputProg" using variable abstraction
-        private static bool checkAndRefine(PersistentCBAProgram prog, RefinementState refinementState, Action<ErrorTrace, string> printTrace, out ErrorTrace cexTrace)
+        public static bool checkAndRefine(PersistentCBAProgram prog, RefinementState refinementState, Action<ErrorTrace, string> printTrace, out ErrorTrace cexTrace)
         {
             cexTrace = null;
             var outcomeSuccess = true;

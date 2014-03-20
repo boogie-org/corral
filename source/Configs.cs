@@ -188,11 +188,6 @@ namespace cba
                 throw new UsageError("Input file not given");
             }
 
-            if (!System.IO.File.Exists(inputFile))
-            {
-                throw new UsageError(string.Format("Input file {0} does not exist", inputFile));
-            }
-
             Configs config = new Configs();
             config.inputFile = inputFile;
 
