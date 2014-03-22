@@ -35,7 +35,7 @@ namespace AngelicVerifierNull
             var prog = GetProgram(args[0]);
 
             // Run Corral
-            //RunCorral(prog, corralConfig.mainProcName); //no main yet
+            RunCorral(prog, corralConfig.mainProcName); 
         }
 
         // Initialization
@@ -132,28 +132,39 @@ namespace AngelicVerifierNull
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
 
-            // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            CheckInputProgramRequirements(init); 
 
-            // Now we can typecheck
-            CommandLineOptions.Clo.DoModSetAnalysis = true;
-            if (BoogieUtil.TypecheckProgram(init, filename))
-            {
-                BoogieUtil.PrintProgram(init, "error.bpl");
-                throw new InvalidProg("Cannot typecheck " + filename);
-            }
-            CommandLineOptions.Clo.DoModSetAnalysis = false;
-            
             //Instrument to create the harness
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
             (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
-            return null; //we don't have main yet
+
+            //resolve+typecheck wo bothering about modSets
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
+            init = BoogieUtil.ReResolve(init);
+            CommandLineOptions.Clo.DoModSetAnalysis = false;
+
+            // Update mod sets
+            ModSetCollector.DoModSetAnalysis(init);
+
+            BoogieUtil.PrintProgram(init, "corralMain.bpl");
 
             GlobalCorralSpecificPass(init);
             var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
             ProgTransformation.PersistentProgram.FreeParserMemory();
 
             return inputProg;
+        }
+
+        /// <summary>
+        /// TODO: Check that the input program satisfies some sanity requirements
+        /// NULL is declared as constant
+        /// malloc is declared as a procedure, with alloc
+        /// each parameter/global/map is annotated with "pointer/ref/data"
+        /// </summary>
+        /// <param name="init"></param>
+        private static void CheckInputProgramRequirements(Program init)
+        {
+            return;
         }
 
         // Make a pass to ensure the whole program created is well formed
