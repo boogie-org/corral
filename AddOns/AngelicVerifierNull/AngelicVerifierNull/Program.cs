@@ -15,6 +15,8 @@ namespace AngelicVerifierNull
     {
         static cba.Configs corralConfig;
 
+        const string CORRAL_MAIN_PROC = "CorralMain";
+
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -23,14 +25,17 @@ namespace AngelicVerifierNull
                 return;
             }
 
+            if (args.Any(s => s == "/break"))
+                System.Diagnostics.Debugger.Launch();
+
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
-            // Get input program
+            // Get input program with the harness
             var prog = GetProgram(args[0]);
 
             // Run Corral
-            RunCorral(prog, corralConfig.mainProcName);
+            //RunCorral(prog, corralConfig.mainProcName); //no main yet
         }
 
         // Initialization
@@ -127,6 +132,33 @@ namespace AngelicVerifierNull
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
 
+            // Update mod sets
+            ModSetCollector.DoModSetAnalysis(init);
+
+            // Now we can typecheck
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
+            if (BoogieUtil.TypecheckProgram(init, filename))
+            {
+                BoogieUtil.PrintProgram(init, "error.bpl");
+                throw new InvalidProg("Cannot typecheck " + filename);
+            }
+            CommandLineOptions.Clo.DoModSetAnalysis = false;
+            
+            //Instrument to create the harness
+            corralConfig.mainProcName = CORRAL_MAIN_PROC;
+            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
+            return null; //we don't have main yet
+
+            GlobalCorralSpecificPass(init);
+            var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
+            ProgTransformation.PersistentProgram.FreeParserMemory();
+
+            return inputProg;
+        }
+
+        // Make a pass to ensure the whole program created is well formed
+        private static void GlobalCorralSpecificPass(Program init)
+        {
             // Find main
             List<string> entrypoints = cba.EntrypointScanner.FindEntrypoint(init);
             if (entrypoints.Count == 0)
@@ -144,23 +176,6 @@ namespace AngelicVerifierNull
             // Massage the input program
             var addIds = new cba.AddUniqueCallIds();
             addIds.VisitProgram(init);
-
-            // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
-
-            // Now we can typecheck
-            CommandLineOptions.Clo.DoModSetAnalysis = true;
-            if (BoogieUtil.TypecheckProgram(init, filename))
-            {
-                BoogieUtil.PrintProgram(init, "error.bpl");
-                throw new InvalidProg("Cannot typecheck " + filename);
-            }
-            CommandLineOptions.Clo.DoModSetAnalysis = false;
-
-            var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
-            ProgTransformation.PersistentProgram.FreeParserMemory();
-
-            return inputProg;
         }
 
         // Given an ordinary looking program, massage it to
