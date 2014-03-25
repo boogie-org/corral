@@ -19,6 +19,7 @@ namespace AngelicVerifierNull
     class Instrumentations
     {
 
+
         public class HarnessInstrumentation
         {
             Program prog;
@@ -33,6 +34,7 @@ namespace AngelicVerifierNull
             public void DoInstrument()
             {
                 FindMalloc();
+                FindNULL();
                 CreateMainProcedure();
                 ChangeStubsIntoFunkyMalloc();
             }
@@ -65,8 +67,10 @@ namespace AngelicVerifierNull
                 //TODO: get globals of type refs/pointers
                 var globalMallocCmds = FunkyAllocatePointers(prog.GlobalVariables().ConvertAll(x => (Variable)x));
                 Block blkStart = new Block(Token.NoToken, "CorralMainStart", globalMallocCmds, new GotoCmd(Token.NoToken, mainBlocks));
-                mainBlocks.Add(blkStart);
-                var mainProcImpl = BoogieAstFactory.MkImpl("CorralMain", new List<Variable>(), new List<Variable>(), locals, mainBlocks);
+                var blocks = new List<Block>();
+                blocks.Add(blkStart);
+                blocks.AddRange(mainBlocks);
+                var mainProcImpl = BoogieAstFactory.MkImpl("CorralMain", new List<Variable>(), new List<Variable>(), locals, blocks);
                 mainProcImpl[0].AddAttribute("entrypoint");
                 prog.TopLevelDeclarations.AddRange(mainProcImpl);
             }
@@ -83,7 +87,7 @@ namespace AngelicVerifierNull
                 var stubImpls = new List<Implementation>();
                 foreach (var p in procsWithoutImpl)
                 {
-                    if (QKeyValue.FindBoolAttribute(p.Attributes, "allocator")) continue; 
+                    if (BoogieUtil.checkAttrExists("allocator", p.Attributes)) continue; 
                     if (p.OutParams.Count == 1 &&
                         IsPointerVariable(p.OutParams[0]))
                     {
@@ -106,16 +110,27 @@ namespace AngelicVerifierNull
             {
                 //find the malloc procedure
                 mallocProcedure = (Procedure)prog.TopLevelDeclarations
-                    .Where(x => x is Procedure && QKeyValue.FindBoolAttribute(x.Attributes, "allocator"))
+                    .Where(x => x is Procedure && BoogieUtil.checkAttrExists("allocator", x.Attributes))
                     .FirstOrDefault();
                 if (mallocProcedure == null)
                 {
-                    mallocProcedure = (Procedure)BoogieAstFactory.MkProc("malloc",
-                        new List<Variable>(),
-                        new List<Variable>() { BoogieAstFactory.MkFormal("ret", btype.Int, false) });
-                    mallocProcedure.AddAttribute("allocator");
-                    prog.TopLevelDeclarations.Add(mallocProcedure);
+                    throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator} declared in the input program");
+                    #region deprecated
+                    //mallocProcedure = (Procedure)BoogieAstFactory.MkProc("malloc",
+                    //    new List<Variable>(),
+                    //    new List<Variable>() { BoogieAstFactory.MkFormal("ret", btype.Int, false) });
+                    //mallocProcedure.AddAttribute("allocator");
+                    //prog.TopLevelDeclarations.Add(mallocProcedure);
+                    #endregion
                 }
+            }
+            private void FindNULL()
+            {
+                //find the malloc procedure
+                var nulls = prog.TopLevelDeclarations
+                    .Where(x => x is Constant && x.ToString().Equals("NULL"));
+                if (!nulls.Any())
+                    throw new InputProgramDoesNotMatchExn("ABORT: no NULL constant declared in the input program");
             }
             private List<Variable> GetPointerVars(List<Variable> vars)
             {
@@ -131,6 +146,56 @@ namespace AngelicVerifierNull
                 return x.TypedIdent.Type.IsInt;
             }
         }
+
+        public class MallocInstrumentation
+        {
+            Program prog;
+
+            public MallocInstrumentation(Program program)
+            {
+                prog = program;
+            }
+            public void DoInstrument()
+            {
+                var mi = new MallocInstrumentVisitor(this)
+                    .Visit(prog);
+            }
+
+            private class MallocInstrumentVisitor : StandardVisitor
+            {
+                MallocInstrumentation instance;
+                public Dictionary<CallCmd, Function> mallocTriggers;
+                internal MallocInstrumentVisitor(MallocInstrumentation mi)
+                {
+                    instance = mi;
+                    mallocTriggers = new Dictionary<CallCmd, Function>();
+                }
+                public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
+                {
+                    var newCmdSeq = new List<Cmd>();
+                    foreach (Cmd c in cmdSeq)
+                    {
+                        var callCmd = c as CallCmd;
+                        if (callCmd != null && BoogieUtil.checkAttrExists("allocator", callCmd.Proc.Attributes))
+                        {
+                            var retCall = callCmd.Outs[0];
+                            var mallocTriggerFn = new Function(Token.NoToken, "mallocTrigger_" + mallocTriggers.Count,
+                                new List<Variable>() { BoogieAstFactory.MkFormal("a", btype.Int, false) },
+                                BoogieAstFactory.MkFormal("r", btype.Bool, false));
+                            mallocTriggers[callCmd] = mallocTriggerFn;
+                            instance.prog.TopLevelDeclarations.Add(mallocTriggerFn);
+                            var fnApp = new NAryExpr(Token.NoToken,
+                                new FunctionCall(mallocTriggerFn),
+                                new List<Expr> () {retCall});
+                            newCmdSeq.Add(BoogieAstFactory.MkAssume(fnApp)); //TODO: change it to a predicate
+                        }
+                        newCmdSeq.Add(c);
+                    }
+                    return base.VisitCmdSeq(newCmdSeq);
+                }
+            }
+        }
+
 
     }
 }

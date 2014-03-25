@@ -1,4 +1,4 @@
-const NULL: int;
+const aaaaa: int;
 
 var b: int;
 var arr: [int]int;
@@ -7,7 +7,7 @@ procedure Foo(a:int) returns (s:int) {
 
   var r: int;
   var c: bool;
-  r := NULL;
+  r := aaaaa;
   
   call c := stub_bool(a);
 
@@ -25,12 +25,12 @@ procedure Foo(a:int) returns (s:int) {
 }
 
 procedure Bar(a:int) {
-  assert(a != NULL);
+  assert(a != aaaaa);
   arr[a] := 1;
 }
 
 procedure Baz(a:int) {
-  assert (a != NULL);
+  assert (a != aaaaa);
   arr[a] := 2;
 }
 

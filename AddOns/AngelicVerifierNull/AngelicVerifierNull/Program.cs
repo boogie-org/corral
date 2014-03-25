@@ -11,6 +11,11 @@ using PersistentProgram = cba.PersistentCBAProgram;
 
 namespace AngelicVerifierNull
 {
+    class InputProgramDoesNotMatchExn : Exception
+    {
+        public InputProgramDoesNotMatchExn(string s) : base(s) { } 
+    }
+
     class Driver
     {
         static cba.Configs corralConfig;
@@ -31,11 +36,18 @@ namespace AngelicVerifierNull
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
-            // Get input program with the harness
-            var prog = GetProgram(args[0]);
+            try
+            {
+                // Get input program with the harness
+                var prog = GetProgram(args[0]);
 
-            // Run Corral
-            RunCorral(prog, corralConfig.mainProcName); 
+                // Run Corral
+                RunCorral(prog, corralConfig.mainProcName);
+            }
+            catch (InputProgramDoesNotMatchExn e)
+            {
+                Console.WriteLine("Input program does not satisfy sanity checks" + e.Message);
+            }
         }
 
         // Initialization
@@ -132,6 +144,7 @@ namespace AngelicVerifierNull
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
 
+            //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init); 
 
             //Instrument to create the harness
@@ -146,8 +159,15 @@ namespace AngelicVerifierNull
             // Update mod sets
             ModSetCollector.DoModSetAnalysis(init);
 
+            //TODO: Perform alias analysis here and prune a subset of asserts
+
+            //Various instrumentations on the well-formed program
+            (new Instrumentations.MallocInstrumentation(init)).DoInstrument();
+
+            //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");
 
+            //Do corral specific passes
             GlobalCorralSpecificPass(init);
             var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
             ProgTransformation.PersistentProgram.FreeParserMemory();
