@@ -20,7 +20,8 @@ procedure Foo(a:int) returns (s:int) {
      call stub_noptr(r);
   }
   call Baz(b);  
- 
+
+  assert true; //shouldn't instrument this 
   s := r;
 }
 

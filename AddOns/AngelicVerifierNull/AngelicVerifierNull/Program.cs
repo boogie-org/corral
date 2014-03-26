@@ -36,18 +36,19 @@ namespace AngelicVerifierNull
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
+            PersistentProgram prog = null;
             try
             {
                 // Get input program with the harness
-                var prog = GetProgram(args[0]);
-
-                // Run Corral
-                RunCorral(prog, corralConfig.mainProcName);
+                prog = GetProgram(args[0]);
             }
             catch (InputProgramDoesNotMatchExn e)
             {
                 Console.WriteLine("Input program does not satisfy sanity checks" + e.Message);
             }
+
+            // Run Corral outer loop
+            RunCorralIterative(prog, corralConfig.mainProcName);
         }
 
         // Initialization
@@ -74,7 +75,43 @@ namespace AngelicVerifierNull
 
             return config;
         }
-        
+
+        //Run Corral over different assertions (modulo errorLimit)
+        private static void RunCorralIterative(PersistentProgram prog, string p)
+        {
+            //We are not using the guards to turn the asserts, we simply rewrite the assert
+            var pr = prog.getProgram();
+            while (true)
+            {
+                var prog1 = new PersistentProgram(pr, corralConfig.mainProcName, 1);
+                var cex = RunCorral(prog1, corralConfig.mainProcName);
+                if (cex == null)
+                {
+                    //TODO (how do I distinguish inconclusive results)
+                    Console.WriteLine("No more counterexamples found, Corral returns verified...");
+                    break;
+                }
+                var failingAssertCmd = GetFailingAssert(cex);
+                if (failingAssertCmd == null)
+                {
+                    Console.WriteLine("Failure is not an assert, skipping...");
+                    continue;
+                }
+                else
+                {
+                    Console.WriteLine("Assertion failed at line {0} with expr {1}", failingAssertCmd.Line, failingAssertCmd.ToString());
+                }
+                failingAssertCmd.Expr = Expr.True; //suppress it 
+                pr = prog1.getProgram();
+            }
+        }
+
+        //TODO: [Akash] Fill this up to return the failing assertion/requires/ensures/.
+        private static AssertCmd GetFailingAssert(cba.ErrorTrace cex)
+        {
+            return null;
+        }
+
         // Run Corral on a sequential Boogie Program
         static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string main)
         {
@@ -163,6 +200,7 @@ namespace AngelicVerifierNull
 
             //Various instrumentations on the well-formed program
             (new Instrumentations.MallocInstrumentation(init)).DoInstrument();
+            (new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");

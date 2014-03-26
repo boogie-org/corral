@@ -18,8 +18,6 @@ namespace AngelicVerifierNull
     /// </summary>
     class Instrumentations
     {
-
-
         public class HarnessInstrumentation
         {
             Program prog;
@@ -165,7 +163,7 @@ namespace AngelicVerifierNull
             {
                 MallocInstrumentation instance;
                 public Dictionary<CallCmd, Function> mallocTriggers;
-                internal MallocInstrumentVisitor(MallocInstrumentation mi)
+                public MallocInstrumentVisitor(MallocInstrumentation mi)
                 {
                     instance = mi;
                     mallocTriggers = new Dictionary<CallCmd, Function>();
@@ -196,6 +194,41 @@ namespace AngelicVerifierNull
             }
         }
 
+        public class AssertGuardInstrumentation
+        {
+            Program prog;
 
+            public AssertGuardInstrumentation(Program program)
+            {
+                prog = program;
+            }
+            public void DoInstrument()
+            {
+                new AssertGuardInstrumentVisitor(this)
+                    .Visit(prog);
+            }
+
+            private class AssertGuardInstrumentVisitor : StandardVisitor
+            {
+                AssertGuardInstrumentation instance;
+                public Dictionary<AssertCmd, Constant> assertGuardConsts;
+                public AssertGuardInstrumentVisitor(AssertGuardInstrumentation agi)
+                {
+                    instance = agi;
+                    assertGuardConsts = new Dictionary<AssertCmd, Constant>();
+                }
+                public override Cmd VisitAssertCmd(AssertCmd node)
+                {
+                    if (assertGuardConsts.ContainsKey(node)) return node;
+                    if (node.Expr.ToString().Equals(Expr.True.ToString())) return node;
+                    var guardConst = new Constant(Token.NoToken, 
+                        new TypedIdent(Token.NoToken, "_assert_guard_" + assertGuardConsts.Count(), btype.Bool), false);
+                    node.Expr = Expr.Imp(IdentifierExpr.Ident(guardConst), node.Expr);
+                    assertGuardConsts[node] = guardConst;
+                    instance.prog.TopLevelDeclarations.Add(guardConst);
+                    return base.VisitAssertCmd(node);
+                }
+            }
+        }
     }
 }
