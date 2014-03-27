@@ -80,40 +80,53 @@ namespace AngelicVerifierNull
         private static void RunCorralIterative(PersistentProgram prog, string p)
         {
             //We are not using the guards to turn the asserts, we simply rewrite the assert
-            var pr = prog.getProgram();
             while (true)
             {
-                var prog1 = new PersistentProgram(pr, corralConfig.mainProcName, 1);
-                var cex = RunCorral(prog1, corralConfig.mainProcName);
+                var cex = RunCorral(prog, corralConfig.mainProcName);
                 if (cex == null)
                 {
                     //TODO (how do I distinguish inconclusive results)
                     Console.WriteLine("No more counterexamples found, Corral returns verified...");
                     break;
                 }
-                var failingAssertCmd = GetFailingAssert(cex);
-                if (failingAssertCmd == null)
+                var nprog = prog.getProgram();
+                var ret = SupressFailingAssert(nprog, cex.Item2);
+
+                if (ret == null)
                 {
                     Console.WriteLine("Failure is not an assert, skipping...");
+                    Debug.Assert(false);
                     continue;
                 }
                 else
                 {
-                    Console.WriteLine("Assertion failed at line {0} with expr {1}", failingAssertCmd.Line, failingAssertCmd.ToString());
+                    Console.WriteLine("Assertion failed at line {0} with expr {1}", ret.Line, ret.ToString());
                 }
-                failingAssertCmd.Expr = Expr.True; //suppress it 
-                pr = prog1.getProgram();
+
+                prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
             }
+
         }
 
-        //TODO: [Akash] Fill this up to return the failing assertion/requires/ensures/.
-        private static AssertCmd GetFailingAssert(cba.ErrorTrace cex)
+        // Returns the failing assertion, and supresses it in the input program
+        private static AssertCmd SupressFailingAssert(Program program, cba.AssertLocation aloc)
         {
-            return null;
+            // find procedure
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, aloc.procName);
+            // find block
+            var block = impl.Blocks.Where(blk => blk.Label == aloc.blockName).First();
+            // find instruction
+            Debug.Assert(block.Cmds[aloc.instrNo + 1] is AssertCmd);
+            var ret = block.Cmds[aloc.instrNo + 1] as AssertCmd;
+            // block assert
+            block.Cmds[aloc.instrNo + 1] = new AssumeCmd(ret.tok, ret.Expr, ret.Attributes);
+            
+            return ret;
         }
 
         // Run Corral on a sequential Boogie Program
-        static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string main)
+        // Returns the error trace and the failing assert location
+        static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main)
         {
             Debug.Assert(cba.GlobalConfig.isSingleThreaded);
             Debug.Assert(cba.GlobalConfig.InferPass == null);
@@ -171,7 +184,7 @@ namespace AngelicVerifierNull
                 cexTrace = rcalls.mapBackTrace(cexTrace);
                 //PrintProgramPath.print(rcalls.input, cexTrace, "temp0");
                 cexTrace = apass.mapBackTrace(cexTrace);
-                return cexTrace;
+                return Tuple.Create(cexTrace, apass.getFailingAssertLocation());
             }
 
             return null;
