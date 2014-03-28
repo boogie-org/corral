@@ -116,10 +116,10 @@ namespace AngelicVerifierNull
             // find block
             var block = impl.Blocks.Where(blk => blk.Label == aloc.blockName).First();
             // find instruction
-            Debug.Assert(block.Cmds[aloc.instrNo + 1] is AssertCmd);
-            var ret = block.Cmds[aloc.instrNo + 1] as AssertCmd;
+            Debug.Assert(block.Cmds[aloc.instrNo] is AssertCmd);
+            var ret = block.Cmds[aloc.instrNo] as AssertCmd;
             // block assert
-            block.Cmds[aloc.instrNo + 1] = new AssumeCmd(ret.tok, ret.Expr, ret.Attributes);
+            block.Cmds[aloc.instrNo] = new AssumeCmd(ret.tok, ret.Expr, ret.Attributes);
             
             return ret;
         }
