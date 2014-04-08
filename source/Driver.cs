@@ -1354,7 +1354,7 @@ namespace cba
         // Mark "slic" assume statements
         // Insert captureState for driver methods and start
         // Mark "indirect" call assume statements
-        private static void sdvAnnotateDefectTrace(Program trace, Configs config)
+        public static void sdvAnnotateDefectTrace(Program trace, Configs config)
         {
             var slicVars = new HashSet<string>(config.trackedVars);
             slicVars.Remove("alloc");

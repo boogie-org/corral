@@ -18,7 +18,8 @@ namespace AngelicVerifierNull
 
     class Driver
     {
-        static cba.Configs corralConfig;
+        static cba.Configs corralConfig = null;
+        static cba.AddUniqueCallIds addIds = null;
 
         const string CORRAL_MAIN_PROC = "CorralMain";
 
@@ -59,7 +60,9 @@ namespace AngelicVerifierNull
             CommandLineOptions.Clo.PrintInstrumented = true;
 
             // Set all defaults for corral
-            var config = cba.Configs.parseCommandLine(new string[] { "doesntExist.bpl" });
+            var config = cba.Configs.parseCommandLine(new string[] { 
+                "doesntExist.bpl", "/useProverEvaluate", "/prevCorralState:cstate.db", "/dumpCorralState:cstate.db" });
+
             cba.Driver.Initialize(config);
 
             cba.VerificationPass.usePruning = false;
@@ -124,12 +127,18 @@ namespace AngelicVerifierNull
             return ret;
         }
 
+        static cba.CorralState corralState = null;
+
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
         static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main)
         {
             Debug.Assert(cba.GlobalConfig.isSingleThreaded);
             Debug.Assert(cba.GlobalConfig.InferPass == null);
+
+            // Reuse previous corral state
+            if(corralState != null)
+                cba.CorralState.AbsorbPrevState(corralConfig, cba.ConfigManager.progVerifyOptions);
 
             // Rewrite assert commands
             var apass = new cba.RewriteAssertsPass();
@@ -173,6 +182,10 @@ namespace AngelicVerifierNull
             cba.ErrorTrace cexTrace = null;
             cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
 
+            // dump corral state for next iteration
+            cba.CorralState.DumpCorralState(corralConfig, cba.ConfigManager.progVerifyOptions.CallTree, 
+                refinementState.getVars().Variables);
+
             ////////////////////////////////////
             // Output Phase
             ////////////////////////////////////
@@ -189,7 +202,42 @@ namespace AngelicVerifierNull
 
             return null;
         }
-        
+
+        // Given a counterexample trace 'trace' through a program 'program', return the
+        // path program for that trace. The path program has a single implementation 
+        // with straightline code, and all non-determinism is concretized
+
+        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program)
+        {
+            // convert trace to a path program
+            var tinfo = new cba.InsertionTrans();
+            var traceProgCons = new cba.RestrictToTrace(program.getProgram(), tinfo);
+            traceProgCons.addTrace(trace);
+            var tprog = traceProgCons.getProgram();
+
+            // mark some annotations (that enable optimizations) along the path program
+            cba.Driver.sdvAnnotateDefectTrace(tprog, corralConfig);
+
+            // convert to a persistent program
+            var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
+
+            // Concretize non-determinism
+            BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
+            var concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
+            witness = concretize.run(witness);
+
+            if (concretize.success)
+            {
+                // Something went wrong, fail 
+                throw new Exception("Path program concretization failed");
+            }
+
+            // optinally, dump the witness to a file
+            // witness.writeToFile("corral_witness.bpl");
+
+            return witness;
+        }
+
         static PersistentProgram GetProgram(string filename)
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
@@ -256,7 +304,7 @@ namespace AngelicVerifierNull
             cba.GlobalConfig.isSingleThreaded = true;
 
             // Massage the input program
-            var addIds = new cba.AddUniqueCallIds();
+            addIds = new cba.AddUniqueCallIds();
             addIds.VisitProgram(init);
         }
 
