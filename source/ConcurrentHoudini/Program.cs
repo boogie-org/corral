@@ -61,6 +61,10 @@ namespace ConcurrentHoudini
                 //pruneAsserts = true;
                 //instantiateTemplates = true;
             }
+            else if (arg == "/printAssignment")
+            {
+                printAssignment = true;
+            }
             else
             {
                 printUsageMessage();
@@ -132,6 +136,8 @@ namespace ConcurrentHoudini
         static bool extractLoops;
         // Split threads based on entry point
         static bool splitThreads;
+        // print assignment
+        static bool printAssignment = false;
 
         public static Context con = null;
         public static string absDomain = "IA[HoudiniConst]";
@@ -289,56 +295,38 @@ namespace ConcurrentHoudini
 
             program = BoogieUtil.ReResolve(program, dbg ? annotatedFileName : tmpFileName);
 
-            // Run OG
-            if(dbg)
-                Console.WriteLine("Running OG: {0}", expandedFileName);
-
-            LinearTypeChecker linearTypechecker;
-            MoverTypeChecker moverTypeChecker;
-            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
-
-            if (oc != PipelineOutcome.ResolvedAndTypeChecked)
-                throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.errorCount, annotatedFileName));
-
-            Concurrency.Transform(linearTypechecker, moverTypeChecker);
-            var eraser = new LinearEraser();
-            eraser.VisitProgram(program);
-
-            //var stats = new PipelineStatistics();
-            //ExecutionEngine.EliminateDeadVariablesAndInline(program);
-            //var ret = ExecutionEngine.InferAndVerify(program, stats);
-            //ExecutionEngine.printer.WriteTrailer(stats);
-            //return;
-
-            program = BoogieUtil.ReResolve(program, dbg ? expandedFileName : tmpFileName);
-
-            // Run Abs
-            if(dbg)
-                Console.WriteLine("Running abs houdini on {0}", expandedFileName);
-
-            ExecutionEngine.EliminateDeadVariables(program);
-            ExecutionEngine.Inline(program);
-
             CommandLineOptions.Clo.ContractInfer = true;
             CommandLineOptions.Clo.AbstractHoudini = absDomain;
             CommandLineOptions.Clo.UseProverEvaluate = true;
             CommandLineOptions.Clo.ModelViewFile = "z3model";
-            
             Microsoft.Boogie.Houdini.AbstractDomainFactory.Initialize(program);
-            var domain = Microsoft.Boogie.Houdini.AbstractDomainFactory.GetInstance(absDomain);
 
-            var abs = new Microsoft.Boogie.Houdini.AbsHoudini(program, domain);
-            var outcome = abs.ComputeSummaries();
-            if (outcome.outcome != VC.ConditionGeneration.Outcome.Correct)
+            // First, do sequential
+            var answer = DoInference(program, InferenceMode.SEQUENTIAL, annotatedFileName, expandedFileName);
+
+            program = BoogieUtil.ReadAndOnlyResolve(dbg ? annotatedFileName : tmpFileName);
+
+            // prune "true" functions
+            var progFuncs = new Dictionary<string, Function>();
+            program.TopLevelDeclarations.OfType<Function>()
+                .Iter(f => progFuncs.Add(f.Name, f));
+            
+            var truefuncs = new List<Function>();
+            foreach (var f in answer)
             {
-                Console.WriteLine("Some assert failed while running AbsHoudini, aborting");
-                outcome.errors.ForEach(error => og.PrintError(error));
-                return;
+                if (f.Body is LiteralExpr && (f.Body as LiteralExpr).IsTrue)
+                {
+                    truefuncs.Add(f);
+                    var actualf = progFuncs[f.Name];
+                    actualf.Attributes = BoogieUtil.removeAttr("existential", actualf.Attributes);
+                    actualf.Body = Expr.True;
+                }
             }
+            Console.WriteLine("Sequential check pruned away {0} functions, {1} remain", truefuncs.Count, answer.Count() - truefuncs.Count);
 
-            Console.WriteLine("Verified");
-
-            var answer = abs.GetAssignment();
+            // now do concurrent
+            answer = DoInference(program, InferenceMode.CONCURRENT, annotatedFileName, expandedFileName);
+            answer = answer.Concat(truefuncs);
 
             var provedAsserts = new Dictionary<string, bool>();
             answer.Where(func => QKeyValue.FindBoolAttribute(func.Attributes, "assertGuard"))
@@ -352,8 +340,11 @@ namespace ConcurrentHoudini
             answer = answer.Where(func => !QKeyValue.FindBoolAttribute(func.Attributes, "chignore")
                 && !QKeyValue.FindBoolAttribute(func.Attributes, "assertGuard"));
 
-            using (var tt = new TokenTextWriter(Console.Out))
-                answer.ToList().ForEach(func => func.Emit(tt, 0));
+            if (printAssignment)
+            {
+                using (var tt = new TokenTextWriter(Console.Out))
+                    answer.ToList().ForEach(func => func.Emit(tt, 0));
+            }
 
 
             if(dbg)
@@ -376,6 +367,62 @@ namespace ConcurrentHoudini
 
         }
 
+        enum InferenceMode { SEQUENTIAL, CONCURRENT };
+
+        static IEnumerable<Function> DoInference(Program program, InferenceMode mode, string annotatedFileName, string expandedFileName)
+        {
+            var tmpFileName = "og__tmp_di.bpl";
+
+            if (mode == InferenceMode.SEQUENTIAL)
+            {
+                // remove yields
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.Cmds = new List<Cmd>(blk.Cmds.Filter(c => !(c is YieldCmd)))));
+            }
+
+            // Run OG
+            if (dbg)
+                Console.WriteLine("Running OG: {0}", expandedFileName);
+
+            LinearTypeChecker linearTypechecker;
+            MoverTypeChecker moverTypeChecker;
+            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
+
+            if (oc != PipelineOutcome.ResolvedAndTypeChecked)
+                throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.errorCount, annotatedFileName));
+
+            Concurrency.Transform(linearTypechecker, moverTypeChecker);
+            var eraser = new LinearEraser();
+            eraser.VisitProgram(program);
+
+            //var stats = new PipelineStatistics();
+            //ExecutionEngine.EliminateDeadVariablesAndInline(program);
+            //var ret = ExecutionEngine.InferAndVerify(program, stats);
+            //ExecutionEngine.printer.WriteTrailer(stats);
+            //return;
+
+            program = BoogieUtil.ReResolve(program, dbg ? expandedFileName : tmpFileName);
+
+            // Run Abs
+            if (dbg)
+                Console.WriteLine("Running abs houdini on {0}", expandedFileName);
+
+            ExecutionEngine.EliminateDeadVariables(program);
+            ExecutionEngine.Inline(program);
+
+            var domain = Microsoft.Boogie.Houdini.AbstractDomainFactory.GetInstance(absDomain);
+
+            var abs = new Microsoft.Boogie.Houdini.AbsHoudini(program, domain);
+            var outcome = abs.ComputeSummaries();
+            if (outcome.outcome != VC.ConditionGeneration.Outcome.Correct)
+            {
+                Console.WriteLine("Some assert failed while running AbsHoudini, aborting");
+                outcome.errors.ForEach(error => og.PrintError(error));
+            }
+
+            return abs.GetAssignment();
+        }
  
 
         // convert:

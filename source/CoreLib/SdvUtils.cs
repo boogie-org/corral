@@ -35,7 +35,7 @@ namespace CoreLib
 
             program.TopLevelDeclarations
                 .OfType<GlobalVariable>()
-                .Where(g => g.TypedIdent.Type.IsMap)
+                .Where(g => g.TypedIdent.Type.IsMap && (g.TypedIdent.Type as MapType).Result.IsInt)
                 .Iter(g => AllMaps.Add(g.Name));
 
             // Fix Cmds
@@ -45,6 +45,21 @@ namespace CoreLib
                     impl.Blocks.Iter(block =>
                         block.Cmds
                         .OfType<Cmd>().Iter(cmd => Visit(cmd))));
+
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(p => VisitEnsuresSeq(p.Ensures));
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(p => VisitRequiresSeq(p.Requires));
+            
+            var impls = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impls.Add(impl.Name));
+            
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => impls.Contains(p.Name))
+                .Iter(p => p.Modifies = new List<IdentifierExpr>());
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(p => VisitIdentifierExprSeq(p.Modifies));
 
             // Remove globals
             var newDecls = new List<Declaration>();

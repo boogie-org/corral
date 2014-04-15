@@ -1344,11 +1344,20 @@ namespace cba.Util
 
         private void Compute()
         {
+            var irreducible = new HashSet<string>();
+
+            var op = CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible;
+            CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = false;
+
             // Extract loops, we don't want cycles in the CFG            
-            program.ExtractLoops();
+            program.ExtractLoops(out irreducible);
             program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => !irreducible.Contains(impl.Name))
                 .Iter(SSARename);
+
             program.TopLevelDeclarations.AddRange(phiProcsDecl);
+
+            CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
         }
 
         private void SSARename(Implementation impl)
