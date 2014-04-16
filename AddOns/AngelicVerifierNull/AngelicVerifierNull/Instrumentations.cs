@@ -141,7 +141,8 @@ namespace AngelicVerifierNull
             /// <returns></returns>
             private bool IsPointerVariable(Variable x)
             {
-                return x.TypedIdent.Type.IsInt;
+                return x.TypedIdent.Type.IsInt &&
+                    !BoogieUtil.checkAttrExists("non-pointer", x.Attributes); //to reduce clutter, perhaps only a few ints are non-pointers
             }
         }
 

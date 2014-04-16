@@ -92,6 +92,19 @@ namespace AngelicVerifierNull
                     Console.WriteLine("No more counterexamples found, Corral returns verified...");
                     break;
                 }
+                //get the pathProgram
+                var pprog = GetPathProgram(cex.Item1, prog);
+                var mainImpl = pprog.getProgram().TopLevelDeclarations.OfType<Implementation>()
+                            .Where(impl => impl.Name.Contains(corralConfig.mainProcName)).FirstOrDefault(); //TODO: hack to get the name
+                //call e = ExplainError on PathProg(cex)
+                ExplainError.STATUS eeStatus;
+                Dictionary<string, string> eeComplexExprs;
+                var explain = ExplainError.Toplevel.Go(mainImpl, pprog.getProgram(), 1000, 1, out eeStatus, out eeComplexExprs);
+                Console.WriteLine("The output of ExplainError => Status = {0} Exprs = ({1})",
+                    eeStatus, explain != null ? String.Join(", ", explain) : "");
+                //if e is NoSpec, show warning, suppress failing assert
+                //if e is Spec(s), conjoin s to prog as precondition to main
+                //otherwise, suppress failing assert
                 var nprog = prog.getProgram();
                 var ret = SupressFailingAssert(nprog, cex.Item2);
 
@@ -224,7 +237,7 @@ namespace AngelicVerifierNull
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
             var concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
-            witness = concretize.run(witness);
+            //witness = concretize.run(witness); //uncomment: shuvendu
 
             if (concretize.success)
             {
