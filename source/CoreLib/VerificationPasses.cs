@@ -1107,6 +1107,9 @@ namespace cba
             // Abstract houdini sets a prover option for the time limit. Get rid of that now
             CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
 
+            // Record new summaries
+            var predicates = absHoudini.GetPredicates();
+            
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
@@ -1116,9 +1119,6 @@ namespace cba
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
-            // Record new summaries
-            var predicates = absHoudini.GetPredicates();
-            
             // get rid of "true ==> blah" for type-state predicates 
             // because we know they get covered by other candidates anyway
             var typestatePost = new HashSet<string>();
