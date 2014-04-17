@@ -125,6 +125,8 @@ namespace cba
                 throw new InvalidProg("Cannot typecheck");
             }
 
+            BoogieVerify.options.Set();
+
             // An important pass for recording the value of int variables
             Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
             if(WillGetModel)
@@ -1662,7 +1664,10 @@ namespace cba
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcName) == null);
 
             p.TopLevelDeclarations.Add(reProc);
-            
+            var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
+            if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
+                tmainimpl.AddAttribute("entrypoint");
+
             var program = new PersistentCBAProgram(p, p.mainProcName, 0);
             //program.writeToFile("beforeverify.bpl");
             var vp = new VerificationPass(true);
@@ -1711,6 +1716,9 @@ namespace cba
                     .Iter(s => allocConstants[s] = implName);
             }
             */
+            BoogieUtil.findProcedureImpl(rtprog.TopLevelDeclarations, rt.getFirstNameInstance(p.mainProcName))
+                .AddAttribute("entrypoint");
+
             program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
 
             // Lets inline it all
@@ -2426,7 +2434,7 @@ namespace cba
         }
 
         // Instrument deep asserts in a trace
-        public PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
+        public static PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
         {
             var program = ptrace.getProgram();
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, ptrace.mainProcName);

@@ -94,8 +94,8 @@ namespace AngelicVerifierNull
                 }
                 //get the pathProgram
                 var pprog = GetPathProgram(cex.Item1, prog);
-                var mainImpl = pprog.getProgram().TopLevelDeclarations.OfType<Implementation>()
-                            .Where(impl => impl.Name.Contains(corralConfig.mainProcName)).FirstOrDefault(); //TODO: hack to get the name
+                var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);
+
                 //call e = ExplainError on PathProg(cex)
                 ExplainError.STATUS eeStatus;
                 Dictionary<string, string> eeComplexExprs;
@@ -222,22 +222,30 @@ namespace AngelicVerifierNull
 
         static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program)
         {
+            BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
+
             // convert trace to a path program
+            cba.RestrictToTrace.convertNonFailingAssertsToAssumes = true;
             var tinfo = new cba.InsertionTrans();
             var traceProgCons = new cba.RestrictToTrace(program.getProgram(), tinfo);
             traceProgCons.addTrace(trace);
             var tprog = traceProgCons.getProgram();
+            cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
             // mark some annotations (that enable optimizations) along the path program
             cba.Driver.sdvAnnotateDefectTrace(tprog, corralConfig);
 
             // convert to a persistent program
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
+            // rewrite asserts back to main
+            witness = cba.DeepAssertRewrite.InstrumentTrace(witness);
+
+            //witness.writeToFile("tt.bpl");
 
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
             var concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
-            //witness = concretize.run(witness); //uncomment: shuvendu
+            witness = concretize.run(witness); //uncomment: shuvendu
 
             if (concretize.success)
             {

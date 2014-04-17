@@ -936,7 +936,7 @@ namespace cba
                 //ptrace.writeToFile("ptrace.bpl");
 
                 if (da != null)
-                    ptrace = da.InstrumentTrace(ptrace);
+                    ptrace = DeepAssertRewrite.InstrumentTrace(ptrace);
 
                 //////////////////////////
                 // Check concrete trace
