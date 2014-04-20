@@ -32,6 +32,8 @@ namespace cba
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
         public Dictionary<string, Tuple<string, string, int>> allocConstantToCall;
+        // Convert non-failing asserts to assumes
+        public static bool convertNonFailingAssertsToAssumes = false;
 
         public RestrictToTrace(Program p, InsertionTrans t)
         {
@@ -177,7 +179,14 @@ namespace cba
 
                     if (!(c is CallCmd))
                     {
-                        traceBlock.Cmds.Add(c);
+                        if (convertNonFailingAssertsToAssumes && c is AssertCmd && !(curr_instr.info is AssertFailInstrInfo))
+                        {
+                            traceBlock.Cmds.Add(new AssumeCmd(c.tok, (c as AssertCmd).Expr, (c as AssertCmd).Attributes));
+                        }
+                        else
+                        {
+                            traceBlock.Cmds.Add(c);
+                        }
                         Debug.Assert(!curr_instr.isCall());
                         addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
 

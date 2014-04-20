@@ -125,6 +125,8 @@ namespace cba
                 throw new InvalidProg("Cannot typecheck");
             }
 
+            BoogieVerify.options.Set();
+
             // An important pass for recording the value of int variables
             Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
             if(WillGetModel)
@@ -1107,6 +1109,9 @@ namespace cba
             // Abstract houdini sets a prover option for the time limit. Get rid of that now
             CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
 
+            // Record new summaries
+            var predicates = absHoudini.GetPredicates();
+            
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
@@ -1116,9 +1121,6 @@ namespace cba
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
-            // Record new summaries
-            var predicates = absHoudini.GetPredicates();
-            
             // get rid of "true ==> blah" for type-state predicates 
             // because we know they get covered by other candidates anyway
             var typestatePost = new HashSet<string>();
@@ -1662,7 +1664,10 @@ namespace cba
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcName) == null);
 
             p.TopLevelDeclarations.Add(reProc);
-            
+            var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
+            if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
+                tmainimpl.AddAttribute("entrypoint");
+
             var program = new PersistentCBAProgram(p, p.mainProcName, 0);
             //program.writeToFile("beforeverify.bpl");
             var vp = new VerificationPass(true);
@@ -1711,6 +1716,9 @@ namespace cba
                     .Iter(s => allocConstants[s] = implName);
             }
             */
+            BoogieUtil.findProcedureImpl(rtprog.TopLevelDeclarations, rt.getFirstNameInstance(p.mainProcName))
+                .AddAttribute("entrypoint");
+
             program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
 
             // Lets inline it all
@@ -2426,7 +2434,7 @@ namespace cba
         }
 
         // Instrument deep asserts in a trace
-        public PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
+        public static PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
         {
             var program = ptrace.getProgram();
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, ptrace.mainProcName);
