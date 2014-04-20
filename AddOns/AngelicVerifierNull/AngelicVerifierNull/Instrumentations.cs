@@ -34,7 +34,7 @@ namespace AngelicVerifierNull
                 FindMalloc();
                 FindNULL();
                 CreateMainProcedure();
-                ChangeStubsIntoFunkyMalloc();
+                ChangeStubsIntoUnkowns();
             }
             
             private void CreateMainProcedure()
@@ -52,7 +52,7 @@ namespace AngelicVerifierNull
                     locals.AddRange(args);
                     locals.AddRange(rets);
                     //call 
-                    var argMallocCmds = FunkyAllocatePointers(args);
+                    var argMallocCmds = AllocatePointersAsUnknowns(args);
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
                         rets.ConvertAll(x => IdentifierExpr.Ident(x)));
                     var cmds = argMallocCmds;
@@ -63,8 +63,12 @@ namespace AngelicVerifierNull
                     mainBlocks.Add(blk);
                 }
                 //TODO: get globals of type refs/pointers
-                var globalMallocCmds = FunkyAllocatePointers(prog.GlobalVariables().ConvertAll(x => (Variable)x));
-                Block blkStart = new Block(Token.NoToken, "CorralMainStart", globalMallocCmds, new GotoCmd(Token.NoToken, mainBlocks));
+                var initCmd = (AssumeCmd) BoogieAstFactory.MkAssume(Expr.True);
+                //TODO: find a reusable API to add attributes to cmds
+                initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() {"Start"}, null);
+                var globalCmds = new List<Cmd>() { initCmd };
+                globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+                Block blkStart = new Block(Token.NoToken, "CorralMainStart", globalCmds, new GotoCmd(Token.NoToken, mainBlocks));
                 var blocks = new List<Block>();
                 blocks.Add(blkStart);
                 blocks.AddRange(mainBlocks);
@@ -75,7 +79,7 @@ namespace AngelicVerifierNull
 
             //Change the body of any stub that returns a pointer into calling malloc()
             //TODO: only do this for procedures with a single return with a pointer type
-            private void ChangeStubsIntoFunkyMalloc()
+            private void ChangeStubsIntoUnkowns()
             {
                 var procsWithImpl = prog.TopLevelDeclarations.OfType<Implementation>()
                     .Select(x => x.Proc);
@@ -89,7 +93,7 @@ namespace AngelicVerifierNull
                     if (p.OutParams.Count == 1 &&
                         IsPointerVariable(p.OutParams[0]))
                     {
-                        var retMallocCmds = FunkyAllocatePointers(p.OutParams);
+                        var retMallocCmds = AllocatePointersAsUnknowns(p.OutParams);
                         var blk = BoogieAstFactory.MkBlock(retMallocCmds, new ReturnCmd(Token.NoToken));
                         var blks = new List<Block>() { blk };
                         var impl = BoogieAstFactory.MkImpl(p.Name, p.InParams, p.OutParams, new List<Variable>(), blks);
@@ -99,7 +103,7 @@ namespace AngelicVerifierNull
                 }
                 prog.TopLevelDeclarations.AddRange(stubImpls);
             }
-            private List<Cmd> FunkyAllocatePointers(List<Variable> vars)
+            private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {
                 return GetPointerVars(vars)
                     .ConvertAll(x => BoogieAstFactory.MkCall(mallocProcedure, new List<Expr>(), new List<Variable>() { x }));

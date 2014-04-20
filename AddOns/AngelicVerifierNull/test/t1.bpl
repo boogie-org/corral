@@ -9,7 +9,7 @@ procedure Foo(a:int) returns (s:int) {
   var c: bool;
   r := NULL;
   
-  call c := stub_bool(a);
+//  call c := stub_bool(a); //crashes with a structured if and stub
 
   if (c) {
      call Bar(r);

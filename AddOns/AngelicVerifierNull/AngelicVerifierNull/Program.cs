@@ -42,14 +42,13 @@ namespace AngelicVerifierNull
             {
                 // Get input program with the harness
                 prog = GetProgram(args[0]);
+                // Run Corral outer loop
+                RunCorralIterative(prog, corralConfig.mainProcName);
             }
-            catch (InputProgramDoesNotMatchExn e)
+            catch (Exception e)
             {
-                Console.WriteLine("Input program does not satisfy sanity checks" + e.Message);
+                Console.WriteLine("AnglelicVerifier failed with:" + e.Message);
             }
-
-            // Run Corral outer loop
-            RunCorralIterative(prog, corralConfig.mainProcName);
         }
 
         // Initialization
@@ -94,34 +93,61 @@ namespace AngelicVerifierNull
                 }
                 //get the pathProgram
                 var pprog = GetPathProgram(cex.Item1, prog);
-                var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);
-
-                //call e = ExplainError on PathProg(cex)
-                ExplainError.STATUS eeStatus;
-                Dictionary<string, string> eeComplexExprs;
+                var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);                
+                //call ExplainError 
+                var eeStatus = CheckWithExplainError(pprog, mainImpl);
+                var nprog = prog.getProgram();
+                if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
+                    eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
+                {
+                    var ret = SupressFailingAssert(nprog, cex.Item2);
+                    if (ret == null)
+                    {
+                        Console.WriteLine("Failure is not an assert, skipping...");
+                        Debug.Assert(false);
+                        continue;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Assertion failed at line {0} with expr {1}", ret.Line, ret.ToString());
+                    }
+                }
+                else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
+                {
+                    var ret = SupressFailingAssert(nprog, cex.Item2); //TODO: remove this call (currently kept there to terminate)
+                    mainImpl.Proc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
+                }
+                prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
+            }
+        }
+        private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
+        private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(PersistentProgram pprog, Implementation mainImpl)
+        {
+            //Let ee be the result of ExplainError
+            // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
+            // else if (ee is SUCCESS(e)) Block(e); 
+            // else //inconclusive/timeout/.. Suppress
+            var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
+            ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
+            Dictionary<string, string> eeComplexExprs;
+            try
+            {
                 var explain = ExplainError.Toplevel.Go(mainImpl, pprog.getProgram(), 1000, 1, out eeStatus, out eeComplexExprs);
                 Console.WriteLine("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : "");
-                //if e is NoSpec, show warning, suppress failing assert
-                //if e is Spec(s), conjoin s to prog as precondition to main
-                //otherwise, suppress failing assert
-                var nprog = prog.getProgram();
-                var ret = SupressFailingAssert(nprog, cex.Item2);
-
-                if (ret == null)
+                if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
-                    Console.WriteLine("Failure is not an assert, skipping...");
-                    Debug.Assert(false);
-                    continue;
+                    if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
+                        status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr) Expr.True);
+                    else if (explain.Count > 0)
+                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, (Expr) Expr.True); //TODO: get expressions from ExplainError
                 }
-                else
-                {
-                    Console.WriteLine("Assertion failed at line {0} with expr {1}", ret.Line, ret.ToString());
-                }
-
-                prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
             }
-
+            catch (Exception e)
+            {
+                Console.WriteLine("ExplainError failed with {0}", e);
+            }
+            return status;
         }
 
         // Returns the failing assertion, and supresses it in the input program
@@ -240,12 +266,15 @@ namespace AngelicVerifierNull
             // rewrite asserts back to main
             witness = cba.DeepAssertRewrite.InstrumentTrace(witness);
 
-            //witness.writeToFile("tt.bpl");
+            witness.writeToFile("trace_prog.bpl");
 
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
             var concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
             witness = concretize.run(witness); //uncomment: shuvendu
+
+            witness.getProgram().Resolve();
+            witness.getProgram().Typecheck();
 
             if (concretize.success)
             {
@@ -282,7 +311,7 @@ namespace AngelicVerifierNull
 
             //Various instrumentations on the well-formed program
             (new Instrumentations.MallocInstrumentation(init)).DoInstrument();
-            (new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
+            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");

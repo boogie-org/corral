@@ -20,13 +20,14 @@ namespace ExplainError
     /// ANGELIC_DATAFLOW_BUG: Env cannot control the non-control statements to avoid the error
     /// </summary>
     public enum STATUS { SUCCESS, PARTIALCOVER, TIMEOUT, INCONCLUSIVE, ILLEGAL, ANGELIC_DATAFLOW_BUG};
-
+    
     public class Toplevel
     {
         # region Analysis flags
-        //Options: Add them to ParseAndRemoveNonBoogieOptions
+        public const string CAPTURESTATE_ATTRIBUTE_NAME = "captureState";
         private const int MAX_TIMEOUT = 100;
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
+        //Options: Add them to ParseAndRemoveNonBoogieOptions
         private static bool verbose = false;
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
@@ -326,7 +327,7 @@ namespace ExplainError
             foreach (var d in preDisjuncts)
             {
                 var tmp = new HashSet<List<Expr>>(preDisjuncts);
-                tmp.Remove(d);
+                tmp.Remove(d); //remove 1 element and check the rest
                 disjunct = ExprListSetToDNFExpr(tmp);
                 t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
                 t.VisitImplementation(currImpl); //changes currImpl as well
@@ -893,7 +894,7 @@ namespace ExplainError
         }
         private static bool ContainsCaptureStateAttribute(AssumeCmd assumeCmd, out string captureStateLoc)
         {
-            captureStateLoc = QKeyValue.FindStringAttribute(assumeCmd.Attributes, "captureState");
+            captureStateLoc = QKeyValue.FindStringAttribute(assumeCmd.Attributes, CAPTURESTATE_ATTRIBUTE_NAME);
             return (captureStateLoc != null);
         }
         private static bool CheckSanity(Implementation impl)
@@ -991,7 +992,6 @@ namespace ExplainError
                     i.Blocks = i.OriginalBlocks;
                     i.LocVars = i.OriginalLocVars;
                 }
-                //var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList, out mList);
                 var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList, out mList);
                 var reset = new ResetVerificationState();
                 reset.Visit(i);
@@ -1018,6 +1018,24 @@ namespace ExplainError
                     node.IncarnationMap = null;
                     return base.VisitAssertCmd(node);
                 }
+                public override TypedIdent VisitTypedIdent(TypedIdent node)
+                {
+                    if (node.Type != null)  //special hack to avoid encountering variables with null Type (e.g. call10690formal@b@0)
+                        node.Type = (Microsoft.Boogie.Type)this.Visit(node.Type);
+                    return node;
+                }
+                public override Cmd VisitAssumeCmd(AssumeCmd node)
+                {
+                    //TODO: This fix does not help
+
+                    //get rid of some temp variables introduced
+                    if (node.Expr != null && node.Expr.ToString().Contains("formal@"))
+                        node.Expr = Expr.True;
+                    else
+                        node.Expr = this.VisitExpr(node.Expr);
+                    return node;
+                }
+
             }
         }
         #endregion 
