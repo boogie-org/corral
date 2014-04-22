@@ -660,6 +660,7 @@ namespace cba
     public class AddUniqueCallIds
     {
         private static int counter = 0;
+        public static bool useGlobalCounter = true;
         // (caller, callee, int) -> (block label, cnt)
         public Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
@@ -690,8 +691,9 @@ namespace cba
                     if (!cnt.ContainsKey(cc.callee))
                         cnt[cc.callee] = 0;
 
+                    var uniqueId = useGlobalCounter ? counter : cnt[cc.callee];
                     var attr = new List<object>();
-                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(cnt[cc.callee])));
+                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(uniqueId)));
 
                     cc.Attributes = BoogieUtil.removeAttr("si_old_unique_call", cc.Attributes);
                     var oldAttr = BoogieUtil.getAttr("si_unique_call", cc.Attributes);
@@ -706,7 +708,7 @@ namespace cba
                     }
 
                     cc.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, cc.Attributes);
-                    callIdToLocation.Add(Tuple.Create(impl.Name, cc.callee, cnt[cc.callee]), Tuple.Create(block.Label, callcnt));
+                    callIdToLocation.Add(Tuple.Create(impl.Name, cc.callee, uniqueId), Tuple.Create(block.Label, callcnt));
 
                     cnt[cc.callee]++;
 
