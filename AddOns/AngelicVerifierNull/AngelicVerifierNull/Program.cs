@@ -16,6 +16,17 @@ namespace AngelicVerifierNull
         public InputProgramDoesNotMatchExn(string s) : base(s) { } 
     }
 
+    public class Utils
+    {
+        //TODO: merge with Log class in Corral
+        const bool SUPPRESS_DEBUG_MESSAGES = false;
+        public enum PRINT_TAG { AV_DEBUG, AV_NORMAL };
+        public static void Print(string msg, PRINT_TAG tag=PRINT_TAG.AV_DEBUG)
+        {
+            if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
+                Console.WriteLine("[TAG: {0}] {1}", tag, msg);
+        }
+    }
     class Driver
     {
         static cba.Configs corralConfig = null;
@@ -51,6 +62,60 @@ namespace AngelicVerifierNull
             }
         }
 
+        #region Instrumentatations
+        //globals
+        static Instrumentations.MallocInstrumentation mallocInstrumentation = null;
+        /// <summary>
+        /// TODO: Check that the input program satisfies some sanity requirements
+        /// NULL is declared as constant
+        /// malloc is declared as a procedure, with alloc
+        /// each parameter/global/map is annotated with "pointer/ref/data"
+        /// </summary>
+        /// <param name="init"></param>
+        private static void CheckInputProgramRequirements(Program init)
+        {
+            return;
+        }
+        static PersistentProgram GetProgram(string filename)
+        {
+            Program init = BoogieUtil.ReadAndOnlyResolve(filename);
+
+            //Sanity check (currently most of it happens inside HarnessInstrumentation)
+            CheckInputProgramRequirements(init);
+
+            //Instrument to create the harness
+            corralConfig.mainProcName = CORRAL_MAIN_PROC;
+            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
+
+            //resolve+typecheck wo bothering about modSets
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
+            init = BoogieUtil.ReResolve(init);
+            CommandLineOptions.Clo.DoModSetAnalysis = false;
+
+            // Update mod sets
+            ModSetCollector.DoModSetAnalysis(init);
+
+            //TODO: Perform alias analysis here and prune a subset of asserts
+
+            //Various instrumentations on the well-formed program
+
+            mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
+            mallocInstrumentation.DoInstrument();
+            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
+
+            //Print the instrumented program
+            BoogieUtil.PrintProgram(init, "corralMain.bpl");
+
+            //Do corral specific passes
+            GlobalCorralSpecificPass(init);
+            var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
+            ProgTransformation.PersistentProgram.FreeParserMemory();
+
+            return inputProg;
+        }
+        #endregion
+
+        #region Corral related
         // Initialization
         static cba.Configs InitializeCorral()
         {
@@ -77,10 +142,31 @@ namespace AngelicVerifierNull
 
             return config;
         }
+        // Make a pass to ensure the whole program created is well formed
+        private static void GlobalCorralSpecificPass(Program init)
+        {
+            // Find main
+            List<string> entrypoints = cba.EntrypointScanner.FindEntrypoint(init);
+            if (entrypoints.Count == 0)
+                throw new InvalidInput("Main procedure not specified");
+            corralConfig.mainProcName = entrypoints[0];
 
+            if (BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, corralConfig.mainProcName) == null)
+            {
+                throw new InvalidInput("Implementation of main procedure not found");
+            }
+
+            Debug.Assert(cba.SequentialInstrumentation.isSingleThreadProgram(init, corralConfig.mainProcName));
+            cba.GlobalConfig.isSingleThreaded = true;
+
+            // Massage the input program
+            addIds = new cba.AddUniqueCallIds();
+            addIds.VisitProgram(init);
+        }
         //Run Corral over different assertions (modulo errorLimit)
         private static void RunCorralIterative(PersistentProgram prog, string p)
         {
+            int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
@@ -92,10 +178,11 @@ namespace AngelicVerifierNull
                     break;
                 }
                 //get the pathProgram
-                var pprog = GetPathProgram(cex.Item1, prog);
+                cba.SDVConcretizePathPass concretize;
+                var pprog = GetPathProgram(cex.Item1, prog, out concretize);
                 var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);                
                 //call ExplainError 
-                var eeStatus = CheckWithExplainError(pprog, mainImpl);
+                var eeStatus = CheckWithExplainError(pprog, mainImpl,concretize);
                 var nprog = prog.getProgram();
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
@@ -114,42 +201,17 @@ namespace AngelicVerifierNull
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
-                    var ret = SupressFailingAssert(nprog, cex.Item2); //TODO: remove this call (currently kept there to terminate)
-                    mainImpl.Proc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
+                    var mainProc = nprog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
+                    if (mainProc == null)
+                        throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
+                    mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
                 }
                 prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
+                //Print the instrumented program
+                iterCount++;
+                BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
         }
-        private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
-        private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(PersistentProgram pprog, Implementation mainImpl)
-        {
-            //Let ee be the result of ExplainError
-            // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
-            // else if (ee is SUCCESS(e)) Block(e); 
-            // else //inconclusive/timeout/.. Suppress
-            var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
-            ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
-            Dictionary<string, string> eeComplexExprs;
-            try
-            {
-                var explain = ExplainError.Toplevel.Go(mainImpl, pprog.getProgram(), 1000, 1, out eeStatus, out eeComplexExprs);
-                Console.WriteLine("The output of ExplainError => Status = {0} Exprs = ({1})",
-                    eeStatus, explain != null ? String.Join(", ", explain) : "");
-                if (eeStatus == ExplainError.STATUS.SUCCESS)
-                {
-                    if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
-                        status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr) Expr.True);
-                    else if (explain.Count > 0)
-                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, (Expr) Expr.True); //TODO: get expressions from ExplainError
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("ExplainError failed with {0}", e);
-            }
-            return status;
-        }
-
         // Returns the failing assertion, and supresses it in the input program
         private static AssertCmd SupressFailingAssert(Program program, cba.AssertLocation aloc)
         {
@@ -162,12 +224,10 @@ namespace AngelicVerifierNull
             var ret = block.Cmds[aloc.instrNo] as AssertCmd;
             // block assert
             block.Cmds[aloc.instrNo] = new AssumeCmd(ret.tok, ret.Expr, ret.Attributes);
-            
+
             return ret;
         }
-
         static cba.CorralState corralState = null;
-
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
         static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main)
@@ -176,7 +236,7 @@ namespace AngelicVerifierNull
             Debug.Assert(cba.GlobalConfig.InferPass == null);
 
             // Reuse previous corral state
-            if(corralState != null)
+            if (corralState != null)
                 cba.CorralState.AbsorbPrevState(corralConfig, cba.ConfigManager.progVerifyOptions);
 
             // Rewrite assert commands
@@ -216,13 +276,13 @@ namespace AngelicVerifierNull
             // Verification phase
             ////////////////////////////////////
 
-            var refinementState = new cba.RefinementState(curr, new HashSet<string>(corralConfig.trackedVars.Union(new string [] {seqInstr.assertsPassedName})), false);
+            var refinementState = new cba.RefinementState(curr, new HashSet<string>(corralConfig.trackedVars.Union(new string[] { seqInstr.assertsPassedName })), false);
 
             cba.ErrorTrace cexTrace = null;
             cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
 
             // dump corral state for next iteration
-            cba.CorralState.DumpCorralState(corralConfig, cba.ConfigManager.progVerifyOptions.CallTree, 
+            cba.CorralState.DumpCorralState(corralConfig, cba.ConfigManager.progVerifyOptions.CallTree,
                 refinementState.getVars().Variables);
 
             ////////////////////////////////////
@@ -241,12 +301,10 @@ namespace AngelicVerifierNull
 
             return null;
         }
-
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
-
-        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program)
+        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program, out cba.SDVConcretizePathPass concretize)
         {
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
 
@@ -270,7 +328,7 @@ namespace AngelicVerifierNull
 
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
-            var concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
+            concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
             witness = concretize.run(witness); //uncomment: shuvendu
 
             witness.getProgram().Resolve();
@@ -287,77 +345,136 @@ namespace AngelicVerifierNull
 
             return witness;
         }
+        #endregion
 
-        static PersistentProgram GetProgram(string filename)
+        #region ExplainError related
+        private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
+        private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(PersistentProgram pprog, Implementation mainImpl, 
+            cba.SDVConcretizePathPass concretize)
         {
-            Program init = BoogieUtil.ReadAndOnlyResolve(filename);
+            //Let ee be the result of ExplainError
+            // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
+            // else if (ee is SUCCESS(e)) Block(e); 
+            // else //inconclusive/timeout/.. Suppress
+            var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
+            ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
-            //Sanity check (currently most of it happens inside HarnessInstrumentation)
-            CheckInputProgramRequirements(init); 
-
-            //Instrument to create the harness
-            corralConfig.mainProcName = CORRAL_MAIN_PROC;
-            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
-
-            //resolve+typecheck wo bothering about modSets
-            CommandLineOptions.Clo.DoModSetAnalysis = true;
-            init = BoogieUtil.ReResolve(init);
-            CommandLineOptions.Clo.DoModSetAnalysis = false;
-
-            // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
-
-            //TODO: Perform alias analysis here and prune a subset of asserts
-
-            //Various instrumentations on the well-formed program
-            (new Instrumentations.MallocInstrumentation(init)).DoInstrument();
-            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
-
-            //Print the instrumented program
-            BoogieUtil.PrintProgram(init, "corralMain.bpl");
-
-            //Do corral specific passes
-            GlobalCorralSpecificPass(init);
-            var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
-            ProgTransformation.PersistentProgram.FreeParserMemory();
-
-            return inputProg;
-        }
-
-        /// <summary>
-        /// TODO: Check that the input program satisfies some sanity requirements
-        /// NULL is declared as constant
-        /// malloc is declared as a procedure, with alloc
-        /// each parameter/global/map is annotated with "pointer/ref/data"
-        /// </summary>
-        /// <param name="init"></param>
-        private static void CheckInputProgramRequirements(Program init)
-        {
-            return;
-        }
-
-        // Make a pass to ensure the whole program created is well formed
-        private static void GlobalCorralSpecificPass(Program init)
-        {
-            // Find main
-            List<string> entrypoints = cba.EntrypointScanner.FindEntrypoint(init);
-            if (entrypoints.Count == 0)
-                throw new InvalidInput("Main procedure not specified");
-            corralConfig.mainProcName = entrypoints[0];
-
-            if (BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, corralConfig.mainProcName) == null)
+            Dictionary<string, string> eeComplexExprs;
+            try
             {
-                throw new InvalidInput("Implementation of main procedure not found");
+                HashSet<List<Expr>> preDisjuncts;
+                var explain = ExplainError.Toplevel.Go(mainImpl, pprog.getProgram(), 1000, 1, out eeStatus, out eeComplexExprs, out preDisjuncts);
+                Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
+                    eeStatus, explain != null ? String.Join(", ", explain) : ""));
+                if (eeStatus == ExplainError.STATUS.SUCCESS)
+                {
+                    if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
+                        status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr) Expr.True);
+                    else if (explain.Count > 0)
+                    {
+                        var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
+                        blockExpr = MkBlockExprFromExplainError(pprog, blockExpr, concretize.allocConstants);
+                        Utils.Print(String.Format("The expression returned from ExplainError is {0}", blockExpr));
+                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); //TODO: get expressions from ExplainError
+                    }
+                }
             }
-
-            Debug.Assert(cba.SequentialInstrumentation.isSingleThreadProgram(init, corralConfig.mainProcName));
-            cba.GlobalConfig.isSingleThreaded = true;
-
-            // Massage the input program
-            addIds = new cba.AddUniqueCallIds();
-            addIds.VisitProgram(init);
+            catch (Exception e)
+            {
+                Console.WriteLine("ExplainError failed with {0}", e);
+            }
+            return status;
         }
+        private static Expr MkBlockExprFromExplainError(PersistentProgram pprog, Expr expr, Dictionary<string, Tuple<string, string, int>> allocConsts)
+        {
+            //- given expr, allocConsts (string)
+            //- usedVars = varsUsedIn(expr)
+            //- newUsedVars = Lookup(usedVars, pprog)  // subset of newAllocConsts U NULL     
+            //- newAllocConsts= Lookup(allocConsts, pprog)
+            //- allocToBv: newAllocConsts -> bv 
+            //- allocToTriggers: newAllocConsts -> triggers (all in pprog)
 
+            //- forallBV = newUsedVars \intersect newAllocConsts
+            //  forallPre = \wedge_i (trigger(bv) | bv \in forallBV)
+            //  forallPost = expr[newUsedVars/usedVars][allocToBV/newAllocConsts]
+            //- forall forallBV :: forallPre => forallPost
+
+            Utils.Print(String.Format("The list of allocConsts = {0}", String.Join(", ",
+                        allocConsts
+                        .Select(x => "(" + x.Key + " -> [" + x.Value.Item1 + ", " + x.Value.Item2 + ", " + x.Value.Item3 + "])"))
+            ));
+            Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
+            HashSet<Constant> newAllocConsts = new HashSet<Constant>();
+            //TODO: resorting to string instead of Constant as I see 4 different UniqueId for expr/usedVars/newUsedVars/newAllocConstsToBVars
+            allocConsts.ToList()
+                .ForEach(x =>
+                    {
+                        var xConst = pprog.getProgram().TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
+                        if (xConst == null)
+                            throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0}", x.Key));
+                        newAllocConsts.Add(xConst);
+                        string mallocTrigger;
+                        if (!mallocInstrumentation.mallocTriggersLocation.TryGetValue(x.Value, out mallocTrigger))
+                            throw new Exception(String.Format("WARNING!!: allocConst {0} has no mallocTrigger", x.Key));
+                        var mallocTriggerFn = pprog.getProgram().TopLevelDeclarations.OfType<Function>().Where(y => y.Name == mallocTrigger).FirstOrDefault();
+                        if (mallocTriggerFn == null)
+                            throw new Exception(String.Format("WARNING!!: Current program has no mallocTrigger with name", mallocTrigger));
+                        //make an expr mallocFn(x_i) for alloc_i
+                        var bvar =  new BoundVariable(Token.NoToken, 
+                                        new TypedIdent(Token.NoToken, "x_" +  newAllocConsts.Count, Microsoft.Boogie.Type.Int));
+
+                        var fnApp = (Expr) new NAryExpr(Token.NoToken,
+                                new FunctionCall(mallocTriggerFn),
+                                new List<Expr> () {IdentifierExpr.Ident(bvar)});
+                        allocToBndVarAndTrigger[xConst.Name] = Tuple.Create((Variable) bvar,  fnApp);
+                    });
+
+            var usedVarsCollector = new VariableCollector();
+            usedVarsCollector.Visit(expr);
+            Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
+            var newUsedVars = new HashSet<Constant>();
+            usedVarsCollector.usedVars.Iter(x =>
+            {
+                var xnew = pprog.getProgram().TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Name).FirstOrDefault();
+                if (xnew == null)
+                    throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0} in current program", x.Name));
+                newUsedVars.Add(xnew);
+            });
+            Utils.Print(string.Format("List of new-used vars in {0} => {1}", expr, String.Join(", ", newUsedVars)));
+
+            var nexpr = (new Instrumentations.RewriteConstants(newUsedVars)).VisitExpr(expr);
+            Utils.Print(string.Format("The expression after rewriting constants for {0} is {1}", expr, nexpr));
+
+            usedVarsCollector = new VariableCollector();
+            usedVarsCollector.Visit(nexpr);
+            var substMap = new Dictionary<Variable, Expr>();
+            var forallPre = new List<Expr>();
+            List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
+            usedVarsCollector.usedVars.Iter(x =>
+            {
+                if (allocToBndVarAndTrigger.ContainsKey(x.Name))
+                {
+                    substMap[x] = (Expr) IdentifierExpr.Ident(allocToBndVarAndTrigger[x.Name].Item1);
+                    forallPre.Add(allocToBndVarAndTrigger[x.Name].Item2);
+                    bvarList.Add(allocToBndVarAndTrigger[x.Name].Item1);
+                }
+            });
+            Substitution subst = Substituter.SubstitutionFromHashtable(substMap);
+            nexpr = Substituter.Apply(subst, nexpr);
+            Utils.Print(string.Format("The substituted expression for {0} is {1}", expr, nexpr));
+
+            //create the forall (forall x_i..: malloc_Trigger_i(x_i) .. => expr')
+            var forallPreExpr = forallPre.Aggregate((Expr) Expr.True,
+                                        (x, y) => ExplainError.Toplevel.ExprUtil.And(x, y));
+            var forallBody = Expr.Imp(forallPreExpr, nexpr);
+            Utils.Print(string.Format("The body of forall {0}", forallBody));
+
+            var forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
+            return forallExpr;
+        }
+        #endregion
+
+        #region Alias analysis
         // Given an ordinary looking program, massage it to
         // satisfy preconditions for an alias analysis
         static PersistentProgram SetupAliasAnalysis(PersistentProgram program)
@@ -365,8 +482,6 @@ namespace AngelicVerifierNull
             // TODO
             return program;
         }
-
-
         // Run Alias Analysis on a sequential Boogie program
         // and returned the pruned program
         static PersistentProgram RunAliasAnalysis(PersistentProgram inp)
@@ -391,5 +506,6 @@ namespace AngelicVerifierNull
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
+        #endregion
     }
 }

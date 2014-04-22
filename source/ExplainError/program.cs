@@ -80,7 +80,16 @@ namespace ExplainError
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, out STATUS status, out Dictionary<string,string> complexCExprsRet)
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
+            out STATUS status, out Dictionary<string, string> complexCExprsRet)
+        {
+            HashSet<List<Expr>> preDisjuncts;
+            return Go(impl, pr, tmout, explainErrorFilters, out status, out complexCExprsRet, out preDisjuncts);
+        }
+
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
+            out STATUS status, out Dictionary<string,string> complexCExprsRet,
+            out HashSet<List<Expr>> preDisjuncts)
         {
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
@@ -106,7 +115,7 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl);
+            var tmp = Go(impl, out preDisjuncts);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
@@ -117,11 +126,11 @@ namespace ExplainError
             Dictionary<string, string> tmp;
             return Go(impl, pr, tmout, 0, out status, out tmp);
         }
-        public static List<string> Go(Implementation impl)
+        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preDisjuncts)
         {
             sw = new Stopwatch();
             sw.Start();
-            HashSet<List<Expr>> preDisjuncts = null;
+            preDisjuncts = null; //HashSet<List<Expr>> preDisjuncts = null;
             allCubesCovered = true;
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
@@ -1150,7 +1159,7 @@ namespace ExplainError
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
             return false;
         }
-        private static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preDisjuncts)
+        public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preDisjuncts)
         {
             Expr ret = Expr.False;
             foreach (var el in preDisjuncts)

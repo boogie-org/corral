@@ -154,6 +154,9 @@ namespace AngelicVerifierNull
         {
             Program prog;
 
+            public const string mallocTriggerFuncName = "mallocTrigger_";
+            public Dictionary<Tuple<string, string, int>, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
+
             public MallocInstrumentation(Program program)
             {
                 prog = program;
@@ -161,40 +164,56 @@ namespace AngelicVerifierNull
             public void DoInstrument()
             {
                 var mi = new MallocInstrumentVisitor(this)
-                    .Visit(prog);
+                    .Visit(prog);                
             }
 
             private class MallocInstrumentVisitor : StandardVisitor
             {
+                public Block currBlock = null;
+                public Implementation currImpl = null;
                 MallocInstrumentation instance;
                 public Dictionary<CallCmd, Function> mallocTriggers;
                 public MallocInstrumentVisitor(MallocInstrumentation mi)
                 {
                     instance = mi;
                     mallocTriggers = new Dictionary<CallCmd, Function>();
+                    instance.mallocTriggersLocation = new Dictionary<Tuple<string, string, int>, string>();
                 }
                 public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
                 {
+                    int callCmdCount = -1; 
                     var newCmdSeq = new List<Cmd>();
                     foreach (Cmd c in cmdSeq)
                     {
+                        newCmdSeq.Add(c);
                         var callCmd = c as CallCmd;
+                        if (callCmd != null) callCmdCount++;
                         if (callCmd != null && BoogieUtil.checkAttrExists("allocator", callCmd.Proc.Attributes))
                         {
                             var retCall = callCmd.Outs[0];
-                            var mallocTriggerFn = new Function(Token.NoToken, "mallocTrigger_" + mallocTriggers.Count,
+                            var mallocTriggerFn = new Function(Token.NoToken, mallocTriggerFuncName + mallocTriggers.Count,
                                 new List<Variable>() { BoogieAstFactory.MkFormal("a", btype.Int, false) },
                                 BoogieAstFactory.MkFormal("r", btype.Bool, false));
                             mallocTriggers[callCmd] = mallocTriggerFn;
+                            instance.mallocTriggersLocation[Tuple.Create(currImpl.Name, currBlock.Label, callCmdCount)] = mallocTriggerFn.Name;
                             instance.prog.TopLevelDeclarations.Add(mallocTriggerFn);
                             var fnApp = new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
                                 new List<Expr> () {retCall});
                             newCmdSeq.Add(BoogieAstFactory.MkAssume(fnApp)); //TODO: change it to a predicate
                         }
-                        newCmdSeq.Add(c);
                     }
                     return base.VisitCmdSeq(newCmdSeq);
+                }
+                public override Block VisitBlock(Block node)
+                {
+                    currBlock = node;    
+                    return base.VisitBlock(node);
+                }
+                public override Implementation VisitImplementation(Implementation node)
+                {
+                    currImpl = node;
+                    return base.VisitImplementation(node);
                 }
             }
         }
@@ -232,6 +251,30 @@ namespace AngelicVerifierNull
                     assertGuardConsts[node] = guardConst;
                     instance.prog.TopLevelDeclarations.Add(guardConst);
                     return base.VisitAssertCmd(node);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Useful for rewriting an expr (with only constants) from one PersistentProgram to another
+        /// TODO: Is there a cleaner way to achieve this?
+        /// </summary>
+        public class RewriteConstants : StandardVisitor
+        {
+            Dictionary<string,Constant> newConstantsMap;
+            public RewriteConstants(HashSet<Constant> newConstants)
+            {
+                this.newConstantsMap = new Dictionary<string, Constant>();
+                newConstants.Iter(x => this.newConstantsMap[x.Name] = x);
+            }
+            public override Variable VisitVariable(Variable node)
+            {
+                if (newConstantsMap.ContainsKey(node.Name))
+                    return base.VisitVariable(newConstantsMap[node.Name]);
+                else
+                {
+                    Utils.Print("WARNING!!: Cannot find constant " + node.Name + " in the set of constants");
+                    return base.VisitVariable(node);
                 }
             }
         }
