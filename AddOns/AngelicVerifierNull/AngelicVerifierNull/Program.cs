@@ -181,6 +181,7 @@ namespace AngelicVerifierNull
                 //get the pathProgram
                 cba.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex.Item1, prog, out concretize);
+                //pprog.writeToFile("path" + iterCount + ".bpl");
                 var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);                
                 //call ExplainError 
                 var eeStatus = CheckWithExplainError(pprog, mainImpl,concretize);

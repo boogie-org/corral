@@ -204,19 +204,21 @@ namespace cba
                         traceBlock.Cmds.Add(c);
                         Debug.Assert(!call_instr.hasCalledTrace);
                         if (addConcretization && cc.Outs.Count == 1 &&
-                            call_instr.info.hasIntVar("si_arg"))
+                            (call_instr.info.hasIntVar("si_arg") || call_instr.info.hasBoolVar("si_arg")))
                         {
-                            var val = call_instr.info.getIntVal("si_arg");
-
                             if (!addConcretizationAsConstants || !cc.Proc.Name.Contains("malloc"))
                             {
-                                traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, val));
+                                if(call_instr.info.hasBoolVar("si_arg"))
+                                    traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getBoolVal("si_arg")));
+                                else
+                                    traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getIntVal("si_arg")));
+
                             }
-                            else
+                            else if(call_instr.info.hasIntVar("si_arg"))
                             {
                                 // create a constant that is equal to this literal, then use the constant
                                 // for concretization
-
+                                var val = call_instr.info.getIntVal("si_arg");
                                 var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
                                     string.Format("alloc_{0}", const_counter), Microsoft.Boogie.Type.Int), false);
                                 const_counter++;

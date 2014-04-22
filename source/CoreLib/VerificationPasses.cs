@@ -1593,8 +1593,10 @@ namespace cba
     public class SDVConcretizePathPass : CompilerPass
     {
         public bool success;
-        readonly string recordProcName = "boogie_si_record_sdvcp_int";
-        readonly string initLocProcName = "init_locals_nondet__tmp";
+        readonly string recordProcNameInt = "boogie_si_record_sdvcp_int";
+        readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
+        readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
+        readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
         public Dictionary<string, Tuple<string, string, int>> allocConstants;
         Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
@@ -1626,31 +1628,43 @@ namespace cba
             }
 
             // Add the boogie_si_record_int procedure
-            var inpVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
-            var inpArgs = new List<Variable>();
-            inpArgs.Add(inpVar);
+            var inpVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
+            var inpVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), true);
 
-            var reProc = new Procedure(Token.NoToken, recordProcName, new List<TypeVariable>(), inpArgs, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reProcInt = new Procedure(Token.NoToken, recordProcNameInt, new List<TypeVariable>(), new List<Variable>{inpVarInt}, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reProcBool = new Procedure(Token.NoToken, recordProcNameBool, new List<TypeVariable>(), new List<Variable> { inpVarBool }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
 
-            // Add a procedure to fake initialization of local variables
-            var outVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
-            var reLocProc = new Procedure(Token.NoToken, initLocProcName, new List<TypeVariable>(),
-                new List<Variable>(), new List<Variable>(new Variable[] { outVar }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-            procsWithoutBody.Add(reLocProc.Name);
+            // Add procedures for initialization of local variables
+            var outVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
+            var outVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), false);
+            var reLocProcInt = new Procedure(Token.NoToken, initLocProcNameInt, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarInt }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reLocProcBool = new Procedure(Token.NoToken, initLocProcNameBool, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarBool }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+
+            procsWithoutBody.Add(reLocProcInt.Name);
+            procsWithoutBody.Add(reLocProcBool.Name);
 
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
                 var ncmds = new List<Cmd>();
                 foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsInt))
                 {
-                    var cc = new CallCmd(Token.NoToken, initLocProcName, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
-                    cc.Proc = reLocProc;
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcInt;
+                    ncmds.Add(cc);
+                }
+                foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsBool))
+                {
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcBool;
                     ncmds.Add(cc);
                 }
                 ncmds.AddRange(impl.Blocks[0].Cmds);
                 impl.Blocks[0].Cmds = ncmds;
             }
-            p.TopLevelDeclarations.Add(reLocProc);
+            p.TopLevelDeclarations.Add(reLocProcInt);
+            p.TopLevelDeclarations.Add(reLocProcBool);
 
             // save the current program
             var fd = new FixedDuplicator(true);
@@ -1661,9 +1675,11 @@ namespace cba
                  impl.Blocks.Iter(instrument));
 
             // Name clash if this assert fails
-            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcName) == null);
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameBool) == null);
 
-            p.TopLevelDeclarations.Add(reProc);
+            p.TopLevelDeclarations.Add(reProcInt);
+            p.TopLevelDeclarations.Add(reProcBool);
             var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
             if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
                 tmainimpl.AddAttribute("entrypoint");
@@ -1775,7 +1791,7 @@ namespace cba
 
                 if (retVal == null) continue;
 
-                if (!retVal.Type.IsInt)
+                if (!retVal.Type.IsInt && !retVal.Type.IsBool)
                 {
                     continue;
                 }
@@ -1790,7 +1806,15 @@ namespace cba
             var ins = new List<Expr>();
             ins.Add(v);
 
-            return new CallCmd(Token.NoToken, recordProcName, ins, new List<IdentifierExpr>());
+            if(v.Type.IsInt) 
+                return new CallCmd(Token.NoToken, recordProcNameInt, ins, new List<IdentifierExpr>());
+            else if (v.Type.IsBool)
+                return new CallCmd(Token.NoToken, recordProcNameBool, ins, new List<IdentifierExpr>());
+            else
+            {
+                Debug.Assert(false);
+                return null;
+            }
         }
 
 
@@ -1806,7 +1830,7 @@ namespace cba
                     if (cmd is CallInstr)
                     {
                         var ccmd = cmd as CallInstr;
-                        if (ccmd.callee == recordProcName)
+                        if (ccmd.callee == recordProcNameInt || ccmd.callee == recordProcNameBool)
                         {
                             Debug.Assert(nb.Cmds.Count != 0);
                             nb.Cmds.Last().info = ccmd.info;
