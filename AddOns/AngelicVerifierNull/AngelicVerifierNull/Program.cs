@@ -20,7 +20,7 @@ namespace AngelicVerifierNull
     {
         //TODO: merge with Log class in Corral
         const bool SUPPRESS_DEBUG_MESSAGES = false;
-        public enum PRINT_TAG { AV_DEBUG, AV_NORMAL };
+        public enum PRINT_TAG { AV_DEBUG, AV_OUTPUT };
         public static void Print(string msg, PRINT_TAG tag=PRINT_TAG.AV_DEBUG)
         {
             if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
@@ -52,13 +52,14 @@ namespace AngelicVerifierNull
             try
             {
                 // Get input program with the harness
+                Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
                 // Run Corral outer loop
                 RunCorralIterative(prog, corralConfig.mainProcName);
             }
             catch (Exception e)
             {
-                Console.WriteLine("AnglelicVerifier failed with:" + e.Message);
+                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
             }
         }
 
@@ -101,7 +102,7 @@ namespace AngelicVerifierNull
 
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
-            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument();
+            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");
@@ -173,7 +174,7 @@ namespace AngelicVerifierNull
                 var cex = RunCorral(prog, corralConfig.mainProcName);
                 if (cex == null)
                 {
-                    //TODO (how do I distinguish inconclusive results)
+                    //TODO (how do I distinguish inconclusive results from Corral)
                     Console.WriteLine("No more counterexamples found, Corral returns verified...");
                     break;
                 }
@@ -196,7 +197,10 @@ namespace AngelicVerifierNull
                     }
                     else
                     {
-                        Console.WriteLine("Assertion failed at line {0} with expr {1}", ret.Line, ret.ToString());
+                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2}", cex.Item2.procName, ret.Line, ret.ToString());
+                        Console.WriteLine(output);
+                        if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
+                            Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
                     }
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
@@ -356,7 +360,7 @@ namespace AngelicVerifierNull
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
-            var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
+            var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
             Dictionary<string, string> eeComplexExprs;
@@ -374,8 +378,8 @@ namespace AngelicVerifierNull
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
                         blockExpr = MkBlockExprFromExplainError(pprog, blockExpr, concretize.allocConstants);
-                        Utils.Print(String.Format("The expression returned from ExplainError is {0}", blockExpr));
-                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); //TODO: get expressions from ExplainError
+                        Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
+                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
                     }
                 }
             }
@@ -399,30 +403,30 @@ namespace AngelicVerifierNull
             //  forallPost = expr[newUsedVars/usedVars][allocToBV/newAllocConsts]
             //- forall forallBV :: forallPre => forallPost
 
-            Utils.Print(String.Format("The list of allocConsts = {0}", String.Join(", ",
+            Utils.Print(String.Format("The list of allocConsts along trace = {0}", String.Join(", ",
                         allocConsts
                         .Select(x => "(" + x.Key + " -> [" + x.Value.Item1 + ", " + x.Value.Item2 + ", " + x.Value.Item3 + "])"))
             ));
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
-            HashSet<Constant> newAllocConsts = new HashSet<Constant>();
             //TODO: resorting to string instead of Constant as I see 4 different UniqueId for expr/usedVars/newUsedVars/newAllocConstsToBVars
+            int allocConstCount = 0;
             allocConsts.ToList()
                 .ForEach(x =>
                     {
                         var xConst = pprog.getProgram().TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
                         if (xConst == null)
                             throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0}", x.Key));
-                        newAllocConsts.Add(xConst);
+                        allocConstCount++;
                         string mallocTrigger;
                         if (!mallocInstrumentation.mallocTriggersLocation.TryGetValue(x.Value, out mallocTrigger))
                             throw new Exception(String.Format("WARNING!!: allocConst {0} has no mallocTrigger", x.Key));
                         var mallocTriggerFn = pprog.getProgram().TopLevelDeclarations.OfType<Function>().Where(y => y.Name == mallocTrigger).FirstOrDefault();
                         if (mallocTriggerFn == null)
                             throw new Exception(String.Format("WARNING!!: Current program has no mallocTrigger with name", mallocTrigger));
-                        //make an expr mallocFn(x_i) for alloc_i
+                        //create a new bound variable for quantified expr later
                         var bvar =  new BoundVariable(Token.NoToken, 
-                                        new TypedIdent(Token.NoToken, "x_" +  newAllocConsts.Count, Microsoft.Boogie.Type.Int));
-
+                                        new TypedIdent(Token.NoToken, "x_" +  allocConstCount, Microsoft.Boogie.Type.Int));
+                        //make an expr mallocFn(x_i) for alloc_i
                         var fnApp = (Expr) new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
                                 new List<Expr> () {IdentifierExpr.Ident(bvar)});
@@ -432,18 +436,19 @@ namespace AngelicVerifierNull
             var usedVarsCollector = new VariableCollector();
             usedVarsCollector.Visit(expr);
             Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
-            var newUsedVars = new HashSet<Constant>();
+            var newUsedVars = new HashSet<Variable>();
             usedVarsCollector.usedVars.Iter(x =>
             {
-                var xnew = pprog.getProgram().TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Name).FirstOrDefault();
+                var xnew = pprog.getProgram().TopLevelDeclarations.OfType<Variable>().Where(y => y.Name == x.Name).FirstOrDefault();
                 if (xnew == null)
                     throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0} in current program", x.Name));
                 newUsedVars.Add(xnew);
             });
             Utils.Print(string.Format("List of new-used vars in {0} => {1}", expr, String.Join(", ", newUsedVars)));
 
-            var nexpr = (new Instrumentations.RewriteConstants(newUsedVars)).VisitExpr(expr);
-            Utils.Print(string.Format("The expression after rewriting constants for {0} is {1}", expr, nexpr));
+            var nexpr = (new Instrumentations.RewriteConstants(newUsedVars)).VisitExpr(expr); //get the expr in scope of pprog
+            Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
+            //Utils.Print(string.Format("The expression after rewriting constants for {0} is {1}", expr, nexpr)); //the two strings should be the same
 
             usedVarsCollector = new VariableCollector();
             usedVarsCollector.Visit(nexpr);
@@ -464,10 +469,11 @@ namespace AngelicVerifierNull
             Utils.Print(string.Format("The substituted expression for {0} is {1}", expr, nexpr));
 
             //create the forall (forall x_i..: malloc_Trigger_i(x_i) .. => expr')
-            var forallPreExpr = forallPre.Aggregate((Expr) Expr.True,
+            var forallPreExpr = forallPre.Aggregate(
+                                        (Expr) Expr.True,
                                         (x, y) => ExplainError.Toplevel.ExprUtil.And(x, y));
             var forallBody = Expr.Imp(forallPreExpr, nexpr);
-            Utils.Print(string.Format("The body of forall {0}", forallBody));
+            //Utils.Print(string.Format("The body of forall {0}", forallBody));
 
             var forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
             return forallExpr;

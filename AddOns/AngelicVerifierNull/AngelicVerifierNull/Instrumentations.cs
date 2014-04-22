@@ -62,7 +62,7 @@ namespace AngelicVerifierNull
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
-                //TODO: get globals of type refs/pointers
+                //TODO: get globals of type refs/pointers and maps
                 var initCmd = (AssumeCmd) BoogieAstFactory.MkAssume(Expr.True);
                 //TODO: find a reusable API to add attributes to cmds
                 initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() {"Start"}, null);
@@ -200,7 +200,7 @@ namespace AngelicVerifierNull
                             var fnApp = new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
                                 new List<Expr> () {retCall});
-                            newCmdSeq.Add(BoogieAstFactory.MkAssume(fnApp)); //TODO: change it to a predicate
+                            newCmdSeq.Add(BoogieAstFactory.MkAssume(fnApp)); 
                         }
                     }
                     return base.VisitCmdSeq(newCmdSeq);
@@ -261,10 +261,10 @@ namespace AngelicVerifierNull
         /// </summary>
         public class RewriteConstants : StandardVisitor
         {
-            Dictionary<string,Constant> newConstantsMap;
-            public RewriteConstants(HashSet<Constant> newConstants)
+            Dictionary<string,Variable> newConstantsMap;
+            public RewriteConstants(HashSet<Variable> newConstants)
             {
-                this.newConstantsMap = new Dictionary<string, Constant>();
+                this.newConstantsMap = new Dictionary<string, Variable>();
                 newConstants.Iter(x => this.newConstantsMap[x.Name] = x);
             }
             public override Variable VisitVariable(Variable node)
