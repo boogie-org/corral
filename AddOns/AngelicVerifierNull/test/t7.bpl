@@ -13,7 +13,7 @@ procedure Foo(a:int) returns (s:int) {
    assert (a != NULL);
    x := field[a];
 
-   assert (field[x] != NULL);
+   assert (x != NULL);
    x := field[x]; 
 }
 

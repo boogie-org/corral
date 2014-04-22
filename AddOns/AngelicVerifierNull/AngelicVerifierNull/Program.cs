@@ -182,10 +182,13 @@ namespace AngelicVerifierNull
                 cba.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex.Item1, prog, out concretize);
                 //pprog.writeToFile("path" + iterCount + ".bpl");
-                var mainImpl = BoogieUtil.findProcedureImpl(pprog.getProgram().TopLevelDeclarations, pprog.mainProcName);                
+                var ppprog = pprog.getProgram(); //don't do getProgram on pprog anymore
+                var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);                
                 //call ExplainError 
-                var eeStatus = CheckWithExplainError(pprog, mainImpl,concretize);
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
+                //get the program once 
                 var nprog = prog.getProgram();
+                
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
@@ -354,7 +357,7 @@ namespace AngelicVerifierNull
 
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
-        private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(PersistentProgram pprog, Implementation mainImpl, 
+        private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
             cba.SDVConcretizePathPass concretize)
         {
             //Let ee be the result of ExplainError
@@ -368,7 +371,7 @@ namespace AngelicVerifierNull
             try
             {
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, pprog.getProgram(), 1000, 1, out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
@@ -378,7 +381,7 @@ namespace AngelicVerifierNull
                     else if (explain.Count > 0)
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
-                        blockExpr = MkBlockExprFromExplainError(pprog, blockExpr, concretize.allocConstants);
+                        blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
                         Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
                         status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
                     }
@@ -390,7 +393,7 @@ namespace AngelicVerifierNull
             }
             return status;
         }
-        private static Expr MkBlockExprFromExplainError(PersistentProgram pprog, Expr expr, Dictionary<string, Tuple<string, string, int>> allocConsts)
+        private static Expr MkBlockExprFromExplainError(Program  nprog, Expr expr, Dictionary<string, Tuple<string, string, int>> allocConsts)
         {
             //- given expr, allocConsts (string)
             //- usedVars = varsUsedIn(expr)
@@ -409,19 +412,18 @@ namespace AngelicVerifierNull
                         .Select(x => "(" + x.Key + " -> [" + x.Value.Item1 + ", " + x.Value.Item2 + ", " + x.Value.Item3 + "])"))
             ));
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
-            //TODO: resorting to string instead of Constant as I see 4 different UniqueId for expr/usedVars/newUsedVars/newAllocConstsToBVars
             int allocConstCount = 0;
             allocConsts.ToList()
                 .ForEach(x =>
                     {
-                        var xConst = pprog.getProgram().TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
+                        var xConst = nprog.TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
                         if (xConst == null)
                             throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0}", x.Key));
                         allocConstCount++;
                         string mallocTrigger;
                         if (!mallocInstrumentation.mallocTriggersLocation.TryGetValue(x.Value, out mallocTrigger))
                             throw new Exception(String.Format("WARNING!!: allocConst {0} has no mallocTrigger", x.Key));
-                        var mallocTriggerFn = pprog.getProgram().TopLevelDeclarations.OfType<Function>().Where(y => y.Name == mallocTrigger).FirstOrDefault();
+                        var mallocTriggerFn = nprog.TopLevelDeclarations.OfType<Function>().Where(y => y.Name == mallocTrigger).FirstOrDefault();
                         if (mallocTriggerFn == null)
                             throw new Exception(String.Format("WARNING!!: Current program has no mallocTrigger with name", mallocTrigger));
                         //create a new bound variable for quantified expr later
@@ -437,22 +439,19 @@ namespace AngelicVerifierNull
             var usedVarsCollector = new VariableCollector();
             usedVarsCollector.Visit(expr);
             Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
-            var newUsedVars = new HashSet<Variable>();
-            usedVarsCollector.usedVars.Iter(x =>
-            {
-                var xnew = pprog.getProgram().TopLevelDeclarations.OfType<Variable>().Where(y => y.Name == x.Name).FirstOrDefault();
-                if (xnew == null)
-                    throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0} in current program", x.Name));
-                newUsedVars.Add(xnew);
-            });
-            Utils.Print(string.Format("List of new-used vars in {0} => {1}", expr, String.Join(", ", newUsedVars)));
+            //var newUsedVars = new HashSet<Variable>();
+            //usedVarsCollector.usedVars.Iter(x =>
+            //{
+            //    var xnew = nprog.TopLevelDeclarations.OfType<Variable>().Where(y => y.Name == x.Name).FirstOrDefault();
+            //    if (xnew == null)
+            //        throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0} in current program", x.Name));
+            //    newUsedVars.Add(xnew);
+            //});
+            //Utils.Print(string.Format("List of new-used vars in {0} => {1}", expr, String.Join(", ", newUsedVars)));
 
-            var nexpr = (new Instrumentations.RewriteConstants(newUsedVars)).VisitExpr(expr); //get the expr in scope of pprog
+            var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
-            //Utils.Print(string.Format("The expression after rewriting constants for {0} is {1}", expr, nexpr)); //the two strings should be the same
 
-            usedVarsCollector = new VariableCollector();
-            usedVarsCollector.Visit(nexpr);
             var substMap = new Dictionary<Variable, Expr>();
             var forallPre = new List<Expr>();
             List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
