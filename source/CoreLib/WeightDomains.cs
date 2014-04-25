@@ -327,7 +327,7 @@ namespace StaticAnalysis
             {
                 var e1 = nexpr.Args[0] as LiteralExpr;
                 if (e1 != null)
-                    return Value.GetSingleton(0 - e1.asBigNum.ToInt);
+                    return Value.GetSingleton((int)(System.Numerics.BigInteger.Zero - e1.asBigNum.ToBigInteger));
             }
 
             if (nexpr != null
@@ -340,7 +340,7 @@ namespace StaticAnalysis
 
                 if (e1 != null && e2 != null)
                 {
-                    return Value.GetSingleton(e1.asBigNum.ToInt - e2.asBigNum.ToInt);
+                    return Value.GetSingleton((int)(e1.asBigNum.ToBigInteger - e2.asBigNum.ToBigInteger));
                 }
             }
 
