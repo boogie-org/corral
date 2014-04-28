@@ -76,6 +76,19 @@ namespace AngelicVerifierNull
                 mainProcImpl[0].AddAttribute("entrypoint");
                 prog.TopLevelDeclarations.AddRange(mainProcImpl);
             }
+            
+            // create a copy ofthe variables without annotations
+            private List<Variable> DropAnnotations(List<Variable> vars)
+            {
+                var ret = new List<Variable>();
+                var dup = new Duplicator();
+                vars.Select(v => dup.VisitVariable(v)).Iter(v =>
+                    {
+                        v.Attributes = null;
+                        ret.Add(v);
+                    });
+                return ret;
+            }
 
             //Change the body of any stub that returns a pointer into calling malloc()
             //TODO: only do this for procedures with a single return with a pointer type
@@ -96,7 +109,8 @@ namespace AngelicVerifierNull
                         var retMallocCmds = AllocatePointersAsUnknowns(p.OutParams);
                         var blk = BoogieAstFactory.MkBlock(retMallocCmds, new ReturnCmd(Token.NoToken));
                         var blks = new List<Block>() { blk };
-                        var impl = BoogieAstFactory.MkImpl(p.Name, p.InParams, p.OutParams, new List<Variable>(), blks);
+                        var impl = BoogieAstFactory.MkImpl(p.Name, DropAnnotations(p.InParams), DropAnnotations(p.OutParams),
+                            new List<Variable>(), blks);
                         //don't insert the proc as it already exists
                         stubImpls.Add((Implementation) impl[1]);
                     }
