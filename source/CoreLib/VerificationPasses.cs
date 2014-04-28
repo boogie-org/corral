@@ -547,6 +547,8 @@ namespace cba
             public HashSet<string> mustNotMod;
             public QKeyValue annotations;
 
+            public static HashSet<string> procsThatFail = null;
+
             public bool IsFree
             {
                 get
@@ -636,6 +638,13 @@ namespace cba
 
                 if (!mustMod.IsSubsetOf(mods)) return false;
                 if (mustNotMod.Intersection(mods).Any()) return false;
+
+                if (QKeyValue.FindBoolAttribute(annotations, "mustfail"))
+                {
+                    Debug.Assert(procsThatFail != null);
+                    return procsThatFail.Contains(proc.Name);
+                }
+
                 return true;
             }
 
@@ -1005,9 +1014,9 @@ namespace cba
             }
 
             ModSetCollector.DoModSetAnalysis(program);
+            EExpr.procsThatFail = BoogieUtil.procsThatMaySatisfyPredicate(program, c => BoogieUtil.isAssert(c));
 
             DoStaticAnalysis(program);
-
             var info = Instantiate(program);
 
             if (!runAbsHoudini && info.Count == 0 && summaries.Count == 0) return program;
@@ -1239,7 +1248,7 @@ namespace cba
                 impl.Attributes = BoogieUtil.removeAttr("inline", impl.Attributes);
                 impl.Attributes = BoogieUtil.removeAttr("verify", impl.Attributes);
             }
-
+            
             if (checkAsserts)
             {
                 // Guard assert with an existential Boolean
@@ -1248,10 +1257,8 @@ namespace cba
                 {
                     for (int i = 0; i < blk.Cmds.Count; i++)
                     {
+                        if (!BoogieUtil.isAssert(blk.Cmds[i])) continue;
                         var acmd = blk.Cmds[i] as AssertCmd;
-                        if (acmd == null) continue;
-                        var le = acmd.Expr as LiteralExpr;
-                        if (le != null && le.IsTrue) continue;
                         blk.Cmds[i] = new AssumeCmd(Token.NoToken, acmd.Expr);
                     }
                 }));
@@ -1267,7 +1274,7 @@ namespace cba
                                 foreach (var cmd in blk.Cmds)
                                 {
                                     var acmd = cmd as AssertCmd;
-                                    if (acmd == null || BoogieUtil.isAssertTrue(cmd))
+                                    if (!BoogieUtil.isAssert(cmd))
                                     {
                                         ncmds.Add(cmd);
                                         continue;
@@ -1358,6 +1365,9 @@ namespace cba
 
                 inline(program);
                 BoogieUtil.TypecheckProgram(program, "error.bpl");
+                
+                // TODO: what about abshoudini?
+                //PruneIrrelevantImpls(program);
 
                 if (printHoudiniQuery != null)
                     BoogieUtil.PrintProgram(program, printHoudiniQuery);
@@ -1572,6 +1582,19 @@ namespace cba
                     }
                 }
             }
+        }
+
+        // Remove implementations that cannot have an impact on any houdini candidate.
+        // In our setting (only postconditions), these are ones that don't have a non-free ensures
+        private void PruneIrrelevantImpls(Program program)
+        {
+            var implHasEnsures = new Predicate<Implementation>(impl =>
+            {
+                bool r = impl.Proc.Ensures.Any(en => !en.Free);
+                return r;
+            });
+            program.TopLevelDeclarations =
+                program.TopLevelDeclarations.Filter(decl => !(decl is Implementation) || implHasEnsures(decl as Implementation));
         }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)

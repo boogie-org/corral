@@ -155,6 +155,44 @@ namespace cba.Util
             program.TopLevelDeclarations = newDecls;
         }
 
+        // Return the set of procedures that may reach a cmd that satisfies pred
+        public static HashSet<string> procsThatMaySatisfyPredicate(Program program, Predicate<Cmd> pred)
+        {
+            // target procedures
+            var targets = new HashSet<string>();
+
+            // call graph
+            var edges = new Dictionary<string, HashSet<string>>();
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    blk.Cmds.OfType<CallCmd>()
+                        .Iter(ccmd => edges.InitAndAdd(ccmd.callee, impl.Name)); 
+                    blk.Cmds.OfType<ParCallCmd>()
+                        .Iter(pcmd => pcmd.CallCmds
+                            .Iter(ccmd => edges.InitAndAdd(ccmd.callee, impl.Name)));
+                    if (blk.Cmds.Any(c => pred(c)))
+                        targets.Add(impl.Name);
+                }
+            }
+            var reachable = new HashSet<string>(targets);
+
+            var delta = new HashSet<string>(reachable);
+            while (delta.Count != 0)
+            {
+                var nf = new HashSet<string>();
+                foreach (var n in delta)
+                {
+                    if (edges.ContainsKey(n)) nf.UnionWith(edges[n]);
+                }
+                delta = nf.Difference(reachable);
+                reachable.UnionWith(nf);
+            }
+
+            return reachable;
+        }
+         
         public static HashSet<string> getVarsModified(Cmd cmd, HashSet<string> procsWithImpl)
         {
             var ret = new HashSet<string>();
@@ -475,6 +513,15 @@ namespace cba.Util
         {
             var p = System.Diagnostics.Process.GetCurrentProcess();
             return p.VirtualMemorySize64 / (1024.0 * 1024.0); 
+        }
+
+        
+        // is this a non-trivial assert? 
+        public static bool isAssert(Cmd cmd)
+        {
+            var acmd = cmd as AssertCmd;
+            if (acmd == null || isAssertTrue(cmd)) return false;
+            return true;
         }
 
         // is "assert true"?
