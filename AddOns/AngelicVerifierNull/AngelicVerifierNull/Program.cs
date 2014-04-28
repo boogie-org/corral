@@ -439,15 +439,6 @@ namespace AngelicVerifierNull
             var usedVarsCollector = new VariableCollector();
             usedVarsCollector.Visit(expr);
             Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
-            //var newUsedVars = new HashSet<Variable>();
-            //usedVarsCollector.usedVars.Iter(x =>
-            //{
-            //    var xnew = nprog.TopLevelDeclarations.OfType<Variable>().Where(y => y.Name == x.Name).FirstOrDefault();
-            //    if (xnew == null)
-            //        throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0} in current program", x.Name));
-            //    newUsedVars.Add(xnew);
-            //});
-            //Utils.Print(string.Format("List of new-used vars in {0} => {1}", expr, String.Join(", ", newUsedVars)));
 
             var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");

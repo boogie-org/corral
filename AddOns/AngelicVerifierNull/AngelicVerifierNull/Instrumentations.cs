@@ -106,7 +106,7 @@ namespace AngelicVerifierNull
             private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {
                 return GetPointerVars(vars)
-                    .ConvertAll(x => BoogieAstFactory.MkCall(mallocProcedure, new List<Expr>(), new List<Variable>() { x }));
+                    .ConvertAll(x => BoogieAstFactory.MkCall(mallocProcedure, new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, new List<Variable>() { x }));
             }
             private void FindMalloc()
             {
@@ -124,6 +124,11 @@ namespace AngelicVerifierNull
                     //mallocProcedure.AddAttribute("allocator");
                     //prog.TopLevelDeclarations.Add(mallocProcedure);
                     #endregion
+                }
+                if (mallocProcedure.InParams.Count != 1)
+                {
+                    throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
+                        mallocProcedure.Name, mallocProcedure.InParams.Count));
                 }
             }
             private void FindNULL()
@@ -146,7 +151,7 @@ namespace AngelicVerifierNull
             private bool IsPointerVariable(Variable x)
             {
                 return x.TypedIdent.Type.IsInt &&
-                    !BoogieUtil.checkAttrExists("non-pointer", x.Attributes); //to reduce clutter, perhaps only a few ints are non-pointers
+                    !BoogieUtil.checkAttrExists("scalar", x.Attributes); //we will err on the side of treating variables as references
             }
         }
 

@@ -139,8 +139,9 @@ namespace ExplainError
             Console.WriteLine("############# Implementation = {0} #################", impl.Name);
             try
             {
+                //SimplifyAssumesUsingForwardPass();
                 ComputePre(impl.Blocks[0].Cmds, out preDisjuncts);
-                //Don't call the prover before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
+                //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 if (CheckNecessaryDisjuncts(ref preDisjuncts))
                 {
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
@@ -228,6 +229,36 @@ namespace ExplainError
             //foreach (var d in DisplayPre(pre, null))
             foreach (var d in DisplayPre(preL, null))
                 preDisjuncts.Add(d);
+        }
+
+        private static void SimplifyAssumesUsingForwardPass()
+        {
+            foreach (Cmd c in currImpl.Blocks[0].Cmds)
+            {
+                var assumeCmd = c as AssumeCmd;
+                if (assumeCmd == null) continue;
+                if (assumeCmd.Expr.ToString() == Expr.True.ToString()) continue;
+                if (!ContainsSlicAttribute(assumeCmd)) continue; //thousands of assumes on uninitialized variables
+                //HACK: still hundreds of assumes, just look for the equalities
+                var oldExpr = assumeCmd.Expr;
+                if (!(
+                    oldExpr.ToString().Contains("==") ||
+                    oldExpr.ToString().Contains("!="))) continue;
+
+                assumeCmd.Expr = Expr.Not(oldExpr);
+                prog.Resolve(); prog.Typecheck(); //TODO: perhaps move this inside MyVerifyImplementation?
+                Console.WriteLine("Checking the assume {0} ", assumeCmd);
+                if (VCVerifier.MyVerifyImplementation(currImpl) == ConditionGeneration.Outcome.Correct)
+                {
+                    Console.WriteLine("Evals to true");
+                    assumeCmd.Expr = Expr.True;
+                }
+                else
+                {
+                    assumeCmd.Expr = oldExpr;
+                }
+            }
+            throw new Exception("This is just for experimentation");
         }
         private static HashSet<List<Expr>> DisplayPre(List<Expr> pre, string captureStateLoc)
         {

@@ -40,4 +40,4 @@ procedure stub_noptr(a:int);
 
 procedure stub_bool(a:int) returns (b:bool);
 
-procedure {:allocator} malloc() returns (b:int);
+procedure {:allocator} malloc(a:int) returns (b:int);

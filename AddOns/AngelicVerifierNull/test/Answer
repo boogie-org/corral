@@ -37,3 +37,7 @@
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_2(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_5(x_3) ==> arr[x_3] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> x_2 != NULL)
+
+-------------------- pruned.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo at line 113 with expr assert {:nonnull} !(x == NULL);
