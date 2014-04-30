@@ -515,6 +515,8 @@ namespace AngelicVerifierNull
             program =
               SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
+            //AliasAnalysis.AliasAnalysis.dbg = true;
+            //AliasAnalysis.AliasConstraintSolver.dbg = true;
             var ret =
               AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
 

@@ -543,7 +543,7 @@ namespace AliasAnalysis
         }
     }
 
-    abstract class AliasConstraint
+    public abstract class AliasConstraint
     {
         public abstract void GatherMentionedVars(ref HashSet<string> vars);
     }
@@ -643,7 +643,7 @@ namespace AliasAnalysis
 
     }
 
-    class AliasConstraintSolver
+    public class AliasConstraintSolver
     {
         List<AliasConstraint> constraints;
         Dictionary<string, HashSet<string>> PointsTo;
