@@ -34,6 +34,9 @@ namespace AngelicVerifierNull
 
         const string CORRAL_MAIN_PROC = "CorralMain";
 
+        public enum PRINT_TRACE_MODE { Boogie, Sdv };
+        public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
+
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -45,6 +48,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
 
+            if (args.Any(s => s == "/sdv"))
+                printTraceMode = PRINT_TRACE_MODE.Sdv;
+
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
@@ -54,6 +60,10 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
+
+                // Run alias analysis
+                prog = RunAliasAnalysis(prog);
+
                 // Run Corral outer loop
                 RunCorralIterative(prog, corralConfig.mainProcName);
             }
@@ -172,6 +182,8 @@ namespace AngelicVerifierNull
             while (true)
             {
                 var cex = RunCorral(prog, corralConfig.mainProcName);
+                var traceType = "";
+
                 if (cex == null)
                 {
                     //TODO (how do I distinguish inconclusive results from Corral)
@@ -192,6 +204,8 @@ namespace AngelicVerifierNull
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
+                    traceType = (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) ? "Suppressed" : "Angelic";
+
                     var ret = SupressFailingAssert(nprog, cex.Item2);
                     if (ret == null)
                     {
@@ -209,17 +223,32 @@ namespace AngelicVerifierNull
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
+                    traceType = "Blocked";
                     var mainProc = nprog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
                     if (mainProc == null)
                         throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                     mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
                 }
+
+                // print the trace to disk
+                PrintTrace(cex.Item1, prog, traceType + iterCount);
+
                 prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
                 //Print the instrumented program
                 iterCount++;
                 BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
         }
+
+        // print trace to disk
+        public static void PrintTrace(cba.ErrorTrace trace, PersistentProgram program, string name)
+        {
+            if(printTraceMode == PRINT_TRACE_MODE.Boogie) 
+                cba.PrintProgramPath.print(program, trace, name);
+            else
+                cba.PrintSdvPath.Print(program.getProgram(), trace, new HashSet<string>(), null, name + ".tt", "stack.txt");
+        }
+
         // Returns the failing assertion, and supresses it in the input program
         private static AssertCmd SupressFailingAssert(Program program, cba.AssertLocation aloc)
         {
@@ -472,13 +501,7 @@ namespace AngelicVerifierNull
         #endregion
 
         #region Alias analysis
-        // Given an ordinary looking program, massage it to
-        // satisfy preconditions for an alias analysis
-        static PersistentProgram SetupAliasAnalysis(PersistentProgram program)
-        {
-            // TODO
-            return program;
-        }
+
         // Run Alias Analysis on a sequential Boogie program
         // and returned the pruned program
         static PersistentProgram RunAliasAnalysis(PersistentProgram inp)
