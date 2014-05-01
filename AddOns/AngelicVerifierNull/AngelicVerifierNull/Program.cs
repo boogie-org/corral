@@ -20,7 +20,7 @@ namespace AngelicVerifierNull
     {
         //TODO: merge with Log class in Corral
         const bool SUPPRESS_DEBUG_MESSAGES = false;
-        public enum PRINT_TAG { AV_DEBUG, AV_OUTPUT };
+        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT };
         public static void Print(string msg, PRINT_TAG tag=PRINT_TAG.AV_DEBUG)
         {
             if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
@@ -495,7 +495,16 @@ namespace AngelicVerifierNull
             var forallBody = Expr.Imp(forallPreExpr, nexpr);
             //Utils.Print(string.Format("The body of forall {0}", forallBody));
 
-            var forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
+            Expr forallExpr;
+            if (bvarList.Count == 0)
+            {
+                Utils.Print(String.Format("The expression has no free allocated variables {0}", forallBody), Utils.PRINT_TAG.AV_WARNING);
+                forallExpr = forallBody;
+            }
+            else
+            {
+                forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
+            }
             return forallExpr;
         }
         #endregion
