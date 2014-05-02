@@ -18,6 +18,8 @@ namespace AngelicVerifierNull
     /// </summary>
     class Instrumentations
     {
+        const string CORRAL_EXTRA_INIT_PROC = "corralExtraInit";
+
         public class HarnessInstrumentation
         {
             Program prog;
@@ -68,6 +70,11 @@ namespace AngelicVerifierNull
                 initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() {"Start"}, null);
                 var globalCmds = new List<Cmd>() { initCmd };
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+                //add call to corralExtraInit
+                var inits = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == CORRAL_EXTRA_INIT_PROC);
+                if (inits.Count() > 0)
+                    globalCmds.Add(BoogieAstFactory.MkCall(inits.First(), new List<Expr>(), new List<Variable>()));
+                //first block
                 Block blkStart = new Block(Token.NoToken, "CorralMainStart", globalCmds, new GotoCmd(Token.NoToken, mainBlocks));
                 var blocks = new List<Block>();
                 blocks.Add(blkStart);
