@@ -1779,7 +1779,7 @@ namespace cba
             foreach (Cmd cmd in block.Cmds)
             {
                 newCmds.Add(cmd);
-                if (cmd is HavocCmd && ((cmd as HavocCmd).Vars.Count > 1 || !(cmd as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt))
+                if (cmd is HavocCmd && (cmd as HavocCmd).Vars.Count > 1)
                 {
                     Console.WriteLine("{0}", cmd);
                     throw new InvalidInput("Produce Bug Witness: Havoc cmd found");

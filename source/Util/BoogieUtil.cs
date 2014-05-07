@@ -1579,6 +1579,7 @@ namespace cba.Util
             // Assign formals to their last version in the exit block
             foreach (var f in impl.OutParams)
             {
+                if (!maxVersion.ContainsKey(f)) continue;
                 exitBlock.Cmds.Add(BoogieAstFactory.MkAssign(f, varInstances(f, maxVersion[f])));
             }
 

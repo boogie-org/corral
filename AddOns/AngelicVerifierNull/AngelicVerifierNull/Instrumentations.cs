@@ -121,7 +121,7 @@ namespace AngelicVerifierNull
                 foreach (var op in p.OutParams)
                 {
                     if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op));
-                    //else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
+                    else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
                 }
                 foreach (var ip in p.InParams)
                 {
