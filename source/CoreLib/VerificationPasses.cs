@@ -1646,7 +1646,7 @@ namespace cba
             // Make sure that procs without a body don't modify globals
             foreach (var proc in p.TopLevelDeclarations.OfType<Procedure>().Where(proc => procsWithoutBody.Contains(proc.Name)))
             {
-                if (proc.Modifies.Count > 0 && !proc.Name.Contains("HAVOC_malloc"))
+                if (proc.Modifies.Count > 0 && !BoogieUtil.checkAttrExists("allocator", proc.Attributes))
                     throw new InvalidInput("Produce Bug Witness: Procedure " + proc.Name + " modifies globals");
             }
 
