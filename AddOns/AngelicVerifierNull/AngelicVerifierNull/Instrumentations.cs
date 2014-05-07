@@ -97,8 +97,6 @@ namespace AngelicVerifierNull
                 return ret;
             }
 
-            //Change the body of any stub that returns a pointer into calling malloc()
-            //TODO: only do this for procedures with a single return with a pointer type
             private void ChangeStubsIntoUnkowns()
             {
                 var procsWithImpl = prog.TopLevelDeclarations.OfType<Implementation>()
@@ -109,25 +107,65 @@ namespace AngelicVerifierNull
                 var stubImpls = new List<Implementation>();
                 foreach (var p in procsWithoutImpl)
                 {
-                    if (BoogieUtil.checkAttrExists("allocator", p.Attributes)) continue; 
-                    if (p.OutParams.Count == 1 &&
-                        IsPointerVariable(p.OutParams[0]))
-                    {
-                        var retMallocCmds = AllocatePointersAsUnknowns(p.OutParams);
-                        var blk = BoogieAstFactory.MkBlock(retMallocCmds, new ReturnCmd(Token.NoToken));
-                        var blks = new List<Block>() { blk };
-                        var impl = BoogieAstFactory.MkImpl(p.Name, DropAnnotations(p.InParams), DropAnnotations(p.OutParams),
-                            new List<Variable>(), blks);
-                        //don't insert the proc as it already exists
-                        stubImpls.Add((Implementation) impl[1]);
-                    }
+                    if (BoogieUtil.checkAttrExists("allocator", p.Attributes)) continue;
+                    MkStubImplementation(stubImpls, p);
                 }
                 prog.TopLevelDeclarations.AddRange(stubImpls);
+            }
+            //Change the body of any stub that returns a pointer into calling malloc()
+            //TODO: only do this for procedures with a single return with a pointer type            
+            private void MkStubImplementation(List<Implementation> stubImpls, Procedure p)
+            {
+                List<Cmd> cmds = new List<Cmd>();
+                List<Variable> localVars = new List<Variable>();
+                foreach (var op in p.OutParams)
+                {
+                    if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op));
+                    //else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
+                }
+                foreach (var ip in p.InParams)
+                {
+                    if (!BoogieUtil.checkAttrExists("ref", ip.Attributes)) continue;
+                    string mapName = QKeyValue.FindStringAttribute(ip.Attributes, "ref");
+                    if (mapName == null) {
+                        Utils.Print(String.Format("Expecting a map <name> with {:ref <name>} annotation on procedure {0}", p.Name), 
+                            Utils.PRINT_TAG.AV_WARNING);
+                        continue;
+                    }
+                    var mapVars = prog.TopLevelDeclarations.OfType<Variable>().Where(x => x.Name == mapName && x.TypedIdent.Type.IsMap);
+                    if (mapVars.Count() != 1)
+                    {
+                        Utils.Print(String.Format("Mapname {0} provided in {:ref} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
+                            mapName, ip.Name, p.Name, mapVars.Count()),
+                            Utils.PRINT_TAG.AV_WARNING);
+                        continue;
+                    }
+                    var tmpVar = BoogieAstFactory.MkLocal("__tmp_" + ip.Name, ip.TypedIdent.Type);
+                    localVars.Add(tmpVar);
+                    cmds.Add(AllocatePointerAsUnknown(tmpVar));
+                    cmds.Add(BoogieAstFactory.MkMapAssign(mapVars.First(), IdentifierExpr.Ident(ip), IdentifierExpr.Ident(tmpVar)));
+                }
+                if (cmds.Count == 0) return; //don't create a body if no statements
+                var blk = BoogieAstFactory.MkBlock(cmds, new ReturnCmd(Token.NoToken));
+                var blks = new List<Block>() { blk };
+                //don't insert the proc as it already exists
+                var impl = BoogieAstFactory.MkImpl(p.Name, 
+                    DropAnnotations(p.InParams), 
+                    DropAnnotations(p.OutParams),
+                    new List<Variable>(), blks);
+                ((Implementation)impl[1]).LocVars.AddRange(localVars);
+                stubImpls.Add((Implementation)impl[1]);
+            }
+            private Cmd AllocatePointerAsUnknown(Variable x)
+            {
+                return BoogieAstFactory.MkCall(mallocProcedure, 
+                    new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, 
+                    new List<Variable>() {x});
             }
             private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {
                 return GetPointerVars(vars)
-                    .ConvertAll(x => BoogieAstFactory.MkCall(mallocProcedure, new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, new List<Variable>() { x }));
+                    .Select(x => AllocatePointerAsUnknown(x)).ToList();
             }
             private void FindMalloc()
             {
@@ -138,13 +176,6 @@ namespace AngelicVerifierNull
                 if (mallocProcedure == null)
                 {
                     throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator} declared in the input program");
-                    #region deprecated
-                    //mallocProcedure = (Procedure)BoogieAstFactory.MkProc("malloc",
-                    //    new List<Variable>(),
-                    //    new List<Variable>() { BoogieAstFactory.MkFormal("ret", btype.Int, false) });
-                    //mallocProcedure.AddAttribute("allocator");
-                    //prog.TopLevelDeclarations.Add(mallocProcedure);
-                    #endregion
                 }
                 if (mallocProcedure.InParams.Count != 1)
                 {

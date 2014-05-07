@@ -450,6 +450,7 @@ namespace AngelicVerifierNull
                             throw new Exception(String.Format("WARNING!!: Cannot find constant with the name {0}", x.Key));
                         allocConstCount++;
                         string mallocTrigger;
+                        //sometimes Corral creates an alloc_k variable for non ":allocator" calls, skip them
                         if (!mallocInstrumentation.mallocTriggersLocation.TryGetValue(x.Value, out mallocTrigger))
                             throw new Exception(String.Format("WARNING!!: allocConst {0} has no mallocTrigger", x.Key));
                         var mallocTriggerFn = nprog.TopLevelDeclarations.OfType<Function>().Where(y => y.Name == mallocTrigger).FirstOrDefault();
