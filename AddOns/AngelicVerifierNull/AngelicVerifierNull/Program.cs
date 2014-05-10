@@ -279,7 +279,7 @@ namespace AngelicVerifierNull
             Debug.Assert(cba.GlobalConfig.InferPass == null);
             corralIterationCount ++;
 
-            inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
+            //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 
             // Reuse previous corral state
             if (corralState != null)
