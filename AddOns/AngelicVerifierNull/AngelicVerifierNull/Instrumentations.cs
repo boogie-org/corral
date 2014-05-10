@@ -24,14 +24,12 @@ namespace AngelicVerifierNull
         {
             Program prog;
             string mainName;
-            Dictionary<string, string> sourceFiles;
             Procedure mallocProcedure = null;
 
-            public HarnessInstrumentation(Program program, string corralName, Dictionary<string,string> sourceFiles)
+            public HarnessInstrumentation(Program program, string corralName)
             {
                 prog = program;
                 mainName = corralName;
-                this.sourceFiles = sourceFiles;
             }
             public void DoInstrument()
             {
@@ -48,19 +46,6 @@ namespace AngelicVerifierNull
                 List<Variable> locals = new List<Variable>();
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
-                    //TODO: move to engineq4sdv
-                    //we ignore only when we know the sourcefile is a .h (otherwise, regular bpl files are skipped)
-                    if (Options.ignoreHeaderFilesAtTopLevel && sourceFiles.ContainsKey(impl.Name))
-                    {
-                        var src = sourceFiles[impl.Name].ToLower();
-                        if (src.EndsWith(".h") || src.EndsWith(".hxx") || src.EndsWith(".hpp") || src.EndsWith(".tmh"))
-                        {
-                            Utils.Print(String.Format("Ignoring method {0} at top-level since it is defined in a header {1}", impl.Name, src), 
-                                Utils.PRINT_TAG.AV_DEBUG);
-                            continue;
-                        }
-                    }
-
                     //allocate params
                     var args = new List<Variable>();
                     var rets = new List<Variable>();
@@ -329,30 +314,6 @@ namespace AngelicVerifierNull
             }
         }
 
-        /// <summary>
-        /// Finds the sourcefile name of the implementations
-        /// </summary>
-        public class SourceFileFinderVisitor : StandardVisitor
-        {
-            public Dictionary<string, string> sourceFiles;
-            string currImpl = null;
-            public SourceFileFinderVisitor()
-            {
-                sourceFiles = new Dictionary<string, string>();
-            }
-            public override Implementation VisitImplementation(Implementation node)
-            {
-                currImpl = node.Name;
-                return base.VisitImplementation(node);
-            }
-            public override Cmd VisitAssertCmd(AssertCmd node)
-            {
-                var file = QKeyValue.FindStringAttribute(node.Attributes, "sourcefile");
-                if (file != null && file != "?" && currImpl != null)
-                    sourceFiles[currImpl] = file;
-                return base.VisitAssertCmd(node);
-            }
-        }
 
         /// <summary>
         /// Useful for rewriting an expr (with only constants) from one PersistentProgram to another

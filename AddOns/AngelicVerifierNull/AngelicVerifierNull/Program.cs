@@ -16,10 +16,6 @@ namespace AngelicVerifierNull
         public InputProgramDoesNotMatchExn(string s) : base(s) { } 
     }
 
-    public class Options
-    {
-        public static bool ignoreHeaderFilesAtTopLevel = true; //TODO: move to engineq4sdv
-    }
     public class Utils
     {
         //TODO: merge with Log class in Corral
@@ -99,13 +95,9 @@ namespace AngelicVerifierNull
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
 
-            //find the sourcefile names
-            var sourceFileFinder = new Instrumentations.SourceFileFinderVisitor();
-            sourceFileFinder.Visit(init);
-
             //Instrument to create the harness
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
-            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName,sourceFileFinder.sourceFiles)).DoInstrument();
+            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
