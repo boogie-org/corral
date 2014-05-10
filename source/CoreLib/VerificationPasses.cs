@@ -1044,6 +1044,8 @@ namespace cba
             return program;
         }
 
+        public static bool FPA = false;
+
         public void trainSummaries(CBAProgram program)
         {
             // discard non-free templates
@@ -1069,6 +1071,31 @@ namespace cba
             if (impl != null) impl.AddAttribute("entrypoint");
 
             var info = Instantiate(program);
+
+            var proc2Exprs = new Dictionary<string, List<Expr>>();
+            if (FPA)
+            {
+                var newFns = new List<Declaration>();
+                foreach (var p in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    var proc = p.Proc;
+                    
+                    var sp = proc.Ensures.Partition(ens => ens.Free);
+                    proc.Ensures = sp.fst;
+
+                    var foo = CreateFunctionFPA(sp.snd.Count, "foo_" + proc.Name);
+                    foo.AddAttribute("absdomain", "PredicateAbs");
+                    newFns.Add(foo);
+
+                    var exprArgs = new List<Expr>(sp.snd.Select(ens => ens.Condition));
+                    var expr = new NAryExpr(Token.NoToken, new FunctionCall(foo), exprArgs);
+                    proc.Ensures.Add(new Ensures(false, expr));
+
+                    proc2Exprs.Add(foo.Name, exprArgs);
+                }
+
+                program.TopLevelDeclarations.AddRange(newFns);
+            }
 
             // Massage program
             (new RewriteCallDontCares()).VisitProgram(program);
@@ -1111,15 +1138,50 @@ namespace cba
             if (printHoudiniQuery != null)
                 BoogieUtil.PrintProgram(program, printHoudiniQuery);
 
-            AbstractHoudini absHoudini = null;
-            PredicateAbs.Initialize(program);
-            absHoudini = new AbstractHoudini(program);
-            absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
-            // Abstract houdini sets a prover option for the time limit. Get rid of that now
-            CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+            HashSet<string> predicates = new HashSet<string>();
 
-            // Record new summaries
-            var predicates = absHoudini.GetPredicates();
+            if (FPA)
+            {
+                AbstractDomainFactory.Initialize(program);
+                var domain = AbstractDomainFactory.GetInstance("PredicateAbs");
+                var abs = new AbsHoudini(program, domain);
+                CommandLineOptions.Clo.PrintAssignment = true;
+                var absout = abs.ComputeSummaries();
+
+                var summaries = abs.GetAssignment();
+                foreach (var foo in summaries)
+                {
+                    var body = foo.Body;
+                    if(body is LiteralExpr && (body as LiteralExpr).IsTrue)
+                        continue;
+
+                    // break top-level ANDs
+
+                    var subst = new Substitution(v =>
+                        {
+                            var num = Int32.Parse(v.Name.Substring(1));
+                            return proc2Exprs[foo.Name][num];
+                        });
+
+                    body = Substituter.Apply(subst, body);
+
+                    foreach(var c in GetConjuncts(body)) 
+                        predicates.Add(c.ToString());
+                }
+            }
+            else
+            {
+                AbstractHoudini absHoudini = null;
+                PredicateAbs.Initialize(program);
+                absHoudini = new AbstractHoudini(program);
+                absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
+                // Abstract houdini sets a prover option for the time limit. Get rid of that now
+                CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+
+                // Record new summaries
+                predicates = absHoudini.GetPredicates();
+            }
+
             
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
@@ -1146,6 +1208,29 @@ namespace cba
             {
                 predicates.Iter(s => fs.WriteLine("{0}", s));
             }
+        }
+
+        private Function CreateFunctionFPA(int numArgs, string name)
+        {
+            var args = new List<Variable>();
+            for(int i = 0; i < numArgs; i++) 
+                args.Add(BoogieAstFactory.MkFormal("x" + i.ToString(), Microsoft.Boogie.Type.Bool, true));
+            var ret = new Function(Token.NoToken, name, args, BoogieAstFactory.MkFormal("x", Microsoft.Boogie.Type.Bool, false));
+            ret.AddAttribute("existential", Expr.Literal(true));
+            return ret;
+        }
+
+        private List<Expr> GetConjuncts(Expr expr)
+        {
+            var nary = expr as NAryExpr;
+            if (nary == null) return new List<Expr> { expr };
+            var bop = nary.Fun as BinaryOperator;
+            if (bop == null || bop.Op != BinaryOperator.Opcode.And) return new List<Expr> { expr };
+
+            var l1 = GetConjuncts(nary.Args[0]);
+            var l2 = GetConjuncts(nary.Args[1]);
+
+            return new List<Expr>(l1.Concat(l2));
         }
 
         private void DoStaticAnalysis(CBAProgram program)

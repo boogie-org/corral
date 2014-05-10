@@ -34,6 +34,7 @@ namespace AngelicVerifierNull
         static string boogieOpts = "";
 
         const string CORRAL_MAIN_PROC = "CorralMain";
+        static bool useProvidedEntryPoints = false;
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -55,6 +56,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/bopt:"))
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
+
+            if (args.Any(s => s == "/useEntryPoints"))
+                useProvidedEntryPoints = true;
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -101,7 +105,7 @@ namespace AngelicVerifierNull
 
             //Instrument to create the harness
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
-            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName)).DoInstrument();
+            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints)).DoInstrument();
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -141,7 +145,7 @@ namespace AngelicVerifierNull
 
             // Set all defaults for corral
             var config = cba.Configs.parseCommandLine(new string[] { 
-                "doesntExist.bpl", "/useProverEvaluate", "/prevCorralState:cstate.db", "/dumpCorralState:cstate.db" });
+                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate", "/prevCorralState:cstate.db", "/dumpCorralState:cstate.db" });
             config.boogieOpts += boogieOpts;
 
             cba.Driver.Initialize(config);
@@ -271,12 +275,17 @@ namespace AngelicVerifierNull
             return ret;
         }
         static cba.CorralState corralState = null;
+        static int corralIterationCount = 0;
+
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
         static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main)
         {
             Debug.Assert(cba.GlobalConfig.isSingleThreaded);
             Debug.Assert(cba.GlobalConfig.InferPass == null);
+            corralIterationCount ++;
+
+            //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 
             // Reuse previous corral state
             if (corralState != null)
@@ -531,6 +540,8 @@ namespace AngelicVerifierNull
             program =
               SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
+            //AliasAnalysis.AliasAnalysis.dbg = true;
+            //AliasAnalysis.AliasConstraintSolver.dbg = true;
             var ret =
               AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
 
