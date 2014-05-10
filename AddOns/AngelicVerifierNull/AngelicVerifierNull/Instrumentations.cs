@@ -25,11 +25,13 @@ namespace AngelicVerifierNull
             Program prog;
             string mainName;
             Procedure mallocProcedure = null;
+            bool useProvidedEntryPoints = false;
 
-            public HarnessInstrumentation(Program program, string corralName)
+            public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
             {
                 prog = program;
                 mainName = corralName;
+                this.useProvidedEntryPoints = useProvidedEntryPoints;
             }
             public void DoInstrument()
             {
@@ -46,6 +48,11 @@ namespace AngelicVerifierNull
                 List<Variable> locals = new List<Variable>();
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
+                    // skip this impl if it is not marked as an entrypoint
+                    if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                        continue;
+                    impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
+
                     //allocate params
                     var args = new List<Variable>();
                     var rets = new List<Variable>();
