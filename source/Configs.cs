@@ -90,7 +90,7 @@ namespace cba
 
         public string printFinalProg { get; private set; }
 
-        public string boogieOpts { get; private set; }
+        public string boogieOpts;
         public bool cadeTiming { get; private set; }
 
         public bool sdvMode { get; private set; }

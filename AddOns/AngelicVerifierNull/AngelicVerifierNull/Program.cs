@@ -31,6 +31,7 @@ namespace AngelicVerifierNull
     {
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
+        static string boogieOpts = "";
 
         const string CORRAL_MAIN_PROC = "CorralMain";
 
@@ -51,6 +52,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/sdv"))
                 printTraceMode = PRINT_TRACE_MODE.Sdv;
+
+            args.Where(s => s.StartsWith("/bopt:"))
+                .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -138,6 +142,7 @@ namespace AngelicVerifierNull
             // Set all defaults for corral
             var config = cba.Configs.parseCommandLine(new string[] { 
                 "doesntExist.bpl", "/useProverEvaluate", "/prevCorralState:cstate.db", "/dumpCorralState:cstate.db" });
+            config.boogieOpts += boogieOpts;
 
             cba.Driver.Initialize(config);
 
