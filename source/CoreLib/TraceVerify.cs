@@ -206,7 +206,7 @@ namespace cba
                         if (addConcretization && cc.Outs.Count == 1 &&
                             (call_instr.info.hasIntVar("si_arg") || call_instr.info.hasBoolVar("si_arg")))
                         {
-                            if (!addConcretizationAsConstants || !cc.Proc.Name.Contains("malloc"))
+                            if (!addConcretizationAsConstants || !BoogieUtil.checkAttrExists("allocator", cc.Proc.Attributes))
                             {
                                 if(call_instr.info.hasBoolVar("si_arg"))
                                     traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getBoolVal("si_arg")));

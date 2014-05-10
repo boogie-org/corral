@@ -1731,7 +1731,7 @@ namespace cba
             // Make sure that procs without a body don't modify globals
             foreach (var proc in p.TopLevelDeclarations.OfType<Procedure>().Where(proc => procsWithoutBody.Contains(proc.Name)))
             {
-                if (proc.Modifies.Count > 0 && !proc.Name.Contains("HAVOC_malloc"))
+                if (proc.Modifies.Count > 0 && !BoogieUtil.checkAttrExists("allocator", proc.Attributes))
                     throw new InvalidInput("Produce Bug Witness: Procedure " + proc.Name + " modifies globals");
             }
 
@@ -1864,7 +1864,7 @@ namespace cba
             foreach (Cmd cmd in block.Cmds)
             {
                 newCmds.Add(cmd);
-                if (cmd is HavocCmd && ((cmd as HavocCmd).Vars.Count > 1 || !(cmd as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt))
+                if (cmd is HavocCmd && (cmd as HavocCmd).Vars.Count > 1)
                 {
                     Console.WriteLine("{0}", cmd);
                     throw new InvalidInput("Produce Bug Witness: Havoc cmd found");
