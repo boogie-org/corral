@@ -40,7 +40,7 @@
 
 -------------------- pruned.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo at line 108 with expr assert {:nonnull} !(x == NULL);
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo at line 113 with expr assert {:nonnull} !(x == NULL);
 
 -------------------- empty_forall.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------
