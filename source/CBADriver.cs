@@ -389,15 +389,24 @@ namespace cba
         public Dictionary<string,int> CallTree;
         public HashSet<string> TrackedVariables;
 
+        public static CorralState GetCorralState(string file)
+        {
+            if (file == null || !System.IO.File.Exists(file))
+                return null;
+
+            var serailizer = new BinaryFormatter();
+            FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+            var cs = (CorralState)serailizer.Deserialize(stream);
+            stream.Close();
+
+            return cs;
+        }
+
         public static void AbsorbPrevState(Configs config, BoogieVerifyOptions progVerifyOptions)
         {
-            if (config.prevCorralState != null && System.IO.File.Exists(config.prevCorralState))
+            var cs = GetCorralState(config.prevCorralState);
+            if (cs != null)
             {
-                var serailizer = new BinaryFormatter();
-                FileStream stream = new FileStream(config.prevCorralState, FileMode.Open, FileAccess.Read, FileShare.None);
-                var cs = (CorralState)serailizer.Deserialize(stream);
-                stream.Close();
-
                 progVerifyOptions.CallTree = cs.CallTree;
                 config.trackedVars.UnionWith(cs.TrackedVariables);
             }
@@ -405,13 +414,18 @@ namespace cba
 
         public static void DumpCorralState(Configs config, Dictionary<string, int> CallTree, HashSet<string> Vars)
         {
-            if (config.dumpCorralState != null)
+            DumpCorralState(config.dumpCorralState, CallTree, Vars);
+        }
+
+        public static void DumpCorralState(string file, Dictionary<string, int> CallTree, HashSet<string> Vars)
+        {
+            if (file != null)
             {
                 var cs = new CorralState();
                 cs.CallTree = CallTree;
                 cs.TrackedVariables = Vars;
                 BinaryFormatter serializer = new BinaryFormatter();
-                FileStream stream = new FileStream(config.dumpCorralState, FileMode.Create, FileAccess.Write, FileShare.None);
+                FileStream stream = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
                 serializer.Serialize(stream, cs);
                 stream.Close();
             }

@@ -16,6 +16,12 @@ namespace AngelicVerifierNull
         public InputProgramDoesNotMatchExn(string s) : base(s) { } 
     }
 
+    class Options
+    {
+        // Reuse tracked variables and explored call tree across corral runs
+        public static readonly bool UsePrevCorralState = true;
+    }
+
     public class Utils
     {
         //TODO: merge with Log class in Corral
@@ -145,7 +151,7 @@ namespace AngelicVerifierNull
 
             // Set all defaults for corral
             var config = cba.Configs.parseCommandLine(new string[] { 
-                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate", "/prevCorralState:cstate.db", "/dumpCorralState:cstate.db" });
+                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"});
             config.boogieOpts += boogieOpts;
 
             cba.Driver.Initialize(config);
@@ -288,8 +294,11 @@ namespace AngelicVerifierNull
             //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 
             // Reuse previous corral state
-            if (corralState != null)
-                cba.CorralState.AbsorbPrevState(corralConfig, cba.ConfigManager.progVerifyOptions);
+            if (corralState != null && Options.UsePrevCorralState)
+            {
+                corralConfig.trackedVars.UnionWith(corralState.TrackedVariables);
+                cba.ConfigManager.progVerifyOptions.CallTree = corralState.CallTree;
+            }
 
             // Rewrite assert commands
             var apass = new cba.RewriteAssertsPass();
@@ -334,8 +343,9 @@ namespace AngelicVerifierNull
             cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
 
             // dump corral state for next iteration
-            cba.CorralState.DumpCorralState(corralConfig, cba.ConfigManager.progVerifyOptions.CallTree,
-                refinementState.getVars().Variables);
+            corralState = new cba.CorralState();
+            corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
+            corralState.TrackedVariables = refinementState.getVars().Variables;
 
             ////////////////////////////////////
             // Output Phase
