@@ -2190,6 +2190,12 @@ namespace cba
         HashSet<string> exitBlocks; // for assert
         HashSet<string> callInlinedBlocks; // for calls
 
+        // number of procs inlined into main
+        public int procsIncludedInMain { get; private set; }
+
+        // disable loop transformation
+        public static bool disableLoops = false;
+
         public DeepAssertRewrite()
         {
             origMain = null;
@@ -2199,6 +2205,7 @@ namespace cba
             callContinueBlocks = new HashSet<string>();
             exitBlocks = new HashSet<string>();
             callInlinedBlocks = new HashSet<string>();
+            procsIncludedInMain = 0;
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -2211,13 +2218,16 @@ namespace cba
             if (procsThatCannotReachAssert.Contains(program.mainProcName))
                 return program;
 
-            // loopy guys cannot reach asserts
-            program.TopLevelDeclarations.OfType<LoopProcedure>()
-                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            if (!disableLoops)
+            {
+                // loopy guys cannot reach asserts
+                program.TopLevelDeclarations.OfType<LoopProcedure>()
+                    .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
 
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
-                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+                program.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
+                    .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            }
 
             // Make copies of all procedures that can reach assert
             var implCopy = new Dictionary<string, Implementation>();
@@ -2225,6 +2235,8 @@ namespace cba
                 .Where(impl => !procsThatCannotReachAssert.Contains(impl.Name))
                 .Iter(impl => implCopy.Add(impl.Name,
                     (new FixedDuplicator(true)).VisitImplementation(impl)));
+
+            procsIncludedInMain = implCopy.Count;
 
             // Disable assertions in the original procedures
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -2372,34 +2384,37 @@ namespace cba
 
             implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
 
-            // detect loops
-            var l2b = BoogieUtil.labelBlockMapping(mainCopy);
-            var color = new Dictionary<Block, int>();
-            mainCopy.Blocks.Iter(b => color.Add(b, 0));
-            var Succ = new Func<Block, IEnumerable<Block>>(b =>
+            if (!disableLoops)
             {
-                var succ = new List<Block>();
-                var gc = b.TransferCmd as GotoCmd;
-                if (gc == null) return succ;
-                gc.labelNames.Iter(s => succ.Add(l2b[s]));
-                return succ;
-            });
-            var parentTree = new Dictionary<Block, Block>();
-            var cycle = new List<Block>();
-            // DFS
-            try
-            {
-                DFS(mainCopy.Blocks[0], null, Succ, color, parentTree, cycle);
-            }
-            catch (Exception)
-            {
-                var firstBlockToImpl = new Dictionary<string, string>();
-                implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+                // detect loops
+                var l2b = BoogieUtil.labelBlockMapping(mainCopy);
+                var color = new Dictionary<Block, int>();
+                mainCopy.Blocks.Iter(b => color.Add(b, 0));
+                var Succ = new Func<Block, IEnumerable<Block>>(b =>
+                {
+                    var succ = new List<Block>();
+                    var gc = b.TransferCmd as GotoCmd;
+                    if (gc == null) return succ;
+                    gc.labelNames.Iter(s => succ.Add(l2b[s]));
+                    return succ;
+                });
+                var parentTree = new Dictionary<Block, Block>();
+                var cycle = new List<Block>();
+                // DFS
+                try
+                {
+                    DFS(mainCopy.Blocks[0], null, Succ, color, parentTree, cycle);
+                }
+                catch (Exception)
+                {
+                    var firstBlockToImpl = new Dictionary<string, string>();
+                    implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
 
-                cycle.Reverse();
-                cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
-                    .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
-                throw;
+                    cycle.Reverse();
+                    cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
+                        .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
+                    throw;
+                }
             }
 
             // Add new main back to the program
@@ -2413,6 +2428,14 @@ namespace cba
             newMainDecl.Name = mainCopy.Name;
             mainCopy.Proc = newMainDecl;
             program.TopLevelDeclarations.Add(newMainDecl);
+
+            if (disableLoops)
+            {
+                // need to get loops out of main
+                program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
+                var ex = new ExtractLoopsPass(true);
+                return ex.runCBAPass(program);
+            }
 
             return program;
         }

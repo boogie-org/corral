@@ -24,6 +24,7 @@ namespace cba.Util
         public static TimeSpan tempTime = TimeSpan.Zero;
         public static bool recordTempTime = false;
         public static int CallTreeSize = 0;
+        public static int vcSize = 0;
         public static bool shuffleProgram = false;
         public static bool removeAsserts = true;
         public static string assertsPassed = "assertsPassed";
@@ -285,10 +286,12 @@ namespace cba.Util
             if (vcgen is StratifiedVCGen)
             {
                 CallTreeSize = (vcgen as StratifiedVCGen).numInlined;
+                vcSize = (vcgen as StratifiedVCGen).vcsize;
             }
             else if (vcgen is CoreLib.StratifiedInlining)
             {
                 CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
+                vcSize = (vcgen as CoreLib.StratifiedInlining).stats.vcSize;
             }
             else
                 CallTreeSize = 0;

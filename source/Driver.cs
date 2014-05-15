@@ -812,6 +812,7 @@ namespace cba
             var correct = false;
             var iterCnt = 0;
             var maxInlined = 0;
+            var vcSize = 0;
             VarSet varsToKeep;
             var cLoopHistory = ConstLoopHistory.GetNull();
             ErrorTrace buggyTrace = null;
@@ -874,6 +875,8 @@ namespace cba
                 DeepAssertRewrite da = null;
                 if (config.deepAsserts)
                 {
+                    DeepAssertRewrite.disableLoops = config.deepAssertsNoLoop;
+
                     //abs.writeToFile("ttin.bpl");
                     da = new DeepAssertRewrite();
                     abs = da.run(abs);
@@ -902,6 +905,8 @@ namespace cba
 
                 BoogieVerify.setTimeOut(0);
                 maxInlined = (BoogieVerify.CallTreeSize > maxInlined) ? BoogieVerify.CallTreeSize : maxInlined;
+                maxInlined += (da != null) ? da.procsIncludedInMain : 0;
+                vcSize = (BoogieVerify.vcSize > vcSize) ? BoogieVerify.vcSize : vcSize;
 
                 if (verificationPass.success)
                 {
@@ -1004,6 +1009,7 @@ namespace cba
             Console.WriteLine("CLoops Time: {0} s", cloopsTime.TotalSeconds.ToString("F2"));
             Console.WriteLine("Num refinements: {0}", iterCnt);
             Console.WriteLine("Number of procedures inlined: {0}", maxInlined);
+            Console.WriteLine("VC Size: {0}", vcSize);
             Console.WriteLine("Final tracked vars: {0}", varsToKeep.Variables.Print());
             Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
 

@@ -119,6 +119,7 @@ namespace cba
         public List<string> specialVars { get; private set; }
 
         public bool deepAsserts { get; private set; }
+        public bool deepAssertsNoLoop { get; private set; }
 
         public bool cooperativeYield { get; private set; }
         public bool unifyMaps { get; private set; }
@@ -334,6 +335,7 @@ namespace cba
             disableStaticAnalysis = false;
 
             deepAsserts = false;
+            deepAssertsNoLoop = false;
             prevCorralState = null;
             dumpCorralState = null;
         }
@@ -660,6 +662,10 @@ namespace cba
             else if (flag == "/deepAsserts")
             {
                 deepAsserts = true;
+            }
+            else if (flag == "/deepAssertsNoLoop")
+            {
+                deepAssertsNoLoop = true;
             }
             else if (flag.StartsWith("/z3opt"))
             {

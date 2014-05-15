@@ -136,6 +136,7 @@ namespace CoreLib {
     class Stats
     {
         public int numInlined = 0;
+        public int vcSize = 0;
         public int stratNumInlined = 0;
         public int bck = 0;
         public int stacksize = 0;
@@ -429,7 +430,10 @@ namespace CoreLib {
                     openCallSites.Add(newCallSite);
                     parent[newCallSite] = scs;
                 }
-                prover.Assert(scs.Attach(svc), true);
+                var toassert =scs.Attach(svc);
+                stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
+
+                prover.Assert(toassert, true);
                 attachedVC[scs] = svc;
                 MustNotFail(scs, svc);
             }
@@ -721,7 +725,10 @@ namespace CoreLib {
                     openCallSites.Add(newCallSite);
                     parent[newCallSite] = scs;
                 }
-                prover.Assert(scs.Attach(svc), true);
+                var toassert = scs.Attach(svc);
+                stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
+
+                prover.Assert(toassert, true);
                 attachedVC[scs] = svc;
             }
         }
