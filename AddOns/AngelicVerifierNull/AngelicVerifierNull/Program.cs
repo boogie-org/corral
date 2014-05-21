@@ -93,6 +93,11 @@ namespace AngelicVerifierNull
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
+                Utils.Print(
+                    string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, InstrumentTime:{4} ms",
+                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsAfterAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
+                    Utils.PRINT_TAG.AV_STATS);
+
                 // Run Corral outer loop
                 RunCorralIterative(prog, corralConfig.mainProcName);
             }
@@ -102,10 +107,7 @@ namespace AngelicVerifierNull
             }
             finally
             {
-                Utils.Print(
-                    string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, TotalTime:{4} ms",
-                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsAfterAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds), 
-                    Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
             }
         }
 
