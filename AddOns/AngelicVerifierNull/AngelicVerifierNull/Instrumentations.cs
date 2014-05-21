@@ -46,11 +46,14 @@ namespace AngelicVerifierNull
                 //blocks 
                 List<Block> mainBlocks = new List<Block>();
                 List<Variable> locals = new List<Variable>();
+                Stats.numProcs = prog.TopLevelDeclarations.Where(x => x is Implementation).Count();
+                Stats.numProcsAnalyzed = 0;
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
                     // skip this impl if it is not marked as an entrypoint
                     if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         continue;
+                    Stats.numProcsAnalyzed++;
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
 
                     //allocate params
@@ -318,6 +321,17 @@ namespace AngelicVerifierNull
                     instance.prog.TopLevelDeclarations.Add(guardConst);
                     return base.VisitAssertCmd(node);
                 }
+            }
+        }
+
+        public class AssertCountVisitor : StandardVisitor
+        {
+            public int assertCount = 0;
+            public override Cmd VisitAssertCmd(AssertCmd node)
+            {
+                if (node.Expr.ToString().Equals(Expr.True.ToString())) return node;
+                assertCount++;
+                return base.VisitAssertCmd(node);
             }
         }
 

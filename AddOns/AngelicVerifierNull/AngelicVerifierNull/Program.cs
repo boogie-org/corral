@@ -22,11 +22,19 @@ namespace AngelicVerifierNull
         public static readonly bool UsePrevCorralState = true;
     }
 
+    class Stats
+    {
+        public static int numProcs = -1;
+        public static int numProcsAnalyzed = -1;
+        public static int numAssertsBeforeAliasAnalysis = -1;
+        public static int numAssertsAfterAliasAnalysis = -1;
+    }
+
     public class Utils
     {
         //TODO: merge with Log class in Corral
         const bool SUPPRESS_DEBUG_MESSAGES = false;
-        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT };
+        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT, AV_STATS };
         public static void Print(string msg, PRINT_TAG tag=PRINT_TAG.AV_DEBUG)
         {
             if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
@@ -48,6 +56,8 @@ namespace AngelicVerifierNull
 
         static void Main(string[] args)
         {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             if (args.Length < 1)
             {
                 Console.WriteLine("Usage: AngelicVerifierNull file.bpl");
@@ -76,8 +86,12 @@ namespace AngelicVerifierNull
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
 
+                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
+
                 // Run alias analysis
                 prog = RunAliasAnalysis(prog);
+
+                Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
                 // Run Corral outer loop
                 RunCorralIterative(prog, corralConfig.mainProcName);
@@ -86,6 +100,20 @@ namespace AngelicVerifierNull
             {
                 Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
             }
+            finally
+            {
+                Utils.Print(
+                    string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, TotalTime:{4} ms",
+                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsAfterAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds), 
+                    Utils.PRINT_TAG.AV_STATS);
+            }
+        }
+
+        private static int CountAsserts(PersistentProgram prog)
+        {
+            var assertVisitor = new Instrumentations.AssertCountVisitor();
+            assertVisitor.Visit(prog.getProgram());
+            return assertVisitor.assertCount;
         }
 
         #region Instrumentatations
