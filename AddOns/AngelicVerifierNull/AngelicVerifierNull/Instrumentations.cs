@@ -26,12 +26,14 @@ namespace AngelicVerifierNull
             string mainName;
             Procedure mallocProcedure = null;
             bool useProvidedEntryPoints = false;
+            public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
             {
                 prog = program;
                 mainName = corralName;
                 this.useProvidedEntryPoints = useProvidedEntryPoints;
+                blockEntryPointConstants = new Dictionary<string,string>();
             }
             public void DoInstrument()
             {
@@ -48,6 +50,7 @@ namespace AngelicVerifierNull
                 List<Variable> locals = new List<Variable>();
                 Stats.numProcs = prog.TopLevelDeclarations.Where(x => x is Implementation).Count();
                 Stats.numProcsAnalyzed = 0;
+                HashSet<Constant> blockCallConsts = new HashSet<Constant>(); 
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
                     // skip this impl if it is not marked as an entrypoint
@@ -64,16 +67,25 @@ namespace AngelicVerifierNull
                     locals.AddRange(args);
                     locals.AddRange(rets);
                     //call 
+                    var blockCallConst = new Constant(Token.NoToken,
+                        new TypedIdent(Token.NoToken, "__block_call_" + impl.Name, btype.Bool), false);
+                    blockCallConsts.Add(blockCallConst);
+                    blockEntryPointConstants[blockCallConst.Name] = impl.Name;
+                    var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst)); 
                     var argMallocCmds = AllocatePointersAsUnknowns(args);
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
                         rets.ConvertAll(x => IdentifierExpr.Ident(x)));
-                    var cmds = argMallocCmds;
+                    var cmds = new List<Cmd>();
+                    cmds.Add(blockCallAssumeCmd);
+                    cmds.AddRange(argMallocCmds);
                     cmds.Add(callCmd);
                     //succ
                     var txCmd = new ReturnCmd(Token.NoToken);
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
+                //add the constants to the prog
+                blockCallConsts.Iter(x => prog.TopLevelDeclarations.Add(x));
                 //TODO: get globals of type refs/pointers and maps
                 var initCmd = (AssumeCmd) BoogieAstFactory.MkAssume(Expr.True);
                 //TODO: find a reusable API to add attributes to cmds

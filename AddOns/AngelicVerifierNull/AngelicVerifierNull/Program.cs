@@ -45,10 +45,12 @@ namespace AngelicVerifierNull
     {
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
-        static string boogieOpts = "";
 
         const string CORRAL_MAIN_PROC = "CorralMain";
-        static bool useProvidedEntryPoints = false;
+
+        static bool useProvidedEntryPoints = false; //making default true
+        static string boogieOpts = "";
+        static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -76,6 +78,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
 
+            if (args.Any(s => s == "/disableRoundRobinPrePass"))
+                disableRoundRobinPrePass = true;
+
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
@@ -98,8 +103,8 @@ namespace AngelicVerifierNull
                     Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsAfterAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
                     Utils.PRINT_TAG.AV_STATS);
 
-                // Run Corral outer loop
-                RunCorralIterative(prog, corralConfig.mainProcName);
+                //Analyze
+                RunCorralForAnalysis(prog);
             }
             catch (Exception e)
             {
@@ -111,16 +116,10 @@ namespace AngelicVerifierNull
             }
         }
 
-        private static int CountAsserts(PersistentProgram prog)
-        {
-            var assertVisitor = new Instrumentations.AssertCountVisitor();
-            assertVisitor.Visit(prog.getProgram());
-            return assertVisitor.assertCount;
-        }
-
         #region Instrumentatations
         //globals
         static Instrumentations.MallocInstrumentation mallocInstrumentation = null;
+        static Instrumentations.HarnessInstrumentation harnessInstrumentation = null;
         /// <summary>
         /// TODO: Check that the input program satisfies some sanity requirements
         /// NULL is declared as constant
@@ -141,7 +140,8 @@ namespace AngelicVerifierNull
 
             //Instrument to create the harness
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
-            (new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints)).DoInstrument();
+            harnessInstrumentation = new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints);
+            harnessInstrumentation.DoInstrument();
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -168,6 +168,12 @@ namespace AngelicVerifierNull
             ProgTransformation.PersistentProgram.FreeParserMemory();
 
             return inputProg;
+        }
+        private static int CountAsserts(PersistentProgram prog)
+        {
+            var assertVisitor = new Instrumentations.AssertCountVisitor();
+            assertVisitor.Visit(prog.getProgram());
+            return assertVisitor.assertCount;
         }
         #endregion
 
@@ -221,7 +227,7 @@ namespace AngelicVerifierNull
             addIds.VisitProgram(init);
         }
         //Run Corral over different assertions (modulo errorLimit)
-        private static void RunCorralIterative(PersistentProgram prog, string p)
+        private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p)
         {
             int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
@@ -233,7 +239,7 @@ namespace AngelicVerifierNull
                 if (cex == null)
                 {
                     //TODO (how do I distinguish inconclusive results from Corral)
-                    Console.WriteLine("No more counterexamples found, Corral returns verified...");
+                    Console.WriteLine("No more counterexamples found, Corral returns verified/inconclusive...");
                     break;
                 }
                 //get the pathProgram
@@ -284,6 +290,52 @@ namespace AngelicVerifierNull
                 iterCount++;
                 BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
+            return prog;
+        }
+        //Run RunCorralIterative with only one procedure enabled
+        private static PersistentProgram RunCorralRoundRobin(PersistentProgram pprog, string p)
+        {
+            Utils.Print("Using round robin exploration...", Utils.PRINT_TAG.AV_DEBUG);
+            var prog = pprog.getProgram();
+            var blockConstNames = harnessInstrumentation.blockEntryPointConstants.Keys;
+            var blockCallConsts = prog.TopLevelDeclarations
+                .OfType<Constant>()
+                .Where(x => blockConstNames.Contains(x.Name));
+            //TODO: iterate for multiple rounds removing procedures once they are verified
+            foreach (var bc in blockCallConsts)
+            {
+                Utils.Print(string.Format("Analyzing procedure {0} in round robin mode", harnessInstrumentation.blockEntryPointConstants[bc.Name]),
+                     Utils.PRINT_TAG.AV_DEBUG);
+                //enable only the procedure corresponding to kv
+                var tmp = new HashSet<Constant>(blockCallConsts);
+                tmp.Remove(bc);
+                var blockExpr = tmp.Aggregate((Expr)Expr.True, (x, y) => (Expr.And(x, Expr.Not(IdentifierExpr.Ident(y))))); 
+                var mainProc = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
+                if (mainProc == null)
+                    throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
+                mainProc.Requires.Add(new Requires(false, blockExpr)); //add the blocking condition and iterate
+                pprog = new PersistentProgram(prog, corralConfig.mainProcName, 1);
+                pprog = RunCorralIterative(pprog, corralConfig.mainProcName);                
+                //TODO: need to remove the requires corresponding to the blockExpr, but the program has changed 
+                //      and more requires corresponding to blockign clauses may have been added
+                //find the mainProc in the new program
+                prog = pprog.getProgram();
+                mainProc = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
+                if (mainProc == null)
+                    throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
+                mainProc.Requires.RemoveAll(x => x.Condition.ToString() == blockExpr.ToString());
+            }
+            return new PersistentProgram(prog, corralConfig.mainProcName, 1);
+        }
+        //Top-level Corral call
+        private static void RunCorralForAnalysis(PersistentProgram prog)
+        {
+            //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
+            if (!disableRoundRobinPrePass)
+                prog = RunCorralRoundRobin(prog, corralConfig.mainProcName);
+
+            // Run Corral outer loop
+            RunCorralIterative(prog, corralConfig.mainProcName);
         }
 
         // print trace to disk
