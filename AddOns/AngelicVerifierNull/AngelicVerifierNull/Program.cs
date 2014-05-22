@@ -51,7 +51,7 @@ namespace AngelicVerifierNull
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
-        static int timeout = 1000000; 
+        static int timeout = 0; 
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -183,6 +183,18 @@ namespace AngelicVerifierNull
         #endregion
 
         #region Corral related
+        // Set timeout for Corral
+        static void SetCorralTimeout()
+        {
+            if (timeout == 0)
+                return;
+
+            Console.WriteLine("Setting Corral timeout to {0} seconds", timeout);
+            cba.GlobalConfig.timeOut = timeout;
+            cba.GlobalConfig.corralStartTime = DateTime.Now;
+
+        }
+
         // Initialization
         static cba.Configs InitializeCorral()
         {
@@ -192,7 +204,7 @@ namespace AngelicVerifierNull
 
             // Set all defaults for corral
             var config = cba.Configs.parseCommandLine(new string[] { 
-                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"/*, "/timeLimit:" + timeout*/});
+                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"});
             config.boogieOpts += boogieOpts;
             cba.Driver.Initialize(config);
 
@@ -385,6 +397,7 @@ namespace AngelicVerifierNull
             Debug.Assert(cba.GlobalConfig.isSingleThreaded);
             Debug.Assert(cba.GlobalConfig.InferPass == null);
             corralIterationCount ++;
+            SetCorralTimeout();
 
             //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 

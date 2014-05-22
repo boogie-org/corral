@@ -169,6 +169,8 @@ namespace cba
 
             if (BoogieUtil.InitializeBoogie(boogieOptions))
                 throw new InternalError("Cannot initialize Boogie");
+
+            GlobalConfig.corralStartTime = DateTime.Now;
         }
 
         public static int run(string[] args) 
@@ -188,7 +190,7 @@ namespace cba
             Initialize(config);
 
             var startTime = DateTime.Now;
-            GlobalConfig.corralStartTime = DateTime.Now;
+            
 
             ////////////////////////////////////
             // Initial program rewriting
