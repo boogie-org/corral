@@ -51,6 +51,7 @@ namespace AngelicVerifierNull
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
+        static int timeout = 1000000; 
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -80,6 +81,10 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/disableRoundRobinPrePass"))
                 disableRoundRobinPrePass = true;
+
+            args.Where(s => s.StartsWith("/timeout:"))
+                .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
+                
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -187,9 +192,8 @@ namespace AngelicVerifierNull
 
             // Set all defaults for corral
             var config = cba.Configs.parseCommandLine(new string[] { 
-                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"});
+                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"/*, "/timeLimit:" + timeout*/});
             config.boogieOpts += boogieOpts;
-
             cba.Driver.Initialize(config);
 
             cba.VerificationPass.usePruning = false;
@@ -233,13 +237,22 @@ namespace AngelicVerifierNull
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
-                var cex = RunCorral(prog, corralConfig.mainProcName);
+                Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
+
+                try
+                {
+                    cex = RunCorral(prog, corralConfig.mainProcName);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Corral call terminates inconclusively with {0}...", e.Message);
+                    break;
+                }
                 var traceType = "";
 
                 if (cex == null)
                 {
-                    //TODO (how do I distinguish inconclusive results from Corral)
-                    Console.WriteLine("No more counterexamples found, Corral returns verified/inconclusive...");
+                    Console.WriteLine("No more counterexamples found, Corral returns verified...");
                     break;
                 }
                 //get the pathProgram
