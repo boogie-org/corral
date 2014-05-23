@@ -128,18 +128,34 @@ namespace cba
             out PersistentCBAProgram pout, out InsertionTrans tinfo, out ErrorTrace cex)
         {
             ConfigManager.beginProgVerification();
-            var ret = VerifyProgram(ref prog, trackedVars, returnTrace, out pout, out tinfo, out cex);
-            ConfigManager.endProgVerification();
-            return ret;
+            try
+            {
+                var ret = VerifyProgram(ref prog, trackedVars, returnTrace, out pout, out tinfo, out cex);
+                ConfigManager.endProgVerification();
+                return ret;
+            }
+            catch (Exception)
+            {
+                ConfigManager.endProgVerification();
+                throw;
+            }
         }
 
         public static bool checkPath(PersistentCBAProgram prog, VarSet trackedVars, bool returnTrace,
             out PersistentCBAProgram pout, out InsertionTrans tinfo, out ErrorTrace cex)
         {
             ConfigManager.beginPathVerification(returnTrace);
-            var ret = VerifyProgram(ref prog, trackedVars, returnTrace, out pout, out tinfo, out cex);
-            ConfigManager.endPathVerification();
-            return ret;
+            try
+            {
+                var ret = VerifyProgram(ref prog, trackedVars, returnTrace, out pout, out tinfo, out cex);
+                ConfigManager.endPathVerification();
+                return ret;
+            }
+            catch (Exception)
+            {
+                ConfigManager.endPathVerification();
+                throw;
+            }
         }
 
         public static bool checkPath(PersistentCBAProgram pmeta, VarSet trackedVars)
