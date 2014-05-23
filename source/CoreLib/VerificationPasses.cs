@@ -1756,13 +1756,13 @@ namespace cba
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
                 var ncmds = new List<Cmd>();
-                foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsInt))
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsInt))
                 {
                     var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
                     cc.Proc = reLocProcInt;
                     ncmds.Add(cc);
                 }
-                foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsBool))
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsBool))
                 {
                     var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
                     cc.Proc = reLocProcBool;
@@ -2434,7 +2434,10 @@ namespace cba
                 // need to get loops out of main
                 program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
                 var ex = new ExtractLoopsPass(true);
-                return ex.runCBAPass(program);
+                program = ex.runCBAPass(program);
+                // redo IDs
+                (new AddUniqueCallIds()).VisitProgram(program);
+                return program;
             }
 
             return program;
