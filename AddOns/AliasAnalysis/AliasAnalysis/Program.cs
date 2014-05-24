@@ -75,12 +75,10 @@ namespace AliasAnalysis
     public class PruneAliasingQueries : FixedVisitor
     {
         Dictionary<string, bool> result;
-        int insideNeg;
 
         PruneAliasingQueries(Dictionary<string, bool> result)
         {
             this.result = result;
-            insideNeg = 0;
         }
 
         public static void Prune(Program program, Dictionary<string, bool> result)
@@ -115,13 +113,19 @@ namespace AliasAnalysis
             var ret = base.VisitNAryExpr(node);
 
             var nary = ret as NAryExpr;
-            if (insideNeg == 0 && nary != null && nary.Fun is BinaryOperator
+            if (nary != null && nary.Fun is BinaryOperator
                 && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
             {
                 if (nary.Args.Any(a => a == Expr.False))
                     return Expr.False;
             }
-
+            if (nary != null && nary.Fun is UnaryOperator
+                && (nary.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not
+                && nary.Args[0] is LiteralExpr
+                && (nary.Args[0] as LiteralExpr).IsFalse)
+            {
+                return Expr.True;
+            }
 
             return ret;
         }
