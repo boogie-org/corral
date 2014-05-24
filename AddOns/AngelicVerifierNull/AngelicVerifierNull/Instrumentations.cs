@@ -339,9 +339,20 @@ namespace AngelicVerifierNull
         public class AssertCountVisitor : StandardVisitor
         {
             public int assertCount = 0;
+            public string notfalse = null;
+
+            public AssertCountVisitor()
+            {
+                notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            }
+
             public override Cmd VisitAssertCmd(AssertCmd node)
             {
-                if (node.Expr.ToString().Equals(Expr.True.ToString())) return node;
+                // disregard true and !false
+                if (node.Expr.ToString() == Expr.True.ToString() ||
+                    node.Expr.ToString() == notfalse)
+                    return node;
+
                 assertCount++;
                 return base.VisitAssertCmd(node);
             }

@@ -100,10 +100,10 @@ namespace AngelicVerifierNull
                 prog = GetProgram(args[0]);
 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
-
+                
                 // Run alias analysis
                 prog = RunAliasAnalysis(prog);
-
+                
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
                 Utils.Print(
