@@ -51,7 +51,8 @@ namespace AngelicVerifierNull
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
-        static int timeout = 0; 
+        static int timeout = 0;
+        static int timeoutRoundRobin = 0;
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -84,7 +85,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
-                
+
+            args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
+                .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -105,7 +108,7 @@ namespace AngelicVerifierNull
 
                 Utils.Print(
                     string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, InstrumentTime:{4} ms",
-                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsAfterAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
+                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsBeforeAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
                     Utils.PRINT_TAG.AV_STATS);
 
                 //Analyze
@@ -184,13 +187,13 @@ namespace AngelicVerifierNull
 
         #region Corral related
         // Set timeout for Corral
-        static void SetCorralTimeout()
+        static void SetCorralTimeout(int corralTimeout)
         {
-            if (timeout == 0)
+            if (corralTimeout == 0)
                 return;
 
-            Console.WriteLine("Setting Corral timeout to {0} seconds", timeout);
-            cba.GlobalConfig.timeOut = timeout;
+            Console.WriteLine("Setting Corral timeout to {0} seconds", corralTimeout);
+            cba.GlobalConfig.timeOut = corralTimeout;
             cba.GlobalConfig.corralStartTime = DateTime.Now;
 
         }
@@ -243,7 +246,7 @@ namespace AngelicVerifierNull
             addIds.VisitProgram(init);
         }
         //Run Corral over different assertions (modulo errorLimit)
-        private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p)
+        private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p, int corralTimeout)
         {
             int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
@@ -253,7 +256,7 @@ namespace AngelicVerifierNull
 
                 try
                 {
-                    cex = RunCorral(prog, corralConfig.mainProcName);
+                    cex = RunCorral(prog, corralConfig.mainProcName, corralTimeout);
                 }
                 catch (Exception e)
                 {
@@ -340,7 +343,8 @@ namespace AngelicVerifierNull
                     throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                 mainProc.Requires.Add(new Requires(false, blockExpr)); //add the blocking condition and iterate
                 pprog = new PersistentProgram(prog, corralConfig.mainProcName, 1);
-                pprog = RunCorralIterative(pprog, corralConfig.mainProcName);                
+                //we give less timeout for the individual procedure
+                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);                
                 //TODO: need to remove the requires corresponding to the blockExpr, but the program has changed 
                 //      and more requires corresponding to blockign clauses may have been added
                 //find the mainProc in the new program
@@ -360,7 +364,7 @@ namespace AngelicVerifierNull
                 prog = RunCorralRoundRobin(prog, corralConfig.mainProcName);
 
             // Run Corral outer loop
-            RunCorralIterative(prog, corralConfig.mainProcName);
+            RunCorralIterative(prog, corralConfig.mainProcName,timeout);
         }
 
         // print trace to disk
@@ -392,12 +396,12 @@ namespace AngelicVerifierNull
 
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
-        static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main)
+        static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main, int corralTimeout)
         {
             Debug.Assert(cba.GlobalConfig.isSingleThreaded);
             Debug.Assert(cba.GlobalConfig.InferPass == null);
             corralIterationCount ++;
-            SetCorralTimeout();
+            SetCorralTimeout(corralTimeout);
 
             //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 
