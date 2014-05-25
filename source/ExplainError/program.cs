@@ -835,7 +835,8 @@ namespace ExplainError
         public static bool ParseCommandLine(string clo)
         {
             //without the next line, it fails to find the right prover!!
-            var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /printModel:1 /printModelToFile:model.dmp  /errorLimit:1 /printInstrumented " + clo;
+            //var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /printModel:1 /printModelToFile:model.dmp  /errorLimit:1 /printInstrumented " + clo;
+            var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /errorLimit:1 /printInstrumented " + clo;
             var oldArgs = boogieOptions.Split(' ');
             string[] args;
             //Custom parser to look and remove RootCause specific options
