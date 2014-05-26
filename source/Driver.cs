@@ -315,6 +315,13 @@ namespace cba
 
             Log.WriteLine(string.Format("Total Time: {0} s", (endTime - startTime).TotalSeconds));
 
+
+            // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
+            Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
+            System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
+            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+            Log.WriteLine(string.Format("Total User CPU time: {0} s"), TotalUserTime.TotalSeconds);
+
             #region Stats for .NET programs
             if (config.verboseMode > 1)
             {
@@ -991,6 +998,14 @@ namespace cba
             Console.WriteLine("Number of procedures inlined: {0}", maxInlined);
             Console.WriteLine("Final tracked vars: {0}", varsToKeep.Variables.Print());
             Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
+            
+            // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
+            Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
+            System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
+            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+            Console.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds.ToString("F2")));
+
+
 
             if (correct)
             {
