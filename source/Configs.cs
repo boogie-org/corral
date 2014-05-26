@@ -90,7 +90,7 @@ namespace cba
 
         public string printFinalProg { get; private set; }
 
-        public string boogieOpts { get; private set; }
+        public string boogieOpts;
         public bool cadeTiming { get; private set; }
 
         public bool sdvMode { get; private set; }
@@ -119,6 +119,7 @@ namespace cba
         public List<string> specialVars { get; private set; }
 
         public bool deepAsserts { get; private set; }
+        public bool deepAssertsNoLoop { get; private set; }
 
         public bool cooperativeYield { get; private set; }
         public bool unifyMaps { get; private set; }
@@ -145,7 +146,10 @@ namespace cba
         public int rootCause { get; private set; }
         public int maxStaticLoopBound { get; private set; }
         public bool disableStaticAnalysis { get; private set; }
-	public bool useDuality { get; private set; }
+        public bool useDuality { get; private set; }
+
+        public string prevCorralState { get; private set; }
+        public string dumpCorralState { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
         {
@@ -183,11 +187,6 @@ namespace cba
             if (inputFile == null)
             {
                 throw new UsageError("Input file not given");
-            }
-
-            if (!System.IO.File.Exists(inputFile))
-            {
-                throw new UsageError(string.Format("Input file {0} does not exist", inputFile));
             }
 
             Configs config = new Configs();
@@ -336,6 +335,9 @@ namespace cba
             disableStaticAnalysis = false;
 
             deepAsserts = false;
+            deepAssertsNoLoop = false;
+            prevCorralState = null;
+            dumpCorralState = null;
         }
 
 
@@ -495,6 +497,16 @@ namespace cba
             {
                 noCallTreeReuse = true;
             }
+            else if (flag.StartsWith("/dumpCorralState:"))
+            {
+                var split = flag.Split(sep);
+                dumpCorralState = split[1];
+            }
+            else if (flag.StartsWith("/prevCorralState:"))
+            {
+                var split = flag.Split(sep);
+                prevCorralState = split[1];
+            }
             else if (flag == "/printInstrumented")
             {
                 printInstrumented = true;
@@ -650,6 +662,10 @@ namespace cba
             else if (flag == "/deepAsserts")
             {
                 deepAsserts = true;
+            }
+            else if (flag == "/deepAssertsNoLoop")
+            {
+                deepAssertsNoLoop = true;
             }
             else if (flag.StartsWith("/z3opt"))
             {

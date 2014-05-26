@@ -15,13 +15,19 @@ using BType = Microsoft.Boogie.Type;
 namespace ExplainError
 {
 
-    public enum STATUS { SUCCESS, PARTIALCOVER, TIMEOUT, INCONCLUSIVE, ILLEGAL };
-
+    /// <summary>
+    /// Status returned by ExplainError
+    /// ANGELIC_DATAFLOW_BUG: Env cannot control the non-control statements to avoid the error
+    /// </summary>
+    public enum STATUS { SUCCESS, PARTIALCOVER, TIMEOUT, INCONCLUSIVE, ILLEGAL, ANGELIC_DATAFLOW_BUG};
+    
     public class Toplevel
     {
-        //Options: Add them to ParseAndRemoveNonBoogieOptions
+        # region Analysis flags
+        public const string CAPTURESTATE_ATTRIBUTE_NAME = "captureState";
         private const int MAX_TIMEOUT = 100;
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
+        //Options: Add them to ParseAndRemoveNonBoogieOptions
         private static bool verbose = false;
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
@@ -36,7 +42,11 @@ namespace ExplainError
         public static bool dontUsePruningWhileEliminatingUpdates = false ; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
         public static bool applyFiltersBeforeDNF = true; // if true, it causes overapproximation by first reducing any filtered expr to Expr.True
         public static bool checkIfExprFalseCalled = false; //HACK!
-        //private static bool performDNF = false; //may blow up
+        //private static bool performDNF = false; //will blow up
+
+        #endregion
+
+        #region Globals
         //Statics
         static private Stopwatch sw;
         static public Program prog;
@@ -50,17 +60,18 @@ namespace ExplainError
         static private Boogie2VCExprTranslator translator;
         static private VCExpressionGenerator exprGen;
 
-
         static public HashSet<string> fieldMapFuncs; //set of functions that have "fieldMap" attribute
         static public bool allCubesCovered; // are all the cubes covered in the final returned set
         static public STATUS returnStatus; //what is the status of the return
         static public Dictionary<string, string> complexCExprs; //list of let exprs for displaying concisely
+        #endregion
 
         //this will be invoked from corral
         /// <summary>
         /// explainErrorFilters is used to control any options to filter
         ///    0 : reserved for default SDV options 
         ///    1 : {ignoreAllAssumes, !onlyDisplayAliasingInPre, !onlyDisplayMapExpressions, !dontDisplayComparisonWithConsts}
+        ///    10: (returns true/false) check for ANGELIC_DATAFLOW_BUG by verifying assert false after making assert -> assume
         /// </summary>
         /// <param name="impl"></param>
         /// <param name="pr"></param>
@@ -69,7 +80,16 @@ namespace ExplainError
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, out STATUS status, out Dictionary<string,string> complexCExprsRet)
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
+            out STATUS status, out Dictionary<string, string> complexCExprsRet)
+        {
+            HashSet<List<Expr>> preDisjuncts;
+            return Go(impl, pr, tmout, explainErrorFilters, out status, out complexCExprsRet, out preDisjuncts);
+        }
+
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
+            out STATUS status, out Dictionary<string,string> complexCExprsRet,
+            out HashSet<List<Expr>> preDisjuncts)
         {
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
@@ -84,6 +104,7 @@ namespace ExplainError
             {
                 ignoreAllAssumes = true; onlyDisplayAliasingInPre = false; onlyDisplayMapExpressions = false; dontDisplayComparisonsWithConsts = false;
             }
+
             showBoogieExprs = false;
             complexCExprsRet = null;
             timeout = tmout > 0 ? tmout : MAX_TIMEOUT;
@@ -94,7 +115,7 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl);
+            var tmp = Go(impl, out preDisjuncts);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
@@ -105,11 +126,11 @@ namespace ExplainError
             Dictionary<string, string> tmp;
             return Go(impl, pr, tmout, 0, out status, out tmp);
         }
-        public static List<string> Go(Implementation impl)
+        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preDisjuncts)
         {
             sw = new Stopwatch();
             sw.Start();
-            HashSet<List<Expr>> preDisjuncts = null;
+            preDisjuncts = null; //HashSet<List<Expr>> preDisjuncts = null;
             allCubesCovered = true;
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
@@ -118,8 +139,9 @@ namespace ExplainError
             Console.WriteLine("############# Implementation = {0} #################", impl.Name);
             try
             {
+                //SimplifyAssumesUsingForwardPass();
                 ComputePre(impl.Blocks[0].Cmds, out preDisjuncts);
-                //Don't call the prover before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
+                //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 if (CheckNecessaryDisjuncts(ref preDisjuncts))
                 {
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
@@ -146,47 +168,14 @@ namespace ExplainError
             }
         }
 
-        private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preDisjuncts)
+        private static void CheckTimeout(string p)
         {
-            if (!checkIfExprFalseCalled)
-                throw new Exception("We need to call CheckIfEXprFalseCalled before calling CheckNecessaryDisjuncts");
-            var proc = currImpl.Proc;
-            Debug.Assert(proc != null, "The proc of currImpl is null");
-            Expr disjunct = ExprListSetToDNFExpr(preDisjuncts);
-            var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
-            var t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-            t.VisitImplementation(currImpl); //changes currImpl as well
-            var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
-            Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
-            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds to have the captureState
-            if (!result) return false;
-            //now try to greedily minimize
-            var retain = new HashSet<List<Expr>>();
-            
-            foreach (var d in preDisjuncts)
-            {
-                var tmp = new HashSet<List<Expr>>(preDisjuncts);
-                tmp.Remove(d);
-                disjunct = ExprListSetToDNFExpr(tmp);
-                t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-                t.VisitImplementation(currImpl); //changes currImpl as well
-                result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
-                Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
-                if (!result) retain.Add(d); //necessary
-                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds to have the captureState
-            }
-            if (retain.Count > 0) //else keep preDisjuncts possibly non-minimal
-                preDisjuncts = retain;
-            return true;
-        }
-        private static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preDisjuncts)
-        {
-            Expr ret = Expr.False;
-            foreach (var el in preDisjuncts)
-                ret = ExprUtil.Or(ret, el.Aggregate((Expr)Expr.True, (x, y) => Expr.And(x, y)));
-            return ret;
+            if (verbose) Console.Write("At [{0},{1},{2}]..", p, sw.ElapsedMilliseconds / 1000, timeout);
+            if (sw.ElapsedMilliseconds > timeout * 1000) throw new TimeoutException("ExplainError timed out at [" + p + "]" + sw.ElapsedMilliseconds + " ms");
         }
 
+        # region Top-level routines for computing and massaging Pre
+ 
         private static void ComputePre(List<Cmd> cmdseq, out HashSet<List<Expr>> preDisjuncts)
         {
             preDisjuncts = new HashSet<List<Expr>>();
@@ -241,10 +230,35 @@ namespace ExplainError
             foreach (var d in DisplayPre(preL, null))
                 preDisjuncts.Add(d);
         }
-        private static bool ContainsCaptureStateAttribute(AssumeCmd assumeCmd, out string captureStateLoc)
+
+        private static void SimplifyAssumesUsingForwardPass()
         {
-            captureStateLoc  = QKeyValue.FindStringAttribute(assumeCmd.Attributes, "captureState");
-            return (captureStateLoc != null);             
+            foreach (Cmd c in currImpl.Blocks[0].Cmds)
+            {
+                var assumeCmd = c as AssumeCmd;
+                if (assumeCmd == null) continue;
+                if (assumeCmd.Expr.ToString() == Expr.True.ToString()) continue;
+                if (!ContainsSlicAttribute(assumeCmd)) continue; //thousands of assumes on uninitialized variables
+                //HACK: still hundreds of assumes, just look for the equalities
+                var oldExpr = assumeCmd.Expr;
+                if (!(
+                    oldExpr.ToString().Contains("==") ||
+                    oldExpr.ToString().Contains("!="))) continue;
+
+                assumeCmd.Expr = Expr.Not(oldExpr);
+                prog.Resolve(); prog.Typecheck(); //TODO: perhaps move this inside MyVerifyImplementation?
+                Console.WriteLine("Checking the assume {0} ", assumeCmd);
+                if (VCVerifier.MyVerifyImplementation(currImpl) == ConditionGeneration.Outcome.Correct)
+                {
+                    Console.WriteLine("Evals to true");
+                    assumeCmd.Expr = Expr.True;
+                }
+                else
+                {
+                    assumeCmd.Expr = oldExpr;
+                }
+            }
+            throw new Exception("This is just for experimentation");
         }
         private static HashSet<List<Expr>> DisplayPre(List<Expr> pre, string captureStateLoc)
         {
@@ -314,44 +328,57 @@ namespace ExplainError
                 l.Add(t.Aggregate((Expr)Expr.True, (x, y) => ExprUtil.And(x, y)));
             return t.Count > 0;
         }
-        /// <summary>
-        /// Checks if the ~pre (t) implies that path has no errors
-        /// </summary>
-        /// <param name="currImpl"></param>
-        /// <param name="t"></param>
-        /// <returns></returns>
-        private static HashSet<Expr> FilteredAtoms(Implementation currImpl, Expr t, out Expr e)
-        {
-            var fexps = new HashSet<Expr>(); // list of filtered exprs
-            e = GetFilteredExpr(t, ref fexps); //the return expr is of no value now
-            Console.WriteLine("\n Filtered atoms = {0}", String.Join(", ", fexps));
-            return fexps; 
-        }
-        private static Expr GetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
-        {
-            CheckTimeout("Inside GetFilteredExpr");
-            var expr = e as NAryExpr;
-            if (expr == null)
-            {
-                if (FilterConjunct(e)) return Expr.True;
-                if (!fexps.Contains(e)) fexps.Add(e);
-                return e;
-            }
-            var binOp = expr.Fun as BinaryOperator;
-            if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
-            {
-                if (FilterConjunct(e)) return Expr.True;
-                if (!fexps.Contains(e)) fexps.Add(e);
-                return e;
-            }
-            return ExprUtil.NAryExpr(binOp, 
-                new List<Expr>{GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps)});
-        }
 
-        private static void CheckTimeout(string p)
+        class InjectNecessaryDisjuncts : StandardVisitor
         {
-            if (verbose) Console.Write("At [{0},{1},{2}]..", p,sw.ElapsedMilliseconds / 1000, timeout);
-            if (sw.ElapsedMilliseconds > timeout * 1000) throw new TimeoutException("ExplainError timed out at [" + p + "]" + sw.ElapsedMilliseconds + " ms");
+            Expr exprToAssume;
+            public InjectNecessaryDisjuncts(Expr c)
+            {
+                exprToAssume = c;
+            }
+            public override Cmd VisitAssumeCmd(AssumeCmd cmd)
+            {
+                string captureStateLoc;
+                if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc) &&
+                    captureStateLoc != null)
+                {
+                    return base.VisitAssumeCmd(new AssumeCmd(Token.NoToken, exprToAssume));
+                }
+                return base.VisitAssumeCmd(cmd);
+            }
+        }
+        private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preDisjuncts)
+        {
+            if (!checkIfExprFalseCalled)
+                throw new Exception("We need to call CheckIfEXprFalseCalled before calling CheckNecessaryDisjuncts");
+            var proc = currImpl.Proc;
+            Debug.Assert(proc != null, "The proc of currImpl is null");
+            Expr disjunct = ExprListSetToDNFExpr(preDisjuncts);
+            var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
+            var t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
+            t.VisitImplementation(currImpl); //changes currImpl as well
+            var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
+            Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
+            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds to have the captureState
+            if (!result) return false;
+            //now try to greedily minimize
+            var retain = new HashSet<List<Expr>>();
+
+            foreach (var d in preDisjuncts)
+            {
+                var tmp = new HashSet<List<Expr>>(preDisjuncts);
+                tmp.Remove(d); //remove 1 element and check the rest
+                disjunct = ExprListSetToDNFExpr(tmp);
+                t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
+                t.VisitImplementation(currImpl); //changes currImpl as well
+                result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
+                Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
+                if (!result) retain.Add(d); //necessary
+                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds to have the captureState
+            }
+            if (retain.Count > 0) //else keep preDisjuncts possibly non-minimal
+                preDisjuncts = retain;
+            return true;
         }
 
         private static List<string> DisplayDisjunctsOnConsole(HashSet<List<Expr>> preDisjuncts)
@@ -400,24 +427,17 @@ namespace ExplainError
             displayStrs.Add(toDisplay); //this may be redundant, as the C expressions are generated much later
             CheckTimeout("End DisplayConjuncts");
         }
-        private static bool FilterConjunct(Expr c)
-        {
-            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;
-            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
-            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
-            return false;
-        }
         // finds if there is a cube in displayedConjuncts that is subsumed by toDisplay
         private static bool SubsumedCubes(List<Expr> toDisplay, HashSet<List<Expr>> displayedConjuncts)
         {
             foreach (var cb in displayedConjuncts)
             {
-                bool found = true; 
+                bool found = true;
                 foreach (var d in cb)
                 {
-                    if (toDisplay.Find(x => (x.ToString() == d.ToString())) == null) 
-                    { 
-                        found = false; 
+                    if (toDisplay.Find(x => (x.ToString() == d.ToString())) == null)
+                    {
+                        found = false;
                         break;
                     }
                 }
@@ -425,8 +445,9 @@ namespace ExplainError
             }
             return false;
         }
+        #endregion
 
-        //Helper functins for displaying C expressions
+        #region Helper functins for displaying C expressions
         //returns null whenever there is confusion
         private static Expr DisplayCExpression(Expr c, int depth, ref Dictionary<string, string> complexCExprs)
         {
@@ -554,81 +575,9 @@ namespace ExplainError
             fldname = QKeyValue.FindStringAttribute(f.Func.Attributes, "fieldname");
             return fldname != null;
         }
+        #endregion
 
-        /// <summary>
-        /// UNSOUND HACK: turns any f(t) --> t. Useful for comparing devExt(4) == devExt(5), where most funcs are unary 
-        /// </summary>
-        /// <param name="c"></param>
-        /// <returns></returns>
-        private static Expr CleanupUnaryFuncApplications(Expr a)
-        {
-            var b = a as NAryExpr;
-            if (b == null) return a;
-            var newArgs = new List<Expr>();
-            foreach (Expr arg in b.Args)
-                newArgs.Add(CleanupUnaryFuncApplications(arg));
-            if (newArgs.Count == 1 && b.Fun.FunctionName != "Not") //any unary function is shortcircuited
-                return newArgs[0];
-            return new NAryExpr(Token.NoToken, b.Fun, newArgs);
-        }
-        private static bool IsAliasingConstraint(Expr c)
-        {
-            var expr = c as NAryExpr;
-            if (expr == null) return false;
-            var binOp = expr.Fun as BinaryOperator;
-            if (binOp == null) return false;
-            if (binOp.Op != BinaryOperator.Opcode.Eq /* && binOp.Op != BinaryOperator.Opcode.Neq */) return false;
-            if (expr.Args[0] is LiteralExpr && expr.Args[1] is LiteralExpr) return false;
-            //if (binOp.Op != BinaryOperator.Opcode.Eq && (expr.Args[0] is LiteralExpr || expr.Args[1] is LiteralExpr)) return false;
-            //we want to keep x[y := z][w] != z constaints that give rise to y != w aliasing constraints
-            return true;
-        }
-        private static bool ContainsMapExpression(Expr c)
-        {
-            var a = c as NAryExpr;
-            if (a == null) return false;
-            //just look at top-level exprs
-            foreach (var arg in a.Args) {
-                var b = arg as NAryExpr;
-                if (b != null && b.Fun.FunctionName == "MapSelect")
-                    return true;
-            }
-            return false;
-        }
-        private static bool IsRelationalExprWithConst(Expr c)
-        {
-            var a = c as NAryExpr;
-            if (a == null) return false;
-            //just look at top-level exprs
-            if (!ExprUtil.IsRelationalOp(a.Fun)) return false;
-            foreach (var arg in a.Args)
-                if (arg is LiteralExpr) return true;
-            return false;
-        }
-        private static void CollectConjuncts(Expr pre, ref List<Expr> conjuncts)
-        {
-            if (conjuncts.Contains(pre)) return; //eliminate duplicates
-            var expr = pre as NAryExpr;
-            if (expr == null) {conjuncts.Add(pre); return;}
-            var binOp = expr.Fun as BinaryOperator;
-            if (binOp == null || binOp.Op != BinaryOperator.Opcode.And) 
-            {
-                conjuncts.Add(pre); return;
-            }
-            CollectConjuncts(expr.Args[0], ref conjuncts);
-            CollectConjuncts(expr.Args[1], ref conjuncts);
-        }
-        private static bool IsTrueAssert(AssertCmd assertCmd)
-        {
-            return (assertCmd.Expr.ToString() == "true"); //TODO: any better way to check?
-        }
-        private static bool ContainsSlicAttribute(AssumeCmd assumeCmd)
-        {
-            if (ignoreAllAssumes) return false;
-            return (!onlySlicAssumes || QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic"));
-        }
-
-        //The routines to eliminate array updates from expressions 
+        #region The routines to eliminate array updates from expressions
         //From the almost correct spec project (acsspec) 
         private static Expr CreateITE(Expr p)
         {
@@ -877,15 +826,17 @@ namespace ExplainError
         //    var a3 = EliminateArrayUpdatesFromRelationalExpr(ExprUtil.NAryExpr(fun, sf)); //[[sf]]
         //    return ExprUtil.Or(ExprUtil.And(bd, a2), ExprUtil.And(ExprUtil.Not(bd), a3));
         //}
+        #endregion 
 
-
+        #region Parsing related methods
         /*
          * A whole bunch of parsing functions 
          */ 
         public static bool ParseCommandLine(string clo)
         {
             //without the next line, it fails to find the right prover!!
-            var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /printModel:1 /printModelToFile:model.dmp  /errorLimit:1 /printInstrumented " + clo;
+            //var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /printModel:1 /printModelToFile:model.dmp  /errorLimit:1 /printInstrumented " + clo;
+            var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /errorLimit:1 /printInstrumented " + clo;
             var oldArgs = boogieOptions.Split(' ');
             string[] args;
             //Custom parser to look and remove RootCause specific options
@@ -982,12 +933,17 @@ namespace ExplainError
             }
             return true;
         }
+        private static bool ContainsCaptureStateAttribute(AssumeCmd assumeCmd, out string captureStateLoc)
+        {
+            captureStateLoc = QKeyValue.FindStringAttribute(assumeCmd.Attributes, CAPTURESTATE_ATTRIBUTE_NAME);
+            return (captureStateLoc != null);
+        }
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
             if (CommandLineOptions.Clo.ProcsToCheck != null && CommandLineOptions.Clo.ProcsToCheck.FindAll(x => impl.Name.StartsWith(x)).Count == 0)
-            { 
-                returnStatus = STATUS.ILLEGAL; return false; 
+            {
+                returnStatus = STATUS.ILLEGAL; return false;
             }
             if (impl.Blocks.Count == 0) { returnStatus = STATUS.ILLEGAL; return false; }
             if (impl.Blocks.Count > 1)
@@ -1011,28 +967,9 @@ namespace ExplainError
                 Console.WriteLine(">>>>WARNING: Presence of at least one non assign/assume/assert/havoc/call cmd found. Turn on /verbose to see the cmds.");
             return true;
         }
+        #endregion
 
-
-        class InjectNecessaryDisjuncts : StandardVisitor
-        {
-            Expr exprToAssume; 
-            public InjectNecessaryDisjuncts(Expr c)
-            {
-                exprToAssume = c;
-            }
-            public override Cmd VisitAssumeCmd(AssumeCmd cmd)
-            {
-                string captureStateLoc;
-                if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc) && 
-                    captureStateLoc != null)
-                {
-                    return base.VisitAssumeCmd(new AssumeCmd(Token.NoToken, exprToAssume));
-                }
-                return base.VisitAssumeCmd(cmd);
-            }
-        }
-
-
+        #region Invoking Verifier for semantic queries
         private static void CreateProver()
         {
             //create vcgen/proverInterface
@@ -1042,7 +979,6 @@ namespace ExplainError
             exprGen = proverInterface.Context.ExprGen;
             collector = new ConditionGeneration.CounterexampleCollector();
         }
-
         /// <summary>
         /// Class for asking semantic questions for the verifier (carried over from almost correct specs)
         /// </summary>
@@ -1097,7 +1033,6 @@ namespace ExplainError
                     i.Blocks = i.OriginalBlocks;
                     i.LocVars = i.OriginalLocVars;
                 }
-                //var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList, out mList);
                 var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList, out mList);
                 var reset = new ResetVerificationState();
                 reset.Visit(i);
@@ -1124,10 +1059,148 @@ namespace ExplainError
                     node.IncarnationMap = null;
                     return base.VisitAssertCmd(node);
                 }
+                public override TypedIdent VisitTypedIdent(TypedIdent node)
+                {
+                    if (node.Type != null)  //special hack to avoid encountering variables with null Type (e.g. call10690formal@b@0)
+                        node.Type = (Microsoft.Boogie.Type)this.Visit(node.Type);
+                    return node;
+                }
+                public override Cmd VisitAssumeCmd(AssumeCmd node)
+                {
+                    //TODO: This fix does not help
+
+                    //get rid of some temp variables introduced
+                    if (node.Expr != null && node.Expr.ToString().Contains("formal@"))
+                        node.Expr = Expr.True;
+                    else
+                        node.Expr = this.VisitExpr(node.Expr);
+                    return node;
+                }
+
             }
         }
+        #endregion 
 
+        #region Syntactic queries on expression sets and massaging to DNF/CNF/list form
+        #region deprecated
+        ///// <summary>
+        ///// UNSOUND HACK: turns any f(t) --> t. Useful for comparing devExt(4) == devExt(5), where most funcs are unary 
+        ///// </summary>
+        ///// <param name="c"></param>
+        ///// <returns></returns>
+        //private static Expr CleanupUnaryFuncApplications(Expr a)
+        //{
+        //    var b = a as NAryExpr;
+        //    if (b == null) return a;
+        //    var newArgs = new List<Expr>();
+        //    foreach (Expr arg in b.Args)
+        //        newArgs.Add(CleanupUnaryFuncApplications(arg));
+        //    if (newArgs.Count == 1 && b.Fun.FunctionName != "Not") //any unary function is shortcircuited
+        //        return newArgs[0];
+        //    return new NAryExpr(Token.NoToken, b.Fun, newArgs);
+        //}
+        #endregion
+        private static bool IsAliasingConstraint(Expr c)
+        {
+            var expr = c as NAryExpr;
+            if (expr == null) return false;
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Eq /* && binOp.Op != BinaryOperator.Opcode.Neq */) return false;
+            if (expr.Args[0] is LiteralExpr && expr.Args[1] is LiteralExpr) return false;
+            //if (binOp.Op != BinaryOperator.Opcode.Eq && (expr.Args[0] is LiteralExpr || expr.Args[1] is LiteralExpr)) return false;
+            //we want to keep x[y := z][w] != z constaints that give rise to y != w aliasing constraints
+            return true;
+        }
+        private static bool ContainsMapExpression(Expr c)
+        {
+            var a = c as NAryExpr;
+            if (a == null) return false;
+            //just look at top-level exprs
+            foreach (var arg in a.Args)
+            {
+                var b = arg as NAryExpr;
+                if (b != null && b.Fun.FunctionName == "MapSelect")
+                    return true;
+            }
+            return false;
+        }
+        private static bool IsRelationalExprWithConst(Expr c)
+        {
+            var a = c as NAryExpr;
+            if (a == null) return false;
+            //just look at top-level exprs
+            if (!ExprUtil.IsRelationalOp(a.Fun)) return false;
+            foreach (var arg in a.Args)
+                if (arg is LiteralExpr) return true;
+            return false;
+        }
+        private static void CollectConjuncts(Expr pre, ref List<Expr> conjuncts)
+        {
+            if (conjuncts.Contains(pre)) return; //eliminate duplicates
+            var expr = pre as NAryExpr;
+            if (expr == null) { conjuncts.Add(pre); return; }
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null || binOp.Op != BinaryOperator.Opcode.And)
+            {
+                conjuncts.Add(pre); return;
+            }
+            CollectConjuncts(expr.Args[0], ref conjuncts);
+            CollectConjuncts(expr.Args[1], ref conjuncts);
+        }
+        private static bool IsTrueAssert(AssertCmd assertCmd)
+        {
+            return (assertCmd.Expr.ToString() == "true"); //TODO: any better way to check?
+        }
+        private static bool ContainsSlicAttribute(AssumeCmd assumeCmd)
+        {
+            if (ignoreAllAssumes) return false;
+            return (!onlySlicAssumes || QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic"));
+        }
+        private static HashSet<Expr> FilteredAtoms(Implementation currImpl, Expr t, out Expr e)
+        {
+            var fexps = new HashSet<Expr>(); // list of filtered exprs
+            e = GetFilteredExpr(t, ref fexps); //the return expr is of no value now
+            Console.WriteLine("\n Filtered atoms = {0}", String.Join(", ", fexps));
+            return fexps;
+        }
+        private static Expr GetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
+        {
+            CheckTimeout("Inside GetFilteredExpr");
+            var expr = e as NAryExpr;
+            if (expr == null)
+            {
+                if (FilterConjunct(e)) return Expr.True;
+                if (!fexps.Contains(e)) fexps.Add(e);
+                return e;
+            }
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
+            {
+                if (FilterConjunct(e)) return Expr.True;
+                if (!fexps.Contains(e)) fexps.Add(e);
+                return e;
+            }
+            return ExprUtil.NAryExpr(binOp,
+                new List<Expr> { GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps) });
+        }
+        private static bool FilterConjunct(Expr c)
+        {
+            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;
+            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
+            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
+            return false;
+        }
+        public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preDisjuncts)
+        {
+            Expr ret = Expr.False;
+            foreach (var el in preDisjuncts)
+                ret = ExprUtil.Or(ret, el.Aggregate((Expr)Expr.True, (x, y) => Expr.And(x, y)));
+            return ret;
+        }
+        #endregion
 
+        #region Expression transformer/simplifier module
         /// <summary>
         /// performs syntactic simplifications of expressions
         /// </summary>
@@ -1353,7 +1426,8 @@ namespace ExplainError
                 }
                 return x;
             }
-
         }
+        #endregion 
+    
     }
 }

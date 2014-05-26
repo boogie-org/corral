@@ -1066,6 +1066,15 @@ namespace cba
             return 0;
         }
 
+        public bool getBoolVal(string var)
+        {
+            var val = getVal(var);
+            if (val is bool) return (bool)val;
+            if (val is Model.Boolean) return ((Model.Boolean)val).Value;
+            Debug.Assert(false);
+            return false;
+        }
+
         public Microsoft.Basetypes.BigNum getBigNumVal(string var)
         {
             var val = getVal(var);
@@ -1088,6 +1097,13 @@ namespace cba
             var v = varToVal[var];
             return ((v is int) || (v is Microsoft.Boogie.Model.Integer) ||
                 (v is Microsoft.Basetypes.BigNum));
+        }
+
+        public bool hasBoolVar(string var)
+        {
+            if (!hasVar(var)) return false;
+            var v = varToVal[var];
+            return ((v is bool) || (v is Microsoft.Boogie.Model.Boolean));
         }
 
         public override string ToString()

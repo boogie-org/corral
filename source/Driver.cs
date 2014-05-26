@@ -12,7 +12,7 @@ using System.IO;
 
 namespace cba
 {
-    class Driver
+    public class Driver
     {
 
         static int Main(string[] args)
@@ -79,14 +79,8 @@ namespace cba
 
         }
 
-        static int run(string[] args) 
+        public static void Initialize(Configs config)
         {
-            ////////////////////////////////////
-            // Input and initialization phase
-            ////////////////////////////////////
-
-            Configs config = Configs.parseCommandLine(args);
-            CommandLineOptions.Install(new CommandLineOptions());
 
             BoogieVerify.useDuality = config.useDuality;
 
@@ -109,7 +103,7 @@ namespace cba
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
-            if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true; 
+            if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
                 config.printData = 1;
 
@@ -142,8 +136,6 @@ namespace cba
 
             boogieOptions += string.Format("/recursionBound:{0} ", config.recursionBound);
 
-            var startTime = DateTime.Now;
-
             // Initialize Boogie
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
@@ -156,13 +148,13 @@ namespace cba
                 "/removeEmptyBlocks:0 /coalesceBlocks:0 /noinfer " +
                 //"/z3opt:RELEVANCY=0  " +                
                 "/typeEncoding:m " +
-                "/vc:i " + 
+                "/vc:i " +
                 "/subsumption:0 ";
 
             InstrumentationConfig.UseOldInstrumentation = false;
             VariableSlicing.UseSimpleSlicing = false;
             InstrumentationConfig.raiseExceptionBeforeAllProcedures = false;
-            
+
             if (GlobalConfig.useArrayTheory)
                 boogieOptions += " /useArrayTheory";
             else
@@ -179,6 +171,26 @@ namespace cba
                 throw new InternalError("Cannot initialize Boogie");
 
             GlobalConfig.corralStartTime = DateTime.Now;
+        }
+
+        public static int run(string[] args) 
+        {
+            ////////////////////////////////////
+            // Input and initialization phase
+            ////////////////////////////////////
+
+            Configs config = Configs.parseCommandLine(args);
+            CommandLineOptions.Install(new CommandLineOptions());
+
+            if (!System.IO.File.Exists(config.inputFile))
+            {
+                throw new UsageError(string.Format("Input file {0} does not exist", config.inputFile));
+            }
+
+            Initialize(config);
+
+            var startTime = DateTime.Now;
+            
 
             ////////////////////////////////////
             // Initial program rewriting
@@ -188,6 +200,8 @@ namespace cba
 
             var inputProg = GetInputProgram(config);
             if (inputProg == null) return 0;
+
+            CorralState.AbsorbPrevState(config, ConfigManager.progVerifyOptions);
 
             // Rewrite assert commands
             RewriteAssertsPass apass = new RewriteAssertsPass();
@@ -380,12 +394,13 @@ namespace cba
             }
             #endregion
 
+            CorralState.DumpCorralState(config, ConfigManager.progVerifyOptions.CallTree, refinementState.getVars().Variables);
             Log.Close();
 
             return 0;
         }
 
-        private static PersistentCBAProgram GetInputProgram(Configs config)
+        public static PersistentCBAProgram GetInputProgram(Configs config)
         {
             // This is to check the input program for parsing and resolution
             // errors. We check for type errors later
@@ -666,6 +681,8 @@ namespace cba
             var pathVerifyOptions = ConfigManager.pathVerifyOptions;
             var refinementVerifyOptions = ConfigManager.refinementVerifyOptions;
 
+            CorralState.AbsorbPrevState(config, progVerifyOptions);
+
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
             VerificationPass.usePruning = false;
             
@@ -804,6 +821,7 @@ namespace cba
             var correct = false;
             var iterCnt = 0;
             var maxInlined = 0;
+            var vcSize = 0;
             VarSet varsToKeep;
             var cLoopHistory = ConstLoopHistory.GetNull();
             ErrorTrace buggyTrace = null;
@@ -866,6 +884,8 @@ namespace cba
                 DeepAssertRewrite da = null;
                 if (config.deepAsserts)
                 {
+                    DeepAssertRewrite.disableLoops = config.deepAssertsNoLoop;
+
                     //abs.writeToFile("ttin.bpl");
                     da = new DeepAssertRewrite();
                     abs = da.run(abs);
@@ -894,6 +914,8 @@ namespace cba
 
                 BoogieVerify.setTimeOut(0);
                 maxInlined = (BoogieVerify.CallTreeSize > maxInlined) ? BoogieVerify.CallTreeSize : maxInlined;
+                maxInlined += (da != null) ? da.procsIncludedInMain : 0;
+                vcSize = (BoogieVerify.vcSize > vcSize) ? BoogieVerify.vcSize : vcSize;
 
                 if (verificationPass.success)
                 {
@@ -928,7 +950,7 @@ namespace cba
                 //ptrace.writeToFile("ptrace.bpl");
 
                 if (da != null)
-                    ptrace = da.InstrumentTrace(ptrace);
+                    ptrace = DeepAssertRewrite.InstrumentTrace(ptrace);
 
                 //////////////////////////
                 // Check concrete trace
@@ -996,6 +1018,7 @@ namespace cba
             Console.WriteLine("CLoops Time: {0} s", cloopsTime.TotalSeconds.ToString("F2"));
             Console.WriteLine("Num refinements: {0}", iterCnt);
             Console.WriteLine("Number of procedures inlined: {0}", maxInlined);
+            Console.WriteLine("VC Size: {0}", vcSize);
             Console.WriteLine("Final tracked vars: {0}", varsToKeep.Variables.Print());
             Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
             
@@ -1325,6 +1348,7 @@ namespace cba
                 am.Close();
             }
 
+            CorralState.DumpCorralState(config, progVerifyOptions.CallTree, varsToKeep.Variables);
             Log.Close();
         }
 
@@ -1353,7 +1377,7 @@ namespace cba
         // Mark "slic" assume statements
         // Insert captureState for driver methods and start
         // Mark "indirect" call assume statements
-        private static void sdvAnnotateDefectTrace(Program trace, Configs config)
+        public static void sdvAnnotateDefectTrace(Program trace, Configs config)
         {
             var slicVars = new HashSet<string>(config.trackedVars);
             slicVars.Remove("alloc");
@@ -1769,7 +1793,7 @@ namespace cba
         static int traceCounterDbg = 0;
 
         // Check program "inputProg" using variable abstraction
-        private static bool checkAndRefine(PersistentCBAProgram prog, RefinementState refinementState, Action<ErrorTrace, string> printTrace, out ErrorTrace cexTrace)
+        public static bool checkAndRefine(PersistentCBAProgram prog, RefinementState refinementState, Action<ErrorTrace, string> printTrace, out ErrorTrace cexTrace)
         {
             cexTrace = null;
             var outcomeSuccess = true;

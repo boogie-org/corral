@@ -1,0 +1,47 @@
+
+-------------------- t1.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t1.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 52 with expr assert a != NULL;
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
+
+-------------------- t2_err.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t2_err.bpl ------
+[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
+
+-------------------- t3_err.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t3_err.bpl ------
+[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no NULL constant declared in the input program
+
+-------------------- t4.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t4.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 53 with expr assert a != NULL;
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
+
+-------------------- t5.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t5.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_2(x_3) ==> x_3 != NULL)
+
+-------------------- t6.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t6.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_2(x_3) ==> x_3 != NULL)
+
+-------------------- t7.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t7.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_1(x_2) ==> field[x_2] != NULL)
+
+-------------------- t8.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t8.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 79 with expr assert a != NULL;
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_2(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_5(x_3) ==> arr[x_3] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> x_2 != NULL)
+
+-------------------- pruned.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo at line 113 with expr assert {:nonnull} !(x == NULL);
+
+-------------------- empty_forall.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> arr[42] != NULL

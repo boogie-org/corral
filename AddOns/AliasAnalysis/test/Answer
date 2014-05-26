@@ -1,0 +1,57 @@
+
+-------------------- f1.bpl --------------------
+f: False
+
+-------------------- f2.bpl --------------------
+f: False
+
+-------------------- f3.bpl --------------------
+f: True
+
+-------------------- f4.bpl --------------------
+f: True
+
+-------------------- f5.bpl --------------------
+f: True
+
+-------------------- f6.bpl --------------------
+f1: False
+f2: True
+
+-------------------- f7.bpl --------------------
+f1: True
+f2: False
+
+-------------------- fail_driver4_completerequest.bpl --------------------
+alias1: True
+alias2: True
+alias3: True
+alias4: True
+alias5: True
+alias6: True
+alias7: True
+
+-------------------- fail_driver5_SignalEventIncCompletion2.bpl --------------------
+alias1: True
+alias2: False
+
+-------------------- fail_driver5_spinlock.bpl --------------------
+alias1: True
+alias2: False
+alias3: False
+alias4: False
+alias5: False
+alias6: False
+alias7: False
+alias8: False
+
+-------------------- flpydisk_fail_wmiforward.bpl --------------------
+alias1: False
+alias2: True
+alias3: False
+alias4: True
+alias5: True
+alias6: False
+alias7: False
+alias8: True
+alias9: True

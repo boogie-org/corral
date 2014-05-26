@@ -125,6 +125,8 @@ namespace cba
                 throw new InvalidProg("Cannot typecheck");
             }
 
+            BoogieVerify.options.Set();
+
             // An important pass for recording the value of int variables
             Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
             if(WillGetModel)
@@ -545,6 +547,8 @@ namespace cba
             public HashSet<string> mustNotMod;
             public QKeyValue annotations;
 
+            public static HashSet<string> procsThatFail = null;
+
             public bool IsFree
             {
                 get
@@ -634,6 +638,13 @@ namespace cba
 
                 if (!mustMod.IsSubsetOf(mods)) return false;
                 if (mustNotMod.Intersection(mods).Any()) return false;
+
+                if (QKeyValue.FindBoolAttribute(annotations, "mustfail"))
+                {
+                    Debug.Assert(procsThatFail != null);
+                    return procsThatFail.Contains(proc.Name);
+                }
+
                 return true;
             }
 
@@ -1003,9 +1014,9 @@ namespace cba
             }
 
             ModSetCollector.DoModSetAnalysis(program);
+            EExpr.procsThatFail = BoogieUtil.procsThatMaySatisfyPredicate(program, c => BoogieUtil.isAssert(c));
 
             DoStaticAnalysis(program);
-
             var info = Instantiate(program);
 
             if (!runAbsHoudini && info.Count == 0 && summaries.Count == 0) return program;
@@ -1033,6 +1044,8 @@ namespace cba
             return program;
         }
 
+        public static bool FPA = false;
+
         public void trainSummaries(CBAProgram program)
         {
             // discard non-free templates
@@ -1058,6 +1071,31 @@ namespace cba
             if (impl != null) impl.AddAttribute("entrypoint");
 
             var info = Instantiate(program);
+
+            var proc2Exprs = new Dictionary<string, List<Expr>>();
+            if (FPA)
+            {
+                var newFns = new List<Declaration>();
+                foreach (var p in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    var proc = p.Proc;
+                    
+                    var sp = proc.Ensures.Partition(ens => ens.Free);
+                    proc.Ensures = sp.fst;
+
+                    var foo = CreateFunctionFPA(sp.snd.Count, "foo_" + proc.Name);
+                    foo.AddAttribute("absdomain", "PredicateAbs");
+                    newFns.Add(foo);
+
+                    var exprArgs = new List<Expr>(sp.snd.Select(ens => ens.Condition));
+                    var expr = new NAryExpr(Token.NoToken, new FunctionCall(foo), exprArgs);
+                    proc.Ensures.Add(new Ensures(false, expr));
+
+                    proc2Exprs.Add(foo.Name, exprArgs);
+                }
+
+                program.TopLevelDeclarations.AddRange(newFns);
+            }
 
             // Massage program
             (new RewriteCallDontCares()).VisitProgram(program);
@@ -1100,13 +1138,51 @@ namespace cba
             if (printHoudiniQuery != null)
                 BoogieUtil.PrintProgram(program, printHoudiniQuery);
 
-            AbstractHoudini absHoudini = null;
-            PredicateAbs.Initialize(program);
-            absHoudini = new AbstractHoudini(program);
-            absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
-            // Abstract houdini sets a prover option for the time limit. Get rid of that now
-            CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+            HashSet<string> predicates = new HashSet<string>();
 
+            if (FPA)
+            {
+                AbstractDomainFactory.Initialize(program);
+                var domain = AbstractDomainFactory.GetInstance("PredicateAbs");
+                var abs = new AbsHoudini(program, domain);
+                CommandLineOptions.Clo.PrintAssignment = true;
+                var absout = abs.ComputeSummaries();
+
+                var summaries = abs.GetAssignment();
+                foreach (var foo in summaries)
+                {
+                    var body = foo.Body;
+                    if(body is LiteralExpr && (body as LiteralExpr).IsTrue)
+                        continue;
+
+                    // break top-level ANDs
+
+                    var subst = new Substitution(v =>
+                        {
+                            var num = Int32.Parse(v.Name.Substring(1));
+                            return proc2Exprs[foo.Name][num];
+                        });
+
+                    body = Substituter.Apply(subst, body);
+
+                    foreach(var c in GetConjuncts(body)) 
+                        predicates.Add(c.ToString());
+                }
+            }
+            else
+            {
+                AbstractHoudini absHoudini = null;
+                PredicateAbs.Initialize(program);
+                absHoudini = new AbstractHoudini(program);
+                absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
+                // Abstract houdini sets a prover option for the time limit. Get rid of that now
+                CommandLineOptions.Clo.ProverOptions.RemoveAll(str => str.StartsWith("TIME_LIMIT"));
+
+                // Record new summaries
+                predicates = absHoudini.GetPredicates();
+            }
+
+            
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
@@ -1116,9 +1192,6 @@ namespace cba
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
-            // Record new summaries
-            var predicates = absHoudini.GetPredicates();
-            
             // get rid of "true ==> blah" for type-state predicates 
             // because we know they get covered by other candidates anyway
             var typestatePost = new HashSet<string>();
@@ -1135,6 +1208,29 @@ namespace cba
             {
                 predicates.Iter(s => fs.WriteLine("{0}", s));
             }
+        }
+
+        private Function CreateFunctionFPA(int numArgs, string name)
+        {
+            var args = new List<Variable>();
+            for(int i = 0; i < numArgs; i++) 
+                args.Add(BoogieAstFactory.MkFormal("x" + i.ToString(), Microsoft.Boogie.Type.Bool, true));
+            var ret = new Function(Token.NoToken, name, args, BoogieAstFactory.MkFormal("x", Microsoft.Boogie.Type.Bool, false));
+            ret.AddAttribute("existential", Expr.Literal(true));
+            return ret;
+        }
+
+        private List<Expr> GetConjuncts(Expr expr)
+        {
+            var nary = expr as NAryExpr;
+            if (nary == null) return new List<Expr> { expr };
+            var bop = nary.Fun as BinaryOperator;
+            if (bop == null || bop.Op != BinaryOperator.Opcode.And) return new List<Expr> { expr };
+
+            var l1 = GetConjuncts(nary.Args[0]);
+            var l2 = GetConjuncts(nary.Args[1]);
+
+            return new List<Expr>(l1.Concat(l2));
         }
 
         private void DoStaticAnalysis(CBAProgram program)
@@ -1237,7 +1333,7 @@ namespace cba
                 impl.Attributes = BoogieUtil.removeAttr("inline", impl.Attributes);
                 impl.Attributes = BoogieUtil.removeAttr("verify", impl.Attributes);
             }
-
+            
             if (checkAsserts)
             {
                 // Guard assert with an existential Boolean
@@ -1246,10 +1342,8 @@ namespace cba
                 {
                     for (int i = 0; i < blk.Cmds.Count; i++)
                     {
+                        if (!BoogieUtil.isAssert(blk.Cmds[i])) continue;
                         var acmd = blk.Cmds[i] as AssertCmd;
-                        if (acmd == null) continue;
-                        var le = acmd.Expr as LiteralExpr;
-                        if (le != null && le.IsTrue) continue;
                         blk.Cmds[i] = new AssumeCmd(Token.NoToken, acmd.Expr);
                     }
                 }));
@@ -1265,7 +1359,7 @@ namespace cba
                                 foreach (var cmd in blk.Cmds)
                                 {
                                     var acmd = cmd as AssertCmd;
-                                    if (acmd == null || BoogieUtil.isAssertTrue(cmd))
+                                    if (!BoogieUtil.isAssert(cmd))
                                     {
                                         ncmds.Add(cmd);
                                         continue;
@@ -1356,6 +1450,9 @@ namespace cba
 
                 inline(program);
                 BoogieUtil.TypecheckProgram(program, "error.bpl");
+                
+                // TODO: what about abshoudini?
+                //PruneIrrelevantImpls(program);
 
                 if (printHoudiniQuery != null)
                     BoogieUtil.PrintProgram(program, printHoudiniQuery);
@@ -1572,6 +1669,19 @@ namespace cba
             }
         }
 
+        // Remove implementations that cannot have an impact on any houdini candidate.
+        // In our setting (only postconditions), these are ones that don't have a non-free ensures
+        private void PruneIrrelevantImpls(Program program)
+        {
+            var implHasEnsures = new Predicate<Implementation>(impl =>
+            {
+                bool r = impl.Proc.Ensures.Any(en => !en.Free);
+                return r;
+            });
+            program.TopLevelDeclarations =
+                program.TopLevelDeclarations.Filter(decl => !(decl is Implementation) || implHasEnsures(decl as Implementation));
+        }
+
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
         {
             var ret = trace;
@@ -1591,14 +1701,16 @@ namespace cba
     public class SDVConcretizePathPass : CompilerPass
     {
         public bool success;
-        readonly string recordProcName = "boogie_si_record_sdvcp_int";
-        readonly string initLocProcName = "init_locals_nondet__tmp";
+        readonly string recordProcNameInt = "boogie_si_record_sdvcp_int";
+        readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
+        readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
+        readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
         public Dictionary<string, Tuple<string, string, int>> allocConstants;
-        Dictionary<int, Tuple<string, string, int>> callIdToLocation;
+        Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
         private HashSet<string> procsWithoutBody;
 
-        public SDVConcretizePathPass(Dictionary<int, Tuple<string, string, int>> callIdToLocation)
+        public SDVConcretizePathPass(Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation)
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
@@ -1619,36 +1731,48 @@ namespace cba
             // Make sure that procs without a body don't modify globals
             foreach (var proc in p.TopLevelDeclarations.OfType<Procedure>().Where(proc => procsWithoutBody.Contains(proc.Name)))
             {
-                if (proc.Modifies.Count > 0 && !proc.Name.Contains("HAVOC_malloc"))
+                if (proc.Modifies.Count > 0 && !BoogieUtil.checkAttrExists("allocator", proc.Attributes))
                     throw new InvalidInput("Produce Bug Witness: Procedure " + proc.Name + " modifies globals");
             }
 
             // Add the boogie_si_record_int procedure
-            var inpVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
-            var inpArgs = new List<Variable>();
-            inpArgs.Add(inpVar);
+            var inpVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
+            var inpVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), true);
 
-            var reProc = new Procedure(Token.NoToken, recordProcName, new List<TypeVariable>(), inpArgs, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reProcInt = new Procedure(Token.NoToken, recordProcNameInt, new List<TypeVariable>(), new List<Variable>{inpVarInt}, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reProcBool = new Procedure(Token.NoToken, recordProcNameBool, new List<TypeVariable>(), new List<Variable> { inpVarBool }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
 
-            // Add a procedure to fake initialization of local variables
-            var outVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
-            var reLocProc = new Procedure(Token.NoToken, initLocProcName, new List<TypeVariable>(),
-                new List<Variable>(), new List<Variable>(new Variable[] { outVar }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-            procsWithoutBody.Add(reLocProc.Name);
+            // Add procedures for initialization of local variables
+            var outVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
+            var outVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), false);
+            var reLocProcInt = new Procedure(Token.NoToken, initLocProcNameInt, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarInt }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reLocProcBool = new Procedure(Token.NoToken, initLocProcNameBool, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarBool }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+
+            procsWithoutBody.Add(reLocProcInt.Name);
+            procsWithoutBody.Add(reLocProcBool.Name);
 
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
                 var ncmds = new List<Cmd>();
-                foreach (var loc in impl.LocVars.OfType<Variable>().Where(v => v.TypedIdent.Type.IsInt))
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsInt))
                 {
-                    var cc = new CallCmd(Token.NoToken, initLocProcName, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
-                    cc.Proc = reLocProc;
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcInt;
+                    ncmds.Add(cc);
+                }
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsBool))
+                {
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcBool;
                     ncmds.Add(cc);
                 }
                 ncmds.AddRange(impl.Blocks[0].Cmds);
                 impl.Blocks[0].Cmds = ncmds;
             }
-            p.TopLevelDeclarations.Add(reLocProc);
+            p.TopLevelDeclarations.Add(reLocProcInt);
+            p.TopLevelDeclarations.Add(reLocProcBool);
 
             // save the current program
             var fd = new FixedDuplicator(true);
@@ -1659,10 +1783,15 @@ namespace cba
                  impl.Blocks.Iter(instrument));
 
             // Name clash if this assert fails
-            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcName) == null);
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameBool) == null);
 
-            p.TopLevelDeclarations.Add(reProc);
-            
+            p.TopLevelDeclarations.Add(reProcInt);
+            p.TopLevelDeclarations.Add(reProcBool);
+            var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
+            if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
+                tmainimpl.AddAttribute("entrypoint");
+
             var program = new PersistentCBAProgram(p, p.mainProcName, 0);
             //program.writeToFile("beforeverify.bpl");
             var vp = new VerificationPass(true);
@@ -1688,8 +1817,9 @@ namespace cba
             {
                 var allocConst = kvp.Key;
                 var callId = kvp.Value;
+                // TODO: fix
                 Debug.Assert(callIdToLocation.ContainsKey(callId));
-                allocConstants.Add(allocConst, callIdToLocation[callId]);
+                allocConstants.Add(allocConst, Tuple.Create(callId.Item1, callIdToLocation[callId].Item1, callIdToLocation[callId].Item2));
             }
 
             /*
@@ -1710,6 +1840,9 @@ namespace cba
                     .Iter(s => allocConstants[s] = implName);
             }
             */
+            BoogieUtil.findProcedureImpl(rtprog.TopLevelDeclarations, rt.getFirstNameInstance(p.mainProcName))
+                .AddAttribute("entrypoint");
+
             program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
 
             // Lets inline it all
@@ -1731,7 +1864,7 @@ namespace cba
             foreach (Cmd cmd in block.Cmds)
             {
                 newCmds.Add(cmd);
-                if (cmd is HavocCmd && ((cmd as HavocCmd).Vars.Count > 1 || !(cmd as HavocCmd).Vars[0].Decl.TypedIdent.Type.IsInt))
+                if (cmd is HavocCmd && (cmd as HavocCmd).Vars.Count > 1)
                 {
                     Console.WriteLine("{0}", cmd);
                     throw new InvalidInput("Produce Bug Witness: Havoc cmd found");
@@ -1766,7 +1899,7 @@ namespace cba
 
                 if (retVal == null) continue;
 
-                if (!retVal.Type.IsInt)
+                if (!retVal.Type.IsInt && !retVal.Type.IsBool)
                 {
                     continue;
                 }
@@ -1781,7 +1914,15 @@ namespace cba
             var ins = new List<Expr>();
             ins.Add(v);
 
-            return new CallCmd(Token.NoToken, recordProcName, ins, new List<IdentifierExpr>());
+            if(v.Type.IsInt) 
+                return new CallCmd(Token.NoToken, recordProcNameInt, ins, new List<IdentifierExpr>());
+            else if (v.Type.IsBool)
+                return new CallCmd(Token.NoToken, recordProcNameBool, ins, new List<IdentifierExpr>());
+            else
+            {
+                Debug.Assert(false);
+                return null;
+            }
         }
 
 
@@ -1797,7 +1938,7 @@ namespace cba
                     if (cmd is CallInstr)
                     {
                         var ccmd = cmd as CallInstr;
-                        if (ccmd.callee == recordProcName)
+                        if (ccmd.callee == recordProcNameInt || ccmd.callee == recordProcNameBool)
                         {
                             Debug.Assert(nb.Cmds.Count != 0);
                             nb.Cmds.Last().info = ccmd.info;
@@ -2049,6 +2190,12 @@ namespace cba
         HashSet<string> exitBlocks; // for assert
         HashSet<string> callInlinedBlocks; // for calls
 
+        // number of procs inlined into main
+        public int procsIncludedInMain { get; private set; }
+
+        // disable loop transformation
+        public static bool disableLoops = false;
+
         public DeepAssertRewrite()
         {
             origMain = null;
@@ -2058,6 +2205,7 @@ namespace cba
             callContinueBlocks = new HashSet<string>();
             exitBlocks = new HashSet<string>();
             callInlinedBlocks = new HashSet<string>();
+            procsIncludedInMain = 0;
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -2070,13 +2218,16 @@ namespace cba
             if (procsThatCannotReachAssert.Contains(program.mainProcName))
                 return program;
 
-            // loopy guys cannot reach asserts
-            program.TopLevelDeclarations.OfType<LoopProcedure>()
-                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            if (!disableLoops)
+            {
+                // loopy guys cannot reach asserts
+                program.TopLevelDeclarations.OfType<LoopProcedure>()
+                    .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
 
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
-                .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+                program.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
+                    .Iter(proc => procsThatCannotReachAssert.Add(proc.Name));
+            }
 
             // Make copies of all procedures that can reach assert
             var implCopy = new Dictionary<string, Implementation>();
@@ -2084,6 +2235,8 @@ namespace cba
                 .Where(impl => !procsThatCannotReachAssert.Contains(impl.Name))
                 .Iter(impl => implCopy.Add(impl.Name,
                     (new FixedDuplicator(true)).VisitImplementation(impl)));
+
+            procsIncludedInMain = implCopy.Count;
 
             // Disable assertions in the original procedures
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -2231,34 +2384,37 @@ namespace cba
 
             implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
 
-            // detect loops
-            var l2b = BoogieUtil.labelBlockMapping(mainCopy);
-            var color = new Dictionary<Block, int>();
-            mainCopy.Blocks.Iter(b => color.Add(b, 0));
-            var Succ = new Func<Block, IEnumerable<Block>>(b =>
+            if (!disableLoops)
             {
-                var succ = new List<Block>();
-                var gc = b.TransferCmd as GotoCmd;
-                if (gc == null) return succ;
-                gc.labelNames.Iter(s => succ.Add(l2b[s]));
-                return succ;
-            });
-            var parentTree = new Dictionary<Block, Block>();
-            var cycle = new List<Block>();
-            // DFS
-            try
-            {
-                DFS(mainCopy.Blocks[0], null, Succ, color, parentTree, cycle);
-            }
-            catch (Exception)
-            {
-                var firstBlockToImpl = new Dictionary<string, string>();
-                implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
+                // detect loops
+                var l2b = BoogieUtil.labelBlockMapping(mainCopy);
+                var color = new Dictionary<Block, int>();
+                mainCopy.Blocks.Iter(b => color.Add(b, 0));
+                var Succ = new Func<Block, IEnumerable<Block>>(b =>
+                {
+                    var succ = new List<Block>();
+                    var gc = b.TransferCmd as GotoCmd;
+                    if (gc == null) return succ;
+                    gc.labelNames.Iter(s => succ.Add(l2b[s]));
+                    return succ;
+                });
+                var parentTree = new Dictionary<Block, Block>();
+                var cycle = new List<Block>();
+                // DFS
+                try
+                {
+                    DFS(mainCopy.Blocks[0], null, Succ, color, parentTree, cycle);
+                }
+                catch (Exception)
+                {
+                    var firstBlockToImpl = new Dictionary<string, string>();
+                    implToFirstBlock.Iter(kvp => firstBlockToImpl.Add(kvp.Value.Label, kvp.Key));
 
-                cycle.Reverse();
-                cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
-                    .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
-                throw;
+                    cycle.Reverse();
+                    cycle.Where(b => firstBlockToImpl.ContainsKey(b.Label))
+                        .Iter(b => Console.WriteLine("{0}", firstBlockToImpl[b.Label]));
+                    throw;
+                }
             }
 
             // Add new main back to the program
@@ -2272,6 +2428,17 @@ namespace cba
             newMainDecl.Name = mainCopy.Name;
             mainCopy.Proc = newMainDecl;
             program.TopLevelDeclarations.Add(newMainDecl);
+
+            if (disableLoops)
+            {
+                // need to get loops out of main
+                program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
+                var ex = new ExtractLoopsPass(true);
+                program = ex.runCBAPass(program);
+                // redo IDs
+                (new AddUniqueCallIds()).VisitProgram(program);
+                return program;
+            }
 
             return program;
         }
@@ -2425,7 +2592,7 @@ namespace cba
         }
 
         // Instrument deep asserts in a trace
-        public PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
+        public static PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
         {
             var program = ptrace.getProgram();
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, ptrace.mainProcName);

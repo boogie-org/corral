@@ -660,11 +660,13 @@ namespace cba
     public class AddUniqueCallIds
     {
         private static int counter = 0;
-        public Dictionary<int, Tuple<string, string, int>> callIdToLocation;
+        public static bool useGlobalCounter = true;
+        // (caller, callee, int) -> (block label, cnt)
+        public Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
 
         public AddUniqueCallIds()
         {
-            callIdToLocation = new Dictionary<int, Tuple<string, string, int>>();
+            callIdToLocation = new Dictionary<Tuple<string, string, int>, Tuple<string, int>>();
         }
 
         public void VisitProgram(Program program)
@@ -675,6 +677,9 @@ namespace cba
 
         public void VisitImplementation(Implementation impl)
         {
+            // callee -> id
+            var cnt = new Dictionary<string, int>();
+
             foreach (var block in impl.Blocks)
             {
                 var callcnt = 0;
@@ -683,8 +688,12 @@ namespace cba
                     var cc = block.Cmds[i] as CallCmd;
                     if (cc == null) continue;
 
+                    if (!cnt.ContainsKey(cc.callee))
+                        cnt[cc.callee] = 0;
+
+                    var uniqueId = useGlobalCounter ? counter : cnt[cc.callee];
                     var attr = new List<object>();
-                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(counter)));
+                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(uniqueId)));
 
                     cc.Attributes = BoogieUtil.removeAttr("si_old_unique_call", cc.Attributes);
                     var oldAttr = BoogieUtil.getAttr("si_unique_call", cc.Attributes);
@@ -699,7 +708,9 @@ namespace cba
                     }
 
                     cc.Attributes = new QKeyValue(Token.NoToken, "si_unique_call", attr, cc.Attributes);
-                    callIdToLocation.Add(counter, Tuple.Create(impl.Name, block.Label, callcnt));
+                    callIdToLocation.Add(Tuple.Create(impl.Name, cc.callee, uniqueId), Tuple.Create(block.Label, callcnt));
+
+                    cnt[cc.callee]++;
 
                     callcnt++;
                     counter++;
@@ -742,7 +753,15 @@ namespace cba
             // For each SCC, compute backedges
             foreach (var scc in sccs)
             {
-                if (scc.Count <= 1) continue;
+                if (scc.Count == 1)
+                {
+                    var onlyProc = scc.First();
+                    if (nameImplMap.ContainsKey(onlyProc) && QKeyValue.FindBoolAttribute(nameImplMap[onlyProc].Attributes, "LoopProcedure"))
+                        continue;
+
+                    if (graph.Successors(onlyProc).All(callee => callee != onlyProc))
+                        continue;
+                }
 
                 Console.Write("Considering SCC: ");
                 scc.Iter(s => Console.Write("{0} ", s));

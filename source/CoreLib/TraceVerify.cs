@@ -31,7 +31,9 @@ namespace cba
         // Add concretization assignments
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
-        public Dictionary<string, int> allocConstantToCall;
+        public Dictionary<string, Tuple<string, string, int>> allocConstantToCall;
+        // Convert non-failing asserts to assumes
+        public static bool convertNonFailingAssertsToAssumes = false;
 
         public RestrictToTrace(Program p, InsertionTrans t)
         {
@@ -45,7 +47,7 @@ namespace cba
             tinfo = t;
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
-            allocConstantToCall = new Dictionary<string, int>();
+            allocConstantToCall = new Dictionary<string, Tuple<string, string, int>>();
         }
 
         private string addIntToString(string s, int i)
@@ -177,7 +179,14 @@ namespace cba
 
                     if (!(c is CallCmd))
                     {
-                        traceBlock.Cmds.Add(c);
+                        if (convertNonFailingAssertsToAssumes && c is AssertCmd && !(curr_instr.info is AssertFailInstrInfo))
+                        {
+                            traceBlock.Cmds.Add(new AssumeCmd(c.tok, (c as AssertCmd).Expr, (c as AssertCmd).Attributes));
+                        }
+                        else
+                        {
+                            traceBlock.Cmds.Add(c);
+                        }
                         Debug.Assert(!curr_instr.isCall());
                         addedTrans(newName, curr.Label, instrCount, c, traceBlock.Label, traceBlock.Cmds);
 
@@ -195,19 +204,21 @@ namespace cba
                         traceBlock.Cmds.Add(c);
                         Debug.Assert(!call_instr.hasCalledTrace);
                         if (addConcretization && cc.Outs.Count == 1 &&
-                            call_instr.info.hasIntVar("si_arg"))
+                            (call_instr.info.hasIntVar("si_arg") || call_instr.info.hasBoolVar("si_arg")))
                         {
-                            var val = call_instr.info.getIntVal("si_arg");
-
-                            if (!addConcretizationAsConstants || !cc.Proc.Name.Contains("malloc"))
+                            if (!addConcretizationAsConstants || !BoogieUtil.checkAttrExists("allocator", cc.Proc.Attributes))
                             {
-                                traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, val));
+                                if(call_instr.info.hasBoolVar("si_arg"))
+                                    traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getBoolVal("si_arg")));
+                                else
+                                    traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getIntVal("si_arg")));
+
                             }
-                            else
+                            else if(call_instr.info.hasIntVar("si_arg"))
                             {
                                 // create a constant that is equal to this literal, then use the constant
                                 // for concretization
-
+                                var val = call_instr.info.getIntVal("si_arg");
                                 var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
                                     string.Format("alloc_{0}", const_counter), Microsoft.Boogie.Type.Int), false);
                                 const_counter++;
@@ -218,7 +229,9 @@ namespace cba
 
                                 var id = QKeyValue.FindIntAttribute(cc.Attributes, "si_old_unique_call", -1); // hack to get around multiple unique calls labels
                                 if (id == -1) id = QKeyValue.FindIntAttribute(cc.Attributes, "si_unique_call", -1);
-                                if (id != -1) allocConstantToCall.Add(constant.Name, id);
+                                var origProcName = QKeyValue.FindStringAttribute(impl.Attributes, "origRTname");
+                                if (origProcName == null) origProcName = trace.procName;
+                                if (id != -1) allocConstantToCall.Add(constant.Name, Tuple.Create(origProcName, cc.callee, id));
                             }
 
                         }
@@ -255,7 +268,10 @@ namespace cba
 
             output.TopLevelDeclarations.Add(
                 new Implementation(Token.NoToken, newName, impl.TypeParameters,
-                    impl.InParams, impl.OutParams, impl.LocVars, traceBlocks, impl.Attributes));
+                    impl.InParams, impl.OutParams, impl.LocVars, traceBlocks,
+                    QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") == null ?
+                      new QKeyValue(Token.NoToken, "origRTname", new List<object> { impl.Name }, impl.Attributes)
+                    : impl.Attributes));
             
             return newName;
         }

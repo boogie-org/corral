@@ -2603,7 +2603,7 @@ namespace cba
                         {
                             throw new InternalError("Multiple assertions have failed");
                         }
-                        failingAssert = new AssertLocation(trace.procName, last.blockName, last.Cmds.Count - 1);
+                        failingAssert = new AssertLocation(trace.procName, last.blockName, last.Cmds.Count);
 
                         if (lab1BlocksAddedForReq.Contains(blk.blockName))
                         {
