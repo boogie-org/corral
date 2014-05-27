@@ -45,3 +45,8 @@
 -------------------- empty_forall.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> arr[42] != NULL
+
+-------------------- null.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing null.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo at line 30 with expr assert b != NULL;
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo at line 23 with expr assert b != NULL;

@@ -401,7 +401,24 @@ namespace ExplainError
             }
             if (retain.Count > 0) //else keep preDisjuncts possibly non-minimal
                 preDisjuncts = retain;
+            CheckIfTrueDisjunct(ref preDisjuncts);
             return true;
+        }
+
+        /// <summary>
+        /// check if the disjunct is semantically true
+        /// if so, replace it by true
+        /// </summary>
+        /// <param name="preDisjuncts"></param>
+        private static void CheckIfTrueDisjunct(ref HashSet<List<Expr>> preDisjuncts)
+        {
+            var pre = ExprUtil.Not(ExprListSetToDNFExpr(preDisjuncts ));
+            if (VCVerifier.CheckIfExprFalse(currImpl, pre))
+            {
+                Console.WriteLine("Replacing semantically true expr ({0}) with true", pre);
+                preDisjuncts = new HashSet<List<Expr>>();
+                preDisjuncts.Add(new List<Expr>() { Expr.True });
+            }
         }
 
         private static List<string> DisplayDisjunctsOnConsole(HashSet<List<Expr>> preDisjuncts)
