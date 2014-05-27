@@ -157,7 +157,7 @@ namespace cba.Util
                     {
                         CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
                         CommandLineOptions.Clo.FixedPointEngine = "duality";
-                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>(), options.extraRecBound);
                     }
             }
             catch (ProverException e)
