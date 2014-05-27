@@ -64,6 +64,11 @@ namespace ExplainError
         static public bool allCubesCovered; // are all the cubes covered in the final returned set
         static public STATUS returnStatus; //what is the status of the return
         static public Dictionary<string, string> complexCExprs; //list of let exprs for displaying concisely
+
+        static public string suggestionsFileName = null; //file where we dump the suggestions
+        static private string CORRAL_EXPLAINERROR_INIT = "corralExplainErrorInit";
+        static private Procedure corralExplainErrorInitProc = null;
+
         #endregion
 
         //this will be invoked from corral
@@ -80,17 +85,20 @@ namespace ExplainError
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
-            out STATUS status, out Dictionary<string, string> complexCExprsRet)
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,             
+            out STATUS status, out Dictionary<string, string> complexCExprsRet,
+            string outFile = null)
         {
             HashSet<List<Expr>> preDisjuncts;
-            return Go(impl, pr, tmout, explainErrorFilters, out status, out complexCExprsRet, out preDisjuncts);
+            return Go(impl, pr, tmout, explainErrorFilters, out status, out complexCExprsRet, out preDisjuncts,outFile);
         }
 
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
             out STATUS status, out Dictionary<string,string> complexCExprsRet,
-            out HashSet<List<Expr>> preDisjuncts)
+            out HashSet<List<Expr>> preDisjuncts,
+            string outFile)
         {
+            suggestionsFileName = outFile;
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
             /////////////////////////////////////
@@ -135,7 +143,7 @@ namespace ExplainError
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
             if (!CheckSanity(impl)) return null;
-
+            if (suggestionsFileName != null) FindOrCreateExplainErrorInit(); 
             Console.WriteLine("############# Implementation = {0} #################", impl.Name);
             try
             {
@@ -156,6 +164,7 @@ namespace ExplainError
                 currImpl = null;
                 sw.Stop();
                 var preStrings = DisplayDisjunctsOnConsole(preDisjuncts);
+                if (suggestionsFileName != null) PersistSuggestionsInFile(preDisjuncts, preStrings);
                 return preStrings;
             }
             catch (Exception e)
@@ -166,6 +175,20 @@ namespace ExplainError
                 preDisjuncts = new HashSet<List<Expr>>();
                 return new List<string>();
             }
+        }
+
+        private static void PersistSuggestionsInFile(HashSet<List<Expr>> preDisjuncts, List<string> preStrings)
+        {
+            var cnfClauses = ExprListSetToNegatedCNFExprList(preDisjuncts);
+            var suggestionsFile = new TokenTextWriter(suggestionsFileName);
+            suggestionsFile.WriteLine("//The file with ExplainError suggestions");
+            suggestionsFile.WriteLine("procedure {0} ();", CORRAL_EXPLAINERROR_INIT);
+            var attr = "{:explainerror}";
+            cnfClauses.Iter(x =>
+                suggestionsFile.WriteLine("free ensures {0} {1};", attr, x));
+            corralExplainErrorInitProc.Ensures.Iter(x =>
+                suggestionsFile.WriteLine("free ensures {0} {1};", attr, x));
+            suggestionsFile.Close();
         }
 
         private static void CheckTimeout(string p)
@@ -967,6 +990,17 @@ namespace ExplainError
                 Console.WriteLine(">>>>WARNING: Presence of at least one non assign/assume/assert/havoc/call cmd found. Turn on /verbose to see the cmds.");
             return true;
         }
+        private static void FindOrCreateExplainErrorInit()
+        {
+            corralExplainErrorInitProc = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == CORRAL_EXPLAINERROR_INIT).FirstOrDefault();
+            if (corralExplainErrorInitProc == null)
+            {
+                Console.WriteLine(string.Format("Creating the procedure {0} ...", CORRAL_EXPLAINERROR_INIT));
+                corralExplainErrorInitProc = new Procedure(Token.NoToken, CORRAL_EXPLAINERROR_INIT, new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
+                    new List<Requires>(),  new List<IdentifierExpr>(), new List<Ensures>());
+                prog.TopLevelDeclarations.Add(corralExplainErrorInitProc);
+            }
+        }
         #endregion
 
         #region Invoking Verifier for semantic queries
@@ -1196,6 +1230,15 @@ namespace ExplainError
             Expr ret = Expr.False;
             foreach (var el in preDisjuncts)
                 ret = ExprUtil.Or(ret, el.Aggregate((Expr)Expr.True, (x, y) => Expr.And(x, y)));
+            return ret;
+        }
+        public static List<Expr> ExprListSetToNegatedCNFExprList(HashSet<List<Expr>> preDisjuncts)
+        {
+            //negate a set represnting DNF expression --> list of CNF clauses
+            var ret = new List<Expr>();
+            ret.AddRange(
+                preDisjuncts.Select(el =>
+                    el.Aggregate((Expr)Expr.False, (x, y) => ExprUtil.Or(x, ExprUtil.Not(y)))));
             return ret;
         }
         #endregion

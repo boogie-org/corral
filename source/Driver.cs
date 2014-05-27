@@ -1221,7 +1221,7 @@ namespace cba
 
                         var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
                             .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
-                            out status, out complexObj);
+                            out status, out complexObj, "suggestions.bpl");
 
                         if (status == ExplainError.STATUS.TIMEOUT)
                         {
