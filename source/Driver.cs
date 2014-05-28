@@ -867,6 +867,7 @@ namespace cba
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
                 }
 
+
                 if (config.trackedVarsSecondary.Count > 0)
                 {
                     config.trackedVarsSecondary.Iter(s => refinementState.trackVar(s));
