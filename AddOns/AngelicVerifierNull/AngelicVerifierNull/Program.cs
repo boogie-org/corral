@@ -116,7 +116,7 @@ namespace AngelicVerifierNull
             }
             catch (Exception e)
             {
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_OUTPUT);
             }
             finally
             {
@@ -503,7 +503,10 @@ namespace AngelicVerifierNull
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
             concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
-            witness = concretize.run(witness); //uncomment: shuvendu
+
+            // TODO: set a reasonable timeout here
+            BoogieVerify.setTimeOut(0);
+            witness = concretize.run(witness); 
 
             witness.getProgram().Resolve();
             witness.getProgram().Typecheck();
