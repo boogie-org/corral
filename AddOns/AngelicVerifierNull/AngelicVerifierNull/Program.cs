@@ -116,7 +116,7 @@ namespace AngelicVerifierNull
             }
             catch (Exception e)
             {
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_OUTPUT);
             }
             finally
             {
@@ -296,6 +296,12 @@ namespace AngelicVerifierNull
                     else
                     {
                         var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2}", cex.Item2.procName, ret.Line, ret.ToString());
+                        if (printTraceMode == PRINT_TRACE_MODE.Sdv)
+                        {
+                            //var loc = GetFailingLocation(ppprog);
+                            BoogieUtil.PrintProgram(ppprog, "ppprog.bpl");
+                        }
+
                         Console.WriteLine(output);
                         if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
@@ -311,6 +317,7 @@ namespace AngelicVerifierNull
                 }
 
                 // print the trace to disk
+                Console.WriteLine("Printing trace {0}", traceType + iterCount);
                 PrintTrace(cex.Item1, prog, traceType + iterCount);
 
                 prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
@@ -320,6 +327,16 @@ namespace AngelicVerifierNull
             }
             return prog;
         }
+
+        /*
+        private Tuple<string, string> GetFailingLocation(Program program, string proc)
+        {
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, proc);
+            var lab2block = BoogieUtil.labelBlockMapping(impl);
+            
+        }
+        */
+
         //Run RunCorralIterative with only one procedure enabled
         private static PersistentProgram RunCorralRoundRobin(PersistentProgram pprog, string p)
         {
@@ -452,7 +469,18 @@ namespace AngelicVerifierNull
             var refinementState = new cba.RefinementState(curr, new HashSet<string>(corralConfig.trackedVars.Union(new string[] { seqInstr.assertsPassedName })), false);
 
             cba.ErrorTrace cexTrace = null;
-            cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+            try
+            {
+                cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+            }
+            catch (Exception)
+            {
+                // dump corral state for next iteration
+                corralState = new cba.CorralState();
+                corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
+                corralState.TrackedVariables = refinementState.getVars().Variables;
+                throw;
+            }
 
             // dump corral state for next iteration
             corralState = new cba.CorralState();
@@ -503,10 +531,10 @@ namespace AngelicVerifierNull
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
             concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
-            witness = concretize.run(witness); //uncomment: shuvendu
 
-            witness.getProgram().Resolve();
-            witness.getProgram().Typecheck();
+            // TODO: set a reasonable timeout here
+            BoogieVerify.setTimeOut(0);
+            witness = concretize.run(witness); 
 
             if (concretize.success)
             {
@@ -667,8 +695,8 @@ namespace AngelicVerifierNull
             var ret =
               AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
 
-            foreach (var tup in ret)
-                Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+            //foreach (var tup in ret)
+            //    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
 
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, ret);
