@@ -867,7 +867,11 @@ namespace cba
                         tmpCiPass.trainSummaries(tmp_abs.getCBAProgram());
                     }
 
-                    // Infer min. loop bounds
+                }
+
+                // Infer min. loop bounds
+                if (iterCnt == 1)
+                {
                     var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
