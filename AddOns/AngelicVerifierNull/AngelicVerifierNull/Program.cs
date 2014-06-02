@@ -298,8 +298,9 @@ namespace AngelicVerifierNull
                         var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2}", cex.Item2.procName, ret.Line, ret.ToString());
                         if (printTraceMode == PRINT_TRACE_MODE.Sdv)
                         {
+                            // TODO: print assertion location in terms of source file
                             //var loc = GetFailingLocation(ppprog);
-                            BoogieUtil.PrintProgram(ppprog, "ppprog.bpl");
+                            //BoogieUtil.PrintProgram(ppprog, "ppprog.bpl");
                         }
 
                         Console.WriteLine(output);
@@ -317,13 +318,15 @@ namespace AngelicVerifierNull
                 }
 
                 // print the trace to disk
-                Console.WriteLine("Printing trace {0}", traceType + iterCount);
-                PrintTrace(cex.Item1, prog, traceType + iterCount);
+                Console.WriteLine("Printing trace {0}", traceType + traceCount);
+                PrintTrace(cex.Item1, prog, traceType + traceCount);
+                traceCount++;
 
                 prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
-                //Print the instrumented program
+                
                 iterCount++;
-                BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
+                //Print the instrumented program
+                //BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
             return prog;
         }
@@ -410,6 +413,7 @@ namespace AngelicVerifierNull
         }
         static cba.CorralState corralState = null;
         static int corralIterationCount = 0;
+        static int traceCount = 0;
 
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
