@@ -334,7 +334,7 @@ namespace cba
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
             TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
-            Log.WriteLine(string.Format("Total User CPU time: {0} s"), TotalUserTime.TotalSeconds);
+            Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
 
             #region Stats for .NET programs
             if (config.verboseMode > 1)
@@ -1877,7 +1877,9 @@ namespace cba
                 if (!lightweight) counterexample.mode = ConcurrencyMode.AnyInterleaving;
 
                 refinementState.Add(new TraceMapping(tinfo));
-                
+
+                //CommandLineOptions.Clo.SimplifyLogFilePath = "log";
+
                 // Check if true bug. Otherwise, gather variables to track                
                 if (optRefinementLoop)
                     success = checkAndRefinePathFewPasses(counterexample, refinementState, out cexTrace);
