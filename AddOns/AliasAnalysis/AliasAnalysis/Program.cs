@@ -879,13 +879,13 @@ namespace AliasAnalysis
             Debug.Assert(solved);
             if (!PointsTo.ContainsKey(var1) || PointsTo[var1].Count == 0)
             {
-                Console.WriteLine("Warning: empty points-to set for {0}", var1);
+                if(dbg) Console.WriteLine("Warning: empty points-to set for {0}", var1);
                 return false;
             }
 
             if (!PointsTo.ContainsKey(var2) || PointsTo[var2].Count == 0)
             {
-                Console.WriteLine("Warning: empty points-to set for {0}", var2);
+                if (dbg) Console.WriteLine("Warning: empty points-to set for {0}", var2);
                 return false;
             }
 

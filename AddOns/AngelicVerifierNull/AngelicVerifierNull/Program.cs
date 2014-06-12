@@ -50,6 +50,7 @@ namespace AngelicVerifierNull
 
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
+        static string corralOpts = "";
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
@@ -76,6 +77,8 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/bopt:"))
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
+            args.Where(s => s.StartsWith("/copt:"))
+                .Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
@@ -102,6 +105,7 @@ namespace AngelicVerifierNull
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
                 // Run alias analysis
+                Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
@@ -204,10 +208,10 @@ namespace AngelicVerifierNull
             // 
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
-
+            
             // Set all defaults for corral
-            var config = cba.Configs.parseCommandLine(new string[] { 
-                "doesntExist.bpl", "/track:alloc", "/useProverEvaluate"});
+            corralOpts += " doesntExist.bpl /track:alloc /useProverEvaluate /printVerify ";
+            var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
             config.boogieOpts += boogieOpts;
             cba.Driver.Initialize(config);
 
@@ -423,6 +427,7 @@ namespace AngelicVerifierNull
             Debug.Assert(cba.GlobalConfig.InferPass == null);
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
+            CommandLineOptions.Clo.SimplifyLogFilePath = null;
 
             //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
 
