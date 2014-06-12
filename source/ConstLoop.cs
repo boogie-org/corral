@@ -1839,6 +1839,13 @@ namespace cba
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
             program.TopLevelDeclarations.Remove(main);
 
+            // remove non-free ensures and requires
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => proc.Requires = proc.Requires.Filter(en => en.Free));
+
+
             // Call graph
             ComputeCallGraph(program);
 

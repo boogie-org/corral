@@ -220,10 +220,12 @@ namespace cba.Util
                     case VC.VCGen.Outcome.Inconclusive:
                         throw new InternalError("z3 says inconclusive");
                     case VC.VCGen.Outcome.OutOfMemory:
-                        timedOut.Add(impl.Name);
+                        // wipe out any counterexamples
+                        timedOut.Add(impl.Name); errors = new List<Counterexample>();
                         break;
                     case VC.VCGen.Outcome.TimedOut:
-                        timedOut.Add(impl.Name);
+                        // wipe out any counterexamples
+                        timedOut.Add(impl.Name); errors = new List<Counterexample>();
                         break;
                     default:
                         throw new InternalError("z3 unknown response");
