@@ -27,6 +27,7 @@ namespace AngelicVerifierNull
             Procedure mallocProcedure = null;
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
+            public HashSet<string> entrypoints; // set of entrypoints identified
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
             {
@@ -34,6 +35,7 @@ namespace AngelicVerifierNull
                 mainName = corralName;
                 this.useProvidedEntryPoints = useProvidedEntryPoints;
                 blockEntryPointConstants = new Dictionary<string,string>();
+                entrypoints = new HashSet<string>();
             }
             public void DoInstrument()
             {
@@ -58,6 +60,7 @@ namespace AngelicVerifierNull
                         continue;
                     Stats.numProcsAnalyzed++;
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
+                    entrypoints.Add(impl.Name);
 
                     //allocate params
                     var args = new List<Variable>();

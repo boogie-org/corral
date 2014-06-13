@@ -45,6 +45,8 @@ namespace AngelicVerifierNull
     {
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
+        static HashSet<string> IdentifiedEntryPoints = new HashSet<string>();
+        static System.IO.TextWriter ResultsFile = null;
 
         const string CORRAL_MAIN_PROC = "CorralMain";
 
@@ -92,6 +94,11 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
                 .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
 
+            string resultsfilename = null;
+            args.Where(s => s.StartsWith("/dumpResults:"))
+                .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
+            if (resultsfilename != null) ResultsFile = new System.IO.StreamWriter(resultsfilename);
+
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
@@ -101,7 +108,7 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
-
+                
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
                 // Run alias analysis
@@ -125,6 +132,7 @@ namespace AngelicVerifierNull
             finally
             {
                 Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
+                ResultsFile.Close();
             }
         }
 
@@ -154,6 +162,7 @@ namespace AngelicVerifierNull
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
             harnessInstrumentation = new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints);
             harnessInstrumentation.DoInstrument();
+            IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -274,6 +283,15 @@ namespace AngelicVerifierNull
                     Console.WriteLine("No more counterexamples found, Corral returns verified...");
                     break;
                 }
+
+                // Identify the entrypoint that led to the assertion violation.
+                // It will be the entrypoint that main calls
+                var failingEntryPoint =
+                    cex.Item1.Blocks.Select(blk => blk.Cmds.OfType<cba.CallInstr>()).Aggregate((a, b) => a.Concat(b))
+                    .Where(ci => IdentifiedEntryPoints.Contains(ci.callee))
+                    .Select(ci => ci.callee)
+                    .FirstOrDefault();
+
                 //get the pathProgram
                 cba.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex.Item1, prog, out concretize);
@@ -299,15 +317,19 @@ namespace AngelicVerifierNull
                     }
                     else
                     {
-                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2}", cex.Item2.procName, ret.Line, ret.ToString());
+                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
                         if (printTraceMode == PRINT_TRACE_MODE.Sdv)
                         {
-                            // TODO: print assertion location in terms of source file
-                            //var loc = GetFailingLocation(ppprog);
+                            // Print assertion location in terms of source file
                             //BoogieUtil.PrintProgram(ppprog, "ppprog.bpl");
+                            var loc = GetFailingLocation(ppprog, string.Format("Assertion failed in proc {0} in file {{0}} line {{1}} with expr {1} and entrypoint {2}", cex.Item2.procName, ret.Expr.ToString(), failingEntryPoint));
+                            if (loc != null) output = loc;                            
                         }
 
                         Console.WriteLine(output);
+                        if (ResultsFile != null)
+                            ResultsFile.WriteLine(output);
+
                         if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
                     }
@@ -335,14 +357,22 @@ namespace AngelicVerifierNull
             return prog;
         }
 
-        /*
-        private Tuple<string, string> GetFailingLocation(Program program, string proc)
+        // precondition: prog had a single implementation with a single block
+        private static string GetFailingLocation(Program prog, string format)
         {
-            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, proc);
-            var lab2block = BoogieUtil.labelBlockMapping(impl);
-            
+            var impl = prog.TopLevelDeclarations.OfType<Implementation>().FirstOrDefault();
+            if (impl == null) return null;
+            var block = impl.Blocks[0];
+            foreach (var cmd in block.Cmds.OfType<PredicateCmd>().Reverse())
+            {
+                if (!BoogieUtil.checkAttrExists("sourcefile", cmd.Attributes)) continue;
+                var file = QKeyValue.FindStringAttribute(cmd.Attributes, "sourcefile");
+                var line = QKeyValue.FindIntAttribute(cmd.Attributes, "sourceline", -1);
+                if (file == null || line == -1) continue;
+                return string.Format(format, file, line);
+            }
+            return null;
         }
-        */
 
         //Run RunCorralIterative with only one procedure enabled
         private static PersistentProgram RunCorralRoundRobin(PersistentProgram pprog, string p)
