@@ -132,7 +132,7 @@ namespace AngelicVerifierNull
             finally
             {
                 Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
-                ResultsFile.Close();
+                if (ResultsFile != null) ResultsFile.Close();
             }
         }
 

@@ -94,11 +94,14 @@ namespace AngelicVerifierNull
                 //TODO: find a reusable API to add attributes to cmds
                 initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() {"Start"}, null);
                 var globalCmds = new List<Cmd>() { initCmd };
-                globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
                 //add call to corralExtraInit
                 var inits = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == CORRAL_EXTRA_INIT_PROC);
                 if (inits.Count() > 0)
                     globalCmds.Add(BoogieAstFactory.MkCall(inits.First(), new List<Expr>(), new List<Variable>()));
+
+                // initialize globals
+                globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+
                 //first block
                 var transferCmd =
                     mainBlocks.Count > 0 ? (TransferCmd)(new GotoCmd(Token.NoToken, mainBlocks)) : (TransferCmd) (new ReturnCmd(Token.NoToken));
