@@ -872,6 +872,7 @@ namespace cba
                 // Infer min. loop bounds
                 if (iterCnt == 1)
                 {
+                    //abs.writeToFile("abs.bpl");
                     var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));

@@ -817,7 +817,7 @@ namespace cba
         {
             foreach (var e in templates)
             {
-                if (e.IsRequires) return false;
+                if (e.IsRequires && !e.IsFree) return false;
             }
             return true;
         }
@@ -1035,7 +1035,7 @@ namespace cba
                 Debug.Assert(onlyEnsures());
                 // Turn on summary computation in Boogie
                 Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
-                CommandLineOptions.Clo.StratifiedInliningOption = 6;
+                CommandLineOptions.Clo.StratifiedInliningOption = 1;
             }
 
             // Insert summaries
@@ -1449,10 +1449,11 @@ namespace cba
                 }
 
                 inline(program);
-                BoogieUtil.TypecheckProgram(program, "error.bpl");
-                
+
                 // TODO: what about abshoudini?
-                //PruneIrrelevantImpls(program);
+                PruneIrrelevantImpls(program);
+
+                BoogieUtil.TypecheckProgram(program, "error.bpl");
 
                 if (printHoudiniQuery != null)
                     BoogieUtil.PrintProgram(program, printHoudiniQuery);
@@ -1638,34 +1639,64 @@ namespace cba
 
         private void inline(Program program)
         {
-            if (CommandLineOptions.Clo.InlineDepth >= 0)
+            foreach (Declaration d in program.TopLevelDeclarations)
             {
-                foreach (Declaration d in program.TopLevelDeclarations)
+                Implementation impl = d as Implementation;
+                if (impl != null)
                 {
-                    Implementation impl = d as Implementation;
-                    if (impl != null)
-                    {
-                        impl.OriginalBlocks = impl.Blocks;
-                        impl.OriginalLocVars = impl.LocVars;
-                    }
+                    impl.OriginalBlocks = impl.Blocks;
+                    impl.OriginalLocVars = impl.LocVars;
                 }
-                foreach (Declaration d in program.TopLevelDeclarations)
+            }
+            foreach (Declaration d in program.TopLevelDeclarations)
+            {
+                Implementation impl = d as Implementation;
+                if (impl != null && !impl.SkipVerification)
                 {
-                    Implementation impl = d as Implementation;
-                    if (impl != null && !impl.SkipVerification)
+                    if (CommandLineOptions.Clo.InlineDepth >= 0)
                     {
                         Inliner.ProcessImplementation(program, impl);
                     }
-                }
-                foreach (Declaration d in program.TopLevelDeclarations)
-                {
-                    Implementation impl = d as Implementation;
-                    if (impl != null)
+                    else
                     {
-                        impl.OriginalBlocks = null;
-                        impl.OriginalLocVars = null;
+                        CallInliner.ProcessImplementation(program, impl);
                     }
+                    
                 }
+            }
+            foreach (Declaration d in program.TopLevelDeclarations)
+            {
+                Implementation impl = d as Implementation;
+                if (impl != null)
+                {
+                    impl.OriginalBlocks = null;
+                    impl.OriginalLocVars = null;
+                }
+            }
+
+        }
+
+        class CallInliner : Inliner
+        {
+            public CallInliner(Program program)
+                : base(program, null, -1)
+            { }
+
+            new public static void ProcessImplementation(Program program, Implementation impl)
+            {
+                ProcessImplementation(impl, new CallInliner(program));
+            }
+
+            protected override int GetInlineCount(CallCmd callCmd, Implementation impl)
+            {
+
+                if (QKeyValue.FindBoolAttribute(callCmd.Attributes, "inlinecall"))
+                {
+                    recursiveProcUnrollMap[impl.Name] = 1;
+                    return 1;
+                }
+                else
+                    return 0;
             }
         }
 
@@ -1678,8 +1709,14 @@ namespace cba
                 bool r = impl.Proc.Ensures.Any(en => !en.Free);
                 return r;
             });
+            var ignoreImpl = new Predicate<Implementation>(impl =>
+            {
+                bool r = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "nohoudini");
+                return r;
+            });
+
             program.TopLevelDeclarations =
-                program.TopLevelDeclarations.Filter(decl => !(decl is Implementation) || implHasEnsures(decl as Implementation));
+                program.TopLevelDeclarations.Filter(decl => !(decl is Implementation) || implHasEnsures(decl as Implementation) || ignoreImpl(decl as Implementation));
         }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
