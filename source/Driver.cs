@@ -898,13 +898,6 @@ namespace cba
                     //abs.writeToFile("ttout.bpl");
                 }
 
-                var cloops = new List<ConstLoop>();
-                if (ConstLoop.aggressive)
-                {
-                    abs = PruneConstLoopsNoCounter(abs, ref cLoopHistory, out cloops);
-                    cloops.Iter(c => cloopsTime += c.lastRun);
-                }
-
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
                 // Check Program
@@ -938,7 +931,6 @@ namespace cba
 
                 // Check if counterexample is feasible
                 ErrorTrace trace = verificationPass.trace;
-                cloops.Reverse<ConstLoop>().Iter(c => trace = c.mapBackTrace(trace));
                 if (ciPass != null) trace = ciPass.mapBackTrace(trace);
                 if(da != null) trace = da.mapBackTrace(trace);
                 trace = abstraction.mapBackTrace(trace);
@@ -1663,76 +1655,15 @@ namespace cba
 
             var noTryFunc = new Func<Implementation, int>(impl =>
                 {
-                    if (noTry.Contains(impl.Name)) return 0;
                     return 2;
                 });
 
-            while (true)
-            {
-                ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
+            ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
-                var cloop = new ConstLoop(noTryFunc);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
+            var cloop = new ConstLoop(noTryFunc);
+            prog = cloop.run(prog);
+            cloops.Add(cloop);
 
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-                
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            return prog;
-        }
-
-        private static PersistentCBAProgram PruneConstLoopsNoCounter(
-            PersistentCBAProgram prog, ref ConstLoopHistory history, out List<ConstLoop> cloops)
-        {
-            cloops = new List<ConstLoop>();
-            var noTry = new HashSet<string>();
-            var inHistory = history;
-            var outHistory = new ConstLoopHistory();
-
-            var summary = new Func<Implementation, int>(impl =>
-            {
-                if (noTry.Contains(impl.Name)) return 0;
-                if (inHistory.definiteFail(impl)) return 0;
-                if (inHistory.definiteSuccess(impl)) return 1;
-                return 2;
-            });
-
-            var constLoopsFound = new HashSet<string>();
-
-            while (true)
-            {
-                var cloop = new ConstLoop(true, false, summary);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
-
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-
-                outHistory.staticallyFailedLoops = cloop.currHistory.staticallyFailedLoops;
-                outHistory.semanticallyFailedLoops.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                cloop.currHistory.globalsUsed.Iter(kvp =>
-                    outHistory.globalsUsed.Add(kvp.Key, kvp.Value));
-
-                constLoopsFound.UnionWith(cloop.cLoops);
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            outHistory.semanticallyFailedLoops.UnionWith(inHistory.semanticallyFailedLoops);
-            foreach (var c in constLoopsFound)
-            {
-                if (!outHistory.globalsUsed.ContainsKey(c) &&
-                    inHistory.globalsUsed.ContainsKey(c))
-                {
-                    outHistory.globalsUsed.Add(c, inHistory.globalsUsed[c]);
-                }
-            }
-
-            history = outHistory;
             return prog;
         }
 

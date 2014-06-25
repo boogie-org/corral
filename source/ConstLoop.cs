@@ -41,8 +41,6 @@ namespace cba
         Dictionary<string, Variable> varFinal2Copy;
         // variable for determinizing corral_nondet
         GlobalVariable nonDetCounter, nonDetCounterInit;
-        // aggressive mode
-        public static bool aggressive = false;
         // Block created for merging recursive calls
         Dictionary<string, string> mergedRecCallBlock;
         // Set of pruned loops
@@ -608,33 +606,6 @@ namespace cba
             rec0.Cmds.Add(BoogieAstFactory.MkAssume(finalExpr));
             rec0.Cmds.Add(assumeAllocEq("a2"));
             
-
-            // if(aggressive)
-            //    havoc g, l, f
-            //    g == g_init
-            //    Init;
-            //    body0b
-            //    g == g_final2 && f == f_final2
-            if (aggressive)
-            {
-                rec0.Cmds.Add(havocCnt);
-                rec0.Cmds.Add(assumeCnt("ac"));
-
-                rec0.Cmds.Add(havocAlloc);
-                rec0.Cmds.Add(assumeAllocEq("ac1"));
-
-                rec0.Cmds.Add(havocGlobals);
-                rec0.Cmds.Add(havocLocals);
-                rec0.Cmds.Add(BoogieAstFactory.MkAssume(initExpr));
-                rec0.Cmds.AddRange(initCmds);
-                rec0.TransferCmd = BoogieAstFactory.MkGotoCmd(body0b[loopBodyStartBlock[impl.Name]].Label);
-
-                rec0 = body0b[recCallBlock[impl.Name]];
-                rec0.Cmds.Remove(rec0.Cmds.Last());
-                rec0.Cmds.Add(BoogieAstFactory.MkAssume(final2Expr));
-                rec0.Cmds.Add(assumeAllocEq("ac2"));
-            }
-
             // havoc globals, locals, formals; assume init; init; goto body1
             rec0.Cmds.Add(havocCnt);
             rec0.Cmds.Add(assumeCnt("b"));
@@ -680,23 +651,6 @@ namespace cba
             var matchFinal =
                 finalAssertExpr(loopGlobals.Concat(loopFormals), s => varFinalCopy[s], allocVars["sp1"]);
 
-            if (aggressive)
-            {
-                matchCnt = Expr.And(matchCnt,
-                    BoogieAstFactory.MkExprAnd(BoogieAstFactory.MkExprVarEqVar(cntVars["ac"], cntVars["b"])));
-
-                matchAlloc = BoogieAstFactory.MkExprAnd(
-                    matchAlloc,
-                    BoogieAstFactory.MkExprVarEqVar(allocVars["ac1"], allocVars["b1"]));
-
-                matchAddr = Expr.And(matchAddr, Expr.Or(
-                    BoogieAstFactory.MkExprVarGtVar(allocVars["c1"], allocVars["sp2"]),
-                    BoogieAstFactory.MkExprVarGeVar(allocVars["sp2"], allocVars["b1"])));
-
-                matchFinal = Expr.Or(matchFinal,
-                    finalAssertExpr(loopGlobals.Concat(loopFormals), s => varFinal2Copy[s], allocVars["sp2"]));
-            }
-
             Expr matchIter = BoogieAstFactory.MkExprAnd(
                 matchCnt, matchAlloc, matchAddr);
 
@@ -704,7 +658,6 @@ namespace cba
             rec2.Cmds.Add(BoogieAstFactory.MkAssert(assertExpr));               
 
             // add new blocks to the impl
-            if (aggressive) impl.Blocks.AddRange(body0b.Values);
             impl.Blocks.AddRange(body1.Values);
             impl.Blocks.AddRange(body2.Values);            
 

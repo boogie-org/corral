@@ -10,6 +10,7 @@ using cba;
 
 namespace CoreLib
 {
+
     // Unify all maps of type [int]int
     public class TypeUnify : FixedVisitor
     {
