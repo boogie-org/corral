@@ -203,7 +203,15 @@ namespace cba
                 verify = new VerificationPass(false);
             }
 
-            verify.run(prog);
+            try
+            {
+                verify.run(prog);
+            }
+            catch (Exception)
+            {
+                ConfigManager.endPathVerification();
+                throw;
+            }
 
             ConfigManager.endPathVerification();
             return verify.success;
