@@ -175,7 +175,7 @@ namespace AngelicVerifierNull
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            BoogieUtil.DoModSetAnalysis(init);
 
             //TODO: Perform alias analysis here and prune a subset of asserts
 
