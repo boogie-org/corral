@@ -114,7 +114,7 @@ namespace cba
             inProg = p;
 
             // do mod set analysis
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
 
             // allocate some variables
             nonDetCounter = BoogieAstFactory.MkGlobal("nonDetCounter__cl", Microsoft.Boogie.Type.Int)
@@ -424,7 +424,7 @@ namespace cba
             // Break all links with inProg
             BoogieUtil.PrintProgram(outProg, "cLoopsQuery.bpl");
             outProg = BoogieUtil.ReadAndOnlyResolve("cLoopsQuery.bpl");
-            ModSetCollector.DoModSetAnalysis(outProg);
+            BoogieUtil.DoModSetAnalysis(outProg);
             BoogieUtil.TypecheckProgram(outProg, "cLoopsQuery.bpl");
 
             // Set options

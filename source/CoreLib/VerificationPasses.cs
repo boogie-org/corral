@@ -1013,7 +1013,7 @@ namespace cba
                 program = (inputPrime as PersistentCBAProgram).getCBAProgram();
             }
 
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             EExpr.procsThatFail = BoogieUtil.procsThatMaySatisfyPredicate(program, c => BoogieUtil.isAssert(c));
 
             DoStaticAnalysis(program);
@@ -1060,7 +1060,7 @@ namespace cba
             foreach (Ensures ens in trainingProc.Ensures)
                 templates.Add(new EExpr(ens));
 
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
 
             DoStaticAnalysis(program);
 
@@ -2090,7 +2090,7 @@ namespace cba
             if (normalizeStatements) p.TopLevelDeclarations.OfType<Implementation>().Iter(normalizeImpl);
  
             // Re-do modset analysis
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
             
             // Eliminate local variables that are never used (i.e., their value is never read)
             varEliminator = new UnReadVarEliminator();
@@ -2191,7 +2191,7 @@ namespace cba
         {
 
             // Re-do modset analysis
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
 
             // Eliminate local variables that are never used (i.e., their value is never read)
             varEliminator = new UnReadVarEliminator(true);

@@ -105,7 +105,7 @@ namespace cba
                 throw new InternalError("Type errors");
             }
             vslice.VisitProgram(p as Program);
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
 
             return p;
         }

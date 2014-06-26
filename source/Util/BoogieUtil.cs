@@ -29,6 +29,11 @@ namespace cba.Util
             return false;
         }
 
+        public static void DoModSetAnalysis(Program p)
+        {
+            (new ModSetCollector()).DoModSetAnalysis(p);
+        }
+
         public static void PrintProgram(Program p, string filename)
         {
             var outFile = new TokenTextWriter(filename);

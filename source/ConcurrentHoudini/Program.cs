@@ -243,7 +243,7 @@ namespace ConcurrentHoudini
             if(extractLoops)
                 program.ExtractLoops();
 
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
 
             if (pruneAsserts)
                 program = og.GuardAsserts(program);
