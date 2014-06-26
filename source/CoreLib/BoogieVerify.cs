@@ -1074,7 +1074,7 @@ namespace cba.Util
             // Collect mod sets
             if (CommandLineOptions.Clo.DoModSetAnalysis)
             {
-                Microsoft.Boogie.ModSetCollector.DoModSetAnalysis(program);
+                BoogieUtil.DoModSetAnalysis(program);
             }
 
             // Coalesce blocks

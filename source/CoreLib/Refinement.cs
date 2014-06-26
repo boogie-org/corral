@@ -91,7 +91,7 @@ namespace cba
             var globalsRead = new HashSet<string>();
             BoogieUtil.GetGlobalVariables(prog).ForEach(v => globalsRead.Add(v.Name));
 
-            ModSetCollector.DoModSetAnalysis(prog);
+            BoogieUtil.DoModSetAnalysis(prog);
             HashSet<string> globalsModified = new HashSet<string>();
             foreach (var decl in prog.TopLevelDeclarations)
             {

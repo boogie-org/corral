@@ -345,7 +345,7 @@ namespace cba
                 procsInlined.Add(config.mainProcName);
                 Log.WriteLine(string.Format("Unique procs inlined: {0}", procsInlined.Count));
                 var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
-                ModSetCollector.DoModSetAnalysis(init);
+                BoogieUtil.DoModSetAnalysis(init);
                 Log.WriteLine(string.Format("Total number of procs: {0}", init.TopLevelDeclarations.OfType<Implementation>().Count()));
                 
                 // Compute LOC on inlined procs and non-trivial procs
@@ -577,7 +577,7 @@ namespace cba
             addIds.VisitProgram(init);
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            BoogieUtil.DoModSetAnalysis(init);
 
             // Now we can typecheck
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -742,7 +742,7 @@ namespace cba
             addIds.VisitProgram(program);
 
             // Prune mod sets
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             // Gather the set of initially tracked variables
             var initialTrackedVars = getTrackedVars(program, config);
             // Did we reach the recursion bound?

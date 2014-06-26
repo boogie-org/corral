@@ -14,7 +14,7 @@ namespace cba
         public Dictionary<Procedure, HashSet<Variable>> modSets { get; private set; }
         bool moreProcessingRequired;
 
-        // Update mod sets: This procedure is a copy of ModSetCollector.DoModSetAnalysis
+        // Update mod sets: This procedure is a copy of BoogieUtil.DoModSetAnalysis
         public static void updateModSet(Program program)
         {
             ModSetAnalysis msa = new ModSetAnalysis();

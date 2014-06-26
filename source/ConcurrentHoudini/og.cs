@@ -576,7 +576,7 @@ namespace ConcurrentHoudini
         public static Program InsertYields(Program program)
         {
             // Gather list of modified globals
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             var modGlobals = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impl.Proc.Modifies.OfType<IdentifierExpr>()
@@ -623,7 +623,7 @@ namespace ConcurrentHoudini
                 }
             }
 
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             return program;
         }
 

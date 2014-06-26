@@ -348,7 +348,6 @@ namespace cba
 
             verifyingPath = true;
             BoogieVerify.recordTempTime = true;
-
             startTime = DateTime.Now;
         }
 

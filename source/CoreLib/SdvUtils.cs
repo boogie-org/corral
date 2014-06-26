@@ -172,7 +172,7 @@ namespace CoreLib
             program.TopLevelDeclarations.Add(U);
 
             // print program
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             BoogieUtil.PrintProgram(program, outfile);
 
             program = null;
