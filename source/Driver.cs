@@ -696,7 +696,7 @@ namespace cba
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
 
-            // set up entry point
+            #region set up entry point
             if (config.mainProcName != null)
             {
                 program.TopLevelDeclarations.OfType<Implementation>()
@@ -735,6 +735,7 @@ namespace cba
                     config.mainProcName = ep.Name;
                 }
             }
+            #endregion
 
             // annotate calls with a unique number
             var addIds = new AddUniqueCallIds();
@@ -1335,8 +1336,8 @@ namespace cba
                     stream.Close();
                 }
 
-                //var ttpp = new PersistentCBAProgram(programForDefectTrace, config.mainProcName, 0);
-                //PrintProgramPath.print(ttpp, buggyTrace, "temp2");
+                //var ttpp = BoogieUtil.ParseProgram(config.inputFile);
+                //PrintProgramPath.print(new ProgTransformation.PersistentProgram(ttpp), buggyTrace, config.inputFile);
 
                 PrintSdvPath.Print(programForDefectTrace, buggyTrace, toRecord, aliasingExplanation, "defect.tt", "stack.txt");
                 var am = new TokenTextWriter("defect.txt");

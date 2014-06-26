@@ -805,7 +805,7 @@ namespace cba.Util
             NonUniformUnfolding = false;
             CallTree = null;
             StratifiedInliningWithoutModels = false;
-            UseProverEvaluate = false;
+            UseProverEvaluate = true;
             ModelViewFile = null;
             printProg = false;
             progFileName = null;
