@@ -808,7 +808,7 @@ namespace CoreLib {
             model = null;
         }
 
-        public override void OnModel(IList<string> labels, Model model)
+        public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome)
         {
             Debug.Assert(model != null);
             //model.Write(Console.Out);
