@@ -28,6 +28,42 @@ namespace AngelicVerifierNull
         public static int numProcsAnalyzed = -1;
         public static int numAssertsBeforeAliasAnalysis = -1;
         public static int numAssertsAfterAliasAnalysis = -1;
+        public static Dictionary<string, int> numAssertsPerProc = new Dictionary<string, int>();
+        public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
+        private static Dictionary<string, DateTime> clocks = new Dictionary<string, DateTime>();
+        private static Dictionary<string, long> counts = new Dictionary<string, long>();
+
+        public static void resume(string name)
+        {
+            clocks[name] = DateTime.Now;
+        }
+
+        public static void stop(string name)
+        {
+            Debug.Assert(clocks.ContainsKey(name));
+            if (!timeTaken.ContainsKey(name)) timeTaken[name] = 0; // initialize
+            timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
+        }
+
+        public static void printStats()
+        {
+            Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
+            foreach (string name in timeTaken.Keys)
+            {
+                Utils.Print(string.Format("{0} : {1} s", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
+            }
+            foreach (string name in counts.Keys)
+            {
+                Utils.Print(string.Format("{0} : {1}", name, counts[name]), Utils.PRINT_TAG.AV_STATS);
+            }
+            Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
+        }
+
+        public static void count(string name)
+        {
+            if (!counts.ContainsKey(name)) counts[name] = 0;
+            counts[name]++;
+        }
     }
 
     public class Utils
@@ -112,8 +148,10 @@ namespace AngelicVerifierNull
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
                 // Run alias analysis
+                Stats.resume("alias.analysis");
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
+                Stats.stop("alias.analysis");
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -121,6 +159,16 @@ namespace AngelicVerifierNull
                     string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, InstrumentTime:{4} ms",
                     Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsBeforeAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
                     Utils.PRINT_TAG.AV_STATS);
+
+                // count number of assertions per procedure after alias analysis
+                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
+                    .Where(x => x is Implementation))
+                {
+                    var assertVisitor = new Instrumentations.AssertCountVisitor();
+                    assertVisitor.Visit(impl);
+                    Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
+                }
+                Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
                 //Analyze
                 RunCorralForAnalysis(prog);
@@ -131,6 +179,7 @@ namespace AngelicVerifierNull
             }
             finally
             {
+                Stats.printStats();
                 Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
@@ -261,15 +310,19 @@ namespace AngelicVerifierNull
         //Run Corral over different assertions (modulo errorLimit)
         private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p, int corralTimeout)
         {
+            Stats.resume("run.corral.iterative");
             int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
+                Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
-
+                
                 try
                 {
+                    Stats.resume("run.corral");
                     cex = RunCorral(prog, corralConfig.mainProcName, corralTimeout);
+                    Stats.stop("run.corral");
                 }
                 catch (Exception e)
                 {
@@ -299,7 +352,9 @@ namespace AngelicVerifierNull
                 var ppprog = pprog.getProgram(); //don't do getProgram on pprog anymore
                 var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);                
                 //call ExplainError 
+                Stats.resume("explain.error");
                 var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
+                Stats.stop("explain.error");
                 //get the program once 
                 var nprog = prog.getProgram();
                 
@@ -354,6 +409,7 @@ namespace AngelicVerifierNull
                 //Print the instrumented program
                 //BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
+            Stats.stop("run.corral.iterative");
             return prog;
         }
 
@@ -388,6 +444,9 @@ namespace AngelicVerifierNull
             {
                 Utils.Print(string.Format("Analyzing procedure {0} in round robin mode", harnessInstrumentation.blockEntryPointConstants[bc.Name]),
                      Utils.PRINT_TAG.AV_DEBUG);
+                Utils.Print(string.Format("Number of assertions: {0}", Stats.numAssertsPerProc[harnessInstrumentation.blockEntryPointConstants[bc.Name]]),
+                    Utils.PRINT_TAG.AV_STATS);
+
                 //enable only the procedure corresponding to kv
                 var tmp = new HashSet<Constant>(blockCallConsts);
                 tmp.Remove(bc);
@@ -398,7 +457,13 @@ namespace AngelicVerifierNull
                 mainProc.Requires.Add(new Requires(false, blockExpr)); //add the blocking condition and iterate
                 pprog = new PersistentProgram(prog, corralConfig.mainProcName, 1);
                 //we give less timeout for the individual procedure
-                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);                
+
+                var startTime = DateTime.Now; // Start time of round robin mode
+                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);
+                var endTime = DateTime.Now; // End time of round robin mode
+                Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
+                    Utils.PRINT_TAG.AV_DEBUG);
+                
                 //TODO: need to remove the requires corresponding to the blockExpr, but the program has changed 
                 //      and more requires corresponding to blockign clauses may have been added
                 //find the mainProc in the new program
@@ -407,15 +472,19 @@ namespace AngelicVerifierNull
                 if (mainProc == null)
                     throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                 mainProc.Requires.RemoveAll(x => x.Condition.ToString() == blockExpr.ToString());
+
+                Stats.printStats();
             }
             return new PersistentProgram(prog, corralConfig.mainProcName, 1);
         }
         //Top-level Corral call
         private static void RunCorralForAnalysis(PersistentProgram prog)
         {
+            Stats.resume("round.robin");
             //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
             if (!disableRoundRobinPrePass)
                 prog = RunCorralRoundRobin(prog, corralConfig.mainProcName);
+            Stats.stop("round.robin");
 
             // Run Corral outer loop
             RunCorralIterative(prog, corralConfig.mainProcName,timeout);
