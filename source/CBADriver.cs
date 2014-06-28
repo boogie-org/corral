@@ -389,7 +389,7 @@ namespace cba
             BoogieVerify.options = progVerifyOptions;
 
             // AL: adding logging
-            CommandLineOptions.Clo.SimplifyLogFilePath = "logProg";
+            //CommandLineOptions.Clo.SimplifyLogFilePath = "logProg";
             startTime = DateTime.Now;
         }
 
@@ -407,7 +407,7 @@ namespace cba
             refinement = true;
 
             // AL: adding logging
-            CommandLineOptions.Clo.SimplifyLogFilePath = "logRefine";
+            //CommandLineOptions.Clo.SimplifyLogFilePath = "logRefine";
 
         }
 
