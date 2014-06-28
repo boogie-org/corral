@@ -50,7 +50,7 @@ namespace AngelicVerifierNull
             Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
             foreach (string name in timeTaken.Keys)
             {
-                Utils.Print(string.Format("{0} : {1} s", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("{0}(s) : {1}", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
             }
             foreach (string name in counts.Keys)
             {
@@ -160,10 +160,11 @@ namespace AngelicVerifierNull
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
-                Utils.Print(
-                    string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, InstrumentTime:{4} ms",
-                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsBeforeAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
-                    Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#Procs : {0}",Stats.numProcs),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#EntryPoints : {0}",Stats.numProcsAnalyzed),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsBeforeAA : {0}",Stats.numAssertsBeforeAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
 
                 // count number of assertions per procedure after alias analysis
                 foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
@@ -185,7 +186,7 @@ namespace AngelicVerifierNull
             finally
             {
                 Stats.printStats();
-                Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
         }
@@ -449,8 +450,8 @@ namespace AngelicVerifierNull
             {
                 Utils.Print(string.Format("Analyzing procedure {0} in round robin mode", harnessInstrumentation.blockEntryPointConstants[bc.Name]),
                      Utils.PRINT_TAG.AV_DEBUG);
-                Utils.Print(string.Format("Number of assertions: {0}", Stats.numAssertsPerProc[harnessInstrumentation.blockEntryPointConstants[bc.Name]]),
-                    Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("number.assertions: {0}", Stats.numAssertsPerProc[harnessInstrumentation.blockEntryPointConstants[bc.Name]]),
+                    Utils.PRINT_TAG.AV_DEBUG);
 
                 //enable only the procedure corresponding to kv
                 var tmp = new HashSet<Constant>(blockCallConsts);
