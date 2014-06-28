@@ -188,7 +188,7 @@ namespace cba
                 var instrumented = tprog.getProgram();
 
                 // Re-do the modsets -- make them as concise as possible. 
-                ModSetCollector.DoModSetAnalysis(instrumented);
+                BoogieUtil.DoModSetAnalysis(instrumented);
 
                 // Temporary fix for Boogie's bug while inlining calls
                 // that have don't care expressions. 

@@ -203,7 +203,15 @@ namespace cba
                 verify = new VerificationPass(false);
             }
 
-            verify.run(prog);
+            try
+            {
+                verify.run(prog);
+            }
+            catch (Exception)
+            {
+                ConfigManager.endPathVerification();
+                throw;
+            }
 
             ConfigManager.endPathVerification();
             return verify.success;
@@ -349,8 +357,9 @@ namespace cba
             verifyingPath = true;
             BoogieVerify.recordTempTime = true;
 
+
             // AL: adding logging
-            CommandLineOptions.Clo.SimplifyLogFilePath = "logPath";
+            // CommandLineOptions.Clo.SimplifyLogFilePath = "logPath";
 
             startTime = DateTime.Now;
         }

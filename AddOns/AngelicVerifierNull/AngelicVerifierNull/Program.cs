@@ -116,7 +116,9 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/bopt:"))
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
             args.Where(s => s.StartsWith("/copt:"))
-                .Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
+                .Iter(s => corralOpts += " /" + s.Substring("/copt:".Length) + " ");
+                //.Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
+                
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
@@ -129,6 +131,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
                 .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
+
+            if (timeoutRoundRobin == 0)
+                disableRoundRobinPrePass = true;
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -219,7 +224,7 @@ namespace AngelicVerifierNull
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            BoogieUtil.DoModSetAnalysis(init);
 
             //TODO: Perform alias analysis here and prune a subset of asserts
 

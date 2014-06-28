@@ -345,7 +345,7 @@ namespace cba
                 procsInlined.Add(config.mainProcName);
                 Log.WriteLine(string.Format("Unique procs inlined: {0}", procsInlined.Count));
                 var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
-                ModSetCollector.DoModSetAnalysis(init);
+                BoogieUtil.DoModSetAnalysis(init);
                 Log.WriteLine(string.Format("Total number of procs: {0}", init.TopLevelDeclarations.OfType<Implementation>().Count()));
                 
                 // Compute LOC on inlined procs and non-trivial procs
@@ -577,7 +577,7 @@ namespace cba
             addIds.VisitProgram(init);
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            BoogieUtil.DoModSetAnalysis(init);
 
             // Now we can typecheck
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -696,7 +696,7 @@ namespace cba
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
 
-            // set up entry point
+            #region set up entry point
             if (config.mainProcName != null)
             {
                 program.TopLevelDeclarations.OfType<Implementation>()
@@ -735,13 +735,14 @@ namespace cba
                     config.mainProcName = ep.Name;
                 }
             }
+            #endregion
 
             // annotate calls with a unique number
             var addIds = new AddUniqueCallIds();
             addIds.VisitProgram(program);
 
             // Prune mod sets
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             // Gather the set of initially tracked variables
             var initialTrackedVars = getTrackedVars(program, config);
             // Did we reach the recursion bound?
@@ -898,13 +899,6 @@ namespace cba
                     //abs.writeToFile("ttout.bpl");
                 }
 
-                var cloops = new List<ConstLoop>();
-                if (ConstLoop.aggressive)
-                {
-                    abs = PruneConstLoopsNoCounter(abs, ref cLoopHistory, out cloops);
-                    cloops.Iter(c => cloopsTime += c.lastRun);
-                }
-
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
                 // Check Program
@@ -938,7 +932,6 @@ namespace cba
 
                 // Check if counterexample is feasible
                 ErrorTrace trace = verificationPass.trace;
-                cloops.Reverse<ConstLoop>().Iter(c => trace = c.mapBackTrace(trace));
                 if (ciPass != null) trace = ciPass.mapBackTrace(trace);
                 if(da != null) trace = da.mapBackTrace(trace);
                 trace = abstraction.mapBackTrace(trace);
@@ -1343,8 +1336,8 @@ namespace cba
                     stream.Close();
                 }
 
-                //var ttpp = new PersistentCBAProgram(programForDefectTrace, config.mainProcName, 0);
-                //PrintProgramPath.print(ttpp, buggyTrace, "temp2");
+                //var ttpp = BoogieUtil.ParseProgram(config.inputFile);
+                //PrintProgramPath.print(new ProgTransformation.PersistentProgram(ttpp), buggyTrace, config.inputFile);
 
                 PrintSdvPath.Print(programForDefectTrace, buggyTrace, toRecord, aliasingExplanation, "defect.tt", "stack.txt");
                 var am = new TokenTextWriter("defect.txt");
@@ -1663,76 +1656,15 @@ namespace cba
 
             var noTryFunc = new Func<Implementation, int>(impl =>
                 {
-                    if (noTry.Contains(impl.Name)) return 0;
                     return 2;
                 });
 
-            while (true)
-            {
-                ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
+            ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
-                var cloop = new ConstLoop(noTryFunc);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
+            var cloop = new ConstLoop(noTryFunc);
+            prog = cloop.run(prog);
+            cloops.Add(cloop);
 
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-                
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            return prog;
-        }
-
-        private static PersistentCBAProgram PruneConstLoopsNoCounter(
-            PersistentCBAProgram prog, ref ConstLoopHistory history, out List<ConstLoop> cloops)
-        {
-            cloops = new List<ConstLoop>();
-            var noTry = new HashSet<string>();
-            var inHistory = history;
-            var outHistory = new ConstLoopHistory();
-
-            var summary = new Func<Implementation, int>(impl =>
-            {
-                if (noTry.Contains(impl.Name)) return 0;
-                if (inHistory.definiteFail(impl)) return 0;
-                if (inHistory.definiteSuccess(impl)) return 1;
-                return 2;
-            });
-
-            var constLoopsFound = new HashSet<string>();
-
-            while (true)
-            {
-                var cloop = new ConstLoop(true, false, summary);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
-
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-
-                outHistory.staticallyFailedLoops = cloop.currHistory.staticallyFailedLoops;
-                outHistory.semanticallyFailedLoops.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                cloop.currHistory.globalsUsed.Iter(kvp =>
-                    outHistory.globalsUsed.Add(kvp.Key, kvp.Value));
-
-                constLoopsFound.UnionWith(cloop.cLoops);
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            outHistory.semanticallyFailedLoops.UnionWith(inHistory.semanticallyFailedLoops);
-            foreach (var c in constLoopsFound)
-            {
-                if (!outHistory.globalsUsed.ContainsKey(c) &&
-                    inHistory.globalsUsed.ContainsKey(c))
-                {
-                    outHistory.globalsUsed.Add(c, inHistory.globalsUsed[c]);
-                }
-            }
-
-            history = outHistory;
             return prog;
         }
 
