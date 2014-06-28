@@ -1,0 +1,6 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+70,14,"leaking memory 'ExAllocatePoolWithTag(PagedPool, strlen(hwId)+sizeof(UCHAR), 1330204749)'",pnp.c,557,,,tristang,,kernel;
+100,11,dereferencing NULL pointer 'dsm',mpiowmi.c,2372,,,tristang,,kernel;
+100,11,dereferencing NULL pointer 'dsm',mpiowmi.c,2840,,,tristang,,kernel;
+100,11,dereferencing NULL pointer 'dsm',mpiowmi.c,3089,,,tristang,,kernel;
+100,11,dereferencing NULL pointer 'dsm',mpiowmi.c,3341,,,tristang,,kernel;

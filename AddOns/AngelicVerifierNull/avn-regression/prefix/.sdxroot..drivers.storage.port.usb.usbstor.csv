@@ -1,0 +1,11 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,3768,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,6493,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,6780,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,6169,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,5352,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,5120,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,4911,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,4621,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,4313,,,jibove,,kernel;
+81,11,dereferencing NULL pointer 'fdoDeviceExtension',scsi.c,3928,,,jibove,,kernel;

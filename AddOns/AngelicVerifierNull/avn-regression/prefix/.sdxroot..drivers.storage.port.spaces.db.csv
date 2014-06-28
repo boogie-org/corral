@@ -1,0 +1,5 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+90,11,dereferencing NULL pointer 'Record',configsup.cpp,2157,,,shivr,,kernel;
+90,11,dereferencing NULL pointer 'CfgSpaceRecord',configsup.cpp,2698,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Header',disk.cpp,1899,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Header',disk.cpp,2106,,,shivr,,kernel;

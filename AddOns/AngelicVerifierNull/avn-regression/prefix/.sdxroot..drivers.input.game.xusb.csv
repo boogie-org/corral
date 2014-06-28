@@ -1,0 +1,5 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+80,11,dereferencing NULL pointer 'interfaceList[interfaceIndex]',wdfusbdevicewrapper.cpp,240,,,feisu,,kernel;
+80,11,dereferencing NULL pointer 'this->m_pXUsbPacketDecoder',xenonbusinformation.cpp,528,,,feisu,,kernel;
+90,11,dereferencing NULL pointer 'pConfiguration',pmdinformation.cpp,129,,,feisu,,kernel;
+90,11,dereferencing NULL pointer 'pConfiguration',gamepadinformation.cpp,267,,,feisu,,kernel;

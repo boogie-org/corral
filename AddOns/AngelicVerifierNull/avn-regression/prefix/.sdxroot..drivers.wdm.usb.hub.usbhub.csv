@@ -1,0 +1,10 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+50,1,using uninitialized memory '*id',idstring.c,248,,,vivekg,,kernel;
+60,1,using uninitialized memory 'ps',reset.c,1031,,,vivekg,,kernel;
+90,11,"dereferencing NULL pointer 'UsbhGetPortData(HubFdo, ((WORD)(((DWORD_PTR)(PortNumber))&65535)))'",pnp.c,3856,,,vivekg,,kernel;
+90,11,dereferencing NULL pointer 'pd',pnp.c,3786,Need Triage,,vivekg,,kernel;
+90,11,dereferencing NULL pointer 'pd',reset.c,1264,,,vivekg,,kernel;
+91,11,dereferencing NULL pointer 'portData',sshub.c,631,,,vivekg,,kernel;
+100,11,dereferencing NULL pointer 'hubExDispatch',ex.c,1761,,,vivekg,,kernel;
+100,11,dereferencing NULL pointer 'hubExDispatch',etw.c,387,,,vivekg,,kernel;
+100,11,dereferencing NULL pointer 'level_0',ioctl.c,1939,,,vivekg,,kernel;

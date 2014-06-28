@@ -1,0 +1,8 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+90,11,dereferencing NULL pointer 'deviceInitSettings',init.c,646,,,abhisram,,kernel;
+90,11,dereferencing NULL pointer 'queueInitSettings',init.c,1187,,,abhisram,,kernel;
+90,11,dereferencing NULL pointer 'deviceInitSettings',s0idle.c,54,,,abhisram,,kernel;
+90,11,dereferencing NULL pointer 'deviceInitSettings',init.c,517,,,abhisram,,kernel;
+90,11,dereferencing NULL pointer 'deviceInitSettings',init.c,789,Real - Comments in GetDeviceInitSettings indicate this could return NULL under certain circumstances.  This should probably be handled in kernel mode code.,,abhisram,,kernel;pfx-jw;
+90,11,dereferencing NULL pointer 'deviceInitSettings',init.c,592,There is an error path in GetDeviceInitSettings which can return NULL.,,abhisram,,kernel;pfx-jg;
+90,11,dereferencing NULL pointer 'queueInitSettings',init.c,1148,,,abhisram,,kernel;

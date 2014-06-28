@@ -1,0 +1,16 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+90,11,dereferencing NULL pointer 'PinInformation',gpioclx.c,8316,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',gpioclx.c,8526,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,1560,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,4884,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,4746,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,5148,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',gpioclx.c,3650,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,5023,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,1986,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',interrupt.c,2540,,,muralir,,kernel;
+90,1,using uninitialized memory 'OutputBuffer->Count',utils.c,710,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'GpioBank',callbacks.c,1393,,,muralir,,kernel;
+90,11,dereferencing NULL pointer 'PinInformation',gpioclx.c,3894,,,muralir,,kernel;
+100,11,dereferencing NULL pointer 'GpioBank',gpioclx.c,5921,,,muralir,,kernel;
+100,11,dereferencing NULL pointer 'GpioBank',gpioclx.c,6175,,,muralir,,kernel;

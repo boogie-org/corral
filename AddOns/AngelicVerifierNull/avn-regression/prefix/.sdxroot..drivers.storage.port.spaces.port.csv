@@ -1,0 +1,14 @@
+Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
+50,11,dereferencing NULL pointer '(_SES_DIAGNOSTIC_PAGE *)ControlPage',enclosuresup.cpp,1515,,,shivr,,kernel;
+70,14,leaking memory 'ansiString.Buffer',port.cpp,2419,,,shivr,,kernel;
+80,11,dereferencing NULL pointer 'RootExtension',port.cpp,5188,,,shivr,,
+90,11,dereferencing NULL pointer 'disk',ioctlsup.cpp,774,,,shivr,,kernel;
+90,11,dereferencing NULL pointer 'Drive',pack.cpp,3796,,,shivr,,kernel;
+90,11,dereferencing NULL pointer 'Drive',pack.cpp,3886,,,shivr,,kernel;
+90,11,dereferencing NULL pointer 'Drive',pack.cpp,3487,,,shivr,,kernel;
+90,11,dereferencing NULL pointer 'Record',ioctlsup.cpp,4641,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Record',pack.cpp,3974,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Record',pack.cpp,390,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Record',spacesup.cpp,3213,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Record',pack.cpp,3385,,,shivr,,kernel;
+100,11,dereferencing NULL pointer 'Record',pack.cpp,3483,,,shivr,,kernel;
