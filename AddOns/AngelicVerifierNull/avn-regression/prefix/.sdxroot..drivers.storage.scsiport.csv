@@ -1,8 +1,0 @@
-Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
-52,1,using uninitialized memory 'serviceKey',init.c,5179,,,ralex,,kernel;
-80,11,dereferencing NULL pointer 'deviceExtension',port.c,453,,,ralex,,kernel;
-80,11,dereferencing NULL pointer 'deviceExtension',verify.c,638,,,ralex,,kernel;
-84,1,using uninitialized memory 'savedInterruptData.InterruptFlags',internal.c,1611,,,ralex,,kernel;
-90,11,dereferencing NULL pointer 'deviceExtension',port.c,510,,,ralex,,kernel;
-90,11,dereferencing NULL pointer 'deviceExtension',port.c,219,,,ralex,,kernel;
-100,11,dereferencing NULL pointer '0',verify.c,2555,,,ralex,,kernel;

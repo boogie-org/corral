@@ -1,7 +1,0 @@
-Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
-50,11,dereferencing NULL pointer 'context',hid.c,963,Wouldn't fix. Legacy code.,,anderskl,,kernel;
-63,1,using uninitialized memory 'ulTemp',hidirwake.c,201,Wouldn't fix. Legacy code.,,anderskl,,kernel;
-63,1,using uninitialized memory 'ulTemp',pnp.c,2049,Wouldn't fix. Legacy code,,anderskl,,kernel;
-70,14,leaking memory 'pKeyInfo',pnp.c,1805,Wouldn't fix. Legacy code.,,anderskl,,kernel;
-80,11,dereferencing NULL pointer 'remotePath.Buffer',pnp.c,2070,,,anderskl,,kernel;
-92,11,dereferencing NULL pointer 'pKeyInfo',pnp.c,1060,,,anderskl,,kernel;

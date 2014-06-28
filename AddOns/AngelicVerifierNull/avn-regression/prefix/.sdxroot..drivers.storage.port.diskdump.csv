@@ -1,8 +1,0 @@
-Rank,Warning,Description,Src File,Line,Comment,Status,Owner,Priority,Keywords
-90,11,dereferencing NULL pointer 'cdb',diskdump.c,941,,,scolee,,kernel;
-90,11,dereferencing NULL pointer 'cdb',diskdump.c,2307,,,scolee,,kernel;
-90,11,dereferencing NULL pointer 'cdb',diskdump.c,2460,,,scolee,,kernel;
-90,11,dereferencing NULL pointer 'cdb',diskdump.c,3381,,,scolee,,kernel;
-91,11,dereferencing NULL pointer 'cdb',diskdump.c,3270,,,scolee,,kernel;
-91,11,dereferencing NULL pointer 'cdb',diskdump.c,1353,,,scolee,,kernel;
-100,11,dereferencing NULL pointer 'cdb',diskdump.c,1411,,,scolee,,kernel;
