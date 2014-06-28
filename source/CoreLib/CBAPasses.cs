@@ -1176,6 +1176,11 @@ namespace cba
             //}
 
 
+            // Optimization: if no loop is found, then no need to print
+            // out a new program
+            if (loopProcs.Count == 0)
+                return null;
+
             return p;
         }
 
