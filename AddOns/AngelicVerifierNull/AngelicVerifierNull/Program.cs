@@ -665,6 +665,8 @@ namespace AngelicVerifierNull
 
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
+        private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
+        private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
             cba.SDVConcretizePathPass concretize)
         {
@@ -752,6 +754,13 @@ namespace AngelicVerifierNull
             var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
+            var aexpr = AbstractRepeatedMapsInBlock(expr, usedVarsCollector.usedVars);
+            if (aexpr != null)
+            {
+                Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));
+                return aexpr;
+            }
+
             var substMap = new Dictionary<Variable, Expr>();
             var forallPre = new List<Expr>();
             List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
@@ -787,6 +796,62 @@ namespace AngelicVerifierNull
             }
             return forallExpr;
         }
+
+        private static Expr AbstractRepeatedMapsInBlock(Expr expr, HashSet<Variable> supportVars)
+        {
+            var repeatedFields = new HashSet<Variable>();
+            //once a field has been generalized, we should not see blocks over it
+            supportVars.Iter(x =>
+                {
+                    if (x.TypedIdent.Type.IsMap && x.TypedIdent.Type.MapArity == 1)
+                    {
+                        var xstr = x.ToString();
+                        if (fieldInBlockCount.ContainsKey(xstr))
+                            fieldInBlockCount[xstr]++;
+                        else
+                            fieldInBlockCount[xstr] = 1;
+                        if (fieldInBlockCount[xstr] > MAX_REPEATED_FIELDS_IN_BLOCKS)
+                            repeatedFields.Add(x);
+                    }
+                }
+                );
+            if (repeatedFields.Count == 0) return null;
+            Expr returnExpr = null; 
+            foreach (var m in repeatedFields)
+            {
+                var bvar = new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "_z", m.TypedIdent.Type.AsMap.Arguments[0]));
+                var fexpr = Expr.Gt(BoogieAstFactory.MkMapAccessExpr(m, IdentifierExpr.Ident(bvar)), 
+                    new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
+                var forallExpr = new ForallExpr(Token.NoToken, new List<Variable>() { bvar }, fexpr);
+                if (returnExpr == null)
+                    returnExpr = forallExpr;
+                else
+                    returnExpr = Expr.And(returnExpr, forallExpr);
+            }
+            return returnExpr;
+        }
+
+        //private static void AbstractAndRecordBlock(Expr expr, HashSet<Variable> supportVars)
+        //{
+        //    var substMap = new Dictionary<Variable, Expr>();
+        //    var forallPre = new List<Expr>();
+        //    List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
+        //    int cnt = 0; 
+        //    supportVars.Iter(x =>
+        //    {
+        //        if (x.TypedIdent.Type.IsInt && !(x is Constant)) //exclude NULL
+        //        {
+        //            var bvar =                                                 
+        //                new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "_z" + (cnt++), x.TypedIdent.Type));
+        //            substMap[x] = (Expr)IdentifierExpr.Ident(bvar);
+        //            bvarList.Add(bvar);
+        //        }
+        //    });
+        //    Substitution subst = Substituter.SubstitutionFromHashtable(substMap);
+        //    var nexpr = Substituter.Apply(subst, expr);
+        //    nexpr = new ForallExpr(Token.NoToken, bvarList, nexpr);
+        //    Utils.Print(string.Format("The abstracted block expression for {0} is {1}", expr, nexpr));
+        //}
         #endregion
 
         #region Alias analysis
