@@ -139,6 +139,8 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
             if (resultsfilename != null) ResultsFile = new System.IO.StreamWriter(resultsfilename);
+            ResultsFile.WriteLine("Description,Src File,Line,Procedure,EntryPoint"); // result file header
+            ResultsFile.Flush();
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -378,7 +380,9 @@ namespace AngelicVerifierNull
                     }
                     else
                     {
-                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
+                        // screen output
+                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", 
+                            cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
                         if (printTraceMode == PRINT_TRACE_MODE.Sdv)
                         {
                             // Print assertion location in terms of source file
@@ -388,9 +392,16 @@ namespace AngelicVerifierNull
                         }
 
                         Console.WriteLine(output);
-                        if (ResultsFile != null)
-                            ResultsFile.WriteLine(output);
-
+                        // result file output
+                        // format: Description, Src File, Line, Procedure, EntryPoint
+                        var resultLine = GetFailingLocation(ppprog, string.Format("Assertion {0} failed,{{0}},{{1}},{1},{2}",
+                            ret.Expr.ToString(), cex.Item2.procName, failingEntryPoint));
+                        if (ResultsFile != null && resultLine != null)
+                        {
+                            Stats.count("bug.count");
+                            ResultsFile.WriteLine(resultLine);
+                            ResultsFile.Flush();
+                        }
                         if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
                     }
@@ -402,6 +413,7 @@ namespace AngelicVerifierNull
                     if (mainProc == null)
                         throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                     mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
+                    Stats.count("blocked.count");
                 }
 
                 // print the trace to disk
