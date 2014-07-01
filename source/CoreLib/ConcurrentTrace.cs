@@ -19,7 +19,7 @@ namespace cba
         private static List<Event> events;
         private static Dictionary<int, List<WorkItem>> threadStacks;
         private static int tidCounter = 0;
-        public static Dictionary<Duple<string, string>, Duple<string, string>> mapCTrace = null;
+        public static Dictionary<Duple<string, string>, Tuple<string, string, string>> mapCTrace = null;
 
         // Print data values
         public static int printData = 0;
@@ -120,7 +120,7 @@ namespace cba
         {
             // Read the orignal file gathering a mapping: 
             //   {bpl proc name, bpl block name} -> {C file, line num}
-            mapCTrace = new Dictionary<Duple<string, string>, Duple<string, string>>();
+            mapCTrace = new Dictionary<Duple<string, string>, Tuple<string, string, string>>();
             foreach (var decl in program.TopLevelDeclarations)
             {
                 if (decl is Implementation)
@@ -221,10 +221,10 @@ namespace cba
                 foreach (Cmd cmd in blk.Cmds)
                 {
                     string file;
-                    int line;
+                    int line, col;
                     bool keepCmd;
 
-                    var hasInfo = getSourceInfo(cmd, out file, out line, out keepCmd);
+                    var hasInfo = getSourceInfo(cmd, out file, out line, out col, out keepCmd);
 
                     if (keepCmd)
                     {
@@ -234,7 +234,7 @@ namespace cba
                     if(hasInfo)
                     {
                         var key = new Duple<string, string>(implementation.Name, blk.Label);
-                        var value = new Duple<string, string>(file, line.ToString());
+                        var value = new Tuple<string, string, string>(file, line.ToString(), col.ToString()); 
                         mapCTrace.Add(key, value);
                         if (printData == 2)
                         {
@@ -253,15 +253,16 @@ namespace cba
         private static bool hasSourceInfo(Cmd cmd)
         {
             string file;
-            int line;
+            int line, col;
             bool kc;
-            return getSourceInfo(cmd, out file, out line, out kc);
+            return getSourceInfo(cmd, out file, out line, out col, out kc);
         }
 
-        public static bool getSourceInfo(Cmd cmd, out string file, out int line, out bool keepCmd)
+        public static bool getSourceInfo(Cmd cmd, out string file, out int line, out int column, out bool keepCmd)
         {
             file = null;
             line = -1;
+            column = -1;
             keepCmd = true;
 
             var acmd = cmd as PredicateCmd;
@@ -277,7 +278,11 @@ namespace cba
                 file = attr[0] as string;
                 var tt = attr[1] as LiteralExpr;
                 if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
-                    line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;                
+                    line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;
+                tt = attr[2] as LiteralExpr;
+                if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
+                    column = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;                
+
             }
             else
             {
@@ -333,7 +338,7 @@ namespace cba
                 if (filename != null && filename != "")
                 {
                     //var str = string.Format("{0}({1},{2}):  Thread={3}  K={4}:  {5}", filename, ev.lineno, 1, ev.tid, ev.k, ev.extra);
-                    var str = string.Format("{0}({1},{2}): Trace: Thread={3}  {4}", filename, ev.lineno, 1, ev.tid, ev.extra);
+                    var str = string.Format("{0}({1},{2}): Trace: Thread={3}  {4}", filename, ev.lineno, ev.col == -1? 1 : ev.col, ev.tid, ev.extra);
                     if (str != prev)
                     {
                         Console.WriteLine(str);
@@ -415,7 +420,7 @@ namespace cba
                     assertFails = "ASSERTION FAILS" + extra;
                 }
 
-                events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), assertFails, true));
+                events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), getColNo(tid), assertFails, true));
 
                 int pcnt = 0;
                 int tcnt = 0;
@@ -474,7 +479,7 @@ namespace cba
                             callstr = callstr + assertFails;
                         }
 
-                        events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), callstr, true));
+                        events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), getColNo(tid), callstr, true));
 
                         if (cc.hasCalledTrace)
                         {
@@ -493,13 +498,13 @@ namespace cba
                                     extra = "RETURN from " + (pblk.Cmds[pcnt] as CallCmd).Proc.Name;
                                     extra += " " + leftOverForReturn;
                                 }
-                                events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), extra, true));
+                                events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), getColNo(tid), extra, true));
                             }
                         }
                     }
                     else
                     {
-                        events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), "" + assertFails, true));
+                        events.Add(new Event(k, tid, printStack(tid), getFileName(tid), getLineNo(tid), getColNo(tid), "" + assertFails, true));
                     }
 
                     pcnt++;
@@ -548,16 +553,18 @@ namespace cba
             public bool committed; // true -> committed; false -> pre-empted
             public int eid;
             public int lineno;
+            public int col;
             public string filename;
             private static string lastEvent = "";
 
-            public Event(int k, int tid, string stk, string filename, int lineno, string extra, bool committed)
+            public Event(int k, int tid, string stk, string filename, int lineno, int col, string extra, bool committed)
             {
                 this.k = k;
                 this.tid = tid;
                 this.stk = stk;
                 this.filename = filename;
                 this.lineno = lineno;
+                this.col = col;
                 this.extra = extra;
                 this.committed = committed;
                 eid = -1;
@@ -565,7 +572,7 @@ namespace cba
 
             public Event Copy()
             {
-                var ev = new Event(k, tid, stk, filename, lineno, extra, committed);
+                var ev = new Event(k, tid, stk, filename, lineno, col, extra, committed);
                 ev.eid = eid;
                 return ev;
             }
@@ -821,7 +828,7 @@ namespace cba
             return ret;
         }
 
-        private static Duple<string, string> lastCLocation = null;
+        private static Tuple<string, string, string> lastCLocation = null;
 
         private static void updateCLocation(int tid)
         {
@@ -883,8 +890,9 @@ namespace cba
                         continue;
                     }
 
-                    var file = mapCTrace[key].fst;
-                    var line = mapCTrace[key].snd;
+                    var file = mapCTrace[key].Item1;
+                    var line = mapCTrace[key].Item2;
+                    //var col = mapCTrace[key].Item3;
 
                     if (file.Contains("corral_do_not_print"))
                     {
@@ -900,25 +908,34 @@ namespace cba
 
         private static int getLineNo(int tid)
         {
-            int a;
+            int a,c;
             string b;
-            getLineAndFile(tid, out a, out b);
+            getLineAndFile(tid, out a, out c, out b);
             return a;
+        }
+
+        private static int getColNo(int tid)
+        {
+            int a,c;
+            string b;
+            getLineAndFile(tid, out a, out c, out b);
+            return c;
         }
 
         private static string getFileName(int tid)
         {
-            int a;
+            int a,c;
             string b;
-            getLineAndFile(tid, out a, out b);
+            getLineAndFile(tid, out a, out c, out b);
             return b;
         }
 
-        private static void getLineAndFile(int tid, out int lineno, out string filename)
+        private static void getLineAndFile(int tid, out int lineno, out int col, out string filename)
         {
             Debug.Assert(threadStacks.ContainsKey(tid));
 
             lineno = threadStacks[tid][0].tok.line;
+            col = threadStacks[tid][0].tok.col;
             filename = threadStacks[tid][0].tok.filename;
 
             if (printConsole)
@@ -937,13 +954,15 @@ namespace cba
                     return;
                 }
 
-                filename = mapCTrace[key].fst;
-                lineno = Int32.Parse(mapCTrace[key].snd);
+                filename = mapCTrace[key].Item1;
+                lineno = Int32.Parse(mapCTrace[key].Item2);
+                col = Int32.Parse(mapCTrace[key].Item3);
 
                 if (filename.Contains("corral_do_not_print"))
                 {
                     filename = "";
                     lineno = 1;
+                    col = 1;
                 }
             }
 
