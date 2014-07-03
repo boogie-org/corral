@@ -28,6 +28,7 @@ namespace AngelicVerifierNull
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public HashSet<string> entrypoints; // set of entrypoints identified
+            List<Variable> globalParams = new List<Variable>(); // parameters as global variables
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
             {
@@ -66,9 +67,20 @@ namespace AngelicVerifierNull
                     var args = new List<Variable>();
                     var rets = new List<Variable>();
 
-                    impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+                    
                     impl.OutParams.ForEach(v => rets.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
-                    locals.AddRange(args);
+                    if (Driver.allocateParameters)
+                    {
+                        impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+                        locals.AddRange(args);
+                    }
+                    else
+                    {
+                        impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkGlobal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+                        globalParams.AddRange(args);
+                    }
+
+                    
                     locals.AddRange(rets);
 
                     //call 
@@ -79,16 +91,15 @@ namespace AngelicVerifierNull
                     var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst));
                     
                     var cmds = new List<Cmd>();
-                    if (Driver.allocateParameters)
+                    cmds.Add(blockCallAssumeCmd);
+                    if (Driver.allocateParameters) // allocate parameters if option is enabled
                     {
                         var argMallocCmds = AllocatePointersAsUnknowns(args);
                         cmds.AddRange(argMallocCmds);
                     }
 
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
-                        rets.ConvertAll(x => IdentifierExpr.Ident(x)));
-                    
-                    cmds.Add(blockCallAssumeCmd);
+                        rets.ConvertAll(x => IdentifierExpr.Ident(x)));                
                     
                     cmds.Add(callCmd);
                     //succ
@@ -96,6 +107,8 @@ namespace AngelicVerifierNull
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
+                // add global variables to prog
+                // globals.Iter(x => prog.TopLevelDeclarations.Add(x)); 
                 //add the constants to the prog
                 blockCallConsts.Iter(x => prog.TopLevelDeclarations.Add(x));
                 //TODO: get globals of type refs/pointers and maps
@@ -110,6 +123,9 @@ namespace AngelicVerifierNull
 
                 // initialize globals
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+
+                // globals for parameters
+                prog.TopLevelDeclarations.AddRange(globalParams);
 
                 //first block
                 var transferCmd =

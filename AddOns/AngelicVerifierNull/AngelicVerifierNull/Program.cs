@@ -416,6 +416,7 @@ namespace AngelicVerifierNull
                     if (mainProc == null)
                         throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                     mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
+
                     Stats.count("blocked.count");
                 }
 
