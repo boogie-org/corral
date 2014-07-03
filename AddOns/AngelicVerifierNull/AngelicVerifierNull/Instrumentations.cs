@@ -65,22 +65,31 @@ namespace AngelicVerifierNull
                     //allocate params
                     var args = new List<Variable>();
                     var rets = new List<Variable>();
+
                     impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
                     impl.OutParams.ForEach(v => rets.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
                     locals.AddRange(args);
                     locals.AddRange(rets);
+
                     //call 
                     var blockCallConst = new Constant(Token.NoToken,
                         new TypedIdent(Token.NoToken, "__block_call_" + impl.Name, btype.Bool), false);
                     blockCallConsts.Add(blockCallConst);
                     blockEntryPointConstants[blockCallConst.Name] = impl.Name;
-                    var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst)); 
-                    var argMallocCmds = AllocatePointersAsUnknowns(args);
+                    var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst));
+                    
+                    var cmds = new List<Cmd>();
+                    if (Driver.allocateParameters)
+                    {
+                        var argMallocCmds = AllocatePointersAsUnknowns(args);
+                        cmds.AddRange(argMallocCmds);
+                    }
+
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
                         rets.ConvertAll(x => IdentifierExpr.Ident(x)));
-                    var cmds = new List<Cmd>();
+                    
                     cmds.Add(blockCallAssumeCmd);
-                    cmds.AddRange(argMallocCmds);
+                    
                     cmds.Add(callCmd);
                     //succ
                     var txCmd = new ReturnCmd(Token.NoToken);

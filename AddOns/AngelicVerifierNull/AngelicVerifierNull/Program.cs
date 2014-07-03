@@ -92,6 +92,7 @@ namespace AngelicVerifierNull
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
+        public static bool allocateParameters = true; //allocating parameters for procedures
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -118,7 +119,9 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/copt:"))
                 .Iter(s => corralOpts += " /" + s.Substring("/copt:".Length) + " ");
                 //.Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
-                
+
+            if (args.Any(s => s == "/noAllocation"))
+                allocateParameters = false;
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
