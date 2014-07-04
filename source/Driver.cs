@@ -451,32 +451,6 @@ namespace cba
                 BoogieVerify.removeAsserts = false;
                 var err = new List<BoogieErrorTrace>();
                 init.Typecheck();
-                /*
-                CommandLineOptions.Install(new CommandLineOptions());
-                CommandLineOptions.Clo.PrintInstrumented = true;
-                CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
-                CommandLineOptions.Clo.StratifiedInliningVerbose = config.verboseMode;
-                CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
-                CommandLineOptions.Clo.ExpandLambdas = false;
-                CommandLineOptions.Clo.Parse(new string[] { "/stratifiedInline:1", "/extractLoops", "/noinfer",
-                "/recursionBound:1", "/useArrayTheory", "/vc:i",
-                "/z3opt:ARRAY_WEAK=true", "/z3opt:ARRAY_EXTENSIONAL=false", "/proverLog:out1"
-                });
-                ExecutionEngine.printer = new ConsolePrinter();
-                //ExecutionEngine.ProcessFiles(new List<string> { config.inputFile }, false);
-                //throw new NormalExit("Done");
-                init = ExecutionEngine.ParseBoogieProgram(new List<string> { config.inputFile }, false);
-                LinearTypechecker lt;
-                ExecutionEngine.ResolveAndTypecheck(init, config.inputFile, out lt);
-                ExecutionEngine.EliminateDeadVariablesAndInline(init);
-
-                var checkers = new List<Checker>();
-                var vcgen = new VC.StratifiedVCGen(init, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, checkers);
-                var errors = new List<Counterexample>();
-                var outcome = vcgen.VerifyImplementation(BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, "main_SeqInstr"), out errors, "unknown");
-                if (errors == null || errors.Count == 0) Console.WriteLine("Verified");
-                else Console.WriteLine("Errors");
-                throw new NormalExit("Done"); */
 
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;

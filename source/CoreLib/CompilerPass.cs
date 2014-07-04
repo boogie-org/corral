@@ -254,7 +254,7 @@ namespace cba
             bool inline = false;
             foreach (Declaration d in TopLevelDeclarations)
             {
-                if (d.FindExprAttribute("inline") != null) inline = true;
+                if ((d is Procedure || d is Implementation) && d.FindExprAttribute("inline") != null) inline = true;
             }
             if (inline)
             {
