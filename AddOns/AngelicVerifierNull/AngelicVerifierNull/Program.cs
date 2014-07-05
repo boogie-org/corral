@@ -141,9 +141,12 @@ namespace AngelicVerifierNull
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
-            if (resultsfilename != null) ResultsFile = new System.IO.StreamWriter(resultsfilename);
-            ResultsFile.WriteLine("Description,Src File,Line,Procedure,EntryPoint"); // result file header
-            ResultsFile.Flush();
+            if (resultsfilename != null)
+            {
+                ResultsFile = new System.IO.StreamWriter(resultsfilename);
+                ResultsFile.WriteLine("Description,Src File,Line,Procedure,EntryPoint"); // result file header
+                ResultsFile.Flush();
+            }
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
