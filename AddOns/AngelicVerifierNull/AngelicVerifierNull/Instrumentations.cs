@@ -25,6 +25,7 @@ namespace AngelicVerifierNull
             Program prog;
             string mainName;
             Procedure mallocProcedure = null;
+            Procedure mallocProcedureFull = null;
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public HashSet<string> entrypoints; // set of entrypoints identified
@@ -213,7 +214,7 @@ namespace AngelicVerifierNull
             }
             private Cmd AllocatePointerAsUnknown(Variable x)
             {
-                return BoogieAstFactory.MkCall(mallocProcedure, 
+                return BoogieAstFactory.MkCall(mallocProcedureFull, 
                     new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, 
                     new List<Variable>() {x});
             }
@@ -224,15 +225,26 @@ namespace AngelicVerifierNull
             }
             private void FindMalloc()
             {
-                //find the malloc procedure
-                mallocProcedure = (Procedure)prog.TopLevelDeclarations
-                    .Where(x => x is Procedure && BoogieUtil.checkAttrExists("allocator", x.Attributes))
-                    .FirstOrDefault();
+                //find the malloc and malloc-full procedures
+                foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+                {
+                    var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
+                    if (attr == null) mallocProcedure = proc;
+                    else if (attr == "full") mallocProcedureFull = proc;
+                }
+
                 if (mallocProcedure == null)
                 {
                     throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator} declared in the input program");
                 }
-                if (mallocProcedure.InParams.Count != 1)
+
+                if (mallocProcedureFull == null)
+                {
+                    throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
+                }
+
+                if (mallocProcedure.InParams.Count != 1 || mallocProcedureFull.InParams.Count != 1)
                 {
                     throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
                         mallocProcedure.Name, mallocProcedure.InParams.Count));

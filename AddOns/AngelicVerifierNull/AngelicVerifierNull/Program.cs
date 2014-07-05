@@ -235,10 +235,7 @@ namespace AngelicVerifierNull
             // Update mod sets
             BoogieUtil.DoModSetAnalysis(init);
 
-            //TODO: Perform alias analysis here and prune a subset of asserts
-
             //Various instrumentations on the well-formed program
-
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
             //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
