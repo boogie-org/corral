@@ -644,11 +644,10 @@ namespace cba
         // What it does: gives the program to Boogie as soon as possible
         public static void runSDVMode(Program program, Configs config)
         {
-            Debug.Assert(config.contextBound == 1);
-            //GC.AddMemoryPressure(1500 * 1024 * 1024);
-
             // Save memory by deleting tokens
             ProgTransformation.PersistentProgram.clearTokens = true;
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
+            VerificationPass.usePruning = false;
 
             SetSdvModeOptions(config);
             var progVerifyOptions = ConfigManager.progVerifyOptions;
@@ -656,9 +655,6 @@ namespace cba
             var refinementVerifyOptions = ConfigManager.refinementVerifyOptions;
 
             CorralState.AbsorbPrevState(config, progVerifyOptions);
-
-            ProgTransformation.PersistentProgramIO.useDuplicator = true;
-            VerificationPass.usePruning = false;
             
             PersistentCBAProgram inputProg = null;
             if (config.printData == 2)
@@ -848,7 +844,7 @@ namespace cba
                 if (iterCnt == 1)
                 {
                     //abs.writeToFile("abs.bpl");
-                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound);
+                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
@@ -1284,8 +1280,8 @@ namespace cba
 
                 buggyTrace = sinfo.mapBackTrace(buggyTrace);
 
-                if (config.printData == 2)
-                {
+                //if (config.printData == 2)
+                //{
                     var bugT = buggyTrace.Copy();
                     //PrintProgramPath.print(init, bug, "temp0");
 
@@ -1301,14 +1297,14 @@ namespace cba
                     bugT = tempt;
                     PrintProgramPath.print(inputProg, bugT, "input");
 
-                    PrintSdvPath.PrintStackTrace(inputProg.getCBAProgram(), bugT, "defect.stktrace");
+                    //PrintSdvPath.PrintStackTrace(inputProg.getCBAProgram(), bugT, "defect.stktrace");
 
                     //serialize the buggyTrace
                     BinaryFormatter serializer = new BinaryFormatter();
                     FileStream stream = new FileStream("buggyTrace.serialised", FileMode.Create, FileAccess.Write, FileShare.None);
                     serializer.Serialize(stream, bugT);
                     stream.Close();
-                }
+                //}
 
                 //var ttpp = BoogieUtil.ParseProgram(config.inputFile);
                 //PrintProgramPath.print(new ProgTransformation.PersistentProgram(ttpp), buggyTrace, config.inputFile);
