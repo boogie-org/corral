@@ -28,3 +28,4 @@ procedure Foo(c:int) returns (d:int) {
 }
 
 procedure {:allocator} malloc(a:int) returns (b:int);
+procedure {:allocator "full"} malloc_full(a:int) returns (b:int);
