@@ -59,7 +59,7 @@ namespace AliasAnalysis
             var ret =
             AliasAnalysis.DoAliasAnalysis(program);
 
-            foreach (var tup in ret)
+            foreach (var tup in ret.aliases)
                 Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
 
             if (prune != null)
@@ -74,16 +74,48 @@ namespace AliasAnalysis
 
     public class PruneAliasingQueries : FixedVisitor
     {
-        Dictionary<string, bool> result;
+        AliasAnalysisResults result;
+        
+        Function AllocationSites;
+        Dictionary<string, Constant> asToAS;
 
-        PruneAliasingQueries(Dictionary<string, bool> result)
+        PruneAliasingQueries(AliasAnalysisResults result, Function AllocationSites, Dictionary<string, Constant> asToAS)
         {
             this.result = result;
+            this.AllocationSites = AllocationSites;
+            this.asToAS = asToAS;
         }
 
-        public static void Prune(Program program, Dictionary<string, bool> result)
+        public static void Prune(Program program, AliasAnalysisResults result)
         {
-            var prune = new PruneAliasingQueries(result);
+            Function AllocationSites = null;
+            Dictionary<string, Constant> asToAS = new Dictionary<string, Constant>();
+
+            if (result.allocationSites.Any())
+            {
+                // type AS;
+                var asType = new TypeCtorDecl(Token.NoToken, "AS", 0);
+                program.TopLevelDeclarations.Add(asType);
+                // add AS constants
+                var sites = new HashSet<string>();
+                result.allocationSites.Values.Iter(v => sites.UnionWith(v));
+                foreach (var s in sites)
+                {
+                    var c = new Constant(Token.NoToken,
+                            new TypedIdent(Token.NoToken, "AS_" + s, new CtorType(Token.NoToken, asType, new List<btype>())),
+                            true);
+                    asToAS.Add(s, c);
+                    program.TopLevelDeclarations.Add(c);
+                }
+                // Add: function AllocationSites(int) : AS
+                AllocationSites = new Function(Token.NoToken, "AllocationSites", new List<Variable>{
+                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true)},
+                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), false));
+                program.TopLevelDeclarations.Add(AllocationSites);
+            }
+
+            var prune = new PruneAliasingQueries(result, AllocationSites, asToAS);
+
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => prune.VisitImplementation(impl));
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -98,9 +130,9 @@ namespace AliasAnalysis
         public override Expr VisitNAryExpr(NAryExpr node)
         {
             var fcall = node.Fun as FunctionCall;
-            if (fcall != null && result.ContainsKey(fcall.FunctionName))
+            if (fcall != null && result.aliases.ContainsKey(fcall.FunctionName))
             {
-                if (result[fcall.FunctionName] == false)
+                if (result.aliases[fcall.FunctionName] == false)
                 {
                     return Expr.False;
                 }
@@ -108,6 +140,14 @@ namespace AliasAnalysis
                 {
                     return Expr.Eq(node.Args[0], node.Args[1]);
                 }
+            }
+
+            if (fcall != null && result.allocationSites.ContainsKey(fcall.FunctionName))
+            {
+                Expr r = Expr.False;
+                foreach (var s in result.allocationSites[fcall.FunctionName])
+                    r = Expr.Or(r, Expr.Eq(new NAryExpr(Token.NoToken, new FunctionCall(AllocationSites), new List<Expr>{node.Args[0]}), Expr.Ident(asToAS[s])));
+                return r;
             }
 
             var ret = base.VisitNAryExpr(node);
@@ -285,6 +325,17 @@ namespace AliasAnalysis
     }
     */
 
+    public class AliasAnalysisResults
+    {
+        public Dictionary<string, bool> aliases;
+        public Dictionary<string, HashSet<string>> allocationSites;
+        public AliasAnalysisResults()
+        {
+            aliases = new Dictionary<string, bool>();
+            allocationSites = new Dictionary<string, HashSet<string>>();
+        }
+    }
+
     public class AliasAnalysis
     {
 
@@ -302,9 +353,8 @@ namespace AliasAnalysis
             counter = 0;
         }
 
-        public static Dictionary<string, bool> DoAliasAnalysis(Program program)
+        public static AliasAnalysisResults DoAliasAnalysis(Program program)
         {
-            var ret = new Dictionary<string, bool>();
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
@@ -320,7 +370,9 @@ namespace AliasAnalysis
                     aa.ConstructVariableName(v2, impl.Name))),
                     new Func<Variable, Variable, Implementation, bool>((v1, v2, impl) => aa.solver.IsReachable(
                     aa.ConstructVariableName(v1, impl.Name),
-                    aa.ConstructVariableName(v2, impl.Name)))
+                    aa.ConstructVariableName(v2, impl.Name))),
+                    new Func<Variable, Implementation, HashSet<string>>((v1, impl) => aa.solver.AllocationSites(
+                    aa.ConstructVariableName(v1, impl.Name)))
                     );
         }
 
@@ -328,37 +380,48 @@ namespace AliasAnalysis
         {
             Func<Variable, Variable, Implementation, bool> IsAlias;
             Func<Variable, Variable, Implementation, bool> IsReachable;
+            Func<Variable, Implementation, HashSet<string>> PointsToSet;
             HashSet<string> aliasQueryFuncs;
             HashSet<string> reachableQueryFuncs;
-            Dictionary<string, bool> queryResults;
+            HashSet<string> allocationSitesQueryFuncs;
+            AliasAnalysisResults results;
             Implementation currImpl;
 
-            private AliasQuerySolver(HashSet<string> aliasQueryFuncs, HashSet<string> reachableQueryFuncs, Func<Variable, Variable, Implementation, bool> IsAlias,
-                Func<Variable, Variable, Implementation, bool> IsReachable)
+            private AliasQuerySolver(HashSet<string> aliasQueryFuncs, HashSet<string> reachableQueryFuncs, HashSet<string> allocationSitesQueryFuncs, 
+                Func<Variable, Variable, Implementation, bool> IsAlias,
+                Func<Variable, Variable, Implementation, bool> IsReachable,
+                Func<Variable, Implementation, HashSet<string>> PointsToSet)
             {
                 this.aliasQueryFuncs = aliasQueryFuncs;
                 this.reachableQueryFuncs = reachableQueryFuncs;
-                this.queryResults = new Dictionary<string, bool>();
+                this.allocationSitesQueryFuncs = allocationSitesQueryFuncs;
+                this.results = new AliasAnalysisResults();
                 this.IsAlias = IsAlias;
                 this.IsReachable = IsReachable;
-                aliasQueryFuncs.Iter(q => queryResults.Add(q, false));
-                reachableQueryFuncs.Iter(q => queryResults.Add(q, false));
+                this.PointsToSet = PointsToSet;
+                aliasQueryFuncs.Iter(q => results.aliases.Add(q, false));
+                reachableQueryFuncs.Iter(q => results.aliases.Add(q, false));
+                allocationSitesQueryFuncs.Iter(q => results.allocationSites.Add(q, new HashSet<string>()));
             }
 
-            public static Dictionary<string, bool> Solve(Program program, Func<Variable, Variable, Implementation, bool> IsAlias,
-                Func<Variable, Variable, Implementation, bool> IsReachable)
+            public static AliasAnalysisResults Solve(Program program, 
+                Func<Variable, Variable, Implementation, bool> IsAlias,
+                Func<Variable, Variable, Implementation, bool> IsReachable,
+                Func<Variable, Implementation, HashSet<string>> PointsToSet)
             {
                 var aq = new HashSet<string>();
                 var rq = new HashSet<string>();
+                var asq = new HashSet<string>();
                 foreach (var func in program.TopLevelDeclarations.OfType<Function>()
                     .Where(func => BoogieUtil.checkAttrExists("aliasingQuery", func.Attributes)))
                 {
                     var p = QKeyValue.FindStringAttribute(func.Attributes, "aliasingQuery");
-                    if (p == null || p != "transitive") aq.Add(func.Name);
-                    else rq.Add(func.Name);
+                    if(p != null && p == "transitive") rq.Add(func.Name);
+                    else if(p != null && p == "allocationsites") asq.Add(func.Name);
+                    else aq.Add(func.Name);
                 }
 
-                var qSolver = new AliasQuerySolver(aq, rq, IsAlias, IsReachable);
+                var qSolver = new AliasQuerySolver(aq, rq, asq, IsAlias, IsReachable, PointsToSet);
                 program.TopLevelDeclarations.OfType<Implementation>()
                     .Iter(impl =>
                     {
@@ -366,7 +429,7 @@ namespace AliasAnalysis
                         qSolver.VisitImplementation(impl);
                     });
 
-                return qSolver.queryResults;
+                return qSolver.results;
             }
 
             public override Expr VisitNAryExpr(NAryExpr node)
@@ -380,13 +443,21 @@ namespace AliasAnalysis
                         var arg1 = node.Args[0] as IdentifierExpr;
                         var arg2 = node.Args[1] as IdentifierExpr;
                         Debug.Assert(arg1 != null && arg2 != null);
-                        if (!queryResults[func])
+                        if (!results.aliases[func])
                         {
-                            queryResults[func] = aliasQueryFuncs.Contains(func) ?
+                            results.aliases[func] = aliasQueryFuncs.Contains(func) ?
                                 IsAlias(arg1.Decl, arg2.Decl, currImpl) :
                                 IsReachable(arg1.Decl, arg2.Decl, currImpl);
 
                         }
+                    }
+                    if (allocationSitesQueryFuncs.Contains(func))
+                    {
+                        Debug.Assert(node.Args.Count == 1);
+                        var arg1 = node.Args[0] as IdentifierExpr;
+                        Debug.Assert(arg1 != null);
+                        results.allocationSites[func].UnionWith(
+                            PointsToSet(arg1.Decl, currImpl));
                     }
 
                 }
@@ -923,6 +994,18 @@ namespace AliasAnalysis
             }
 
             return reachable.Intersection(PointsTo[var2]).Any();
+        }
+
+        // Return the set of allocation sites of v
+        public HashSet<string> AllocationSites(string v)
+        {
+            Debug.Assert(solved);
+            var ret = new HashSet<string>();
+
+            if (!PointsTo.ContainsKey(v))
+                return ret;
+
+            return PointsTo[v];
         }
     }
 
