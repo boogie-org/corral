@@ -28,6 +28,7 @@ namespace AngelicVerifierNull
         public static int numProcsAnalyzed = -1;
         public static int numAssertsBeforeAliasAnalysis = -1;
         public static int numAssertsAfterAliasAnalysis = -1;
+        public static int numAssertsAfterOptimization = -1;
     }
 
     public class Utils
@@ -108,6 +109,24 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
+
+                /*
+                string notfalse = null;
+                Console.WriteLine("Before :-");
+                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations.OfType<Implementation>())
+                {
+                    foreach (Block b in impl.Blocks)
+                    {
+                        foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                        {
+                            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                                ac.Expr.ToString() == notfalse) continue;
+                            else Console.Write(ac.ToString());
+                        }
+                    }
+                    Console.Write(impl.ToString());
+                }
+                */
                 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
@@ -722,6 +741,8 @@ namespace AngelicVerifierNull
         {
             var program = inp.getProgram();
 
+            bool dbg = false;
+
             // Make sure that aliasing queries are on identifiers only
             AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
@@ -729,16 +750,78 @@ namespace AngelicVerifierNull
             program =
               SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            program = CleanAssert.CleanAssertStmt(program);
+            Console.WriteLine("Optimization Time : {0}ms", sw.ElapsedMilliseconds);
+
+            int count = 0;
+            if (dbg) Console.WriteLine("After AA:-");
+            string notfalse = null;
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                            continue;
+                        else
+                        {
+                            if (dbg) Console.Write(impl.ToString() + " :- ");
+                            if (dbg) Console.Write(ac.ToString());
+                            count++;
+                        }
+                    }
+                }
+            }
+            Console.WriteLine("#AssertsAfterOptimization : {0}", count);
+
+
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
             var ret =
               AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
 
-            //foreach (var tup in ret)
-            //    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+            /*
+            int true_null = 0, false_null = 0, true_alias = 0, false_alias = 0;
+            foreach (var tup in ret)
+            {
+                if (tup.Key.Contains("aliasQnull"))
+                {
+                    if (tup.Value)
+                    {
+                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+                        true_null++;
+                    }
+                    else
+                    {
+                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+                        false_null++;
+                    }
+                }
+                else
+                {
+                    if (tup.Value)
+                    {
+                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+                        true_alias++;
+                    }
+                    else
+                    {
+                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+                        false_alias++;
+                    }
+                }
+            }
+            Console.WriteLine("True Null : {0}, False Null : {1}, True Alias : {2}, False Alias : {3}", true_null, false_null, true_alias, false_alias);
+            */
 
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, ret);
+
+            
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }

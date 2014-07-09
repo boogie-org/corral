@@ -1842,4 +1842,205 @@ namespace cba.Util
             return defsOut;
         }
     }
+
+    public class CleanAssert
+    {
+        Program program;
+
+        private CleanAssert(Program program)
+        {
+            this.program = program;
+        }
+
+        public static Program CleanAssertStmt(Program program)
+        {
+            var ca = new CleanAssert(program);
+            ca.Clean();
+            return ca.program;
+        }
+
+        private bool checkIfNull(Expr expr)
+        {
+            return (expr as IdentifierExpr).ToString().Equals("NULL");
+        }
+
+        private void Clean()
+        {
+            bool dbg = false;
+            int asserts_removed_count = 0;  // Counting the number of asserts removed
+            string notfalse = null;
+            bool exists, var_exists, valid_assume_cmd, valid_assert_cmd;
+            int count_predecessors, var_frequency;
+            NAryExpr asc_expr;
+            /*
+             * Go to each implementation
+             * Sort the blocks in topological order. (needed for computing live variables in predecessors)
+             */
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (dbg) Console.WriteLine("Implementation :- " + impl.ToString());
+                IEnumerable<Block> sortedBlocks;
+                Dictionary<string, HashSet<string>> assume_flow = new Dictionary<string, HashSet<string>>();
+                // Dictionary from Block_Name -> Live variables in block (variables for which !NULL is implied)
+
+                // Computing predecessors, constructing CFG and topological sorting of blocks
+                impl.ComputePredecessorsForBlocks();
+                Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
+                sortedBlocks = dag.TopologicalSort();
+
+                /*
+                 * Go to each block
+                 * Compute live variables present in all predecessors
+                 */
+                foreach (Block b in sortedBlocks)
+                {
+                    HashSet<string> current_live_vars = new HashSet<string>();  // Live variables in current block
+                    if (dbg) Console.WriteLine("Block :- " + b.ToString());
+                    
+                    List<AssertCmd> removal_list_ac = new List<AssertCmd>();    // List of assert commands to be removed from block
+                    HashSet<string> live_vars;  // Live variables in predecessor block
+                    Dictionary<string, int> intersection_vars = new Dictionary<string, int>();  // Live variables in all predecessor blocks
+                    
+                    count_predecessors = 0;
+
+                    /*
+                     * Go to each predecessor of a block, and compute the live variables in the block using assume_flow dictionary
+                     */
+                    foreach (Block blk in b.Predecessors)
+                    {
+                        if (dbg) Console.WriteLine("Analyzing predecessor block :- " + blk.ToString());
+
+                        count_predecessors++;
+                        exists = assume_flow.TryGetValue(blk.ToString(), out live_vars);    // Get the live variables of predecessor block in live_vars
+                        Debug.Assert(exists);   // Computation of predecessor should be done because of topological sorting
+
+                        /*
+                         * Go to each live variable in the predecessor
+                         * If variable exists in intersection_vars, increment its count
+                         * Else, add variable to intersection_vars with count 1
+                         */
+                        foreach (string var_name in live_vars)
+                        {
+                            if (dbg) Console.WriteLine("\tLive variable :- " + var_name);
+                            var_exists = intersection_vars.TryGetValue(var_name, out var_frequency);    // Taking count in var_frequency
+                            if (var_exists)
+                            {
+                                var_frequency++;                                    // Increment frequency
+                                intersection_vars.Remove(var_name);                 // Remove from variable from intersection_vars
+                                intersection_vars.Add(var_name, var_frequency);     // Add with incremented frequency
+                            }
+                            else intersection_vars.Add(var_name, 1);                // Add with frequency 1
+                        }
+                    }
+
+                    /*
+                     * Go to each variable in intersection_vars
+                     * The variables present in each predecessor should have count = count_predecessors
+                     * Add these variables to current_live_vars
+                     */
+                    foreach (KeyValuePair<string, int> pair in intersection_vars)
+                    {
+                        if (pair.Value == count_predecessors)
+                        {
+                            if (dbg) Console.WriteLine("Adding variable to current live variable :- " + pair.Key);
+                            current_live_vars.Add(pair.Key);
+                        }
+                    }
+
+                    /*
+                     * Go to each command in block
+                     * If command is assert, check if variable is in current_live_vars
+                     * If yes, remove the assert
+                     * Else, add the variable to current_live_vars
+                     * If command is assume, add variable to current_live_vars
+                     */
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (c is AssertCmd)
+                        {
+                            var ac = c as AssertCmd;
+
+                            // Check asserts which are not true
+                            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                                continue;
+                            else
+                            {
+                                IdentifierExpr id = null;
+                                string var_name = null;
+
+                                // Extracting variable name from assert command
+                                if (ac.Expr != null &&
+                                    ac.Expr is NAryExpr &&
+                                    ((NAryExpr)ac.Expr).Args != null &&
+                                    (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
+                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null &&
+                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>() != null &&
+                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First() is IdentifierExpr)
+                                    valid_assert_cmd = true;
+                                else valid_assert_cmd = false;
+                                if (valid_assert_cmd)
+                                {
+                                    id = ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First();
+                                    var_name = id.ToString();
+
+                                    if (dbg) Console.WriteLine("Analyzing Var_AssertCmd :- " + var_name);
+                                    
+                                    // Check if variable is already contained in current_live_vars
+                                    if (current_live_vars.Contains(var_name))
+                                    {
+                                        removal_list_ac.Add(ac);
+                                        if (dbg) Console.WriteLine("Removing " + ac.ToString());
+                                    }
+                                    else current_live_vars.Add(var_name);   // Add variable to current_live_vars
+                                }
+                                
+                            }
+                        }
+                        else if (c is AssumeCmd)
+                        {
+                            var asc = c as AssumeCmd;
+                            IdentifierExpr id = null;
+                            string var_name = null;
+                            valid_assume_cmd = true;
+
+                            // Extracting variable name from assume command
+                            if (asc.Expr is NAryExpr)
+                            {
+                                asc_expr = (NAryExpr)asc.Expr;
+                                if (asc_expr.Fun != null &&
+                                    asc_expr.Fun is BinaryOperator &&
+                                    ((BinaryOperator)asc_expr.Fun).Op == BinaryOperator.Opcode.Neq &&
+                                    asc_expr.Args.Count == 2 &&
+                                    asc_expr.Args[0] is IdentifierExpr &&
+                                    asc_expr.Args[1] is IdentifierExpr &&
+                                    checkIfNull(asc_expr.Args[1]))
+                                        valid_assume_cmd = true;
+                                else valid_assume_cmd = false;
+                                if (valid_assume_cmd && dbg) Console.WriteLine("Hey, found it!");
+                            }
+                            else valid_assume_cmd = false;
+                            if (valid_assume_cmd)
+                            {
+                                id = (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
+                                var_name = id.ToString();
+                                if (dbg) Console.WriteLine("Adding Var_AssumeCmd :- " + var_name);
+                                if (dbg) Console.WriteLine(asc.ToString());
+                                current_live_vars.Add(var_name);        // Add variable to current_live_vars
+                            }
+                        }
+                    }
+
+                    // Remove the assert commands contained in removal_list_ac
+                    foreach (AssertCmd ac in removal_list_ac)
+                    {
+                        b.Cmds.Remove(ac);
+                        asserts_removed_count++;
+                    }
+                    assume_flow.Add(b.ToString(), current_live_vars);
+                }
+            }
+            if (dbg) Console.WriteLine("#Asserts Removed by Optimizations :- " + asserts_removed_count);
+        }
+    }
 }
