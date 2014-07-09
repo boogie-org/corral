@@ -96,6 +96,7 @@ namespace AngelicVerifierNull
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
         public static bool allocateParameters = true; //allocating parameters for procedures
+        static bool trackAllVars = false; //track all variables
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -128,6 +129,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noAA"))
                 Options.UseAliasAnalysis = false;
+
+            if (args.Any(s => s == "/trackAllVars"))
+                trackAllVars = true;
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
@@ -619,8 +623,11 @@ namespace AngelicVerifierNull
             ////////////////////////////////////
             // Verification phase
             ////////////////////////////////////
-
-            var refinementState = new cba.RefinementState(curr, new HashSet<string>(corralConfig.trackedVars.Union(new string[] { seqInstr.assertsPassedName })), false);
+            var refinementState = new cba.RefinementState(curr,
+                Driver.trackAllVars ? 
+                /*track all variables*/curr.allVars.Variables : 
+                /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { seqInstr.assertsPassedName })), 
+                false);
 
             cba.ErrorTrace cexTrace = null;
             try
