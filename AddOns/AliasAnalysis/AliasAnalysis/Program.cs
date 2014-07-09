@@ -206,10 +206,11 @@ namespace AliasAnalysis
             extraCmds = new List<Cmd>();
         }
 
-        public static void Simplify(Program program)
+        public static HashSet<string> Simplify(Program program)
         {
             var sa = new SimplifyAliasingQueries();
             sa.VisitProgram(program);
+            return sa.aliasingFunctions;
         }
 
         public override Program VisitProgram(Program node)

@@ -20,6 +20,8 @@ namespace AngelicVerifierNull
     {
         // Reuse tracked variables and explored call tree across corral runs
         public static readonly bool UsePrevCorralState = true;
+        // Don't use alias analysis
+        public static bool UseAliasAnalysis = true;
     }
 
     class Stats
@@ -122,6 +124,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noAllocation"))
                 allocateParameters = false;
+
+            if (args.Any(s => s == "/noAA"))
+                Options.UseAliasAnalysis = false;
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
@@ -879,7 +884,8 @@ namespace AngelicVerifierNull
             var program = inp.getProgram();
 
             // Make sure that aliasing queries are on identifiers only
-            AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
+            var af =
+                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
@@ -887,14 +893,23 @@ namespace AngelicVerifierNull
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
-            var ret =
-              AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+            AliasAnalysis.AliasAnalysisResults res = null;
+            if (Options.UseAliasAnalysis)
+            {
+                res =
+                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+            }
+            else
+            {
+                res = new AliasAnalysis.AliasAnalysisResults();
+                af.Iter(s => res.aliases.Add(s, true));
+            }
 
             //foreach (var tup in ret)
             //    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
 
             var origProgram = inp.getProgram();
-            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, ret);
+            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
