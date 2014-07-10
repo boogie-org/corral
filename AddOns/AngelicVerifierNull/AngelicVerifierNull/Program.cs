@@ -713,7 +713,9 @@ namespace AngelicVerifierNull
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
+        private const int MAX_REPEATED_BLOCK_EXPR = 4; // maximum number of repeated block expr
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
+        private static Dictionary<string, int> blockExprCount = new Dictionary<string, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
             cba.SDVConcretizePathPass concretize)
         {
@@ -726,7 +728,7 @@ namespace AngelicVerifierNull
 
             Dictionary<string, string> eeComplexExprs;
             try
-            {
+            {            
                 HashSet<List<Expr>> preDisjuncts;
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, out eeStatus, out eeComplexExprs, out preDisjuncts, "suggestions.bpl");
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
@@ -739,6 +741,16 @@ namespace AngelicVerifierNull
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
                         blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
+
+                        /*HACK: supress the assertion when it cannot be blocked*/
+                        if (blockExprCount.ContainsKey(blockExpr.ToString()))
+                        {
+                            if (blockExprCount[blockExpr.ToString()]++ > MAX_REPEATED_BLOCK_EXPR)
+                                throw new Exception("Repeating block expression detected. Not able to block!");
+                        }
+                        else
+                            blockExprCount[blockExpr.ToString()] = 1;
+                        
                         Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
                         status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
                     }
