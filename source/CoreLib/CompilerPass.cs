@@ -81,6 +81,296 @@ namespace cba
     }
 
 
+    public static class LoopBound
+    {
+        // loop impl -> the impl that calls it
+        static Dictionary<string, Implementation> loopCaller;
+        // Call graph
+        static Dictionary<string, HashSet<Implementation>> Succ;
+        static Dictionary<string, HashSet<Implementation>> Pred;
+        // Max bound
+        static int maxBound = -1;
+        // Time taken
+        public static TimeSpan timeTaken = TimeSpan.Zero;
+        // User Annotations
+        static List<string> UserAnnotations = new List<string>();
+
+        // Initialize statics
+        private static void Initialize(List<string> Annotations)
+        {
+            loopCaller = new Dictionary<string, Implementation>();
+            Succ = new Dictionary<string, HashSet<Implementation>>();
+            Pred = new Dictionary<string, HashSet<Implementation>>();
+            UserAnnotations = Annotations;
+        }
+
+        // precondition: the only assert is in main
+        public static Dictionary<string, int> Compute(CBAProgram program, int max, List<string> Annotations)
+        {
+            var loopBounds = new Dictionary<string, int>();
+
+            Initialize(Annotations);
+            maxBound = max;
+            var start = DateTime.Now;
+
+            // remove main from the program because it has an assert
+            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+            program.TopLevelDeclarations.Remove(main);
+
+            // remove non-free ensures and requires
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => proc.Requires = proc.Requires.Filter(en => en.Free));
+
+
+            // Call graph
+            ComputeCallGraph(program);
+
+            // Gather the set of implementations with "loop" inside their name
+            var allLoopImpls = new List<Implementation>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => { if (impl.Name.Contains("loop")) allLoopImpls.Add(impl); });
+
+            // Prune to the right form
+            var loopImpls = allLoopImpls.Filter(CheckImpl);
+
+            #region Process user annotations
+
+            // Include user anntations
+            var allLoops = new HashSet<string>();
+            loopImpls.Iter(impl => allLoops.Add(impl.Name));
+            foreach (var sp in UserAnnotations
+                .Where(s => s.StartsWith("LB:"))
+                .Select(s => s.Split(':'))
+                .Where(sp => sp.Length == 3))
+            {
+                // grab bound
+                var bound = 0;
+                if (!Int32.TryParse(sp[2], out bound))
+                    continue;
+
+                // grab proc
+                if (!allLoops.Contains(sp[1]))
+                    continue;
+
+                loopBounds[sp[1]] = bound;
+                Console.WriteLine("LB: Loop {0} requires minimum {1} iterations (annotated)", sp[1], bound);
+            }
+            loopImpls = loopImpls.Filter(impl => !loopBounds.ContainsKey(impl.Name));
+            #endregion
+
+            if (loopImpls.Count == 0)
+                return loopBounds;
+
+            // Prepare query
+            var query = PrepareQuery(loopImpls, program);
+
+            // Set general options
+            var options = new BoogieVerifyOptions();
+            options.StratifiedInliningWithoutModels = true;
+            BoogieVerify.options = options;
+
+            // Set rec. bound
+            var oldBound = CommandLineOptions.Clo.RecursionBound;
+            CommandLineOptions.Clo.RecursionBound = maxBound;
+
+            // Query
+            var allErrors = new List<BoogieErrorTrace>();
+            BoogieVerify.Verify(query, out allErrors);
+            foreach (var trace in allErrors)
+            {
+                var loopName = QKeyValue.FindStringAttribute(trace.impl.Attributes, "LB_Mapping");
+                var bound = RecBound(loopName, trace.cex, trace.impl.Name);
+                if (bound <= 1) continue;
+                loopBounds.Add(loopName, bound);
+                Console.WriteLine("LB: Loop {0} requires minimum {1} iterations", loopName, bound);
+            }
+
+            CommandLineOptions.Clo.RecursionBound = oldBound;
+            timeTaken = (DateTime.Now - start);
+
+            return loopBounds;
+        }
+
+        private static int RecBound(string recFunc, Counterexample trace, string traceName)
+        {
+            var ret = 0;
+            if (recFunc == traceName)
+                ret++;
+
+            for (int numBlock = 0; numBlock < trace.Trace.Count; numBlock++)
+            {
+                Block b = trace.Trace[numBlock];
+                for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
+                {
+                    Cmd c = b.Cmds[numInstr];
+                    var loc = new TraceLocation(numBlock, numInstr);
+                    if (trace.calleeCounterexamples.ContainsKey(loc))
+                    {
+                        ret +=
+                            RecBound(recFunc, trace.calleeCounterexamples[loc].counterexample,
+                            (c as CallCmd).Proc.Name);
+                    }
+                }
+            }
+            return ret;
+        }
+
+        private static Program PrepareQuery(IEnumerable<Implementation> loopImpls, Program program)
+        {
+            var dup = new FixedDuplicator(true);
+            // Make copies of loopImpl procs
+            var loopProcsCopy = new Dictionary<string, Procedure>();
+            loopImpls
+                .Iter(impl => loopProcsCopy.Add(impl.Name, dup.VisitProcedure(impl.Proc)));
+
+            loopProcsCopy.Values.Iter(proc => proc.Name += "_PassiveCopy");
+
+            // Make copies of the caller implementations
+            var loopCallerImplCopy = new Dictionary<string, Implementation>();
+            var loopCallerProcCopy = new Dictionary<string, Procedure>();
+
+            loopImpls
+                .Iter(impl => loopCallerImplCopy.Add(impl.Name, dup.VisitImplementation(loopCaller[impl.Name])));
+
+            loopImpls
+                .Iter(impl => loopCallerProcCopy.Add(impl.Name, dup.VisitProcedure(loopCaller[impl.Name].Proc)));
+
+            loopCallerImplCopy
+                .Iter(kvp => kvp.Value.Name += "_EntryCopy_" + kvp.Key);
+
+            loopCallerProcCopy
+                .Iter(kvp => kvp.Value.Name += "_EntryCopy_" + kvp.Key);
+
+            loopCallerImplCopy
+                .Iter(kvp => kvp.Value.Proc = loopCallerProcCopy[kvp.Key]);
+
+            // Instrument callers
+            foreach (var kvp in loopCallerImplCopy)
+            {
+                var impl = kvp.Value;
+
+                var av = BoogieAstFactory.MkLocal("LoopBound_AssertVar", Microsoft.Boogie.Type.Bool);
+                impl.LocVars.Add(av);
+
+                // av := true
+                var init = BoogieAstFactory.MkVarEqConst(av, true);
+                var initCmds = new List<Cmd>();
+                initCmds.Add(init);
+                initCmds.AddRange(impl.Blocks[0].Cmds);
+                impl.Blocks[0].Cmds = initCmds;
+
+                // av := false
+                foreach (var blk in impl.Blocks)
+                {
+                    var newCmds = new List<Cmd>();
+                    for (int i = 0; i < blk.Cmds.Count; i++)
+                    {
+                        var cc = blk.Cmds[i] as CallCmd;
+                        if (cc != null && cc.callee == kvp.Key)
+                        {
+                            newCmds.Add(blk.Cmds[i]);
+                            newCmds.Add(BoogieAstFactory.MkVarEqConst(av, false));
+                        }
+                        else if (cc != null && loopProcsCopy.ContainsKey(cc.callee))
+                        {
+                            var ncc = new CallCmd(cc.tok, loopProcsCopy[cc.callee].Name, cc.Ins, cc.Outs, cc.Attributes, cc.IsAsync);
+                            ncc.Proc = loopProcsCopy[cc.callee];
+                            newCmds.Add(ncc);
+                        }
+                        else
+                        {
+                            newCmds.Add(blk.Cmds[i]);
+                        }
+                    }
+                    blk.Cmds = newCmds;
+                }
+
+                // assert av
+                impl.Blocks
+                    .Where(blk => blk.TransferCmd is ReturnCmd)
+                    .Iter(blk => blk.Cmds.Add(new AssertCmd(Token.NoToken, Expr.Ident(av))));
+            }
+
+            // Prepare program
+            var ret = new Program();
+            program.TopLevelDeclarations
+                .Where(decl => !(decl is Implementation))
+                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+
+            loopProcsCopy.Values
+                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+
+            loopCallerImplCopy.Values
+                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+
+            loopCallerProcCopy.Values
+                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+
+            loopImpls
+                .Iter(impl => ret.TopLevelDeclarations.Add(impl));
+
+            loopCallerImplCopy.Values
+                .Iter(impl => impl.AddAttribute("entrypoint"));
+
+            // Store mapping: entrypoint -> loop
+            loopImpls
+                .Select(loop => Tuple.Create(loop, loopCallerImplCopy[loop.Name]))
+                .Iter(tup => tup.Item2.AddAttribute("LB_Mapping", tup.Item1.Name));
+
+            ret = BoogieUtil.ReResolve(ret, "loopBound.bpl");
+
+            return ret;
+        }
+
+        private static void ComputeCallGraph(Program program)
+        {
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl =>
+                {
+                    Succ.Add(impl.Name, new HashSet<Implementation>());
+                    Pred.Add(impl.Name, new HashSet<Implementation>());
+                });
+
+            var name2Impl = BoogieUtil.nameImplMapping(program);
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                    {
+                        if (!Succ.ContainsKey(cmd.callee)) continue;
+                        Succ[impl.Name].Add(name2Impl[cmd.callee]);
+                        Pred[cmd.callee].Add(impl);
+                    }
+                }
+            }
+        }
+
+        private static bool CheckImpl(Implementation impl)
+        {
+            var preds = new HashSet<Implementation>(Pred[impl.Name]);
+
+            // recursive?
+            if (!preds.Contains(impl))
+                return false;
+
+            preds.Remove(impl);
+
+            // unique caller?
+            if (preds.Count != 1)
+                return false;
+
+            // cannot be main
+
+            loopCaller.Add(impl.Name, preds.First());
+
+            return true;
+        }
+    }
+
+
     // Do variable slicing on p 
     public class VariableSlicePass : CompilerPass
     {
@@ -105,7 +395,7 @@ namespace cba
                 throw new InternalError("Type errors");
             }
             vslice.VisitProgram(p as Program);
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
 
             return p;
         }
@@ -254,7 +544,7 @@ namespace cba
             bool inline = false;
             foreach (Declaration d in TopLevelDeclarations)
             {
-                if (d.FindExprAttribute("inline") != null) inline = true;
+                if ((d is Procedure || d is Implementation) && d.FindExprAttribute("inline") != null) inline = true;
             }
             if (inline)
             {

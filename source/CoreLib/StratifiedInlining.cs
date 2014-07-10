@@ -1323,7 +1323,7 @@ namespace CoreLib {
     ****************************************/
 
     class EmptyErrorReporter : ProverInterface.ErrorHandler {
-    public override void OnModel(IList<string> labels, Model model) { }
+        public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) { }
     }
     
     class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler {
@@ -1365,7 +1365,11 @@ namespace CoreLib {
         return (Absy)l2a[id];
     }
     
-    public override void OnModel(IList<string> labels, Model model) {
+    public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) {
+        // Timeout?
+        if (proverOutcome != ProverInterface.Outcome.Invalid)
+            return;
+
         var start = DateTime.Now;
         List<Absy> absyList = new List<Absy>();
         foreach (var label in labels) {

@@ -41,8 +41,6 @@ namespace cba
         Dictionary<string, Variable> varFinal2Copy;
         // variable for determinizing corral_nondet
         GlobalVariable nonDetCounter, nonDetCounterInit;
-        // aggressive mode
-        public static bool aggressive = false;
         // Block created for merging recursive calls
         Dictionary<string, string> mergedRecCallBlock;
         // Set of pruned loops
@@ -114,7 +112,7 @@ namespace cba
             inProg = p;
 
             // do mod set analysis
-            ModSetCollector.DoModSetAnalysis(p);
+            BoogieUtil.DoModSetAnalysis(p);
 
             // allocate some variables
             nonDetCounter = BoogieAstFactory.MkGlobal("nonDetCounter__cl", Microsoft.Boogie.Type.Int)
@@ -424,7 +422,7 @@ namespace cba
             // Break all links with inProg
             BoogieUtil.PrintProgram(outProg, "cLoopsQuery.bpl");
             outProg = BoogieUtil.ReadAndOnlyResolve("cLoopsQuery.bpl");
-            ModSetCollector.DoModSetAnalysis(outProg);
+            BoogieUtil.DoModSetAnalysis(outProg);
             BoogieUtil.TypecheckProgram(outProg, "cLoopsQuery.bpl");
 
             // Set options
@@ -608,33 +606,6 @@ namespace cba
             rec0.Cmds.Add(BoogieAstFactory.MkAssume(finalExpr));
             rec0.Cmds.Add(assumeAllocEq("a2"));
             
-
-            // if(aggressive)
-            //    havoc g, l, f
-            //    g == g_init
-            //    Init;
-            //    body0b
-            //    g == g_final2 && f == f_final2
-            if (aggressive)
-            {
-                rec0.Cmds.Add(havocCnt);
-                rec0.Cmds.Add(assumeCnt("ac"));
-
-                rec0.Cmds.Add(havocAlloc);
-                rec0.Cmds.Add(assumeAllocEq("ac1"));
-
-                rec0.Cmds.Add(havocGlobals);
-                rec0.Cmds.Add(havocLocals);
-                rec0.Cmds.Add(BoogieAstFactory.MkAssume(initExpr));
-                rec0.Cmds.AddRange(initCmds);
-                rec0.TransferCmd = BoogieAstFactory.MkGotoCmd(body0b[loopBodyStartBlock[impl.Name]].Label);
-
-                rec0 = body0b[recCallBlock[impl.Name]];
-                rec0.Cmds.Remove(rec0.Cmds.Last());
-                rec0.Cmds.Add(BoogieAstFactory.MkAssume(final2Expr));
-                rec0.Cmds.Add(assumeAllocEq("ac2"));
-            }
-
             // havoc globals, locals, formals; assume init; init; goto body1
             rec0.Cmds.Add(havocCnt);
             rec0.Cmds.Add(assumeCnt("b"));
@@ -680,23 +651,6 @@ namespace cba
             var matchFinal =
                 finalAssertExpr(loopGlobals.Concat(loopFormals), s => varFinalCopy[s], allocVars["sp1"]);
 
-            if (aggressive)
-            {
-                matchCnt = Expr.And(matchCnt,
-                    BoogieAstFactory.MkExprAnd(BoogieAstFactory.MkExprVarEqVar(cntVars["ac"], cntVars["b"])));
-
-                matchAlloc = BoogieAstFactory.MkExprAnd(
-                    matchAlloc,
-                    BoogieAstFactory.MkExprVarEqVar(allocVars["ac1"], allocVars["b1"]));
-
-                matchAddr = Expr.And(matchAddr, Expr.Or(
-                    BoogieAstFactory.MkExprVarGtVar(allocVars["c1"], allocVars["sp2"]),
-                    BoogieAstFactory.MkExprVarGeVar(allocVars["sp2"], allocVars["b1"])));
-
-                matchFinal = Expr.Or(matchFinal,
-                    finalAssertExpr(loopGlobals.Concat(loopFormals), s => varFinal2Copy[s], allocVars["sp2"]));
-            }
-
             Expr matchIter = BoogieAstFactory.MkExprAnd(
                 matchCnt, matchAlloc, matchAddr);
 
@@ -704,7 +658,6 @@ namespace cba
             rec2.Cmds.Add(BoogieAstFactory.MkAssert(assertExpr));               
 
             // add new blocks to the impl
-            if (aggressive) impl.Blocks.AddRange(body0b.Values);
             impl.Blocks.AddRange(body1.Values);
             impl.Blocks.AddRange(body2.Values);            
 
@@ -1803,317 +1756,6 @@ namespace cba
             }
 
             return trace;
-        }
-    }
-
-    public static class LoopBound
-    {
-        // loop impl -> the impl that calls it
-        static Dictionary<string, Implementation> loopCaller;
-        // Call graph
-        static Dictionary<string, HashSet<Implementation>> Succ;
-        static Dictionary<string, HashSet<Implementation>> Pred;
-        // Max bound
-        static int maxBound = -1;
-        // Time taken
-        public static TimeSpan timeTaken = TimeSpan.Zero;
-
-        // Initialize statics
-        private static void Initialize()
-        {
-            loopCaller = new Dictionary<string, Implementation>();
-            Succ = new Dictionary<string, HashSet<Implementation>>();
-            Pred = new Dictionary<string, HashSet<Implementation>>();
-        }
-
-        // precondition: the only assert is in main
-        public static Dictionary<string, int> Compute(CBAProgram program, int max)
-        {
-            var loopBounds = new Dictionary<string, int>();
-
-            Initialize();
-            maxBound = max;
-            var start = DateTime.Now;
-
-            // remove main from the program because it has an assert
-            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            program.TopLevelDeclarations.Remove(main);
-
-            // remove non-free ensures and requires
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Iter(proc => proc.Requires = proc.Requires.Filter(en => en.Free));
-
-
-            // Call graph
-            ComputeCallGraph(program);
-
-            // Gather the set of implementations with "loop" inside their name
-            var allLoopImpls = new List<Implementation>();
-            program.TopLevelDeclarations.OfType<Implementation>()
-                .Iter(impl => { if (impl.Name.Contains("loop")) allLoopImpls.Add(impl); });
-
-            // Prune to the right form
-            var loopImpls = allLoopImpls.Filter(CheckImpl);
-
-            #region Process user annotations
-
-            // sdv front-end notion of "counter loops"
-            var counterAnn = GlobalConfig.annotations
-                .Where(s => s.StartsWith("PruneCounterLoop:"))
-                .Select(s => s.Split(':'))
-                .Where(sp => sp.Length == 2)
-                .Select(sp => Int32.Parse(sp[1]));
-
-            if (counterAnn.Any())
-            {
-                var counterLoopBound = counterAnn.First();
-                foreach (var impl in loopImpls)
-                {
-                    var ann = ConstLoop.getCounterAnnotation(impl).Item1;
-                    if (ann < 0) continue;
-                    if (ann < counterLoopBound)
-                    {
-                        loopBounds.Add(impl.Name, ann);
-                        Console.WriteLine("LB: Loop {0} requires minimum {1} iterations (annotated)", impl.Name, ann);
-                    }
-                }
-            }
-
-            loopImpls = loopImpls.Filter(impl => !loopBounds.ContainsKey(impl.Name));
-
-            // Include user anntations
-            var allLoops = new HashSet<string>();
-            loopImpls.Iter(impl => allLoops.Add(impl.Name));
-            foreach (var sp in
-                GlobalConfig.annotations
-                .Where(s => s.StartsWith("LB:"))
-                .Select(s => s.Split(':'))
-                .Where(sp => sp.Length == 3))
-            {
-                // grab bound
-                var bound = 0;
-                if (!Int32.TryParse(sp[2], out bound))
-                    continue;
-
-                // grab proc
-                if (!allLoops.Contains(sp[1]))
-                    continue;
-
-                loopBounds[sp[1]] = bound;
-                Console.WriteLine("LB: Loop {0} requires minimum {1} iterations (annotated)", sp[1], bound);
-            }
-            loopImpls = loopImpls.Filter(impl => !loopBounds.ContainsKey(impl.Name));
-            #endregion
-
-            if (loopImpls.Count == 0)
-                return loopBounds;
-
-            // Prepare query
-            var query = PrepareQuery(loopImpls, program);
-
-            // Set general options
-            var options = new BoogieVerifyOptions();
-            options.StratifiedInliningWithoutModels = true;
-            BoogieVerify.options = options;
-
-            // Set rec. bound
-            var oldBound = CommandLineOptions.Clo.RecursionBound;
-            CommandLineOptions.Clo.RecursionBound = maxBound;
-
-            // Query
-            var allErrors = new List<BoogieErrorTrace>();
-            BoogieVerify.Verify(query, out allErrors);
-            foreach (var trace in allErrors)
-            {
-                var loopName = QKeyValue.FindStringAttribute(trace.impl.Attributes, "LB_Mapping");
-                var bound = RecBound(loopName, trace.cex, trace.impl.Name);
-                if (bound <= 1) continue;
-                loopBounds.Add(loopName, bound);
-                Console.WriteLine("LB: Loop {0} requires minimum {1} iterations", loopName, bound);
-            }
-
-            CommandLineOptions.Clo.RecursionBound = oldBound;
-            timeTaken = (DateTime.Now - start);
-
-            return loopBounds;
-        }
-
-        private static int RecBound(string recFunc, Counterexample trace, string traceName)
-        {
-            var ret = 0;
-            if (recFunc == traceName)
-                ret++;
-
-            for (int numBlock = 0; numBlock < trace.Trace.Count; numBlock++)
-            {
-                Block b = trace.Trace[numBlock];
-                for (int numInstr = 0; numInstr < b.Cmds.Count; numInstr++)
-                {
-                    Cmd c = b.Cmds[numInstr];
-                    var loc = new TraceLocation(numBlock, numInstr);
-                    if (trace.calleeCounterexamples.ContainsKey(loc))
-                    {
-                        ret +=
-                            RecBound(recFunc, trace.calleeCounterexamples[loc].counterexample, 
-                            (c as CallCmd).Proc.Name);
-                    }
-                }
-            }
-            return ret;
-        }
-
-        private static Program PrepareQuery(IEnumerable<Implementation> loopImpls, Program program)
-        {
-            var dup = new FixedDuplicator(true);
-            // Make copies of loopImpl procs
-            var loopProcsCopy = new Dictionary<string, Procedure>();
-            loopImpls
-                .Iter(impl => loopProcsCopy.Add(impl.Name, dup.VisitProcedure(impl.Proc)));
-
-            loopProcsCopy.Values.Iter(proc => proc.Name += "_PassiveCopy");
-
-            // Make copies of the caller implementations
-            var loopCallerImplCopy = new Dictionary<string, Implementation>();
-            var loopCallerProcCopy = new Dictionary<string, Procedure>();
-
-            loopImpls
-                .Iter(impl => loopCallerImplCopy.Add(impl.Name, dup.VisitImplementation(loopCaller[impl.Name])));
-
-            loopImpls
-                .Iter(impl => loopCallerProcCopy.Add(impl.Name, dup.VisitProcedure(loopCaller[impl.Name].Proc)));
-
-            loopCallerImplCopy
-                .Iter(kvp => kvp.Value.Name += "_EntryCopy_" + kvp.Key);
-
-            loopCallerProcCopy
-                .Iter(kvp => kvp.Value.Name += "_EntryCopy_" + kvp.Key);
-
-            loopCallerImplCopy
-                .Iter(kvp => kvp.Value.Proc = loopCallerProcCopy[kvp.Key]);
-
-            // Instrument callers
-            foreach (var kvp in loopCallerImplCopy)
-            {
-                var impl = kvp.Value;
-
-                var av = BoogieAstFactory.MkLocal("LoopBound_AssertVar", Microsoft.Boogie.Type.Bool);
-                impl.LocVars.Add(av);
-
-                // av := true
-                var init = BoogieAstFactory.MkVarEqConst(av, true);
-                var initCmds = new List<Cmd>();
-                initCmds.Add(init);
-                initCmds.AddRange(impl.Blocks[0].Cmds);
-                impl.Blocks[0].Cmds = initCmds;
-
-                // av := false
-                foreach (var blk in impl.Blocks)
-                {
-                    var newCmds = new List<Cmd>();
-                    for (int i = 0; i < blk.Cmds.Count; i++)
-                    {
-                        var cc = blk.Cmds[i] as CallCmd;
-                        if (cc != null && cc.callee == kvp.Key)
-                        {
-                            newCmds.Add(blk.Cmds[i]);
-                            newCmds.Add(BoogieAstFactory.MkVarEqConst(av, false));
-                        }
-                        else if (cc != null && loopProcsCopy.ContainsKey(cc.callee))
-                        {
-                            var ncc = new CallCmd(cc.tok, loopProcsCopy[cc.callee].Name, cc.Ins, cc.Outs, cc.Attributes, cc.IsAsync);
-                            ncc.Proc = loopProcsCopy[cc.callee];
-                            newCmds.Add(ncc);
-                        }
-                        else
-                        {
-                            newCmds.Add(blk.Cmds[i]);
-                        }
-                    }
-                    blk.Cmds = newCmds;
-                }
-
-                // assert av
-                impl.Blocks
-                    .Where(blk => blk.TransferCmd is ReturnCmd)
-                    .Iter(blk => blk.Cmds.Add(new AssertCmd(Token.NoToken, Expr.Ident(av))));
-            }
-
-            // Prepare program
-            var ret = new Program();
-            program.TopLevelDeclarations
-                .Where(decl => !(decl is Implementation))
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
-
-            loopProcsCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
-
-            loopCallerImplCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
-
-            loopCallerProcCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
-
-            loopImpls
-                .Iter(impl => ret.TopLevelDeclarations.Add(impl));
-
-            loopCallerImplCopy.Values
-                .Iter(impl => impl.AddAttribute("entrypoint"));
-
-            // Store mapping: entrypoint -> loop
-            loopImpls
-                .Select(loop => Tuple.Create(loop, loopCallerImplCopy[loop.Name]))
-                .Iter(tup => tup.Item2.AddAttribute("LB_Mapping", tup.Item1.Name));
-
-            ret = BoogieUtil.ReResolve(ret, "loopBound.bpl");
-
-            return ret;
-        }
-
-        private static void ComputeCallGraph(Program program)
-        {
-            program.TopLevelDeclarations.OfType<Implementation>()
-                .Iter(impl =>
-                    {
-                        Succ.Add(impl.Name, new HashSet<Implementation>());
-                        Pred.Add(impl.Name, new HashSet<Implementation>());
-                    });
-
-            var name2Impl = BoogieUtil.nameImplMapping(program);
-            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (var blk in impl.Blocks)
-                {
-                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
-                    {
-                        if (!Succ.ContainsKey(cmd.callee)) continue;
-                        Succ[impl.Name].Add(name2Impl[cmd.callee]);
-                        Pred[cmd.callee].Add(impl);
-                    }
-                }
-            }
-        }
-
-        private static bool CheckImpl(Implementation impl)
-        {
-            var preds = new HashSet<Implementation>(Pred[impl.Name]);
-
-            // recursive?
-            if (!preds.Contains(impl))
-                return false;
-
-            preds.Remove(impl);
-
-            // unique caller?
-            if (preds.Count != 1)
-                return false;
-
-            // cannot be main
-
-            loopCaller.Add(impl.Name, preds.First());
-
-            return true;
         }
     }
 }

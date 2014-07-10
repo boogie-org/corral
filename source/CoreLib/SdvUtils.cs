@@ -10,6 +10,105 @@ using cba;
 
 namespace CoreLib
 {
+    /*
+    public class SdvExplainError
+    {
+        public void ee()
+        {
+                                    // Annotate program
+                        tprog = witness.getCBAProgram();
+                        sdvAnnotateDefectTrace(tprog, config);
+                        witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
+
+                        BoogieVerify.options = ConfigManager.pathVerifyOptions;
+                        var concretize = new SDVConcretizePathPass(addIds.callIdToLocation);
+                        witness = concretize.run(witness);
+
+                        if (concretize.success)
+                        {
+                            // Something went wrong, fail silently
+                            throw new NormalExit("ExplainError set up failed");
+                        }
+
+                        if (config.explainError > 1)
+                            witness.writeToFile("corral_witness.bpl");
+
+                        tprog = witness.getCBAProgram();
+
+                        ExplainError.STATUS status;
+                        Dictionary<string, string> complexObj;
+
+                        var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
+                            .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
+                            out status, out complexObj, "suggestions.bpl");
+
+                        if (status == ExplainError.STATUS.TIMEOUT)
+                        {
+                            Console.WriteLine("ExplainError timed out");
+                            aliasingExplanation = "^====Pre=====^___(Timeout)";
+                        }
+                        else if (status != ExplainError.STATUS.SUCCESS)
+                        {
+                            Console.WriteLine("ExplainError didn't return SUCCESS");
+                            aliasingExplanation = "^====Pre=====^___(Inconclusive)";
+                        }
+
+                        if (status == ExplainError.STATUS.SUCCESS && explain.Count > 0)
+                        {
+                            aliasingExplanation = "^====Pre=====";
+
+                            // gather all constants that represent memory addresses
+                            var allocConstants = new HashSet<string>();
+                            var allocRe = new System.Text.RegularExpressions.Regex(@"\b(alloc_\d*)\b");
+                            var gatherAllocConstants = new Action<string>(s =>
+                                {
+                                    var matches = allocRe.Match(s);
+                                    if (matches.Success)
+                                        for (int ai = 1; ai < matches.Groups.Count; ai++)
+                                            allocConstants.Add(matches.Groups[ai].Value);
+
+                                });
+
+                            for (int i = 0; i < explain.Count; i++)
+                            {
+                                if (i == 0) aliasingExplanation += "^____";
+                                else aliasingExplanation += "^or__";
+                                gatherAllocConstants(explain[i]);
+
+                                aliasingExplanation += explain[i].TrimEnd(' ', '\t').Replace(' ', '_').Replace("\t", "_and_");
+                            }
+
+                            if (complexObj.Any())
+                            {
+                                aliasingExplanation += "^where";
+                                foreach (var tup in complexObj)
+                                {
+                                    gatherAllocConstants(tup.Key);
+                                    var str = string.Format("   {0} = {1}", tup.Value, tup.Key);
+                                    aliasingExplanation += "^" + str.Replace(' ', '_');
+                                }
+                            }
+                            foreach (var s in allocConstants.Where(a => concretize.allocConstants.ContainsKey(a)))
+                            {
+                                var str = string.Format("^   {0} was allocated in procedure {1} block {2} cmd {3}", s, concretize.allocConstants[s].Item1,
+                                    concretize.allocConstants[s].Item2, concretize.allocConstants[s].Item3);
+                                Console.WriteLine("{0}", str);
+                                aliasingExplanation += str.Replace(' ', '_');
+                            }
+                        }
+
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Fail silently
+                    aliasingExplanation = "";
+                    Console.WriteLine("ExplainError failed: {0}", e.Message);
+                }
+        }
+    }
+     * */
+
     // Unify all maps of type [int]int
     public class TypeUnify : FixedVisitor
     {
@@ -73,7 +172,7 @@ namespace CoreLib
             program.TopLevelDeclarations.Add(U);
 
             // print program
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             BoogieUtil.PrintProgram(program, outfile);
 
             program = null;

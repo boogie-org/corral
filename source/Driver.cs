@@ -345,7 +345,7 @@ namespace cba
                 procsInlined.Add(config.mainProcName);
                 Log.WriteLine(string.Format("Unique procs inlined: {0}", procsInlined.Count));
                 var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
-                ModSetCollector.DoModSetAnalysis(init);
+                BoogieUtil.DoModSetAnalysis(init);
                 Log.WriteLine(string.Format("Total number of procs: {0}", init.TopLevelDeclarations.OfType<Implementation>().Count()));
                 
                 // Compute LOC on inlined procs and non-trivial procs
@@ -451,32 +451,6 @@ namespace cba
                 BoogieVerify.removeAsserts = false;
                 var err = new List<BoogieErrorTrace>();
                 init.Typecheck();
-                /*
-                CommandLineOptions.Install(new CommandLineOptions());
-                CommandLineOptions.Clo.PrintInstrumented = true;
-                CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
-                CommandLineOptions.Clo.StratifiedInliningVerbose = config.verboseMode;
-                CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
-                CommandLineOptions.Clo.ExpandLambdas = false;
-                CommandLineOptions.Clo.Parse(new string[] { "/stratifiedInline:1", "/extractLoops", "/noinfer",
-                "/recursionBound:1", "/useArrayTheory", "/vc:i",
-                "/z3opt:ARRAY_WEAK=true", "/z3opt:ARRAY_EXTENSIONAL=false", "/proverLog:out1"
-                });
-                ExecutionEngine.printer = new ConsolePrinter();
-                //ExecutionEngine.ProcessFiles(new List<string> { config.inputFile }, false);
-                //throw new NormalExit("Done");
-                init = ExecutionEngine.ParseBoogieProgram(new List<string> { config.inputFile }, false);
-                LinearTypechecker lt;
-                ExecutionEngine.ResolveAndTypecheck(init, config.inputFile, out lt);
-                ExecutionEngine.EliminateDeadVariablesAndInline(init);
-
-                var checkers = new List<Checker>();
-                var vcgen = new VC.StratifiedVCGen(init, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, checkers);
-                var errors = new List<Counterexample>();
-                var outcome = vcgen.VerifyImplementation(BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, "main_SeqInstr"), out errors, "unknown");
-                if (errors == null || errors.Count == 0) Console.WriteLine("Verified");
-                else Console.WriteLine("Errors");
-                throw new NormalExit("Done"); */
 
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
@@ -577,7 +551,7 @@ namespace cba
             addIds.VisitProgram(init);
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
+            BoogieUtil.DoModSetAnalysis(init);
 
             // Now we can typecheck
             CommandLineOptions.Clo.DoModSetAnalysis = true;
@@ -670,11 +644,10 @@ namespace cba
         // What it does: gives the program to Boogie as soon as possible
         public static void runSDVMode(Program program, Configs config)
         {
-            Debug.Assert(config.contextBound == 1);
-            //GC.AddMemoryPressure(1500 * 1024 * 1024);
-
             // Save memory by deleting tokens
             ProgTransformation.PersistentProgram.clearTokens = true;
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
+            VerificationPass.usePruning = false;
 
             SetSdvModeOptions(config);
             var progVerifyOptions = ConfigManager.progVerifyOptions;
@@ -682,9 +655,6 @@ namespace cba
             var refinementVerifyOptions = ConfigManager.refinementVerifyOptions;
 
             CorralState.AbsorbPrevState(config, progVerifyOptions);
-
-            ProgTransformation.PersistentProgramIO.useDuplicator = true;
-            VerificationPass.usePruning = false;
             
             PersistentCBAProgram inputProg = null;
             if (config.printData == 2)
@@ -696,7 +666,7 @@ namespace cba
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
 
-            // set up entry point
+            #region set up entry point
             if (config.mainProcName != null)
             {
                 program.TopLevelDeclarations.OfType<Implementation>()
@@ -735,13 +705,14 @@ namespace cba
                     config.mainProcName = ep.Name;
                 }
             }
+            #endregion
 
             // annotate calls with a unique number
             var addIds = new AddUniqueCallIds();
             addIds.VisitProgram(program);
 
             // Prune mod sets
-            ModSetCollector.DoModSetAnalysis(program);
+            BoogieUtil.DoModSetAnalysis(program);
             // Gather the set of initially tracked variables
             var initialTrackedVars = getTrackedVars(program, config);
             // Did we reach the recursion bound?
@@ -873,7 +844,7 @@ namespace cba
                 if (iterCnt == 1)
                 {
                     //abs.writeToFile("abs.bpl");
-                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound);
+                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
@@ -896,13 +867,6 @@ namespace cba
                     da = new DeepAssertRewrite();
                     abs = da.run(abs);
                     //abs.writeToFile("ttout.bpl");
-                }
-
-                var cloops = new List<ConstLoop>();
-                if (ConstLoop.aggressive)
-                {
-                    abs = PruneConstLoopsNoCounter(abs, ref cLoopHistory, out cloops);
-                    cloops.Iter(c => cloopsTime += c.lastRun);
                 }
 
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
@@ -938,7 +902,6 @@ namespace cba
 
                 // Check if counterexample is feasible
                 ErrorTrace trace = verificationPass.trace;
-                cloops.Reverse<ConstLoop>().Iter(c => trace = c.mapBackTrace(trace));
                 if (ciPass != null) trace = ciPass.mapBackTrace(trace);
                 if(da != null) trace = da.mapBackTrace(trace);
                 trace = abstraction.mapBackTrace(trace);
@@ -1317,8 +1280,8 @@ namespace cba
 
                 buggyTrace = sinfo.mapBackTrace(buggyTrace);
 
-                if (config.printData == 2)
-                {
+                //if (config.printData == 2)
+                //{
                     var bugT = buggyTrace.Copy();
                     //PrintProgramPath.print(init, bug, "temp0");
 
@@ -1334,17 +1297,17 @@ namespace cba
                     bugT = tempt;
                     PrintProgramPath.print(inputProg, bugT, "input");
 
-                    PrintSdvPath.PrintStackTrace(inputProg.getCBAProgram(), bugT, "defect.stktrace");
+                    //PrintSdvPath.PrintStackTrace(inputProg.getCBAProgram(), bugT, "defect.stktrace");
 
                     //serialize the buggyTrace
                     BinaryFormatter serializer = new BinaryFormatter();
                     FileStream stream = new FileStream("buggyTrace.serialised", FileMode.Create, FileAccess.Write, FileShare.None);
                     serializer.Serialize(stream, bugT);
                     stream.Close();
-                }
+                //}
 
-                //var ttpp = new PersistentCBAProgram(programForDefectTrace, config.mainProcName, 0);
-                //PrintProgramPath.print(ttpp, buggyTrace, "temp2");
+                //var ttpp = BoogieUtil.ParseProgram(config.inputFile);
+                //PrintProgramPath.print(new ProgTransformation.PersistentProgram(ttpp), buggyTrace, config.inputFile);
 
                 PrintSdvPath.Print(programForDefectTrace, buggyTrace, toRecord, aliasingExplanation, "defect.tt", "stack.txt");
                 var am = new TokenTextWriter("defect.txt");
@@ -1663,76 +1626,15 @@ namespace cba
 
             var noTryFunc = new Func<Implementation, int>(impl =>
                 {
-                    if (noTry.Contains(impl.Name)) return 0;
                     return 2;
                 });
 
-            while (true)
-            {
-                ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
+            ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
-                var cloop = new ConstLoop(noTryFunc);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
+            var cloop = new ConstLoop(noTryFunc);
+            prog = cloop.run(prog);
+            cloops.Add(cloop);
 
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-                
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            return prog;
-        }
-
-        private static PersistentCBAProgram PruneConstLoopsNoCounter(
-            PersistentCBAProgram prog, ref ConstLoopHistory history, out List<ConstLoop> cloops)
-        {
-            cloops = new List<ConstLoop>();
-            var noTry = new HashSet<string>();
-            var inHistory = history;
-            var outHistory = new ConstLoopHistory();
-
-            var summary = new Func<Implementation, int>(impl =>
-            {
-                if (noTry.Contains(impl.Name)) return 0;
-                if (inHistory.definiteFail(impl)) return 0;
-                if (inHistory.definiteSuccess(impl)) return 1;
-                return 2;
-            });
-
-            var constLoopsFound = new HashSet<string>();
-
-            while (true)
-            {
-                var cloop = new ConstLoop(true, false, summary);
-                prog = cloop.run(prog);
-                cloops.Add(cloop);
-
-                noTry.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                noTry.UnionWith(cloop.currHistory.globalsUsed.Keys);
-
-                outHistory.staticallyFailedLoops = cloop.currHistory.staticallyFailedLoops;
-                outHistory.semanticallyFailedLoops.UnionWith(cloop.currHistory.semanticallyFailedLoops);
-                cloop.currHistory.globalsUsed.Iter(kvp =>
-                    outHistory.globalsUsed.Add(kvp.Key, kvp.Value));
-
-                constLoopsFound.UnionWith(cloop.cLoops);
-                if (cloop.cLoops.Count == 0) break;
-                if (!ConstLoop.aggressive) break;
-            }
-
-            outHistory.semanticallyFailedLoops.UnionWith(inHistory.semanticallyFailedLoops);
-            foreach (var c in constLoopsFound)
-            {
-                if (!outHistory.globalsUsed.ContainsKey(c) &&
-                    inHistory.globalsUsed.ContainsKey(c))
-                {
-                    outHistory.globalsUsed.Add(c, inHistory.globalsUsed[c]);
-                }
-            }
-
-            history = outHistory;
             return prog;
         }
 

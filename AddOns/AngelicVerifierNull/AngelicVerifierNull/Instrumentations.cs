@@ -25,9 +25,11 @@ namespace AngelicVerifierNull
             Program prog;
             string mainName;
             Procedure mallocProcedure = null;
+            Procedure mallocProcedureFull = null;
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public HashSet<string> entrypoints; // set of entrypoints identified
+            List<Variable> globalParams = new List<Variable>(); // parameters as global variables
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
             {
@@ -65,28 +67,49 @@ namespace AngelicVerifierNull
                     //allocate params
                     var args = new List<Variable>();
                     var rets = new List<Variable>();
-                    impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+
+                    
                     impl.OutParams.ForEach(v => rets.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
-                    locals.AddRange(args);
+                    if (Driver.allocateParameters)
+                    {
+                        impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+                        locals.AddRange(args);
+                    }
+                    else
+                    {
+                        impl.InParams.ForEach(v => args.Add(BoogieAstFactory.MkGlobal(v.Name + "_" + impl.Name, v.TypedIdent.Type)));
+                        globalParams.AddRange(args);
+                    }
+
+                    
                     locals.AddRange(rets);
+
                     //call 
                     var blockCallConst = new Constant(Token.NoToken,
                         new TypedIdent(Token.NoToken, "__block_call_" + impl.Name, btype.Bool), false);
                     blockCallConsts.Add(blockCallConst);
                     blockEntryPointConstants[blockCallConst.Name] = impl.Name;
-                    var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst)); 
-                    var argMallocCmds = AllocatePointersAsUnknowns(args);
-                    var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
-                        rets.ConvertAll(x => IdentifierExpr.Ident(x)));
+                    var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst));
+                    
                     var cmds = new List<Cmd>();
                     cmds.Add(blockCallAssumeCmd);
-                    cmds.AddRange(argMallocCmds);
+                    if (Driver.allocateParameters) // allocate parameters if option is enabled
+                    {
+                        var argMallocCmds = AllocatePointersAsUnknowns(args);
+                        cmds.AddRange(argMallocCmds);
+                    }
+
+                    var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
+                        rets.ConvertAll(x => IdentifierExpr.Ident(x)));                
+                    
                     cmds.Add(callCmd);
                     //succ
                     var txCmd = new ReturnCmd(Token.NoToken);
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
+                // add global variables to prog
+                // globals.Iter(x => prog.TopLevelDeclarations.Add(x)); 
                 //add the constants to the prog
                 blockCallConsts.Iter(x => prog.TopLevelDeclarations.Add(x));
                 //TODO: get globals of type refs/pointers and maps
@@ -101,6 +124,9 @@ namespace AngelicVerifierNull
 
                 // initialize globals
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+
+                // globals for parameters
+                prog.TopLevelDeclarations.AddRange(globalParams);
 
                 //first block
                 var transferCmd =
@@ -188,7 +214,7 @@ namespace AngelicVerifierNull
             }
             private Cmd AllocatePointerAsUnknown(Variable x)
             {
-                return BoogieAstFactory.MkCall(mallocProcedure, 
+                return BoogieAstFactory.MkCall(mallocProcedureFull, 
                     new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, 
                     new List<Variable>() {x});
             }
@@ -199,15 +225,26 @@ namespace AngelicVerifierNull
             }
             private void FindMalloc()
             {
-                //find the malloc procedure
-                mallocProcedure = (Procedure)prog.TopLevelDeclarations
-                    .Where(x => x is Procedure && BoogieUtil.checkAttrExists("allocator", x.Attributes))
-                    .FirstOrDefault();
+                //find the malloc and malloc-full procedures
+                foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+                {
+                    var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
+                    if (attr == null) mallocProcedure = proc;
+                    else if (attr == "full") mallocProcedureFull = proc;
+                }
+
                 if (mallocProcedure == null)
                 {
                     throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator} declared in the input program");
                 }
-                if (mallocProcedure.InParams.Count != 1)
+
+                if (mallocProcedureFull == null)
+                {
+                    throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
+                }
+
+                if (mallocProcedure.InParams.Count != 1 || mallocProcedureFull.InParams.Count != 1)
                 {
                     throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
                         mallocProcedure.Name, mallocProcedure.InParams.Count));

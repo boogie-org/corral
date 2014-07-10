@@ -805,7 +805,7 @@ namespace cba.Util
             NonUniformUnfolding = false;
             CallTree = null;
             StratifiedInliningWithoutModels = false;
-            UseProverEvaluate = false;
+            UseProverEvaluate = true;
             ModelViewFile = null;
             printProg = false;
             progFileName = null;
@@ -1061,75 +1061,6 @@ namespace cba.Util
             return true;
         }
 
-    }
-
-    public class OnlyBoogie
-    {
-        public static void EliminateDeadVariablesAndInline(Program program)
-        {
-            Contract.Requires(program != null);
-            // Eliminate dead variables
-            Microsoft.Boogie.UnusedVarEliminator.Eliminate(program);
-
-            // Collect mod sets
-            if (CommandLineOptions.Clo.DoModSetAnalysis)
-            {
-                Microsoft.Boogie.ModSetCollector.DoModSetAnalysis(program);
-            }
-
-            // Coalesce blocks
-            if (CommandLineOptions.Clo.CoalesceBlocks)
-            {
-                Microsoft.Boogie.BlockCoalescer.CoalesceBlocks(program);
-            }
-
-            // Inline
-            // In Spec#, there was no run-time test. The type was just List<Declaration!>
-            List<Declaration> TopLevelDeclarations = program.TopLevelDeclarations;
-
-
-            if (CommandLineOptions.Clo.ProcedureInlining != CommandLineOptions.Inlining.None)
-            {
-                bool inline = false;
-                foreach (Declaration d in TopLevelDeclarations)
-                {
-                    if (d.FindExprAttribute("inline") != null)
-                    {
-                        inline = true;
-                    }
-                }
-                if ((inline && CommandLineOptions.Clo.StratifiedInlining == 0) ||
-                    CommandLineOptions.Clo.InlineDepth >= 0)
-                {
-                    foreach (Declaration d in TopLevelDeclarations)
-                    {
-                        Implementation impl = d as Implementation;
-                        if (impl != null)
-                        {
-                            impl.OriginalBlocks = impl.Blocks;
-                            impl.OriginalLocVars = impl.LocVars;
-                        }
-                    }
-                    foreach (Declaration d in TopLevelDeclarations)
-                    {
-                        Implementation impl = d as Implementation;
-                        if (impl != null && !impl.SkipVerification)
-                        {
-                            Inliner.ProcessImplementation(program, impl);
-                        }
-                    }
-                    foreach (Declaration d in TopLevelDeclarations)
-                    {
-                        Implementation impl = d as Implementation;
-                        if (impl != null)
-                        {
-                            impl.OriginalBlocks = null;
-                            impl.OriginalLocVars = null;
-                        }
-                    }
-                }
-            }
-        }
     }
 
 }

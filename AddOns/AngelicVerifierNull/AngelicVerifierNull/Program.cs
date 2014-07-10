@@ -20,6 +20,8 @@ namespace AngelicVerifierNull
     {
         // Reuse tracked variables and explored call tree across corral runs
         public static readonly bool UsePrevCorralState = true;
+        // Don't use alias analysis
+        public static bool UseAliasAnalysis = true;
     }
 
     class Stats
@@ -28,7 +30,43 @@ namespace AngelicVerifierNull
         public static int numProcsAnalyzed = -1;
         public static int numAssertsBeforeAliasAnalysis = -1;
         public static int numAssertsAfterAliasAnalysis = -1;
-        public static int numAssertsAfterOptimization = -1;
+
+        public static Dictionary<string, int> numAssertsPerProc = new Dictionary<string, int>();
+        public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
+        private static Dictionary<string, DateTime> clocks = new Dictionary<string, DateTime>();
+        private static Dictionary<string, long> counts = new Dictionary<string, long>();
+
+        public static void resume(string name)
+        {
+            clocks[name] = DateTime.Now;
+        }
+
+        public static void stop(string name)
+        {
+            Debug.Assert(clocks.ContainsKey(name));
+            if (!timeTaken.ContainsKey(name)) timeTaken[name] = 0; // initialize
+            timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
+        }
+
+        public static void printStats()
+        {
+            Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
+            foreach (string name in timeTaken.Keys)
+            {
+                Utils.Print(string.Format("{0}(s) : {1}", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
+            }
+            foreach (string name in counts.Keys)
+            {
+                Utils.Print(string.Format("{0} : {1}", name, counts[name]), Utils.PRINT_TAG.AV_STATS);
+            }
+            Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
+        }
+
+        public static void count(string name)
+        {
+            if (!counts.ContainsKey(name)) counts[name] = 0;
+            counts[name]++;
+        }
     }
 
     public class Utils
@@ -57,6 +95,7 @@ namespace AngelicVerifierNull
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
+        public static bool allocateParameters = true; //allocating parameters for procedures
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -81,7 +120,14 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/bopt:"))
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
             args.Where(s => s.StartsWith("/copt:"))
-                .Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
+                .Iter(s => corralOpts += " /" + s.Substring("/copt:".Length) + " ");
+                //.Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
+
+            if (args.Any(s => s == "/noAllocation"))
+                allocateParameters = false;
+
+            if (args.Any(s => s == "/noAA"))
+                Options.UseAliasAnalysis = false;
 
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
@@ -95,10 +141,18 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
                 .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
 
+            if (timeoutRoundRobin == 0)
+                disableRoundRobinPrePass = true;
+
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
-            if (resultsfilename != null) ResultsFile = new System.IO.StreamWriter(resultsfilename);
+            if (resultsfilename != null)
+            {
+                ResultsFile = new System.IO.StreamWriter(resultsfilename);
+                ResultsFile.WriteLine("Description,Src File,Line,Procedure,EntryPoint"); // result file header
+                ResultsFile.Flush();
+            }
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
@@ -131,15 +185,28 @@ namespace AngelicVerifierNull
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
                 // Run alias analysis
+                Stats.resume("alias.analysis");
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
+                Stats.stop("alias.analysis");
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
-                Utils.Print(
-                    string.Format("STATS: #Procs:{0}, #EntryPoints:{1}, #AssertsBeforeAA:{2}, #AssertsAfterAA:{3}, InstrumentTime:{4} ms",
-                    Stats.numProcs, Stats.numProcsAnalyzed, Stats.numAssertsBeforeAliasAnalysis, Stats.numAssertsAfterAliasAnalysis, sw.ElapsedMilliseconds),
-                    Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#Procs : {0}",Stats.numProcs),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#EntryPoints : {0}",Stats.numProcsAnalyzed),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsBeforeAA : {0}",Stats.numAssertsBeforeAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
+
+                // count number of assertions per procedure after alias analysis
+                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
+                    .Where(x => x is Implementation))
+                {
+                    var assertVisitor = new Instrumentations.AssertCountVisitor();
+                    assertVisitor.Visit(impl);
+                    Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
+                }
+                Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
                 //Analyze
                 RunCorralForAnalysis(prog);
@@ -150,7 +217,8 @@ namespace AngelicVerifierNull
             }
             finally
             {
-                Utils.Print(string.Format("STATS: TotalTime:{0} ms", sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
+                Stats.printStats();
+                Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
         }
@@ -189,12 +257,9 @@ namespace AngelicVerifierNull
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
             // Update mod sets
-            ModSetCollector.DoModSetAnalysis(init);
-
-            //TODO: Perform alias analysis here and prune a subset of asserts
+            BoogieUtil.DoModSetAnalysis(init);
 
             //Various instrumentations on the well-formed program
-
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
             //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
@@ -280,15 +345,19 @@ namespace AngelicVerifierNull
         //Run Corral over different assertions (modulo errorLimit)
         private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p, int corralTimeout)
         {
+            Stats.resume("run.corral.iterative");
             int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
+                Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
-
+                
                 try
                 {
+                    Stats.resume("run.corral");
                     cex = RunCorral(prog, corralConfig.mainProcName, corralTimeout);
+                    Stats.stop("run.corral");
                 }
                 catch (Exception e)
                 {
@@ -318,7 +387,9 @@ namespace AngelicVerifierNull
                 var ppprog = pprog.getProgram(); //don't do getProgram on pprog anymore
                 var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);                
                 //call ExplainError 
+                Stats.resume("explain.error");
                 var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
+                Stats.stop("explain.error");
                 //get the program once 
                 var nprog = prog.getProgram();
                 
@@ -336,7 +407,9 @@ namespace AngelicVerifierNull
                     }
                     else
                     {
-                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
+                        // screen output
+                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", 
+                            cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
                         if (printTraceMode == PRINT_TRACE_MODE.Sdv)
                         {
                             // Print assertion location in terms of source file
@@ -346,9 +419,16 @@ namespace AngelicVerifierNull
                         }
 
                         Console.WriteLine(output);
-                        if (ResultsFile != null)
-                            ResultsFile.WriteLine(output);
-
+                        // result file output
+                        // format: Description, Src File, Line, Procedure, EntryPoint
+                        var resultLine = GetFailingLocation(ppprog, string.Format("Assertion {0} failed,{{0}},{{1}},{1},{2}",
+                            ret.Expr.ToString(), cex.Item2.procName, failingEntryPoint));
+                        if (ResultsFile != null && resultLine != null)
+                        {
+                            Stats.count("bug.count");
+                            ResultsFile.WriteLine(resultLine);
+                            ResultsFile.Flush();
+                        }
                         if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
                     }
@@ -360,6 +440,8 @@ namespace AngelicVerifierNull
                     if (mainProc == null)
                         throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                     mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
+
+                    Stats.count("blocked.count");
                 }
 
                 // print the trace to disk
@@ -373,6 +455,7 @@ namespace AngelicVerifierNull
                 //Print the instrumented program
                 //BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
+            Stats.stop("run.corral.iterative");
             return prog;
         }
 
@@ -407,6 +490,9 @@ namespace AngelicVerifierNull
             {
                 Utils.Print(string.Format("Analyzing procedure {0} in round robin mode", harnessInstrumentation.blockEntryPointConstants[bc.Name]),
                      Utils.PRINT_TAG.AV_DEBUG);
+                Utils.Print(string.Format("number.assertions: {0}", Stats.numAssertsPerProc[harnessInstrumentation.blockEntryPointConstants[bc.Name]]),
+                    Utils.PRINT_TAG.AV_DEBUG);
+
                 //enable only the procedure corresponding to kv
                 var tmp = new HashSet<Constant>(blockCallConsts);
                 tmp.Remove(bc);
@@ -417,7 +503,13 @@ namespace AngelicVerifierNull
                 mainProc.Requires.Add(new Requires(false, blockExpr)); //add the blocking condition and iterate
                 pprog = new PersistentProgram(prog, corralConfig.mainProcName, 1);
                 //we give less timeout for the individual procedure
-                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);                
+
+                var startTime = DateTime.Now; // Start time of round robin mode
+                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);
+                var endTime = DateTime.Now; // End time of round robin mode
+                Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
+                    Utils.PRINT_TAG.AV_DEBUG);
+                
                 //TODO: need to remove the requires corresponding to the blockExpr, but the program has changed 
                 //      and more requires corresponding to blockign clauses may have been added
                 //find the mainProc in the new program
@@ -426,15 +518,19 @@ namespace AngelicVerifierNull
                 if (mainProc == null)
                     throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
                 mainProc.Requires.RemoveAll(x => x.Condition.ToString() == blockExpr.ToString());
+
+                Stats.printStats();
             }
             return new PersistentProgram(prog, corralConfig.mainProcName, 1);
         }
         //Top-level Corral call
         private static void RunCorralForAnalysis(PersistentProgram prog)
         {
+            Stats.resume("round.robin");
             //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
             if (!disableRoundRobinPrePass)
                 prog = RunCorralRoundRobin(prog, corralConfig.mainProcName);
+            Stats.stop("round.robin");
 
             // Run Corral outer loop
             RunCorralIterative(prog, corralConfig.mainProcName,timeout);
@@ -609,6 +705,8 @@ namespace AngelicVerifierNull
 
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
+        private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
+        private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
             cba.SDVConcretizePathPass concretize)
         {
@@ -696,6 +794,13 @@ namespace AngelicVerifierNull
             var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
+            var aexpr = AbstractRepeatedMapsInBlock(expr, usedVarsCollector.usedVars);
+            if (aexpr != null)
+            {
+                Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));
+                return aexpr;
+            }
+
             var substMap = new Dictionary<Variable, Expr>();
             var forallPre = new List<Expr>();
             List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
@@ -731,6 +836,62 @@ namespace AngelicVerifierNull
             }
             return forallExpr;
         }
+
+        private static Expr AbstractRepeatedMapsInBlock(Expr expr, HashSet<Variable> supportVars)
+        {
+            var repeatedFields = new HashSet<Variable>();
+            //once a field has been generalized, we should not see blocks over it
+            supportVars.Iter(x =>
+                {
+                    if (x.TypedIdent.Type.IsMap && x.TypedIdent.Type.MapArity == 1)
+                    {
+                        var xstr = x.ToString();
+                        if (fieldInBlockCount.ContainsKey(xstr))
+                            fieldInBlockCount[xstr]++;
+                        else
+                            fieldInBlockCount[xstr] = 1;
+                        if (fieldInBlockCount[xstr] > MAX_REPEATED_FIELDS_IN_BLOCKS)
+                            repeatedFields.Add(x);
+                    }
+                }
+                );
+            if (repeatedFields.Count == 0) return null;
+            Expr returnExpr = null; 
+            foreach (var m in repeatedFields)
+            {
+                var bvar = new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "_z", m.TypedIdent.Type.AsMap.Arguments[0]));
+                var fexpr = Expr.Gt(BoogieAstFactory.MkMapAccessExpr(m, IdentifierExpr.Ident(bvar)), 
+                    new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
+                var forallExpr = new ForallExpr(Token.NoToken, new List<Variable>() { bvar }, fexpr);
+                if (returnExpr == null)
+                    returnExpr = forallExpr;
+                else
+                    returnExpr = Expr.And(returnExpr, forallExpr);
+            }
+            return returnExpr;
+        }
+
+        //private static void AbstractAndRecordBlock(Expr expr, HashSet<Variable> supportVars)
+        //{
+        //    var substMap = new Dictionary<Variable, Expr>();
+        //    var forallPre = new List<Expr>();
+        //    List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
+        //    int cnt = 0; 
+        //    supportVars.Iter(x =>
+        //    {
+        //        if (x.TypedIdent.Type.IsInt && !(x is Constant)) //exclude NULL
+        //        {
+        //            var bvar =                                                 
+        //                new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "_z" + (cnt++), x.TypedIdent.Type));
+        //            substMap[x] = (Expr)IdentifierExpr.Ident(bvar);
+        //            bvarList.Add(bvar);
+        //        }
+        //    });
+        //    Substitution subst = Substituter.SubstitutionFromHashtable(substMap);
+        //    var nexpr = Substituter.Apply(subst, expr);
+        //    nexpr = new ForallExpr(Token.NoToken, bvarList, nexpr);
+        //    Utils.Print(string.Format("The abstracted block expression for {0} is {1}", expr, nexpr));
+        //}
         #endregion
 
         #region Alias analysis
@@ -744,7 +905,8 @@ namespace AngelicVerifierNull
             bool dbg = false;
 
             // Make sure that aliasing queries are on identifiers only
-            AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
+            var af =
+                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
@@ -781,8 +943,17 @@ namespace AngelicVerifierNull
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
-            var ret =
-              AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+            AliasAnalysis.AliasAnalysisResults res = null;
+            if (Options.UseAliasAnalysis)
+            {
+                res =
+                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+            }
+            else
+            {
+                res = new AliasAnalysis.AliasAnalysisResults();
+                af.Iter(s => res.aliases.Add(s, true));
+            }
 
             /*
             int true_null = 0, false_null = 0, true_alias = 0, false_alias = 0;
@@ -819,7 +990,7 @@ namespace AngelicVerifierNull
             */
 
             var origProgram = inp.getProgram();
-            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, ret);
+            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
             
 

@@ -642,11 +642,6 @@ namespace cba
             {
                 detectConstantLoops = true;
             }
-            else if (flag == "/cloops:a")
-            {
-                detectConstantLoops = true;
-                ConstLoop.aggressive = true;
-            }
             else if (flag == "/stats")
             {
                 computeStats = true;
