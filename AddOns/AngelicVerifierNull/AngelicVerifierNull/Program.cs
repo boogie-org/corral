@@ -713,7 +713,7 @@ namespace AngelicVerifierNull
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
-        private const int MAX_REPEATED_BLOCK_EXPR = 4; // maximum number of repeated block expr
+        private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<string, int> blockExprCount = new Dictionary<string, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
