@@ -657,11 +657,11 @@ namespace cba
             CorralState.AbsorbPrevState(config, progVerifyOptions);
             
             PersistentCBAProgram inputProg = null;
-            if (config.printData == 2)
-            {
+            //if (config.printData == 2)
+            //{
                 // save the input program
                 inputProg = new PersistentCBAProgram(program, "", 0);
-            }
+            //}
 
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
@@ -1018,432 +1018,35 @@ namespace cba
 
                 //PrintProgramPath.print(curr, buggyTrace, "temp0");
 
-                var sw = new Stopwatch();
-                sw.Start();
-
                 // Bring back print cmds
                 buggyTrace = printinfo.mapBackTrace(buggyTrace);
-
-                //PrintProgramPath.print(progWithPrintCmds, buggyTrace, "temp1");
-
-                if (config.rootCause >= 0)
-                {
-                    // Inline to trace
-                    Program rc = progWithPrintCmds.getCBAProgram();
-                    InlineToTrace.Inline(rc, buggyTrace);
-                    rc = BoogieUtil.ReResolve(rc, "rootcause.bpl");
-
-                    // Inline depth
-                    var idepth = CommandLineOptions.Clo.InlineDepth;
-                    var ioptions = CommandLineOptions.Clo.ProcedureInlining;
-
-                    CommandLineOptions.Clo.InlineDepth = config.rootCause;
-                    CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
-                    InliningPass.InlineToDepth(rc);
-
-                    CommandLineOptions.Clo.InlineDepth = idepth;
-                    CommandLineOptions.Clo.ProcedureInlining = ioptions;
-
-                    // Remove extra impls
-                    rc.TopLevelDeclarations = rc.TopLevelDeclarations.Filter(decl =>
-                        !(decl is Implementation) || QKeyValue.FindBoolAttribute((decl as Implementation).Attributes, "entrypoint"));
-
-                    // change "assert dup_var" to "if(dup_var) { assert false }"
-                    var impl = rc.TopLevelDeclarations.OfType<Implementation>().FirstOrDefault();
-                    Debug.Assert(impl != null && QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
-                    //   Find the assert
-                    var nblks = new List<Block>();
-                    foreach (var blk in impl.Blocks)
-                    {
-                        if (blk.Cmds.OfType<AssertCmd>().All(BoogieUtil.isAssertTrue))
-                        {
-                            nblks.Add(blk);
-                            continue;
-                        }
-
-                        // Found the assert, now let's break it into an if-branch
-                        var lab1 = "at$block$new1";
-                        var lab2 = "at$block$new2";
-                        var lab3 = "at$block$new3";
-
-                        var ncmds = new List<Cmd>();
-                        foreach (var cmd in blk.Cmds.OfType<Cmd>())
-                        {
-                            var acmd = cmd as AssertCmd;
-                            if (acmd != null && !BoogieUtil.isAssertTrue(acmd))
-                            {
-                                var expr = acmd.Expr;
-                                // finish current block
-                                var currBlock = new Block(Token.NoToken, blk.Label, ncmds, BoogieAstFactory.MkGotoCmd(lab1, lab2));
-                                nblks.Add(currBlock);
-
-                                var blk1 = new Block(Token.NoToken, lab1, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
-                                var blk2 = new Block(Token.NoToken, lab2, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
-
-                                blk1.Cmds.Add(BoogieAstFactory.MkAssume(Expr.Not(expr)));
-                                blk1.Cmds.Add(BoogieAstFactory.MkAssert(Expr.False));
-
-                                blk2.Cmds.Add(BoogieAstFactory.MkAssume(expr));
-
-                                nblks.Add(blk1);
-                                nblks.Add(blk2);
-
-                                ncmds = new List<Cmd>();
-                            }
-                            else
-                            {
-                                ncmds.Add(cmd);
-                            }
-                        }
-
-                        nblks.Add(new Block(Token.NoToken, lab3, ncmds, blk.TransferCmd));
-                    }
-                    impl.Blocks = nblks;
-
-                    // delete "assert {:sourcefile "?"} true;"
-                    foreach (var im in rc.TopLevelDeclarations.OfType<Implementation>())
-                    {
-                        foreach (var blk in im.Blocks)
-                        {
-                            var FilterCmd = new Predicate<Cmd>(cmd =>
-                                BoogieUtil.isAssertTrue(cmd) &&
-                                QKeyValue.FindStringAttribute((cmd as AssertCmd).Attributes, "sourcefile") != null &&
-                                QKeyValue.FindStringAttribute((cmd as AssertCmd).Attributes, "sourcefile") == "?"
-                                );
-                            blk.Cmds = new List<Cmd>(blk.Cmds.OfType<Cmd>().Where(cmd => !FilterCmd(cmd)).ToArray());
-                        }
-                    }
-
-                    BoogieUtil.PrintProgram(rc, "rootcause.bpl");
-                }
-
-                // Restrict the program to the trace
-                var tinfo = new InsertionTrans();
-                var traceProgCons = new RestrictToTrace(progWithPrintCmds.getCBAProgram(), tinfo);
-                traceProgCons.addTrace(buggyTrace);
-                var tprog = traceProgCons.getProgram();
-                var witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
-
-                // Find the stack depth of the last assertion OR assignment to assertsPassed
-                {
-                    var isAssert = new Predicate<Cmd>(cmd =>
-                    {
-                        var acmd = cmd as AssertCmd;
-                        if (acmd != null && !BoogieUtil.isAssertTrue(acmd))
-                            return true;
-                        var ap = passes.OfType<SequentialInstrumentation>().Select(si => si.assertsPassedName)
-                            .FirstOrDefault();
-                        if (ap == null)
-                            ap = config.assertsPassed;
-                        if (ap == null)
-                            return false;
-                        var assign = cmd as AssignCmd;
-                        if (assign == null) return false;
-                        return (assign.Lhss.Any(lhs => lhs.DeepAssignedVariable.Name == ap));
-                    });
-                    var stackD = findLast(tprog, witness.mainProcName, isAssert);
-                    Console.WriteLine("Stack depth: {0}", stackD);
-                }
-
-                // make sure variables to record are scalar and globals
-                var toRecord = new HashSet<string>();
-                tprog.TopLevelDeclarations.OfType<Variable>()
-                    .Where(g => config.recordValues.Contains(g.Name) && g.TypedIdent.Type.IsBasic)
-                    .Iter(g => toRecord.Add(g.Name));
-
-                // Query Z3, asking for values
-                if (config.useProverEvaluate)
-                    ConfigManager.pathVerifyOptions.UseProverEvaluate = true;
-                else
-                    ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = false;
-
-                Console.Write("Generating data values ...");
-                BoogieVerify.options = ConfigManager.pathVerifyOptions;
-                var getValuePass = new VerificationPass(true, toRecord);
-                getValuePass.run(witness);
-
-                if (!getValuePass.success)
-                {
-                    buggyTrace = tinfo.mapBackTrace(getValuePass.trace);
-                    Console.WriteLine("Done");
-                    //PrintProgramPath.print(progWithPrintCmds, buggyTrace, "temp1");
-                }
-                else
-                {
-                    // something went wrong; ignore silently
-                    Console.WriteLine("Failed");
-                }
-
-                var aliasingExplanation = "";
-
-                try
-                {
-                    if (config.explainError > 0)
-                    {
-                        // Annotate program
-                        tprog = witness.getCBAProgram();
-                        sdvAnnotateDefectTrace(tprog, config);
-                        witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
-
-                        BoogieVerify.options = ConfigManager.pathVerifyOptions;
-                        var concretize = new SDVConcretizePathPass(addIds.callIdToLocation);
-                        witness = concretize.run(witness);
-
-                        if (concretize.success)
-                        {
-                            // Something went wrong, fail silently
-                            throw new NormalExit("ExplainError set up failed");
-                        }
-
-                        if (config.explainError > 1)
-                            witness.writeToFile("corral_witness.bpl");
-
-                        tprog = witness.getCBAProgram();
-
-                        ExplainError.STATUS status;
-                        Dictionary<string, string> complexObj;
-
-                        var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
-                            .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
-                            out status, out complexObj, "suggestions.bpl");
-
-                        if (status == ExplainError.STATUS.TIMEOUT)
-                        {
-                            Console.WriteLine("ExplainError timed out");
-                            aliasingExplanation = "^====Pre=====^___(Timeout)";
-                        }
-                        else if (status != ExplainError.STATUS.SUCCESS)
-                        {
-                            Console.WriteLine("ExplainError didn't return SUCCESS");
-                            aliasingExplanation = "^====Pre=====^___(Inconclusive)";
-                        }
-
-                        if (status == ExplainError.STATUS.SUCCESS && explain.Count > 0)
-                        {
-                            aliasingExplanation = "^====Pre=====";
-
-                            // gather all constants that represent memory addresses
-                            var allocConstants = new HashSet<string>();
-                            var allocRe = new System.Text.RegularExpressions.Regex(@"\b(alloc_\d*)\b");
-                            var gatherAllocConstants = new Action<string>(s =>
-                                {
-                                    var matches = allocRe.Match(s);
-                                    if (matches.Success)
-                                        for (int ai = 1; ai < matches.Groups.Count; ai++)
-                                            allocConstants.Add(matches.Groups[ai].Value);
-
-                                });
-
-                            for (int i = 0; i < explain.Count; i++)
-                            {
-                                if (i == 0) aliasingExplanation += "^____";
-                                else aliasingExplanation += "^or__";
-                                gatherAllocConstants(explain[i]);
-
-                                aliasingExplanation += explain[i].TrimEnd(' ', '\t').Replace(' ', '_').Replace("\t", "_and_");
-                            }
-
-                            if (complexObj.Any())
-                            {
-                                aliasingExplanation += "^where";
-                                foreach (var tup in complexObj)
-                                {
-                                    gatherAllocConstants(tup.Key);
-                                    var str = string.Format("   {0} = {1}", tup.Value, tup.Key);
-                                    aliasingExplanation += "^" + str.Replace(' ', '_');
-                                }
-                            }
-                            foreach (var s in allocConstants.Where(a => concretize.allocConstants.ContainsKey(a)))
-                            {
-                                var str = string.Format("^   {0} was allocated in procedure {1} block {2} cmd {3}", s, concretize.allocConstants[s].Item1,
-                                    concretize.allocConstants[s].Item2, concretize.allocConstants[s].Item3);
-                                Console.WriteLine("{0}", str);
-                                aliasingExplanation += str.Replace(' ', '_');
-                            }
-                        }
-
-                    }
-                }
-                catch (Exception e)
-                {
-                    // Fail silently
-                    aliasingExplanation = "";
-                    Console.WriteLine("ExplainError failed: {0}", e.Message);
-                }
-
-                sw.Stop();
-                Console.WriteLine("Data value generation took: {0} s", sw.Elapsed.TotalSeconds.ToString("F2"));
-
 
                 passes.Reverse<CompilerPass>()
                                    .Iter(cp => buggyTrace = cp.mapBackTrace(buggyTrace));
 
                 buggyTrace = sinfo.mapBackTrace(buggyTrace);
 
-                //if (config.printData == 2)
-                //{
-                    var bugT = buggyTrace.Copy();
-                    //PrintProgramPath.print(init, bug, "temp0");
+                buggyTrace = captureTrans.mapBackTrace(buggyTrace);
+                if (mainTrans != null) buggyTrace = mainTrans.mapBackTrace(buggyTrace);
 
-                    bugT = captureTrans.mapBackTrace(bugT);
-                    if(mainTrans != null) bugT = mainTrans.mapBackTrace(bugT);
-                    // knock off fakeMain
-                    ErrorTrace tempt = null;
-                    bugT.Blocks.Iter(blk =>
-                        {
-                            var cmain = blk.Cmds.OfType<CallInstr>().Where(ci => ci.callee == config.mainProcName).FirstOrDefault();
-                            if (cmain != null) tempt = cmain.calleeTrace;
-                        });
-                    bugT = tempt;
-                    PrintProgramPath.print(inputProg, bugT, "input");
+                // knock off fakeMain
+                ErrorTrace tempt = null;
+                buggyTrace.Blocks.Iter(blk =>
+                    {
+                        var cmain = blk.Cmds.OfType<CallInstr>().Where(ci => ci.callee == config.mainProcName).FirstOrDefault();
+                        if (cmain != null) tempt = cmain.calleeTrace;
+                    });
+                buggyTrace = tempt;
 
-                    //PrintSdvPath.PrintStackTrace(inputProg.getCBAProgram(), bugT, "defect.stktrace");
-
-                    //serialize the buggyTrace
-                    BinaryFormatter serializer = new BinaryFormatter();
-                    FileStream stream = new FileStream("buggyTrace.serialised", FileMode.Create, FileAccess.Write, FileShare.None);
-                    serializer.Serialize(stream, bugT);
-                    stream.Close();
-                //}
-
-                //var ttpp = BoogieUtil.ParseProgram(config.inputFile);
-                //PrintProgramPath.print(new ProgTransformation.PersistentProgram(ttpp), buggyTrace, config.inputFile);
-
-                PrintSdvPath.Print(programForDefectTrace, buggyTrace, toRecord, aliasingExplanation, "defect.tt", "stack.txt");
-                var am = new TokenTextWriter("defect.txt");
-                var message = PrintSdvPath.abortMessage;
-                if (message == null) message = "None";
-                am.WriteLine(message);
-                am.Close();
+                //serialize the buggyTrace
+                BinaryFormatter serializer = new BinaryFormatter();
+                FileStream stream = new FileStream("buggyTrace.serialised", FileMode.Create, FileAccess.Write, FileShare.None);
+                serializer.Serialize(stream, buggyTrace);
+                stream.Close();
             }
 
             CorralState.DumpCorralState(config, progVerifyOptions.CallTree, varsToKeep.Variables);
             Log.Close();
-        }
-
-        // program should not have recursion -- or too many paths. This is really just meant for
-        // path programs
-        private static int findLast(Program program, string implName, Predicate<Cmd> pred)
-        {
-            var cnt = 0;
-            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, implName);
-            if(impl == null) return 0;
-            foreach (var blk in impl.Blocks)
-            {
-                foreach (var cmd in blk.Cmds)
-                {
-                    if (pred(cmd)) cnt = Math.Max(cnt, 1);
-                    if (cmd is CallCmd)
-                    {
-                        var c = findLast(program, (cmd as CallCmd).callee, pred);
-                        if (c != 0) cnt = Math.Max(cnt, c + 1);
-                    }
-                }
-            }
-            return cnt;
-        }
-
-        // Mark "slic" assume statements
-        // Insert captureState for driver methods and start
-        // Mark "indirect" call assume statements
-        public static void sdvAnnotateDefectTrace(Program trace, Configs config)
-        {
-            var slicVars = new HashSet<string>(config.trackedVars);
-            slicVars.Remove("alloc");
-
-            var isSlicExpr = new Predicate<Expr>(expr =>
-                {
-                    var vused = new VarsUsed();
-                    vused.VisitExpr(expr);
-                    if (vused.varsUsed.Any(v => slicVars.Contains(v)))
-                        return true;
-                    return false;
-                });
-            var isSlicAssume = new Func<AssumeCmd, Implementation, bool>((ac, impl) =>
-                {
-                    if (impl.Name.Contains("SLIC_") || impl.Name.Contains("sdv_")) return true;
-                    if (isSlicExpr(ac.Expr)) return true;
-                    return false;
-                });
-            var tagAssume = new Action<AssumeCmd, Implementation>((ac, impl) =>
-                {
-                    if (isSlicAssume(ac, impl)) ac.Attributes =
-                          new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
-                });
-
-            var isDriverImpl = new Predicate<Implementation>(impl =>
-                {
-                    return !impl.Name.Contains("sdv") && !impl.Name.Contains("SLIC");
-                });
-
-
-            foreach (var impl in trace.TopLevelDeclarations
-                .OfType<Implementation>())
-            {
-                // Tag entry points of the driver
-                if (isDriverImpl(impl))
-                {
-                    var ac = new AssumeCmd(Token.NoToken, Expr.True);
-                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(), null);
-                    ac.Attributes.Params.Add(impl.Name);
-
-                    var nc = new List<Cmd>();
-                    nc.Add(ac);
-                    nc.AddRange(impl.Blocks[0].Cmds);
-                    impl.Blocks[0].Cmds = nc;
-                }
-
-                // Insert "slic" annotation
-                impl.Blocks.Iter(blk =>
-                    blk.Cmds.OfType<AssumeCmd>()
-                    .Iter(cmd => tagAssume(cmd, impl)));
-
-                // Insert "indirect" annotation
-                foreach (var blk in impl.Blocks)
-                {
-                    for (int i = 0; i < blk.Cmds.Count - 1; i++)
-                    {
-                        var c1 = blk.Cmds[i] as AssumeCmd;
-                        var c2 = blk.Cmds[i + 1] as AssumeCmd;
-                        if (c1 == null || c2 == null) continue;
-                        if (!QKeyValue.FindBoolAttribute(c1.Attributes, "IndirectCall")) continue;
-                        c2.Attributes = new QKeyValue(Token.NoToken, "indirect", new List<object>(), c2.Attributes);
-                    }
-                }
-
-                // Start captureState
-                foreach (var blk in impl.Blocks)
-                {
-                    blk.Cmds.OfType<AssumeCmd>()
-                        .Where(ac => QKeyValue.FindBoolAttribute(ac.Attributes, "mainInitDone"))
-                        .Iter(ac => { ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(new string[] { "Start" }), ac.Attributes); });
-                }
-            }
-                
-            // Mark malloc
-            foreach (var impl in trace.TopLevelDeclarations
-                .OfType<Implementation>())
-            {
-                foreach (var blk in impl.Blocks)
-                {
-                    var ncmds = new List<Cmd>();
-                    foreach (Cmd cmd in blk.Cmds)
-                    {
-                        ncmds.Add(cmd);
-
-                        var ccmd = cmd as CallCmd;
-                        if (ccmd == null || !ccmd.callee.Contains("HAVOC_malloc"))
-                            continue;
-                        var ac = new AssertCmd(Token.NoToken, Expr.True);
-                        ac.Attributes = new QKeyValue(Token.NoToken, "malloc", new List<object>(), null);
-                        ncmds.Add(ac);
-                    }
-                    blk.Cmds = ncmds;
-                }
-            }
-
-
-                
         }
 
         private static void SetSdvModeOptions(Configs config)

@@ -792,6 +792,7 @@ namespace cba
     [Serializable]
     abstract public class ErrorTraceInstr
     {
+        [NonSerialized]
         public InstrInfo info;
         public virtual ErrorTrace CalleeTrace
         {

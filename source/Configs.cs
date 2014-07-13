@@ -135,10 +135,6 @@ namespace cba
 
         public bool useProverEvaluate { get; private set; }
 
-        public int explainError { get; private set; }
-        public int explainErrorTimeout { get; private set; }
-        public int explainErrorFilters { get; private set; }
-
         public bool trainSummaries { get; private set; }
 
         public HashSet<string> recordValues { get; private set; }
@@ -242,11 +238,6 @@ namespace cba
                 config.recursionBound = 1;
             }
 
-            if (config.explainError > 0 && !config.sdvMode)
-            {
-                throw new UsageError("Bug witness currently only supported in SDV mode");
-            }
-
             return config;
         }
 
@@ -326,9 +317,6 @@ namespace cba
 
             useProverEvaluate = false;
 
-            explainError = 0;
-            explainErrorTimeout = 0;
-            explainErrorFilters = 0;
             recordValues = new HashSet<string>();
             printAllTraces = false;
             rootCause = -1;
@@ -425,11 +413,6 @@ namespace cba
                 debugMemAccesses = true;
                 printData = 1;
             }
-            else if (flag == "/explainError")
-            {
-                explainError = 1;
-                useProverEvaluate = true;
-            }
             else if (flag == "/trainSummaries")
             {
                 trainSummaries = true;
@@ -438,16 +421,6 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 rootCause = Int32.Parse(split[1]);
-            }
-            else if (flag.StartsWith("/explainError:"))
-            {
-                var split = flag.Split(sep);
-                explainError = Int32.Parse(split[1]);
-                if (split.Length == 3)
-                    explainErrorTimeout = Int32.Parse(split[2]);
-                if (split.Length == 4)
-                    explainErrorFilters = Int32.Parse(split[3]);
-                useProverEvaluate = true;
             }
             else if (flag.StartsWith("/recursionBound:"))
             {

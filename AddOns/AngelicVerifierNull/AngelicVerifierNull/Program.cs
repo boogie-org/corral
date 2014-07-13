@@ -385,7 +385,7 @@ namespace AngelicVerifierNull
                     .FirstOrDefault();
 
                 //get the pathProgram
-                cba.SDVConcretizePathPass concretize;
+                CoreLib.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex.Item1, prog, out concretize);
                 //pprog.writeToFile("path" + iterCount + ".bpl");
                 var ppprog = pprog.getProgram(); //don't do getProgram on pprog anymore
@@ -667,7 +667,7 @@ namespace AngelicVerifierNull
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
-        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program, out cba.SDVConcretizePathPass concretize)
+        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program, out CoreLib.SDVConcretizePathPass concretize)
         {
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
 
@@ -680,7 +680,7 @@ namespace AngelicVerifierNull
             cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
             // mark some annotations (that enable optimizations) along the path program
-            cba.Driver.sdvAnnotateDefectTrace(tprog, corralConfig);
+            CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars);
 
             // convert to a persistent program
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
@@ -691,7 +691,7 @@ namespace AngelicVerifierNull
 
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
-            concretize = new cba.SDVConcretizePathPass(addIds.callIdToLocation);
+            concretize = new CoreLib.SDVConcretizePathPass(addIds.callIdToLocation);
 
             // TODO: set a reasonable timeout here
             BoogieVerify.setTimeOut(0);
@@ -717,7 +717,7 @@ namespace AngelicVerifierNull
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<string, int> blockExprCount = new Dictionary<string, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            cba.SDVConcretizePathPass concretize)
+            CoreLib.SDVConcretizePathPass concretize)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 

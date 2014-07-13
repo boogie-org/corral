@@ -10,104 +10,387 @@ using cba;
 
 namespace CoreLib
 {
-    /*
-    public class SdvExplainError
+    // For SDV: Given a program (representing a path) that is SAT, add concretization
+    // to determinize the trace
+    public class SDVConcretizePathPass : CompilerPass
     {
-        public void ee()
+        public bool success;
+        readonly string recordProcNameInt = "boogie_si_record_sdvcp_int";
+        readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
+        readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
+        readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
+        public Dictionary<string, Tuple<string, string, int>> allocConstants;
+        Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
+
+        private HashSet<string> procsWithoutBody;
+
+        public SDVConcretizePathPass(Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation)
         {
-                                    // Annotate program
-                        tprog = witness.getCBAProgram();
-                        sdvAnnotateDefectTrace(tprog, config);
-                        witness = new PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(newMain), 0);
+            success = false;
+            procsWithoutBody = new HashSet<string>();
+            allocConstants = new Dictionary<string, Tuple<string, string, int>>();
+            this.callIdToLocation = callIdToLocation;
+        }
 
-                        BoogieVerify.options = ConfigManager.pathVerifyOptions;
-                        var concretize = new SDVConcretizePathPass(addIds.callIdToLocation);
-                        witness = concretize.run(witness);
+        public override CBAProgram runCBAPass(CBAProgram p)
+        {
+            p.Typecheck();
 
-                        if (concretize.success)
+            p.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsWithoutBody.Add(proc.Name));
+            p.TopLevelDeclarations.OfType<Implementation>().Iter(impl => procsWithoutBody.Remove(impl.Name));
+
+            // remove malloc
+            //procsWithoutBody.RemoveWhere(str => str.Contains("malloc"));
+
+            // Make sure that procs without a body don't modify globals
+            foreach (var proc in p.TopLevelDeclarations.OfType<Procedure>().Where(proc => procsWithoutBody.Contains(proc.Name)))
+            {
+                if (proc.Modifies.Count > 0 && !BoogieUtil.checkAttrExists("allocator", proc.Attributes))
+                    throw new InvalidInput("Produce Bug Witness: Procedure " + proc.Name + " modifies globals");
+            }
+
+            // Add the boogie_si_record_int procedure
+            var inpVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true);
+            var inpVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), true);
+
+            var reProcInt = new Procedure(Token.NoToken, recordProcNameInt, new List<TypeVariable>(), new List<Variable> { inpVarInt }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reProcBool = new Procedure(Token.NoToken, recordProcNameBool, new List<TypeVariable>(), new List<Variable> { inpVarBool }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+
+            // Add procedures for initialization of local variables
+            var outVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
+            var outVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), false);
+            var reLocProcInt = new Procedure(Token.NoToken, initLocProcNameInt, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarInt }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            var reLocProcBool = new Procedure(Token.NoToken, initLocProcNameBool, new List<TypeVariable>(),
+                new List<Variable>(), new List<Variable>(new Variable[] { outVarBool }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+
+            procsWithoutBody.Add(reLocProcInt.Name);
+            procsWithoutBody.Add(reLocProcBool.Name);
+
+            foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var ncmds = new List<Cmd>();
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsInt))
+                {
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcInt;
+                    ncmds.Add(cc);
+                }
+                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsBool))
+                {
+                    var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Proc = reLocProcBool;
+                    ncmds.Add(cc);
+                }
+                ncmds.AddRange(impl.Blocks[0].Cmds);
+                impl.Blocks[0].Cmds = ncmds;
+            }
+            p.TopLevelDeclarations.Add(reLocProcInt);
+            p.TopLevelDeclarations.Add(reLocProcBool);
+
+            // save the current program
+            var fd = new FixedDuplicator(true);
+            var modInpProg = fd.VisitProgram(p);
+
+            // Instrument to record stuff
+            p.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
+                impl.Blocks.Iter(instrument));
+
+            // Name clash if this assert fails
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
+            Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameBool) == null);
+
+            p.TopLevelDeclarations.Add(reProcInt);
+            p.TopLevelDeclarations.Add(reProcBool);
+            var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
+            if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
+                tmainimpl.AddAttribute("entrypoint");
+
+            var program = new PersistentCBAProgram(p, p.mainProcName, 0);
+            //program.writeToFile("beforeverify.bpl");
+            var vp = new VerificationPass(true);
+            vp.run(program);
+
+            success = vp.success;
+            if (success) return null;
+
+            var trace = mapBackTraceRecord(vp.trace);
+
+            RestrictToTrace.addConcretization = true;
+            RestrictToTrace.addConcretizationAsConstants = true;
+            var tinfo = new InsertionTrans();
+            var rt = new RestrictToTrace(modInpProg, tinfo);
+            rt.addTrace(trace);
+            RestrictToTrace.addConcretization = false;
+            RestrictToTrace.addConcretizationAsConstants = false;
+
+            var rtprog = rt.getProgram();
+
+            // Build a map of where the alloc constants are from
+            foreach (var kvp in rt.allocConstantToCall)
+            {
+                var allocConst = kvp.Key;
+                var callId = kvp.Value;
+                // TODO: fix
+                Debug.Assert(callIdToLocation.ContainsKey(callId));
+                allocConstants.Add(allocConst, Tuple.Create(callId.Item1, callIdToLocation[callId].Item1, callIdToLocation[callId].Item2));
+            }
+
+            /*
+            foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                // strip _trace from the impl name
+                var implName = impl.Name;
+                var c = implName.LastIndexOf("_trace");
+                while (c != -1)
+                {
+                    implName = implName.Substring(0, c);
+                    c = implName.LastIndexOf("_trace");
+                }
+
+                var vu = new VarsUsed();
+                vu.VisitImplementation(impl);
+                vu.varsUsed.Where(s => s.StartsWith("alloc_"))
+                    .Iter(s => allocConstants[s] = implName);
+            }
+            */
+            BoogieUtil.findProcedureImpl(rtprog.TopLevelDeclarations, rt.getFirstNameInstance(p.mainProcName))
+                .AddAttribute("entrypoint");
+
+            program = new PersistentCBAProgram(rtprog, rt.getFirstNameInstance(p.mainProcName), p.contextBound);
+
+            // Lets inline it all
+            var inlp = new InliningPass(1);
+            program = inlp.run(program);
+
+            var compress = new CompressBlocks();
+            var ret = program.getProgram();
+            compress.VisitProgram(ret);
+
+
+            return new CBAProgram(ret, program.mainProcName, 0);
+        }
+
+
+        private void instrument(Block block)
+        {
+            var newCmds = new List<Cmd>();
+            foreach (Cmd cmd in block.Cmds)
+            {
+                newCmds.Add(cmd);
+                if (cmd is HavocCmd && (cmd as HavocCmd).Vars.Count > 1)
+                {
+                    Console.WriteLine("{0}", cmd);
+                    throw new InvalidInput("Produce Bug Witness: Havoc cmd found");
+                }
+
+                if (cmd is HavocCmd)
+                {
+                    var hcmd = cmd as HavocCmd;
+                    var arg = hcmd.Vars[0];
+                    newCmds.Add(makeRecordCall(arg));
+                    continue;
+                }
+
+                if (!(cmd is CallCmd))
+                {
+                    continue;
+                }
+
+                var ccmd = cmd as CallCmd;
+
+                if (ccmd.Outs.Count != 1)
+                {
+                    continue;
+                }
+
+                if (!procsWithoutBody.Contains(ccmd.Proc.Name))
+                {
+                    continue;
+                }
+
+                var retVal = ccmd.Outs[0];
+
+                if (retVal == null) continue;
+
+                if (!retVal.Type.IsInt && !retVal.Type.IsBool)
+                {
+                    continue;
+                }
+
+                newCmds.Add(makeRecordCall(retVal));
+            }
+            block.Cmds = newCmds;
+        }
+
+        private CallCmd makeRecordCall(IdentifierExpr v)
+        {
+            var ins = new List<Expr>();
+            ins.Add(v);
+
+            if (v.Type.IsInt)
+                return new CallCmd(Token.NoToken, recordProcNameInt, ins, new List<IdentifierExpr>());
+            else if (v.Type.IsBool)
+                return new CallCmd(Token.NoToken, recordProcNameBool, ins, new List<IdentifierExpr>());
+            else
+            {
+                Debug.Assert(false);
+                return null;
+            }
+        }
+
+
+        public ErrorTrace mapBackTraceRecord(ErrorTrace trace)
+        {
+            var ret = new ErrorTrace(trace.procName);
+
+            foreach (var block in trace.Blocks)
+            {
+                var nb = new ErrorTraceBlock(block.blockName);
+                foreach (var cmd in block.Cmds)
+                {
+                    if (cmd is CallInstr)
+                    {
+                        var ccmd = cmd as CallInstr;
+                        if (ccmd.callee == recordProcNameInt || ccmd.callee == recordProcNameBool)
                         {
-                            // Something went wrong, fail silently
-                            throw new NormalExit("ExplainError set up failed");
+                            Debug.Assert(nb.Cmds.Count != 0);
+                            nb.Cmds.Last().info = ccmd.info;
+                            continue;
                         }
 
-                        if (config.explainError > 1)
-                            witness.writeToFile("corral_witness.bpl");
-
-                        tprog = witness.getCBAProgram();
-
-                        ExplainError.STATUS status;
-                        Dictionary<string, string> complexObj;
-
-                        var explain = ExplainError.Toplevel.Go(tprog.TopLevelDeclarations.OfType<Implementation>()
-                            .Where(impl => impl.Name == witness.mainProcName).FirstOrDefault(), tprog, config.explainErrorTimeout, config.explainErrorFilters,
-                            out status, out complexObj, "suggestions.bpl");
-
-                        if (status == ExplainError.STATUS.TIMEOUT)
+                        if (ccmd.hasCalledTrace)
                         {
-                            Console.WriteLine("ExplainError timed out");
-                            aliasingExplanation = "^====Pre=====^___(Timeout)";
+                            var c = new CallInstr(mapBackTraceRecord(ccmd.calleeTrace), ccmd.asyncCall, ccmd.info);
+                            nb.addInstr(c);
                         }
-                        else if (status != ExplainError.STATUS.SUCCESS)
+                        else
                         {
-                            Console.WriteLine("ExplainError didn't return SUCCESS");
-                            aliasingExplanation = "^====Pre=====^___(Inconclusive)";
-                        }
-
-                        if (status == ExplainError.STATUS.SUCCESS && explain.Count > 0)
-                        {
-                            aliasingExplanation = "^====Pre=====";
-
-                            // gather all constants that represent memory addresses
-                            var allocConstants = new HashSet<string>();
-                            var allocRe = new System.Text.RegularExpressions.Regex(@"\b(alloc_\d*)\b");
-                            var gatherAllocConstants = new Action<string>(s =>
-                                {
-                                    var matches = allocRe.Match(s);
-                                    if (matches.Success)
-                                        for (int ai = 1; ai < matches.Groups.Count; ai++)
-                                            allocConstants.Add(matches.Groups[ai].Value);
-
-                                });
-
-                            for (int i = 0; i < explain.Count; i++)
-                            {
-                                if (i == 0) aliasingExplanation += "^____";
-                                else aliasingExplanation += "^or__";
-                                gatherAllocConstants(explain[i]);
-
-                                aliasingExplanation += explain[i].TrimEnd(' ', '\t').Replace(' ', '_').Replace("\t", "_and_");
-                            }
-
-                            if (complexObj.Any())
-                            {
-                                aliasingExplanation += "^where";
-                                foreach (var tup in complexObj)
-                                {
-                                    gatherAllocConstants(tup.Key);
-                                    var str = string.Format("   {0} = {1}", tup.Value, tup.Key);
-                                    aliasingExplanation += "^" + str.Replace(' ', '_');
-                                }
-                            }
-                            foreach (var s in allocConstants.Where(a => concretize.allocConstants.ContainsKey(a)))
-                            {
-                                var str = string.Format("^   {0} was allocated in procedure {1} block {2} cmd {3}", s, concretize.allocConstants[s].Item1,
-                                    concretize.allocConstants[s].Item2, concretize.allocConstants[s].Item3);
-                                Console.WriteLine("{0}", str);
-                                aliasingExplanation += str.Replace(' ', '_');
-                            }
+                            nb.addInstr(ccmd);
                         }
 
                     }
+                    else
+                    {
+                        nb.addInstr(cmd.Copy());
+                    }
+
                 }
-                catch (Exception e)
-                {
-                    // Fail silently
-                    aliasingExplanation = "";
-                    Console.WriteLine("ExplainError failed: {0}", e.Message);
-                }
+                ret.addBlock(nb);
+            }
+
+            if (trace.returns)
+            {
+                ret.addReturn(trace.raisesException);
+            }
+
+            return ret;
         }
     }
-     * */
+
+    public static class SdvUtils
+    {
+        // Mark "slic" assume statements
+        // Insert captureState for driver methods and start
+        // Mark "indirect" call assume statements
+        public static void sdvAnnotateDefectTrace(Program trace, HashSet<string> slicVars)
+        {
+            //var slicVars = new HashSet<string>(config.trackedVars);
+            //slicVars.Remove("alloc");
+
+            var isSlicExpr = new Predicate<Expr>(expr =>
+            {
+                var vused = new VarsUsed();
+                vused.VisitExpr(expr);
+                if (vused.varsUsed.Any(v => slicVars.Contains(v)))
+                    return true;
+                return false;
+            });
+            var isSlicAssume = new Func<AssumeCmd, Implementation, bool>((ac, impl) =>
+            {
+                if (impl.Name.Contains("SLIC_") || impl.Name.Contains("sdv_")) return true;
+                if (isSlicExpr(ac.Expr)) return true;
+                return false;
+            });
+            var tagAssume = new Action<AssumeCmd, Implementation>((ac, impl) =>
+            {
+                if (isSlicAssume(ac, impl)) ac.Attributes =
+                      new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
+            });
+
+            var isDriverImpl = new Predicate<Implementation>(impl =>
+            {
+                return !impl.Name.Contains("sdv") && !impl.Name.Contains("SLIC");
+            });
+
+
+            foreach (var impl in trace.TopLevelDeclarations
+                .OfType<Implementation>())
+            {
+                // Tag entry points of the driver
+                if (isDriverImpl(impl))
+                {
+                    var ac = new AssumeCmd(Token.NoToken, Expr.True);
+                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(), null);
+                    ac.Attributes.Params.Add(impl.Name);
+
+                    var nc = new List<Cmd>();
+                    nc.Add(ac);
+                    nc.AddRange(impl.Blocks[0].Cmds);
+                    impl.Blocks[0].Cmds = nc;
+                }
+
+                // Insert "slic" annotation
+                impl.Blocks.Iter(blk =>
+                    blk.Cmds.OfType<AssumeCmd>()
+                    .Iter(cmd => tagAssume(cmd, impl)));
+
+                // Insert "indirect" annotation
+                foreach (var blk in impl.Blocks)
+                {
+                    for (int i = 0; i < blk.Cmds.Count - 1; i++)
+                    {
+                        var c1 = blk.Cmds[i] as AssumeCmd;
+                        var c2 = blk.Cmds[i + 1] as AssumeCmd;
+                        if (c1 == null || c2 == null) continue;
+                        if (!QKeyValue.FindBoolAttribute(c1.Attributes, "IndirectCall")) continue;
+                        c2.Attributes = new QKeyValue(Token.NoToken, "indirect", new List<object>(), c2.Attributes);
+                    }
+                }
+
+                // Start captureState
+                foreach (var blk in impl.Blocks)
+                {
+                    blk.Cmds.OfType<AssumeCmd>()
+                        .Where(ac => QKeyValue.FindBoolAttribute(ac.Attributes, "mainInitDone"))
+                        .Iter(ac => { ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(new string[] { "Start" }), ac.Attributes); });
+                }
+            }
+
+            // Mark malloc
+            foreach (var impl in trace.TopLevelDeclarations
+                .OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (Cmd cmd in blk.Cmds)
+                    {
+                        ncmds.Add(cmd);
+
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null || !ccmd.callee.Contains("HAVOC_malloc"))
+                            continue;
+                        var ac = new AssertCmd(Token.NoToken, Expr.True);
+                        ac.Attributes = new QKeyValue(Token.NoToken, "malloc", new List<object>(), null);
+                        ncmds.Add(ac);
+                    }
+                    blk.Cmds = ncmds;
+                }
+            }
+        }
+
+    }
 
     // Unify all maps of type [int]int
     public class TypeUnify : FixedVisitor
