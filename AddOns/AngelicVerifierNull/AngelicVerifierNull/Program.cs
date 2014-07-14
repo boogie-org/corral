@@ -422,7 +422,7 @@ namespace AngelicVerifierNull
                             if (loc != null) output = loc;                            
                         }
 
-                        Console.WriteLine(output);
+                        Console.WriteLine(output); //Utils.Print(output, Utils.PRINT_TAG.AV_OUTPUT);
                         // result file output
                         // format: Description, Src File, Line, Procedure, EntryPoint
                         var resultLine = GetFailingLocation(ppprog, string.Format("Assertion {0} failed,{{0}},{{1}},{1},{2}",

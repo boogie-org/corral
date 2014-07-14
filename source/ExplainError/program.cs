@@ -110,7 +110,9 @@ namespace ExplainError
             dontDisplayComparisonsWithConsts = true;
             if (explainErrorFilters == 1) //using it for memory safety rootcause
             {
-                ignoreAllAssumes = true; onlyDisplayAliasingInPre = false; onlyDisplayMapExpressions = false; dontDisplayComparisonsWithConsts = false;
+                ignoreAllAssumes = true;  
+                //onlyDisplayAliasingInPre = false;
+                onlyDisplayMapExpressions = false;dontDisplayComparisonsWithConsts = false;
             }
 
             showBoogieExprs = false;
@@ -310,7 +312,14 @@ namespace ExplainError
             Expr fe; //filtered expr (not used)
             HashSet<Expr> filteredAtoms;
             if ((filteredAtoms = FilteredAtoms(currImpl, e, out fe)).Count == 0)
-                throw new Exception("Abort: No atoms after applying filter...no point proceeding");
+            {
+                //throw new Exception("Abort: No atoms after applying filter...no point proceeding");
+                Console.WriteLine("No atoms after applying filter...treating it as Expr.True");
+                currPre = null;
+                displayStrs = new HashSet<List<Expr>>();
+                displayStrs.Add(new List<Expr>() { Expr.True });
+                return displayStrs;
+            }
             var l = new List<Expr>();
             if (CheckConjunctiveCover(currImpl, currPre, e, filteredAtoms, out l))
             {
