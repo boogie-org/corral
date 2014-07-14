@@ -217,7 +217,10 @@ namespace AngelicVerifierNull
             }
             catch (Exception e)
             {
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_OUTPUT);
+                //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
+                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
+                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
+
             }
             finally
             {
