@@ -98,7 +98,6 @@ namespace cba
             GlobalConfig.recursionBound = config.recursionBound;
             GlobalConfig.refinementAlgo = config.refinementAlgo.ToArray();
             GlobalConfig.timeOut = config.timeout;
-            GlobalConfig.detectConstantLoops = config.detectConstantLoops;
             GlobalConfig.annotations = config.annotations;
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
@@ -655,13 +654,6 @@ namespace cba
             var refinementVerifyOptions = ConfigManager.refinementVerifyOptions;
 
             CorralState.AbsorbPrevState(config, progVerifyOptions);
-            
-            PersistentCBAProgram inputProg = null;
-            //if (config.printData == 2)
-            //{
-                // save the input program
-                inputProg = new PersistentCBAProgram(program, "", 0);
-            //}
 
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
@@ -713,8 +705,10 @@ namespace cba
 
             // Prune mod sets
             BoogieUtil.DoModSetAnalysis(program);
+
             // Gather the set of initially tracked variables
             var initialTrackedVars = getTrackedVars(program, config);
+
             // Did we reach the recursion bound?
             var reachedBound = false;
 
@@ -732,18 +726,6 @@ namespace cba
             if (config.printData == 2)
                 captureStates(program, out captureTrans);
 
-            if (config.debugMemAccesses)
-            {
-                CoreLib.RecordMemoryAccesses.Instrument(program, "start_irql", "sdv_irql_current");
-                BoogieUtil.PrintProgram(program, "recorded.bpl");
-            }
-
-            // Save program; remove source info (because there can be lots of it)
-            var programForDefectTrace = (new FixedDuplicator(true)).VisitProgram(program);
-            var sinfo = new ModifyTrans();
-            if (config.rootCause < 0)
-                sinfo = PrintSdvPath.DeleteSourceInfo(program);
-
             var init = new PersistentCBAProgram(program, newMain, 1);
             var curr = init;
 
@@ -758,36 +740,14 @@ namespace cba
                 refinementState.Add(new AddVarMapping(new VarSet(sinstr.assertsPassedName, "")));
             }
 
-            // prune
-            PruneProgramPass.RemoveUnreachable = true;
-            PruneProgramPass.normalizeStatements = true;
-            var prune = new PruneProgramPass();
-            curr = prune.run(curr);
-            PruneProgramPass.RemoveUnreachable = false;
-            passes.Add(prune);
-
             // extract loops
             var elPass = new ExtractLoopsPass(true);
             curr = elPass.run(curr);
             CommandLineOptions.Clo.ExtractLoops = false;
             passes.Add(elPass);
 
-            if (GlobalConfig.detectConstantLoops)
-            {
-                List<ConstLoop> cloops;
-                curr = PruneConstLoops(curr, out cloops);
-                cloops.Iter(c => cloopsTime += c.lastRun);
-                passes.AddRange(cloops);
-            }
-
-            // Delete print commands, so they are not part of the
-            // abstraction refinement and SI loop.
-            var progWithPrintCmds = curr;
             var currProg = curr.getCBAProgram();
-            var printinfo = PrintSdvPath.DeletePrintCmds(currProg);
-
             var allVars = VarSet.GetAllVars(currProg);
-            curr = new PersistentCBAProgram(currProg, curr.mainProcName, curr.contextBound);
 
             var correct = false;
             var iterCnt = 0;
@@ -1018,13 +978,8 @@ namespace cba
 
                 //PrintProgramPath.print(curr, buggyTrace, "temp0");
 
-                // Bring back print cmds
-                buggyTrace = printinfo.mapBackTrace(buggyTrace);
-
                 passes.Reverse<CompilerPass>()
                                    .Iter(cp => buggyTrace = cp.mapBackTrace(buggyTrace));
-
-                buggyTrace = sinfo.mapBackTrace(buggyTrace);
 
                 buggyTrace = captureTrans.mapBackTrace(buggyTrace);
                 if (mainTrans != null) buggyTrace = mainTrans.mapBackTrace(buggyTrace);
@@ -1219,26 +1174,6 @@ namespace cba
             program.TopLevelDeclarations.Add(newMainImpl);
 
             return newMainImpl.Name;
-        }
-
-
-        private static PersistentCBAProgram PruneConstLoops(PersistentCBAProgram prog, out List<ConstLoop> cloops)
-        {
-            cloops = new List<ConstLoop>();
-            var noTry = new HashSet<string>();
-
-            var noTryFunc = new Func<Implementation, int>(impl =>
-                {
-                    return 2;
-                });
-
-            ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
-
-            var cloop = new ConstLoop(noTryFunc);
-            prog = cloop.run(prog);
-            cloops.Add(cloop);
-
-            return prog;
         }
 
         private static HashSet<string> findTemplates(Program program, Configs config)

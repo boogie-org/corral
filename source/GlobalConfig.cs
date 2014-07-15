@@ -25,9 +25,6 @@ namespace cba
         // For inferring contracts
         public static ContractInfer InferPass = null;
 
-        // Constant loop detection (For SDV)
-        public static bool detectConstantLoops = false;
-
         // Print the instrumented bpl file
         public static bool printInstrumented
         {

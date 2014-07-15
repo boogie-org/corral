@@ -59,7 +59,6 @@ namespace cba
         public bool genCTrace { get; private set; }
         public bool noTrace { get; private set; }
 
-        public bool detectConstantLoops { get; private set; }
         public bool computeStats { get; private set; }
 
         public bool printProgress { get; private set; }
@@ -124,8 +123,6 @@ namespace cba
         public bool cooperativeYield { get; private set; }
         public bool unifyMaps { get; private set; }
 
-        public bool debugMemAccesses { get; private set; }
-
         public HashSet<string> tryDroppingForRefinement { get; private set; }
         public string unfoldRecursion { get; private set; }
         public string daInst { get; private set; }
@@ -137,9 +134,8 @@ namespace cba
 
         public bool trainSummaries { get; private set; }
 
-        public HashSet<string> recordValues { get; private set; }
         public bool printAllTraces { get; private set; }
-        public int rootCause { get; private set; }
+
         public int maxStaticLoopBound { get; private set; }
         public bool disableStaticAnalysis { get; private set; }
         public bool useDuality { get; private set; }
@@ -286,7 +282,6 @@ namespace cba
             printBoogieFlags = false;
 
             verboseMode = 0;
-            detectConstantLoops = false;
 
             houdiniQuery = null;
             useInitialPruning = true;
@@ -305,7 +300,6 @@ namespace cba
 
             cooperativeYield = false;
             unifyMaps = false;
-            debugMemAccesses = false;
 
             tryDroppingForRefinement = new HashSet<string>();
 
@@ -317,9 +311,7 @@ namespace cba
 
             useProverEvaluate = false;
 
-            recordValues = new HashSet<string>();
             printAllTraces = false;
-            rootCause = -1;
             disableStaticAnalysis = false;
 
             deepAsserts = false;
@@ -408,19 +400,9 @@ namespace cba
             {
                 unifyMaps = true;
             }
-            else if (flag == "/debugMemAccesses")
-            {
-                debugMemAccesses = true;
-                printData = 1;
-            }
             else if (flag == "/trainSummaries")
             {
                 trainSummaries = true;
-            }
-            else if (flag.StartsWith("/rootCause"))
-            {
-                var split = flag.Split(sep);
-                rootCause = Int32.Parse(split[1]);
             }
             else if (flag.StartsWith("/recursionBound:"))
             {
@@ -611,10 +593,6 @@ namespace cba
             {
                 printProgress = true;
             }
-            else if (flag == "/cloops")
-            {
-                detectConstantLoops = true;
-            }
             else if (flag == "/stats")
             {
                 computeStats = true;
@@ -667,11 +645,6 @@ namespace cba
             else if (flag == "/fwdBck")
             {
                 FwdBckSearch = 1;
-            }
-            else if (flag.StartsWith("/recordScalar:"))
-            {
-                var split = flag.Split(sep);
-                recordValues.Add(split[1]);
             }
             else if (flag.StartsWith("/assertVar:"))
             {

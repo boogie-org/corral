@@ -790,7 +790,7 @@ namespace cba
 
     // Interface for an instruction in an error trace. 
     [Serializable]
-    abstract public class ErrorTraceInstr
+    abstract public class ErrorTraceInstr 
     {
         [NonSerialized]
         public InstrInfo info;
