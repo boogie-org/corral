@@ -8,6 +8,7 @@ using Microsoft.Boogie;
 using btype = Microsoft.Boogie.Type;
 using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
+using SimpleHoudini = cba.SimpleHoudini;
 
 namespace AngelicVerifierNull
 {
@@ -22,6 +23,8 @@ namespace AngelicVerifierNull
         public static readonly bool UsePrevCorralState = true;
         // Don't use alias analysis
         public static bool UseAliasAnalysis = true;
+        // Do Houdini pass to remove some assertions
+        public static bool HoudiniPass = false;
     }
 
     class Stats
@@ -130,6 +133,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/noAA"))
                 Options.UseAliasAnalysis = false;
 
+            if (args.Any(s => s == "/houdini"))
+                Options.HoudiniPass = true;
+
             if (args.Any(s => s == "/trackAllVars"))
                 trackAllVars = true;
 
@@ -212,6 +218,10 @@ namespace AngelicVerifierNull
                 }
                 Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
+                // run Houdini pass
+                if (Options.HoudiniPass)
+                    prog = RunHoudiniPass(prog);
+
                 //Analyze
                 RunCorralForAnalysis(prog);
             }
@@ -228,6 +238,33 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
+        }
+
+        private static PersistentProgram RunHoudiniPass(PersistentProgram prog)
+        {
+            Stats.resume("houdini");
+            Utils.Print("Start Houdini Pass ...");
+
+            HashSet<Variable> templateVars = new HashSet<Variable>();
+            List<Requires> reqs = new List<Requires>();
+            List<Ensures> enss = new List<Ensures>();
+            SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
+            houdini.ExtractLoops = true;
+            SimpleHoudini.fastRequiresInference = false; // don't turn this on now. cause problem
+            SimpleHoudini.checkAsserts = true;
+            houdini.printHoudiniQuery = "candidates.bpl";
+            // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
+            houdini.InImpOutNonNull = false;
+            houdini.InImpOutNull = false;
+            houdini.InNonNull = false;
+            houdini.OutNonNull = false;
+            
+            PersistentProgram newP = houdini.run(prog);
+            BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
+            Utils.Print("End Houdini Pass ...");
+            Stats.stop("houdini");
+
+            return newP;
         }
 
         #region Instrumentatations

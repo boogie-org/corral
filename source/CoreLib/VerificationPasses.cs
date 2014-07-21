@@ -683,18 +683,18 @@ namespace cba
         public List<EExpr> templates;
         public int InlineDepth;
         private HashSet<string> templateVarNames;
-        private ExtractLoopsPass elPass;
+        protected ExtractLoopsPass elPass;
         public static bool runHoudini = true;
         public string printHoudiniQuery = null;
 
         // Named constants: (implName, id) -> set of constants with that id
-        Dictionary<Tuple<string, string>, HashSet<string>> namedConstants;
+        protected Dictionary<Tuple<string, string>, HashSet<string>> namedConstants;
         // Dependencies: constant -> id that it depends on
-        Dictionary<string, string> dependenciesBetConstants;
+        protected Dictionary<string, string> dependenciesBetConstants;
 
         private Dictionary<string, IEnumerable<Expr>> staticAnalysisSummaries;
         private Dictionary<string, IEnumerable<Expr>> staticAnalysisPreconditions;
-        private HashSet<string> staticAnalysisConstants;
+        protected HashSet<string> staticAnalysisConstants;
         public static bool checkStaticAnalysis = false;
 
         public Dictionary<string, List<EExpr>> summaries;
@@ -731,6 +731,7 @@ namespace cba
             this.elPass = new ExtractLoopsPass(unroll);
             this.summaries = new Dictionary<string, List<EExpr>>();
             staticAnalysisSummaries = new Dictionary<string, IEnumerable<Expr>>();
+            staticAnalysisPreconditions = new Dictionary<string, IEnumerable<Expr>>();
             staticAnalysisConstants = new HashSet<string>();
 
             this.namedConstants = new Dictionary<Tuple<string, string>, HashSet<string>>();
@@ -741,7 +742,7 @@ namespace cba
             templateVars.Iter(v => templateVarNames.Add(v.Name));
         }
 
-        private Expr UpdateVars(Expr expr, Dictionary<string, Variable> globals)
+        protected Expr UpdateVars(Expr expr, Dictionary<string, Variable> globals)
         {
             var dup = new FixedDuplicator();
             var subst = new Dictionary<string, Variable>();
@@ -822,7 +823,7 @@ namespace cba
             return true;
         }
 
-        public Dictionary<string, Dictionary<string, EExpr>> Instantiate(Program program)
+        public virtual Dictionary<string, Dictionary<string, EExpr>> Instantiate(Program program)
         {
             var globals = new Dictionary<string, Variable>();
             program.TopLevelDeclarations
@@ -1452,7 +1453,6 @@ namespace cba
 
                 // TODO: what about abshoudini?
                 PruneIrrelevantImpls(program);
-
                 BoogieUtil.TypecheckProgram(program, "error.bpl");
 
                 if (printHoudiniQuery != null)
@@ -1632,12 +1632,12 @@ namespace cba
         }
 
         // convert v to old(v)
-        private static Expr addOld(Expr expr)
+        protected static Expr addOld(Expr expr)
         {
             return Substituter.Apply(Subst, expr);
         }
 
-        private void inline(Program program)
+        protected void inline(Program program)
         {
             foreach (Declaration d in program.TopLevelDeclarations)
             {
@@ -1702,8 +1702,8 @@ namespace cba
 
         // Remove implementations that cannot have an impact on any houdini candidate.
         // In our setting (only postconditions), these are ones that don't have a non-free ensures
-        private void PruneIrrelevantImpls(Program program)
-        {
+        protected void PruneIrrelevantImpls(Program program)
+        {   
             var implHasEnsures = new Predicate<Implementation>(impl =>
             {
                 bool r = impl.Proc.Ensures.Any(en => !en.Free);
@@ -1729,6 +1729,384 @@ namespace cba
                 CommandLineOptions.Clo.StratifiedInliningOption = 0;
             }
             return ret;
+        }
+    }
+
+    /**
+     * Simple Houdini Inference Pass
+     */
+    public class SimpleHoudini : ContractInfer
+    {
+        private List<Constant> candCons; // maintain a list of bool constants for candidates
+        private static int ConstCounter; // numbering the bool constants
+        private Dictionary<string, Tuple<Expr,string>> candAsserts; // candidate assertions
+        public bool InNonNull, OutNonNull, InImpOutNonNull, InImpOutNull; // a few switches for templates
+
+        public SimpleHoudini(HashSet<Variable> templateVars, List<Requires> req, List<Ensures> ens, int InlineDepth,
+            int unroll) : base(templateVars, req, ens, InlineDepth, unroll)
+        {
+            ConstCounter = 0;
+            candCons = new List<Constant>();
+            candAsserts = new Dictionary<string, Tuple<Expr,string>>();
+            InNonNull = true;
+            OutNonNull = true;
+            InImpOutNonNull = false;
+            InImpOutNull = false;
+        }
+
+        // simplified version of runCBAPass
+        public override CBAProgram runCBAPass(CBAProgram program)
+        {
+            if (ExtractLoops)
+            {
+                // Unroll loops
+                var inputPrime = elPass.run(input);
+                program = (inputPrime as PersistentCBAProgram).getCBAProgram();
+            }
+            var info = Instantiate(program);
+
+            (new RewriteCallDontCares()).VisitProgram(program);
+            RunHoudini(program, info);
+            program = (input as PersistentCBAProgram).getCBAProgram();
+
+            return program;
+        }
+
+        // simplified version of RunHoudini
+        private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
+        {
+            Console.WriteLine("Running {0}Houdini", runAbsHoudini ? "Abstract " : "");
+            // Run Houdini
+
+            CommandLineOptions.Clo.InlineDepth = InlineDepth;
+            var old = CommandLineOptions.Clo.ProcedureInlining;
+            CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
+            var si = CommandLineOptions.Clo.StratifiedInlining;
+            CommandLineOptions.Clo.StratifiedInlining = 0;
+            var cc = CommandLineOptions.Clo.ProverCCLimit;
+            CommandLineOptions.Clo.ProverCCLimit = 5;
+            CommandLineOptions.Clo.ContractInfer = true;
+            var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
+            CommandLineOptions.Clo.ProverKillTime = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
+
+            var time3 = DateTime.Now;
+
+            var trueConstants = new HashSet<string>();
+            var programProcs = new List<Procedure>();
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(proc => programProcs.Add(proc));
+
+            try
+            {
+                if (checkAsserts)
+                    program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
+
+                Program origProg = null;
+                var allConstants = new HashSet<string>();
+                var requiresConstants = new HashSet<string>();
+                //if (fastRequiresInference)
+                //{
+                //    // Turn off requires candidates
+                //    program.TopLevelDeclarations.OfType<Constant>()
+                //        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                //        .Iter(c => allConstants.Add(c.Name));
+
+                //    origProg = BoogieUtil.ReResolve(program);
+                //    program.TopLevelDeclarations.OfType<Procedure>()
+                //        .Iter(proc =>
+                //        {
+                //            var uv = new VarsUsed();
+                //            uv.VisitRequiresSeq(proc.Requires);
+                //            requiresConstants.UnionWith(uv.varsUsed.Intersection(allConstants));
+                //            proc.Requires = proc.Requires.Filter(re => re.Free);
+                //        });
+                //    program.TopLevelDeclarations.OfType<Constant>()
+                //        .Where(c => requiresConstants.Contains(c.Name))
+                //        .Iter(c => c.Attributes = BoogieUtil.removeAttr("existential", c.Attributes));
+                //}
+
+                inline(program);
+
+                // TODO: what about abshoudini?
+                //PruneIrrelevantImpls(program); // turn off this to aviod assertions being removed
+
+                BoogieUtil.TypecheckProgram(program, "error.bpl");
+
+                if (printHoudiniQuery != null)
+                    BoogieUtil.PrintProgram(program, printHoudiniQuery);
+
+                HoudiniOutcome outcome = null;
+
+                {
+                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                    Houdini houdini = new Houdini(program, houdiniStats);
+                    outcome = houdini.PerformHoudiniInference();
+                    Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
+
+                    if (!fastRequiresInference)
+                    {
+                        outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                        Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                    }
+                    var time4 = DateTime.Now;
+                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    houdini = null;
+                }
+
+                //if (fastRequiresInference)
+                //{
+                //    var newAxioms = new List<Axiom>();
+                //    foreach (var b in origProg.TopLevelDeclarations.OfType<Constant>()
+                //        .Where(c => allConstants.Contains(c.Name) && !requiresConstants.Contains(c.Name)))
+                //    {
+                //        b.Attributes = BoogieUtil.removeAttr("existential", b.Attributes);
+                //        var axiom = Expr.Eq(Expr.Ident(b), Expr.Literal(outcome.assignment[b.Name]));
+                //        axiom.Type = Microsoft.Boogie.Type.Bool;
+                //        axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
+                //        newAxioms.Add(new Axiom(Token.NoToken, axiom));
+                //    }
+                //    origProg.TopLevelDeclarations.AddRange(newAxioms);
+                //    //BoogieUtil.PrintProgram(origProg, "h2.bpl");
+
+                //    CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
+                //    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                //    Houdini houdini = new Houdini(origProg, houdiniStats);
+                //    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
+                //    Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
+                //    CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
+
+                //    outcome.assignment.Where(kvp => !requiresConstants.Contains(kvp.Key))
+                //        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                //    outcomeReq.assignment
+                //        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+
+                //    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                //    var time4 = DateTime.Now;
+                //    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                //    houdini = null;
+                //}
+            }
+            catch (OutOfMemoryException)
+            {
+                Console.WriteLine("Houdini ran out of memory; trusting static analysis");
+                trueConstants.UnionWith(staticAnalysisConstants);
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl =>
+                    {
+                        impl.Blocks = new List<Block>();
+                        impl.OriginalBlocks = new List<Block>();
+                    });
+            }
+
+            CommandLineOptions.Clo.InlineDepth = -1;
+            CommandLineOptions.Clo.ProcedureInlining = old;
+            CommandLineOptions.Clo.StratifiedInlining = si;
+            CommandLineOptions.Clo.ProverCCLimit = cc;
+            CommandLineOptions.Clo.ContractInfer = false;
+            CommandLineOptions.Clo.ProverKillTime = oldTimeout;
+            CommandLineOptions.Clo.AbstractHoudini = null;
+            CommandLineOptions.Clo.PrintErrorModel = 0;
+
+            #region debug static analysis
+
+            if (!staticAnalysisConstants.IsSubsetOf(trueConstants))
+            {
+                foreach (var c in staticAnalysisConstants.Difference(trueConstants))
+                {
+                    Expr expr = null;
+                    var proc = "";
+                    foreach (var kvp in info)
+                    {
+                        if (!kvp.Value.ContainsKey(c)) continue;
+                        expr = kvp.Value[c].expr;
+                        proc = kvp.Key;
+                        break;
+                    }
+                    Console.WriteLine("The following expr in {0} is not valid", proc);
+                    expr.Emit(new TokenTextWriter(Console.Out));
+                    Console.WriteLine();
+                }
+
+                Debug.Assert(false, "Bug in static analysis module");
+            }
+            #endregion
+
+            // Record new summaries
+            int cia = 0;
+            candAsserts.Keys.Where(s => trueConstants.Contains(s))
+                .Iter(a =>
+                {
+                    Console.WriteLine(string.Format("Inferred Assert: {0} in {1}", candAsserts[a].Item1, candAsserts[a].Item2));
+                    cia++;
+                });
+            Console.WriteLine(string.Format("Total Asserts: {0} out of {1}", cia, candAsserts.Count));
+
+            int cic = 0;
+            foreach (var proc in programProcs)
+            {
+                if (!info.ContainsKey(proc.Name)) continue;
+                cic += info[proc.Name].Count;
+
+                // Gather true constants
+                var tconsts = new HashSet<string>
+                    (info[proc.Name].Keys.Where(s => trueConstants.Contains(s)));
+
+                foreach (var kvp in info[proc.Name])
+                {
+                    if (!trueConstants.Contains(kvp.Key)) continue;
+
+                    // print inferred contracts
+                    //Console.WriteLine(string.Format("Inferred: {0}", kvp.Value.expr));
+                    
+
+                    // check dependencies: if any of them hold then discard this one
+                    var addSummary = true;
+                    if (dependenciesBetConstants.ContainsKey(kvp.Key))
+                    {
+                        var dep = dependenciesBetConstants[kvp.Key];
+                        var depKey = Tuple.Create(proc.Name, dep);
+                        if (namedConstants.ContainsKey(depKey))
+                        {
+                            if (namedConstants[depKey].Intersection(tconsts).Any())
+                                addSummary = false;
+                        }
+                    }
+
+                    if (addSummary)
+                    {
+                        if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
+                        summaries[proc.Name].Add(kvp.Value);
+                    }
+                }
+            }
+            Console.WriteLine(string.Format("Total Candidates: {0} out of {1}", trueConstants.Count-cia, cic));
+        }
+
+        /**
+         * Add houdini candidates for each procedure with implementation
+         * Requires: CIC => in > 0
+         * Ensures: CIC => (in > 0 => out > 0)
+         * Ensures: CIC => out > 0
+         * Ensures: CIC => (in <= 0 => out <= 0)
+         */
+        public override Dictionary<string, Dictionary<string, EExpr>> Instantiate(Program program)
+        {
+            var ret = new Dictionary<string, Dictionary<string, EExpr>>();
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var proc = impl.Proc;
+                impl.Blocks.Iter(blk => // replace assert (e) by assert (CIC => e)
+                    {
+                        for (int i = 0; i < blk.Cmds.Count; i++)
+                        {
+                            var ac = blk.Cmds[i] as AssertCmd;
+                            if (ac != null && !BoogieUtil.isAssertTrue(blk.Cmds[i]))
+                            {
+                                var cons = FreshConstant(candCons);
+                                blk.Cmds[i] = new AssertCmd(ac.tok, Expr.Imp(Expr.Ident(cons), ac.Expr));
+                                candAsserts[cons.Name] = new Tuple<Expr,string>(ac.Expr, blk.Label);
+                            }
+                        }
+                    });
+
+                if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")) continue;
+                if (!ret.ContainsKey(proc.Name)) ret.Add(proc.Name, new Dictionary<string, EExpr>());
+
+                List<Expr> requires = new List<Expr>();
+                if (InNonNull)
+                {
+                    foreach (Variable p in proc.InParams) // requires(p != NULL)
+                    {
+                        if (!IsPointerVariable(p))
+                            continue;
+                        var expr = NonNull(p);
+                        requires.Add(expr);
+                        proc.Requires.Add(CandiateRequire(expr, candCons, ret[impl.Name]));
+                    }
+                }
+                foreach (Variable r in proc.OutParams) // ensures(p != NULL => r != NULL)
+                {
+                    if (!IsPointerVariable(r))
+                        continue;
+                    if (OutNonNull)
+                    {
+                        // out != NULL
+                        proc.Ensures.Add(CandidateEnsure(NonNull(r), candCons, ret[impl.Name]));
+                    }
+
+                    if (InImpOutNonNull)
+                    {
+                        // in != NULL => out != NULL
+                        requires.OfType<Expr>().
+                            Iter(req =>
+                            {
+                                var expr = Expr.Imp(req, NonNull(r));
+                                proc.Ensures.Add(CandidateEnsure(expr, candCons, ret[impl.Name]));
+                            });
+                    }
+
+                    if (InImpOutNull)
+                    {
+                        // in == NULL => out == NULL
+                        requires.OfType<Expr>().Iter(req =>
+                            {
+                                var expr = Expr.Imp(Expr.Not(req), Expr.Not(NonNull(r)));
+                                proc.Ensures.Add(CandidateEnsure(expr, candCons, ret[impl.Name]));
+                            });
+                    }
+                }
+            }
+
+            program.TopLevelDeclarations.AddRange(candCons);
+            //BoogieUtil.PrintProgram(program, "bfHoudini.bpl");
+            return ret;
+        }
+
+        // return a candidate Ensures expression and add to corresponding info entry
+        private Ensures CandidateEnsure(Expr cond, List<Constant> clist, Dictionary<string,EExpr> infoEntry)
+        {
+            var cons = FreshConstant(clist);
+            var expr = Expr.Imp(Expr.Ident(cons), cond);
+            var ret = new Ensures(false, expr);
+            infoEntry.Add(cons.Name, new EExpr(cond, true));
+            ret.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), ret.Attributes);
+            return ret;
+        }
+
+        // return a candidate Require expression and add to corresponding info entry
+        private Requires CandiateRequire(Expr cond, List<Constant> clist, Dictionary<string, EExpr> infoEntry)
+        {
+            var cons = FreshConstant(clist);
+            var expr = Expr.Imp(Expr.Ident(cons), cond);
+            var ret = new Requires(false, expr);
+            ret.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), ret.Attributes);
+            infoEntry.Add(cons.Name, new EExpr(cond, false));
+            return ret;
+        }
+
+        // return a fresh existential constant
+        private Constant FreshConstant(List<Constant> clist)
+        {
+            var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "CIC" + 
+                (ConstCounter++).ToString(), Microsoft.Boogie.Type.Bool), false);
+            constant.AddAttribute("existential", Expr.Literal(true));
+            clist.Add(constant); // add to bool constant list
+            return constant;
+        }
+
+        // need to be refined
+        private bool IsPointerVariable(Variable x)
+        {
+            return x.TypedIdent.Type.IsInt &&
+                !BoogieUtil.checkAttrExists("scalar", x.Attributes); //we will err on the side of treating variables as references
+        }
+
+        // return x > 0
+        private Expr NonNull(Variable x)
+        {
+            return Expr.Gt(IdentifierExpr.Ident(x),
+                              new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
         }
     }
 
