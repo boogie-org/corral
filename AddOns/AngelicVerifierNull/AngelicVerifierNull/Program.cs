@@ -357,6 +357,8 @@ namespace AngelicVerifierNull
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
+                Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
+                CommandLineOptions.Clo.RecursionBound = 1;
                 Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
                 
@@ -635,7 +637,10 @@ namespace AngelicVerifierNull
             cba.ErrorTrace cexTrace = null;
             try
             {
+                Stats.count("count.check.refine");
+                Stats.resume("check.and.refine");
                 cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+                Stats.stop("check.and.refine");
             }
             catch (Exception)
             {
