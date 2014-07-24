@@ -1389,7 +1389,7 @@ namespace cba.Util
 
         private bool instrumentType(Microsoft.Boogie.Type type)
         {
-            if (type.IsMap) return false;
+            //if (type.IsMap) return false;
             if (typesToInstrument.Count == 0) return true;
             return typesToInstrument.Contains(type.ToString());
         }
@@ -1415,6 +1415,7 @@ namespace cba.Util
         private void SSARename(Implementation impl)
         {
             // Make a unified exit block
+            
             Block exitBlock = null;
             if (impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd).Count() != 1)
             {
@@ -1491,6 +1492,8 @@ namespace cba.Util
             var variables = new HashSet<Variable>();
             variables.UnionWith(impl.LocVars);
             variables.UnionWith(impl.OutParams);
+            
+
             variables = new HashSet<Variable>(variables.Where(v => instrumentType(v.TypedIdent.Type)));
 
             // block -> variable -> version
@@ -1500,7 +1503,7 @@ namespace cba.Util
             // current max version
             var maxVersion = new Dictionary<Variable, int>();
             variables.OfType<LocalVariable>().Iter(v => maxVersion[v] = 0);
-            variables.OfType<Formal>().Iter(v => maxVersion[v] = 1);           
+            variables.OfType<Formal>().Iter(v => maxVersion[v] = 1);
 
             // block -> Variable -> [out-version, in-versions]
             var phiNodes = new Dictionary<Block, Dictionary<Variable, List<int>>>();
@@ -1851,6 +1854,8 @@ namespace cba.Util
     public class CleanAssert
     {
         Program program;
+        Dictionary<KeyValuePair<Implementation, Block>, HashSet<string>> live_var_dictionary;
+        Dictionary<Implementation, HashSet<int>> non_null_funcs;
 
         private CleanAssert(Program program)
         {
@@ -1869,14 +1874,127 @@ namespace cba.Util
             return (expr as IdentifierExpr).ToString().Equals("NULL");
         }
 
+        private bool validAssert(AssertCmd ac)
+        {
+            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == null) return false;
+            if (ac.Expr != null &&
+                ac.Expr is NAryExpr &&
+                ((NAryExpr)ac.Expr).Args != null &&
+                (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
+                ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null)
+                return true;
+            else return false;
+        }
+        private IdentifierExpr getVarFromAssert(AssertCmd ac)
+        {
+            return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First();
+        }
+
+        private bool validAssume(AssumeCmd asc)
+        {
+            if (asc.Expr is NAryExpr)
+            {
+                NAryExpr asc_expr = (NAryExpr)asc.Expr;
+                if (asc_expr.Fun != null &&
+                    asc_expr.Fun is BinaryOperator &&
+                    ((BinaryOperator)asc_expr.Fun).Op == BinaryOperator.Opcode.Neq &&
+                    asc_expr.Args.Count == 2 &&
+                    asc_expr.Args[1] is IdentifierExpr &&
+                    checkIfNull(asc_expr.Args[1])) return true;
+                else return false;
+            }
+            else return false;
+        }
+
+        private IdentifierExpr getVarFromAssume(AssumeCmd asc)
+        {
+            return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
+        }
+
+        private string getArgFromCaller(int index, KeyValuePair<Implementation, Block> ibp, string impl_name)
+        {
+            foreach (CallCmd cc in ibp.Value.Cmds.OfType<CallCmd>().Where(ccmd => ccmd.callee.Equals(impl_name)))
+            {
+                return cc.Ins[index].ToString();
+                //else return null;
+            }
+            return null;
+        }
+
+        private bool checkAllParents(bool dbg, string var_name, Dictionary<string, HashSet<KeyValuePair<Implementation, Block>>> callers, Implementation impl, Block b, Dictionary<KeyValuePair<Implementation, string>, Variable> varsfromargs, Dictionary<Implementation, HashSet<Implementation>> impl2set, bool first)
+        {
+            if (dbg) Console.WriteLine("Analyzing variable " + var_name + " in " + impl.Name + " " + b.Label);
+            if (live_var_dictionary[new KeyValuePair<Implementation, Block>(impl, b)].Contains(var_name) && !first)
+            {
+                if (dbg) Console.WriteLine(var_name + " is live");
+                return true;
+            }
+            if (!callers.ContainsKey(impl.Name))
+            {
+                if (dbg) Console.WriteLine("impl -> " + impl.Name + " not found in callers");
+                return false;
+            }
+            if (callers[impl.Name].Count == 0)
+            {
+                if (dbg) Console.WriteLine("No parent found for " + impl.Name);
+                return false;
+            }
+            if (!varsfromargs.ContainsKey(new KeyValuePair<Implementation, string>(impl, var_name)))
+            {
+                if (dbg) Console.WriteLine(var_name + " not coming from argument");
+                return false;
+            }
+            
+            bool allparentslive;
+            foreach (var ibp in callers[impl.Name])
+            {
+                if (dbg) Console.WriteLine("Caller :- " + ibp.Key + " " + ibp.Value);
+                if (impl2set[ibp.Key].Equals(impl2set[impl]))
+                {
+                    if (dbg) Console.WriteLine("Same SCC as callee");
+                    return false;
+                }
+                int index = impl.InParams.IndexOf(varsfromargs[new KeyValuePair<Implementation, string>(impl, var_name)]);
+                if (dbg) Console.WriteLine("Argument " + varsfromargs[new KeyValuePair<Implementation, string>(impl, var_name)].Name + " found at " + index);
+                
+                if (!live_var_dictionary.ContainsKey(ibp))
+                {
+                    if (dbg) Console.WriteLine("Caller not found in live_var_dictionary");
+                    return false;
+                }
+                if (!live_var_dictionary[ibp].Contains(getArgFromCaller(index, ibp, impl.Name)))
+                {
+                    if (dbg) Console.WriteLine("Caller dead variable :- " + getArgFromCaller(index, ibp, impl.Name));
+                    allparentslive = checkAllParents(dbg, getArgFromCaller(index, ibp, impl.Name), callers, ibp.Key, ibp.Value, varsfromargs, impl2set, false);
+                    if (!allparentslive) return false;
+                }
+                else
+                {
+                    if (dbg) Console.WriteLine("Caller live variable :- " + getArgFromCaller(index, ibp, impl.Name));
+                }
+            }
+            live_var_dictionary[new KeyValuePair<Implementation, Block>(impl, b)].Add(var_name);
+            if (dbg) Console.WriteLine("Making " + var_name + " live in " + impl.Name + " " + b.Label);
+            return true;
+        }
+
+        /*
+         * Arguments - None
+         * Return Value - None
+         * Implementation :- Prunes aliasing queries based on two specific optimizations
+         * 1. Removing duplicate aliasing queries on every execution path
+         * 2. Removing asserts based on assume commands
+         */
         private void Clean()
         {
+            live_var_dictionary = new Dictionary<KeyValuePair<Implementation, Block>, HashSet<string>>();
             bool dbg = false;
             int asserts_removed_count = 0;  // Counting the number of asserts removed
             string notfalse = null;
             bool exists, var_exists, valid_assume_cmd, valid_assert_cmd;
             int count_predecessors, var_frequency;
-            NAryExpr asc_expr;
+
             /*
              * Go to each implementation
              * Sort the blocks in topological order. (needed for computing live variables in predecessors)
@@ -1971,26 +2089,19 @@ namespace cba.Util
                                 continue;
                             else
                             {
-                                IdentifierExpr id = null;
+                                Expr id = null;
                                 string var_name = null;
 
                                 // Extracting variable name from assert command
-                                if (ac.Expr != null &&
-                                    ac.Expr is NAryExpr &&
-                                    ((NAryExpr)ac.Expr).Args != null &&
-                                    (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
-                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null &&
-                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>() != null &&
-                                    ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First() is IdentifierExpr)
-                                    valid_assert_cmd = true;
+                                if (validAssert(ac)) valid_assert_cmd = true;
                                 else valid_assert_cmd = false;
                                 if (valid_assert_cmd)
                                 {
-                                    id = ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First();
+                                    id = getVarFromAssert(ac);
                                     var_name = id.ToString();
 
                                     if (dbg) Console.WriteLine("Analyzing Var_AssertCmd :- " + var_name);
-                                    
+
                                     // Check if variable is already contained in current_live_vars
                                     if (current_live_vars.Contains(var_name))
                                     {
@@ -1999,39 +2110,34 @@ namespace cba.Util
                                     }
                                     else current_live_vars.Add(var_name);   // Add variable to current_live_vars
                                 }
-                                
+
                             }
                         }
                         else if (c is AssumeCmd)
                         {
                             var asc = c as AssumeCmd;
-                            IdentifierExpr id = null;
+                            Expr id = null;
                             string var_name = null;
-                            valid_assume_cmd = true;
 
                             // Extracting variable name from assume command
-                            if (asc.Expr is NAryExpr)
-                            {
-                                asc_expr = (NAryExpr)asc.Expr;
-                                if (asc_expr.Fun != null &&
-                                    asc_expr.Fun is BinaryOperator &&
-                                    ((BinaryOperator)asc_expr.Fun).Op == BinaryOperator.Opcode.Neq &&
-                                    asc_expr.Args.Count == 2 &&
-                                    asc_expr.Args[0] is IdentifierExpr &&
-                                    asc_expr.Args[1] is IdentifierExpr &&
-                                    checkIfNull(asc_expr.Args[1]))
-                                        valid_assume_cmd = true;
-                                else valid_assume_cmd = false;
-                                if (valid_assume_cmd && dbg) Console.WriteLine("Hey, found it!");
-                            }
+                            if (validAssume(asc)) valid_assume_cmd = true;
                             else valid_assume_cmd = false;
+                            if (valid_assume_cmd && dbg) Console.WriteLine("Hey, found it!");
                             if (valid_assume_cmd)
                             {
-                                id = (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
+                                id = getVarFromAssume(asc);
                                 var_name = id.ToString();
                                 if (dbg) Console.WriteLine("Adding Var_AssumeCmd :- " + var_name);
                                 if (dbg) Console.WriteLine(asc.ToString());
                                 current_live_vars.Add(var_name);        // Add variable to current_live_vars
+                            }
+                        }
+                        else if (c is CallCmd)
+                        {
+                            var cc = c as CallCmd;
+                            if (cc.callee.Equals("__HAVOC_malloc") || cc.callee.Equals("__HAVOC_malloc_full"))
+                            {
+                                foreach (var nonnull_vars in cc.Outs) current_live_vars.Add(nonnull_vars.ToString());
                             }
                         }
                     }
@@ -2043,9 +2149,229 @@ namespace cba.Util
                         asserts_removed_count++;
                     }
                     assume_flow.Add(b.ToString(), current_live_vars);
+                    live_var_dictionary.Add(new KeyValuePair<Implementation, Block>(impl, b), current_live_vars);
                 }
             }
             if (dbg) Console.WriteLine("#Asserts Removed by Optimizations :- " + asserts_removed_count);
+
+            //BoogieUtil.PrintProgram(program, "test.bpl");
+
+            CleanGlobal();
+
+        }
+
+        private void CleanGlobal()
+        {
+            bool dbg = false;
+            var callers = new Dictionary<string, HashSet<KeyValuePair<Implementation, Block>>>();
+            var name2Impl = new Dictionary<string, Implementation>();
+            name2Impl = BoogieUtil.nameImplMapping(program);
+            var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
+            var Pred = new Dictionary<Implementation, HashSet<Implementation>>();
+            name2Impl.Values.Iter(impl => Succ.Add(impl, new HashSet<Implementation>()));
+            name2Impl.Values.Iter(impl => Pred.Add(impl, new HashSet<Implementation>()));
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                    {
+                        if (!name2Impl.ContainsKey(cmd.callee)) continue;
+                        Succ[impl].Add(name2Impl[cmd.callee]);
+                        Pred[name2Impl[cmd.callee]].Add(impl);
+                        if (callers.ContainsKey(cmd.callee)) callers[cmd.callee].Add(new KeyValuePair<Implementation, Block>(impl, blk));
+                        else
+                        {
+                            callers.Add(cmd.callee, new HashSet<KeyValuePair<Implementation, Block>>());
+                            callers[cmd.callee].Add(new KeyValuePair<Implementation, Block>(impl, blk));
+                        }
+                    }
+                }
+            }
+
+
+
+            // Build SCC
+            var sccs = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
+                new Adjacency<Implementation>(n => Succ[n]),
+                new Adjacency<Implementation>(n => Pred[n]));
+            sccs.Compute();
+
+            Graph<HashSet<Implementation>> impl_dag = new Graph<HashSet<Implementation>>();
+            Dictionary<Implementation, HashSet<Implementation>> impl2set = new Dictionary<Implementation, HashSet<Implementation>>();
+            foreach (var scc in sccs)
+            {
+                var impl_set = new HashSet<Implementation>();
+                foreach (var impl in scc)
+                {
+                    impl_set.Add(impl);
+                    impl2set.Add(impl, impl_set);
+                }
+                impl_dag.AddSource(impl_set);
+            }
+
+            foreach (Implementation impl in Succ.Keys)
+            {
+                foreach (Implementation succ_impl in Succ[impl])
+                {
+                    if (!impl2set[impl].Equals(impl2set[succ_impl]) && !impl_dag.Edge(impl2set[impl], impl2set[succ_impl])) impl_dag.AddEdge(impl2set[impl], impl2set[succ_impl]);
+                }
+            }
+
+            IEnumerable<HashSet<Implementation>> sortedImplSet;
+            sortedImplSet = impl_dag.TopologicalSort();
+
+            Dictionary<KeyValuePair<Implementation, string>, Variable> varsfromargs = new Dictionary<KeyValuePair<Implementation, string>, Variable>();
+
+            foreach (var implset in sortedImplSet)
+            {
+                if (dbg) Console.WriteLine("ImplSet :- ");
+                foreach (Implementation impl in implset)
+                {
+                    foreach (var par in impl.InParams) varsfromargs.Add(new KeyValuePair<Implementation, string>(impl, par.ToString()), par);
+                    if (dbg) Console.WriteLine("impl -> " + impl.ToString());
+                    if (dbg)
+                    {
+                        Console.Write("Parameters :- ");
+                        foreach (var par in impl.InParams) Console.Write(par.ToString() + " ");
+                        Console.WriteLine();
+                    }
+                    IEnumerable<Block> sortedBlocks;
+
+                    // Computing predecessors, constructing CFG and topological sorting of blocks
+                    impl.ComputePredecessorsForBlocks();
+                    Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
+                    sortedBlocks = dag.TopologicalSort();
+
+                    
+
+                    foreach (Block b in sortedBlocks)
+                    {
+                        if (dbg) Console.WriteLine("Block :- " + b.ToString());
+                        List<AssertCmd> removal_list_ac = new List<AssertCmd>();
+                        foreach (Cmd c in b.Cmds)
+                        {
+                            if (c is AssignCmd)
+                            {
+                                var asc = c as AssignCmd;
+                                if (dbg) Console.Write("AssignCmd :- " + asc.ToString());
+                                for (int i = 0; i < asc.Lhss.Count; i++)
+                                {
+                                    if (asc.Rhss[i] is IdentifierExpr && asc.Lhss[i].AsExpr is IdentifierExpr)
+                                    {
+                                        string var_name = null;
+                                        var_name = asc.Rhss[i].ToString();
+                                        if (varsfromargs.ContainsKey(new KeyValuePair<Implementation, string>(impl, var_name)))
+                                        {
+                                            if (dbg) Console.WriteLine(var_name + " present in varsfromargs");
+                                            if (varsfromargs.ContainsKey(new KeyValuePair<Implementation, string>(impl, asc.Lhss[i].AsExpr.ToString())))
+                                            {
+                                                if (dbg) Console.WriteLine(asc.Lhss[i].AsExpr.ToString() + " present in varsfromargs");
+                                                if (varsfromargs[new KeyValuePair<Implementation, string>(impl, asc.Lhss[i].AsExpr.ToString())].Equals(varsfromargs[new KeyValuePair<Implementation, string>(impl, var_name)])) continue;
+                                                else
+                                                {
+                                                    if (dbg) Console.WriteLine(asc.Lhss[i].AsExpr.ToString() + " removed from varsfromargs");
+                                                    varsfromargs.Remove(new KeyValuePair<Implementation, string>(impl, asc.Lhss[i].AsExpr.ToString()));
+                                                    continue;
+                                                }
+                                            }
+                                            
+                                            varsfromargs.Add(new KeyValuePair<Implementation, string>(impl, asc.Lhss[i].AsExpr.ToString()), varsfromargs[new KeyValuePair<Implementation, string>(impl, var_name)]);
+                                            if (dbg)
+                                            {
+                                                Console.WriteLine("Variable " + asc.Lhss[i].AsExpr.ToString() + " -> " + varsfromargs[new KeyValuePair<Implementation, string>(impl, asc.Lhss[i].AsExpr.ToString())].Name);
+                                                Console.WriteLine();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (c is AssertCmd)
+                            {
+                                string var_name = null;
+                                AssertCmd ac = c as AssertCmd;
+                                if (validAssert(ac))
+                                {
+                                    if (dbg) Console.WriteLine("Analyzing AssertCmd :- " + ac.ToString());
+                                    var_name = getVarFromAssert(ac).ToString();
+                                    bool allparentslive = checkAllParents(dbg, var_name, callers, impl, b, varsfromargs, impl2set, true);
+                                    if (allparentslive) removal_list_ac.Add(ac);
+                                }
+                            }
+                        }
+                        foreach (var v in varsfromargs.Keys)
+                        {
+                            if (v.Key.Equals(impl)) Console.WriteLine(v.Key.Name + " " + v.Value);
+                        }
+                        foreach (AssertCmd ac in removal_list_ac)
+                        {
+                            if (dbg) Console.WriteLine("Removing AssertCmd :- " + ac.ToString());
+                            b.Cmds.Remove(ac);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void CleanReturnAsserts()
+        {
+            bool dbg = true;
+            non_null_funcs = new Dictionary<Implementation, HashSet<int>>();
+            int freq;
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (dbg) Console.WriteLine("impl -> " + impl.Name);
+                HashSet<int> non_null_vars = new HashSet<int>();
+                Dictionary<Variable, int> return_vars = new Dictionary<Variable, int>();
+                int final_block_count = 0;
+                foreach (Block b in impl.Blocks)
+                {
+                    if (b.TransferCmd is ReturnCmd)
+                    {
+                        final_block_count++;
+                        foreach (Variable v in impl.OutParams)
+                        {
+                            if (live_var_dictionary[new KeyValuePair<Implementation, Block>(impl, b)].Contains(v.Name))
+                            {
+                                bool exists = return_vars.TryGetValue(v, out freq);
+                                if (exists)
+                                {
+                                    freq++;
+                                    return_vars.Remove(v);
+                                    return_vars.Add(v, freq);
+                                }
+                                else return_vars.Add(v, 1);
+                            }
+                        }
+                    }
+                }
+                foreach (Variable v in return_vars.Keys)
+                {
+                    if (return_vars[v] == final_block_count)
+                    {
+                        if (dbg) Console.WriteLine(v.Name);
+                        non_null_vars.Add(impl.OutParams.IndexOf(v));
+                    }
+                }
+                non_null_funcs.Add(impl, non_null_vars);
+            }
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (c is CallCmd)
+                        {
+                            CallCmd cc = c as CallCmd;
+                            Console.WriteLine(cc.ToString());
+                        }
+                    }
+                }
+            }
         }
     }
 }

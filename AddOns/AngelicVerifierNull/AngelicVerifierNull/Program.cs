@@ -209,7 +209,7 @@ namespace AngelicVerifierNull
                 Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
                 //Analyze
-                RunCorralForAnalysis(prog);
+                //RunCorralForAnalysis(prog);
             }
             catch (Exception e)
             {
@@ -904,19 +904,31 @@ namespace AngelicVerifierNull
 
             bool dbg = false;
 
+            /*
+            int temp = CommandLineOptions.Clo.InlineDepth;
+            Microsoft.Boogie.CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.None;
+            CommandLineOptions.Clo.InlineDepth = 1;
+            cba.InliningPass.InlineToDepth(program);
+            BoogieUtil.PrintProgram(program, "unfolded.bpl");
+            CommandLineOptions.Clo.InlineDepth = temp;
+            */
+
             // Make sure that aliasing queries are on identifiers only
             var af =
                 AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
-              SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int", "[int]int" });
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
-            program = CleanAssert.CleanAssertStmt(program);
-            Console.WriteLine("Optimization Time : {0}ms", sw.ElapsedMilliseconds);
+            Stats.resume("OptimizationTime");
 
+            program = CleanAssert.CleanAssertStmt(program);
+
+            Console.WriteLine("Optimization Time : {0}ms", sw.ElapsedMilliseconds);
+            Stats.stop("OptimizationTime");
             int count = 0;
             if (dbg) Console.WriteLine("After AA:-");
             string notfalse = null;
@@ -933,6 +945,7 @@ namespace AngelicVerifierNull
                         {
                             if (dbg) Console.Write(impl.ToString() + " :- ");
                             if (dbg) Console.Write(ac.ToString());
+                            Stats.count("#AssertsAfterOptimization");
                             count++;
                         }
                     }
@@ -955,44 +968,35 @@ namespace AngelicVerifierNull
                 af.Iter(s => res.aliases.Add(s, true));
             }
 
-            /*
-            int true_null = 0, false_null = 0, true_alias = 0, false_alias = 0;
-            foreach (var tup in ret)
-            {
-                if (tup.Key.Contains("aliasQnull"))
-                {
-                    if (tup.Value)
-                    {
-                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
-                        true_null++;
-                    }
-                    else
-                    {
-                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
-                        false_null++;
-                    }
-                }
-                else
-                {
-                    if (tup.Value)
-                    {
-                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
-                        true_alias++;
-                    }
-                    else
-                    {
-                        Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
-                        false_alias++;
-                    }
-                }
-            }
-            Console.WriteLine("True Null : {0}, False Null : {1}, True Alias : {2}, False Alias : {3}", true_null, false_null, true_alias, false_alias);
-            */
+
 
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
-            
+            /*
+            foreach (Implementation impl in origProgram.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                            continue;
+                        else
+                        {
+                            Console.Write(impl.ToString() + " " + b.ToString() + " :- ");
+                            Console.Write(ac.ToString());
+                            //var not_func_expr = (NAryExpr)ac.Expr;
+                            //var func_expr = (NAryExpr)not_func_expr.Args[0];
+                            //var var_name = func_expr.Args[0];
+                            //if (var_name is NAryExpr) Console.WriteLine(((NAryExpr)var_name).Args[0].ToString() + " " + ((NAryExpr)var_name).Args[1].ToString());
+                            //Console.WriteLine(var_name.ToString() + " " + var_name.GetType());
+                        }
+                    }
+                }
+            }
+            */
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
