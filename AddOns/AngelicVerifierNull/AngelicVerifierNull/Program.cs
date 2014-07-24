@@ -173,24 +173,6 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
-
-                /*
-                string notfalse = null;
-                Console.WriteLine("Before :-");
-                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations.OfType<Implementation>())
-                {
-                    foreach (Block b in impl.Blocks)
-                    {
-                        foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                        {
-                            if (ac.Expr.ToString() == Expr.True.ToString() ||
-                                ac.Expr.ToString() == notfalse) continue;
-                            else Console.Write(ac.ToString());
-                        }
-                    }
-                    Console.Write(impl.ToString());
-                }
-                */
                 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
@@ -223,7 +205,7 @@ namespace AngelicVerifierNull
                     prog = RunHoudiniPass(prog);
 
                 //Analyze
-                //RunCorralForAnalysis(prog);
+                RunCorralForAnalysis(prog);
             }
             catch (Exception e)
             {
@@ -968,22 +950,13 @@ namespace AngelicVerifierNull
 
             bool dbg = false;
 
-            /*
-            int temp = CommandLineOptions.Clo.InlineDepth;
-            Microsoft.Boogie.CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.None;
-            CommandLineOptions.Clo.InlineDepth = 1;
-            cba.InliningPass.InlineToDepth(program);
-            BoogieUtil.PrintProgram(program, "unfolded.bpl");
-            CommandLineOptions.Clo.InlineDepth = temp;
-            */
-
             // Make sure that aliasing queries are on identifiers only
             var af =
                 AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
-                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int", "[int]int" });
+                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -1037,30 +1010,7 @@ namespace AngelicVerifierNull
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
-            /*
-            foreach (Implementation impl in origProgram.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (Block b in impl.Blocks)
-                {
-                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                    {
-                        if (ac.Expr.ToString() == Expr.True.ToString() ||
-                            ac.Expr.ToString() == notfalse)
-                            continue;
-                        else
-                        {
-                            Console.Write(impl.ToString() + " " + b.ToString() + " :- ");
-                            Console.Write(ac.ToString());
-                            //var not_func_expr = (NAryExpr)ac.Expr;
-                            //var func_expr = (NAryExpr)not_func_expr.Args[0];
-                            //var var_name = func_expr.Args[0];
-                            //if (var_name is NAryExpr) Console.WriteLine(((NAryExpr)var_name).Args[0].ToString() + " " + ((NAryExpr)var_name).Args[1].ToString());
-                            //Console.WriteLine(var_name.ToString() + " " + var_name.GetType());
-                        }
-                    }
-                }
-            }
-            */
+            //CleanAssert.printAsserts(program);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }

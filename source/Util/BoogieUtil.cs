@@ -1389,7 +1389,7 @@ namespace cba.Util
 
         private bool instrumentType(Microsoft.Boogie.Type type)
         {
-            //if (type.IsMap) return false;
+            if (type.IsMap) return false;
             if (typesToInstrument.Count == 0) return true;
             return typesToInstrument.Contains(type.ToString());
         }
@@ -1854,8 +1854,8 @@ namespace cba.Util
     public class CleanAssert
     {
         Program program;
-        Dictionary<KeyValuePair<Implementation, Block>, HashSet<string>> live_var_dictionary;
-        Dictionary<Implementation, HashSet<int>> non_null_funcs;
+        Dictionary<KeyValuePair<Implementation, Block>, HashSet<string>> live_var_dictionary;   // implementation, block -> live variables in block
+        Dictionary<Implementation, HashSet<int>> non_null_funcs;    // Functions which return non-null variables
 
         private CleanAssert(Program program)
         {
@@ -1869,11 +1869,13 @@ namespace cba.Util
             return ca.program;
         }
 
+        // Check if an expression is NULL expression
         private bool checkIfNull(Expr expr)
         {
             return (expr as IdentifierExpr).ToString().Equals("NULL");
         }
 
+        // Check if AssertCmd is assert (var != NULL)
         private bool validAssert(AssertCmd ac)
         {
             if (ac.Expr.ToString() == Expr.True.ToString() ||
@@ -1886,11 +1888,14 @@ namespace cba.Util
                 return true;
             else return false;
         }
+
+        // Extracting variable name from AssertCmd
         private IdentifierExpr getVarFromAssert(AssertCmd ac)
         {
             return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First();
         }
 
+        // Check if AssumeCmd is assume (var != NULL)
         private bool validAssume(AssumeCmd asc)
         {
             if (asc.Expr is NAryExpr)
@@ -1907,39 +1912,50 @@ namespace cba.Util
             else return false;
         }
 
+        // Extract variable name from AssumeCmd
         private IdentifierExpr getVarFromAssume(AssumeCmd asc)
         {
             return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
         }
 
+
+        // Get variable name from argument index of an implementation
         private string getArgFromCaller(int index, KeyValuePair<Implementation, Block> ibp, string impl_name)
         {
             foreach (CallCmd cc in ibp.Value.Cmds.OfType<CallCmd>().Where(ccmd => ccmd.callee.Equals(impl_name)))
             {
                 return cc.Ins[index].ToString();
-                //else return null;
             }
             return null;
         }
 
+        // Check from all callers if a variable is coming from an argument 
         private bool checkAllParents(bool dbg, string var_name, Dictionary<string, HashSet<KeyValuePair<Implementation, Block>>> callers, Implementation impl, Block b, Dictionary<KeyValuePair<Implementation, string>, Variable> varsfromargs, Dictionary<Implementation, HashSet<Implementation>> impl2set, bool first)
         {
             if (dbg) Console.WriteLine("Analyzing variable " + var_name + " in " + impl.Name + " " + b.Label);
+
+            // If variable is contained in live_var_dictionary, return true
             if (live_var_dictionary[new KeyValuePair<Implementation, Block>(impl, b)].Contains(var_name) && !first)
             {
                 if (dbg) Console.WriteLine(var_name + " is live");
                 return true;
             }
+
+            // Irreducible procedure, return false
             if (!callers.ContainsKey(impl.Name))
             {
                 if (dbg) Console.WriteLine("impl -> " + impl.Name + " not found in callers");
                 return false;
             }
+
+            // If no callers, return false
             if (callers[impl.Name].Count == 0)
             {
                 if (dbg) Console.WriteLine("No parent found for " + impl.Name);
                 return false;
             }
+
+            // If variable not coming from argument, return false
             if (!varsfromargs.ContainsKey(new KeyValuePair<Implementation, string>(impl, var_name)))
             {
                 if (dbg) Console.WriteLine(var_name + " not coming from argument");
@@ -1947,6 +1963,7 @@ namespace cba.Util
             }
             
             bool allparentslive;
+            // Go to each caller, and recursively check if variable is live or not
             foreach (var ibp in callers[impl.Name])
             {
                 if (dbg) Console.WriteLine("Caller :- " + ibp.Key + " " + ibp.Value);
@@ -1974,6 +1991,8 @@ namespace cba.Util
                     if (dbg) Console.WriteLine("Caller live variable :- " + getArgFromCaller(index, ibp, impl.Name));
                 }
             }
+
+            // If variable is live, add to live_var_dictionary
             live_var_dictionary[new KeyValuePair<Implementation, Block>(impl, b)].Add(var_name);
             if (dbg) Console.WriteLine("Making " + var_name + " live in " + impl.Name + " " + b.Label);
             return true;
@@ -2160,10 +2179,45 @@ namespace cba.Util
 
         }
 
+        // Print all asserts present in the program
+        public static void printAsserts(Program program)
+        {
+            string notfalse = null;
+            var ca = new CleanAssert(program);
+            foreach (Implementation impl in ca.program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                            continue;
+                        else
+                        {
+                            Console.Write(impl.ToString() + " " + b.ToString() + " :- ");
+                            Console.Write(ac.ToString());
+                        }
+                    }
+                }
+            }
+        }
+
+        /*
+         * Arguments - None
+         * Return Value - None
+         * Implementation :- Prunes assert statements based on the following optimization
+         * 1. Check if assert is on a variable coming from the argument
+         * 2. If yes, go to each caller and check if the argument being passed is null or not
+         * 3. If the argument is not null at all callers, remove the assert statement
+        */
         private void CleanGlobal()
         {
             bool dbg = false;
-            var callers = new Dictionary<string, HashSet<KeyValuePair<Implementation, Block>>>();
+            var callers = new Dictionary<string, HashSet<KeyValuePair<Implementation, Block>>>();   // Gives the <implementation, block> pair where a function is called
+            
+
+            // Construct the call graph and compute strongly connected components
             var name2Impl = new Dictionary<string, Implementation>();
             name2Impl = BoogieUtil.nameImplMapping(program);
             var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
@@ -2190,16 +2244,14 @@ namespace cba.Util
                 }
             }
 
-
-
             // Build SCC
             var sccs = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
                 new Adjacency<Implementation>(n => Succ[n]),
                 new Adjacency<Implementation>(n => Pred[n]));
             sccs.Compute();
 
-            Graph<HashSet<Implementation>> impl_dag = new Graph<HashSet<Implementation>>();
-            Dictionary<Implementation, HashSet<Implementation>> impl2set = new Dictionary<Implementation, HashSet<Implementation>>();
+            Graph<HashSet<Implementation>> impl_dag = new Graph<HashSet<Implementation>>();     // Construct a new graph where each SCC is reduced to a point, and each node is a set of implementations, which belong to the same SCC
+            Dictionary<Implementation, HashSet<Implementation>> impl2set = new Dictionary<Implementation, HashSet<Implementation>>();   // implementation -> SCC containing implementation
             foreach (var scc in sccs)
             {
                 var impl_set = new HashSet<Implementation>();
@@ -2219,16 +2271,18 @@ namespace cba.Util
                 }
             }
 
+            // Run topological sort on the reduced call graph
             IEnumerable<HashSet<Implementation>> sortedImplSet;
             sortedImplSet = impl_dag.TopologicalSort();
 
-            Dictionary<KeyValuePair<Implementation, string>, Variable> varsfromargs = new Dictionary<KeyValuePair<Implementation, string>, Variable>();
+            Dictionary<KeyValuePair<Implementation, string>, Variable> varsfromargs = new Dictionary<KeyValuePair<Implementation, string>, Variable>();     // Dictionary variable name -> argument from where the variable is coming, if at all the variable is coming from the argument
 
             foreach (var implset in sortedImplSet)
             {
                 if (dbg) Console.WriteLine("ImplSet :- ");
                 foreach (Implementation impl in implset)
                 {
+                    // Add all arguments to varsfromargs
                     foreach (var par in impl.InParams) varsfromargs.Add(new KeyValuePair<Implementation, string>(impl, par.ToString()), par);
                     if (dbg) Console.WriteLine("impl -> " + impl.ToString());
                     if (dbg)
@@ -2245,7 +2299,7 @@ namespace cba.Util
                     sortedBlocks = dag.TopologicalSort();
 
                     
-
+                    // Go to each block and compute variables coming from the arguments, and if an assert cmd is encountered, check at all callers to remove the assertion
                     foreach (Block b in sortedBlocks)
                     {
                         if (dbg) Console.WriteLine("Block :- " + b.ToString());
@@ -2314,6 +2368,7 @@ namespace cba.Util
             }
         }
 
+        // Optimization -> Add assert for return variables, and let alias analysis figure out if assert can be removed. FAIL.
         private void CleanReturnAsserts()
         {
             bool dbg = true;
