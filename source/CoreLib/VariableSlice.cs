@@ -274,11 +274,17 @@ namespace cba
         {
             Debug.Assert(type != null);
 
-            string name = "vslice_dummy_var_" + (localVarCount.ToString());
-            TypedIdent tid = new TypedIdent(Token.NoToken, name, type);
-            LocalVariable lv = new LocalVariable(Token.NoToken, tid);
+            string name = "";
+            LocalVariable lv = null;
+            do
+            {
+                name = "vslice_dummy_var_" + (localVarCount.ToString());
+                TypedIdent tid = new TypedIdent(Token.NoToken, name, type);
+                lv = new LocalVariable(Token.NoToken, tid);
+                localVarCount++;
+            } while (impl != null && impl.LocVars.Any(v => v.Name == name));
+
             if (impl != null) impl.LocVars.Add(lv);
-            localVarCount++;
             return lv;
         }
 
