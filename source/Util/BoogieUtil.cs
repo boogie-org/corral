@@ -2302,7 +2302,7 @@ namespace cba.Util
                         }
                         foreach (var v in varsfromargs.Keys)
                         {
-                            if (v.Key.Equals(impl)) Console.WriteLine(v.Key.Name + " " + v.Value);
+                            if (v.Key.Equals(impl) && dbg) Console.WriteLine(v.Key.Name + " " + v.Value);
                         }
                         foreach (AssertCmd ac in removal_list_ac)
                         {
