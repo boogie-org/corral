@@ -237,7 +237,7 @@ namespace AngelicVerifierNull
             List<Ensures> enss = new List<Ensures>();
             SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
             houdini.ExtractLoops = true;
-            SimpleHoudini.fastRequiresInference = false; // don't turn this on now. cause problem
+            SimpleHoudini.fastRequiresInference = false;
             SimpleHoudini.checkAsserts = true;
             houdini.printHoudiniQuery = "candidates.bpl";
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
@@ -383,7 +383,7 @@ namespace AngelicVerifierNull
             while (true)
             {
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
-                CommandLineOptions.Clo.RecursionBound = 1;
+                CommandLineOptions.Clo.RecursionBound = 1; /*HACK: reset recursion bound to 1 to avoid the bug (500)*/
                 Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
                 
