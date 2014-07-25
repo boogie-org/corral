@@ -377,7 +377,7 @@ namespace AngelicVerifierNull
             while (true)
             {
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
-                CommandLineOptions.Clo.RecursionBound = 1;
+                CommandLineOptions.Clo.RecursionBound = 1; /*HACK: reset recursion bound to 1 to avoid the bug (500)*/
                 Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
                 

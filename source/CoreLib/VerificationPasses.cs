@@ -2014,7 +2014,7 @@ namespace cba
                 if (!ret.ContainsKey(proc.Name)) ret.Add(proc.Name, new Dictionary<string, EExpr>());
 
                 List<Expr> requires = new List<Expr>();
-                if (InNonNull)
+                if (InNonNull || InImpOutNonNull || InImpOutNull)
                 {
                     foreach (Variable p in proc.InParams) // requires(p != NULL)
                     {
@@ -2022,7 +2022,8 @@ namespace cba
                             continue;
                         var expr = NonNull(p);
                         requires.Add(expr);
-                        proc.Requires.Add(CandiateRequire(expr, candCons, ret[impl.Name]));
+                        if (InNonNull)
+                            proc.Requires.Add(CandiateRequire(expr, candCons, ret[impl.Name]));
                     }
                 }
                 foreach (Variable r in proc.OutParams) // ensures(p != NULL => r != NULL)
