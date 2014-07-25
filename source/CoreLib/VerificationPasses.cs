@@ -1741,6 +1741,7 @@ namespace cba
         private static int ConstCounter; // numbering the bool constants
         private Dictionary<string, Tuple<Expr,string>> candAsserts; // candidate assertions
         public bool InNonNull, OutNonNull, InImpOutNonNull, InImpOutNull; // a few switches for templates
+        public HashSet<KeyValuePair<string, string>> inferred_asserts;
 
         public SimpleHoudini(HashSet<Variable> templateVars, List<Requires> req, List<Ensures> ens, int InlineDepth,
             int unroll) : base(templateVars, req, ens, InlineDepth, unroll)
@@ -1775,6 +1776,7 @@ namespace cba
         // simplified version of RunHoudini
         private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
         {
+            inferred_asserts = new HashSet<KeyValuePair<string, string>>();
             Console.WriteLine("Running {0}Houdini", runAbsHoudini ? "Abstract " : "");
             // Run Houdini
 
@@ -1937,6 +1939,7 @@ namespace cba
                 .Iter(a =>
                 {
                     Console.WriteLine(string.Format("Inferred Assert: {0} in {1}", candAsserts[a].Item1, candAsserts[a].Item2));
+                    inferred_asserts.Add(new KeyValuePair<string, string>(candAsserts[a].Item1.ToString(), candAsserts[a].Item2));
                     cia++;
                 });
             Console.WriteLine(string.Format("Total Asserts: {0} out of {1}", cia, candAsserts.Count));
@@ -1981,6 +1984,8 @@ namespace cba
             }
             Console.WriteLine(string.Format("Total Candidates: {0} out of {1}", trueConstants.Count-cia, cic));
         }
+
+        
 
         /**
          * Add houdini candidates for each procedure with implementation

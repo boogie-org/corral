@@ -181,6 +181,8 @@ namespace AngelicVerifierNull
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
                 Stats.stop("alias.analysis");
+
+                
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -200,9 +202,12 @@ namespace AngelicVerifierNull
                 }
                 Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
+                HashSet<KeyValuePair<string, string>> inferred_asserts = new HashSet<KeyValuePair<string, string>>();
                 // run Houdini pass
                 if (Options.HoudiniPass)
-                    prog = RunHoudiniPass(prog);
+                    prog = RunHoudiniPass(prog, out inferred_asserts);
+
+                //CleanAssert.printAsserts(inferred_asserts, prog.getProgram());
 
                 //Analyze
                 RunCorralForAnalysis(prog);
@@ -210,8 +215,8 @@ namespace AngelicVerifierNull
             catch (Exception e)
             {
                 //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
 
             }
             finally
@@ -222,7 +227,7 @@ namespace AngelicVerifierNull
             }
         }
 
-        private static PersistentProgram RunHoudiniPass(PersistentProgram prog)
+        private static PersistentProgram RunHoudiniPass(PersistentProgram prog, out HashSet<KeyValuePair<string, string>> inferred_asserts)
         {
             Stats.resume("houdini");
             Utils.Print("Start Houdini Pass ...");
@@ -238,13 +243,14 @@ namespace AngelicVerifierNull
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
-            houdini.InNonNull = false;
+            houdini.InNonNull = true;
             houdini.OutNonNull = false;
             
             PersistentProgram newP = houdini.run(prog);
             BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
             Utils.Print("End Houdini Pass ...");
             Stats.stop("houdini");
+            inferred_asserts = houdini.inferred_asserts;
 
             return newP;
         }
@@ -1010,7 +1016,7 @@ namespace AngelicVerifierNull
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
-            //CleanAssert.printAsserts(program);
+            
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }

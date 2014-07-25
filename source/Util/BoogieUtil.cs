@@ -2180,8 +2180,9 @@ namespace cba.Util
         }
 
         // Print all asserts present in the program
-        public static void printAsserts(Program program)
+        public static void printAsserts(HashSet<KeyValuePair<string, string>> inferred_asserts, Program program)
         {
+            int count = 0;
             string notfalse = null;
             var ca = new CleanAssert(program);
             foreach (Implementation impl in ca.program.TopLevelDeclarations.OfType<Implementation>())
@@ -2195,9 +2196,31 @@ namespace cba.Util
                             continue;
                         else
                         {
+                            if (inferred_asserts.Contains(new KeyValuePair<string, string>(ac.Expr.ToString(), b.Label))) continue;
                             Console.Write(impl.ToString() + " " + b.ToString() + " :- ");
                             Console.Write(ac.ToString());
+                            count++;
                         }
+                    }
+                }
+            }
+            Console.WriteLine("{0} assertions", count);
+        }
+
+        public static void RemoveAsserts(Dictionary<Expr, string> inferred_asserts, Program program)
+        {
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    var removal_list = new HashSet<AssertCmd>();
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (inferred_asserts.ContainsKey(ac.Expr) && inferred_asserts[ac.Expr].Equals(b.Label)) removal_list.Add(ac);
+                    }
+                    foreach (AssertCmd ac in removal_list)
+                    {
+                        b.Cmds.Remove(ac);
                     }
                 }
             }
@@ -2353,10 +2376,6 @@ namespace cba.Util
                                     if (allparentslive) removal_list_ac.Add(ac);
                                 }
                             }
-                        }
-                        foreach (var v in varsfromargs.Keys)
-                        {
-                            if (v.Key.Equals(impl) && dbg) Console.WriteLine(v.Key.Name + " " + v.Value);
                         }
                         foreach (AssertCmd ac in removal_list_ac)
                         {
