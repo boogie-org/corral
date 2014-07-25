@@ -232,7 +232,7 @@ namespace AngelicVerifierNull
             List<Ensures> enss = new List<Ensures>();
             SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
             houdini.ExtractLoops = true;
-            SimpleHoudini.fastRequiresInference = false; // don't turn this on now. cause problem
+            SimpleHoudini.fastRequiresInference = false;
             SimpleHoudini.checkAsserts = true;
             houdini.printHoudiniQuery = "candidates.bpl";
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions

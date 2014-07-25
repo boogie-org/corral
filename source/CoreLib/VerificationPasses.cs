@@ -1804,26 +1804,27 @@ namespace cba
                 Program origProg = null;
                 var allConstants = new HashSet<string>();
                 var requiresConstants = new HashSet<string>();
-                //if (fastRequiresInference)
-                //{
-                //    // Turn off requires candidates
-                //    program.TopLevelDeclarations.OfType<Constant>()
-                //        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
-                //        .Iter(c => allConstants.Add(c.Name));
 
-                //    origProg = BoogieUtil.ReResolve(program);
-                //    program.TopLevelDeclarations.OfType<Procedure>()
-                //        .Iter(proc =>
-                //        {
-                //            var uv = new VarsUsed();
-                //            uv.VisitRequiresSeq(proc.Requires);
-                //            requiresConstants.UnionWith(uv.varsUsed.Intersection(allConstants));
-                //            proc.Requires = proc.Requires.Filter(re => re.Free);
-                //        });
-                //    program.TopLevelDeclarations.OfType<Constant>()
-                //        .Where(c => requiresConstants.Contains(c.Name))
-                //        .Iter(c => c.Attributes = BoogieUtil.removeAttr("existential", c.Attributes));
-                //}
+                if (fastRequiresInference)
+                {
+                    // Turn off requires candidates
+                    program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                        .Iter(c => allConstants.Add(c.Name));
+
+                    origProg = BoogieUtil.ReResolve(program);
+                    program.TopLevelDeclarations.OfType<Procedure>()
+                        .Iter(proc =>
+                        {
+                            var uv = new VarsUsed();
+                            uv.VisitRequiresSeq(proc.Requires);
+                            requiresConstants.UnionWith(uv.varsUsed.Intersection(allConstants));
+                            proc.Requires = proc.Requires.Filter(re => re.Free);
+                        });
+                    program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => requiresConstants.Contains(c.Name))
+                        .Iter(c => c.Attributes = BoogieUtil.removeAttr("existential", c.Attributes));
+                }
 
                 inline(program);
 
@@ -1853,38 +1854,38 @@ namespace cba
                     houdini = null;
                 }
 
-                //if (fastRequiresInference)
-                //{
-                //    var newAxioms = new List<Axiom>();
-                //    foreach (var b in origProg.TopLevelDeclarations.OfType<Constant>()
-                //        .Where(c => allConstants.Contains(c.Name) && !requiresConstants.Contains(c.Name)))
-                //    {
-                //        b.Attributes = BoogieUtil.removeAttr("existential", b.Attributes);
-                //        var axiom = Expr.Eq(Expr.Ident(b), Expr.Literal(outcome.assignment[b.Name]));
-                //        axiom.Type = Microsoft.Boogie.Type.Bool;
-                //        axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
-                //        newAxioms.Add(new Axiom(Token.NoToken, axiom));
-                //    }
-                //    origProg.TopLevelDeclarations.AddRange(newAxioms);
-                //    //BoogieUtil.PrintProgram(origProg, "h2.bpl");
+                if (fastRequiresInference)
+                {
+                    var newAxioms = new List<Axiom>();
+                    foreach (var b in origProg.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => allConstants.Contains(c.Name) && !requiresConstants.Contains(c.Name)))
+                    {
+                        b.Attributes = BoogieUtil.removeAttr("existential", b.Attributes);
+                        var axiom = Expr.Eq(Expr.Ident(b), Expr.Literal(outcome.assignment[b.Name]));
+                        axiom.Type = Microsoft.Boogie.Type.Bool;
+                        axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
+                        newAxioms.Add(new Axiom(Token.NoToken, axiom));
+                    }
+                    origProg.TopLevelDeclarations.AddRange(newAxioms);
+                    //BoogieUtil.PrintProgram(origProg, "h2.bpl");
 
-                //    CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
-                //    var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                //    Houdini houdini = new Houdini(origProg, houdiniStats);
-                //    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
-                //    Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
-                //    CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
+                    CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
+                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                    Houdini houdini = new Houdini(origProg, houdiniStats);
+                    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
+                    Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
+                    CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
 
-                //    outcome.assignment.Where(kvp => !requiresConstants.Contains(kvp.Key))
-                //        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
-                //    outcomeReq.assignment
-                //        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                    outcome.assignment.Where(kvp => !requiresConstants.Contains(kvp.Key))
+                        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
+                    outcomeReq.assignment
+                        .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
 
-                //    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
-                //    var time4 = DateTime.Now;
-                //    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
-                //    houdini = null;
-                //}
+                    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                    var time4 = DateTime.Now;
+                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    houdini = null;
+                }
             }
             catch (OutOfMemoryException)
             {
