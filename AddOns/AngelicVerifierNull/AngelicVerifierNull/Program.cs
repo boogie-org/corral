@@ -173,24 +173,6 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
-
-                /*
-                string notfalse = null;
-                Console.WriteLine("Before :-");
-                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations.OfType<Implementation>())
-                {
-                    foreach (Block b in impl.Blocks)
-                    {
-                        foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                        {
-                            if (ac.Expr.ToString() == Expr.True.ToString() ||
-                                ac.Expr.ToString() == notfalse) continue;
-                            else Console.Write(ac.ToString());
-                        }
-                    }
-                    Console.Write(impl.ToString());
-                }
-                */
                 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
@@ -199,6 +181,8 @@ namespace AngelicVerifierNull
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
                 Stats.stop("alias.analysis");
+
+                
                 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -218,18 +202,21 @@ namespace AngelicVerifierNull
                 }
                 Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
 
+                HashSet<KeyValuePair<string, string>> inferred_asserts = new HashSet<KeyValuePair<string, string>>();
                 // run Houdini pass
                 if (Options.HoudiniPass)
-                    prog = RunHoudiniPass(prog);
+                    prog = RunHoudiniPass(prog, out inferred_asserts);
+
+                //CleanAssert.printAsserts(inferred_asserts, prog.getProgram());
 
                 //Analyze
-                //RunCorralForAnalysis(prog);
+                RunCorralForAnalysis(prog);
             }
             catch (Exception e)
             {
                 //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
-                Utils.Print(String.Format("AnglelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
 
             }
             finally
@@ -240,7 +227,7 @@ namespace AngelicVerifierNull
             }
         }
 
-        private static PersistentProgram RunHoudiniPass(PersistentProgram prog)
+        private static PersistentProgram RunHoudiniPass(PersistentProgram prog, out HashSet<KeyValuePair<string, string>> inferred_asserts)
         {
             Stats.resume("houdini");
             Utils.Print("Start Houdini Pass ...");
@@ -250,19 +237,20 @@ namespace AngelicVerifierNull
             List<Ensures> enss = new List<Ensures>();
             SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
             houdini.ExtractLoops = true;
-            SimpleHoudini.fastRequiresInference = false; // don't turn this on now. cause problem
+            SimpleHoudini.fastRequiresInference = false;
             SimpleHoudini.checkAsserts = true;
             houdini.printHoudiniQuery = "candidates.bpl";
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
-            houdini.InNonNull = false;
+            houdini.InNonNull = true;
             houdini.OutNonNull = false;
             
             PersistentProgram newP = houdini.run(prog);
             BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
             Utils.Print("End Houdini Pass ...");
             Stats.stop("houdini");
+            inferred_asserts = houdini.inferred_asserts;
 
             return newP;
         }
@@ -395,7 +383,7 @@ namespace AngelicVerifierNull
             while (true)
             {
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
-                CommandLineOptions.Clo.RecursionBound = 1;
+                CommandLineOptions.Clo.RecursionBound = 1; /*HACK: reset recursion bound to 1 to avoid the bug (500)*/
                 Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
                 
@@ -968,22 +956,13 @@ namespace AngelicVerifierNull
 
             bool dbg = false;
 
-            /*
-            int temp = CommandLineOptions.Clo.InlineDepth;
-            Microsoft.Boogie.CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.None;
-            CommandLineOptions.Clo.InlineDepth = 1;
-            cba.InliningPass.InlineToDepth(program);
-            BoogieUtil.PrintProgram(program, "unfolded.bpl");
-            CommandLineOptions.Clo.InlineDepth = temp;
-            */
-
             // Make sure that aliasing queries are on identifiers only
             var af =
                 AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
-                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int", "[int]int" });
+                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -1037,30 +1016,7 @@ namespace AngelicVerifierNull
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
-            /*
-            foreach (Implementation impl in origProgram.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (Block b in impl.Blocks)
-                {
-                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                    {
-                        if (ac.Expr.ToString() == Expr.True.ToString() ||
-                            ac.Expr.ToString() == notfalse)
-                            continue;
-                        else
-                        {
-                            Console.Write(impl.ToString() + " " + b.ToString() + " :- ");
-                            Console.Write(ac.ToString());
-                            //var not_func_expr = (NAryExpr)ac.Expr;
-                            //var func_expr = (NAryExpr)not_func_expr.Args[0];
-                            //var var_name = func_expr.Args[0];
-                            //if (var_name is NAryExpr) Console.WriteLine(((NAryExpr)var_name).Args[0].ToString() + " " + ((NAryExpr)var_name).Args[1].ToString());
-                            //Console.WriteLine(var_name.ToString() + " " + var_name.GetType());
-                        }
-                    }
-                }
-            }
-            */
+            
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
