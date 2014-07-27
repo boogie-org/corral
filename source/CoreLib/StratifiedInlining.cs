@@ -167,14 +167,10 @@ namespace CoreLib {
 
     public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
     public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-    public Dictionary<StratifiedCallSite, StratifiedCallSite> child;
 
     /* results of the initial program analyses */
     private List<Procedure> assertMethods;
     private BuildCallGraph.CallGraph callGraph;
-    
-    /* gymnastic between Procedure, and Name */
-    private Dictionary<String, Procedure> procToProc;
     
     /* main procedure (fake main) */
     private Procedure mainProc;
@@ -182,10 +178,6 @@ namespace CoreLib {
     /* map to stratified VCs (stack of VCs, as we can have several VCs for the same procedure) */
     private Dictionary<string, Stack<StratifiedVC>> implName2SVC;
     
-    /* constant for BFS/DFS parametrisation -- -1 if using heuristics */
-    private bool BFSDFS = false; // use the parametrisation
-    private int BFSDFSConst = int.MaxValue;
-
     /* creates or retrieves a VC */
     public StratifiedVC getSVC(string name)
     {
@@ -200,47 +192,7 @@ namespace CoreLib {
             vc = implName2SVC[name].First();
         return vc;
     }
-    
-    /* creates a new VC */
-    public StratifiedVC getNewSVC(string name)
-    {
-        StratifiedVC vc;
-        if (!implName2SVC.ContainsKey(name) || implName2SVC[name] == null)
-            implName2SVC[name] = new Stack<StratifiedVC>();
-        vc = new StratifiedVC(implName2StratifiedInliningInfo[name]);
-        implName2SVC[name].Push(vc);
-        return vc;
-    }
-    
-    /* removes a VC */
-    public void removeSVC(string name)
-    {
-        if (implName2SVC.ContainsKey(name) && implName2SVC[name].Count > 0)
-            implName2SVC[name].Pop();
-    }
-    
-    /* computes the map for the Procedure/Name gymnastic */
-    protected void ProcedureToCallSite(Program P)
-    {
-        // we clone the declarations list as implName2StratifiedInliningInfo updates it
-        List<Declaration> declarations = new List<Declaration>(P.TopLevelDeclarations);
-        foreach (Declaration decl in declarations)
-#if(false)
-            if (decl is Implementation)
-                // TODO: initial SVC creation useless -- but we need to compensate the previous call to labsy2...
-                getSVC(((Implementation) decl).Name);
-            else
-#endif
-            if (decl is Procedure)
-            {
-                Procedure proc = (Procedure)decl;
-                if (!procToProc.ContainsKey(proc.Name))
-                    procToProc.Add(proc.Name, proc);
-                else
-                    procToProc[proc.Name] = proc;
-            }
-    }
-        
+          
     /* initial analyses */
     public void RunInitialAnalyses(Program prog)
     {
@@ -274,7 +226,6 @@ namespace CoreLib {
         BuildCallGraph builder = new BuildCallGraph();
         builder.Visit(prog);
         callGraph = builder.graph; 
-        ProcedureToCallSite(prog);
    
         if (CommandLineOptions.Clo.StratifiedInliningVerbose > 3)
             callGraph.PrintOut();
@@ -288,13 +239,11 @@ namespace CoreLib {
 
         if (cba.Util.BoogieVerify.options.useFwdBck)
         {
-            procToProc = new Dictionary<string, Procedure>();
             RunInitialAnalyses(program);
         }
     
         attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
         parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
-        child = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
     }
     
     ~StratifiedInlining()
@@ -304,43 +253,13 @@ namespace CoreLib {
     }
 
     /* depth of the recursion inlined so far */
-    private int MyRecursionDepth(StratifiedCallSite cs)
-    {
-        int i = 0;
-        StratifiedCallSite iter = cs;
-        while (parent.ContainsKey(iter))
-        {
-            iter = parent[iter]; /* previous callsite */
-            if (iter.callSite.calleeName == cs.callSite.calleeName)
-                i++; /* recursion */
-        }
-        return i;
-    }
-
-    /* depth of the recursion inlined so far */
-    private int RecursionDepth(StratifiedCallSite cs, Implementation mainImpl)
-    {
-        int i = 0;
-        StratifiedCallSite iter = cs;
-        while (parent.ContainsKey(iter))
-        {
-            iter = parent[iter]; /* previous callsite */
-            if (iter.callSite.calleeName == cs.callSite.calleeName)
-                i++; /* recursion */
-        }
-        if (mainImpl.Name == cs.callSite.calleeName)
-            i++;
-        return i;
-    }
-
-    /* depth of the recursion inlined so far */
     private int RecursionDepth(StratifiedCallSite cs)
     {
         int i = 0;
         StratifiedCallSite iter = cs;
-        while (child.ContainsKey(iter))
+        while (parent.ContainsKey(iter))
         {
-            iter = child[iter]; /* previous callsite */
+            iter = parent[iter]; /* previous callsite */
             if (iter.callSite.calleeName == cs.callSite.calleeName)
                 i++; /* recursion */
         }
@@ -394,7 +313,7 @@ namespace CoreLib {
             Push();
             foreach (StratifiedCallSite cs in openCallSites)
             {
-                if (MyRecursionDepth(cs) == CommandLineOptions.Clo.RecursionBound)
+                if (RecursionDepth(cs) == CommandLineOptions.Clo.RecursionBound)
                 {
                     prover.Assert(cs.callSiteExpr, false);
                     boundHit = true;
@@ -694,7 +613,7 @@ namespace CoreLib {
             Push();
             foreach (StratifiedCallSite cs in openCallSites)
             {
-                if (RecursionDepth(cs, impl) == currRecursionBound)
+                if (RecursionDepth(cs) == currRecursionBound)
                 {
                     prover.Assert(cs.callSiteExpr, false);
                     boundHit = true;
@@ -736,417 +655,6 @@ namespace CoreLib {
         Pop(); 
         CommandLineOptions.Clo.UseLabels = oldUseLabels;
         return outcome;
-    }
-    
-    /* with backward/forward approach */
-    public Outcome VerifyImplementationFwdBck(Implementation impl, VerifierCallback callback)
-    {
-        MacroSI.PRINT("Starting forward/backward approach...");
-        Outcome outcome = Outcome.Correct;
-        /* is there a method with assert leading to a real counter-example? */
-        foreach (Procedure assertMethod in assertMethods)
-        {
-            /* if the method is not in the call-graph, it is the fake main initially added */
-            if (!callGraph.callers.ContainsKey(assertMethod))
-                continue;   
-
-            Push();
-
-            StratifiedVC svc = getSVC(assertMethod.Name);
-            HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
-            outcome = ForwardVerify(impl, assertMethod.Name, callback, 1, svc, openCallSites, new HashSet<StratifiedCallSite>());
-
-            /* a bug is found */
-            if (outcome == Outcome.Errors)
-                return outcome;
-
-            MacroSI.PRINT("No bug starting from " + assertMethod.Name + ". Selecting next method (if existing)...");
-        }
-    
-        /* none of the methods containing an assert reaches successfully the main -- the program is safe */
-        return Outcome.Correct;
-    }
-    
-    /* forward: original Corral stratified inlining, adapted to local (non Main) reasoning */
-    protected Outcome ForwardVerify(
-        Implementation impl /*only passed for the depth*/, 
-        string method, 
-        VerifierCallback callback,
-        int currRecursionBound, 
-        StratifiedVC svc, 
-        HashSet<StratifiedCallSite> originalOpenCallSites,
-        HashSet<StratifiedCallSite> originalVisitedCallSites)
-    {
-        /* local copies */
-        HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(originalOpenCallSites);
-        /* callsites inlined in the current exploration */
-        HashSet<StratifiedCallSite> visitedCallSites = new HashSet<StratifiedCallSite>(originalVisitedCallSites);
-
-        /* for SVCs removal */
-        HashSet<StratifiedCallSite> locallyVisitedCallSites = new HashSet<StratifiedCallSite>();
-
-        /* decision table:
-         * ---------------
-         * 
-         *              this \ bwd  |    SAT    |   UNSAT
-         * -------------------------------------------------
-         * underapprox    SAT       |   BUG     | extend CS
-         *               UNSAT      |    X      | extend CS
-         * -------------------------------------------------
-         *  overapprox    SAT       | extend CS |   SAFE
-         *               UNSAT      |    X      |   SAFE
-         *               
-         *  "this" means the result of the verification of this function (and the functions inlined) in the
-         *  under-approximation and over-approximation phases. "bwd" refers to the backward call which aims
-         *  at finding a feasible context (i.e., a path starting from the main) to inline the current method, 
-         *  with its current inlined functions attached.
-         */
-
-        /* adds assertsPassed at the end of the VC for local test */
-        if (svc.info.interfaceExprVars.Exists(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed)))
-        {
-            var index = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
-            if (cba.Util.BoogieVerify.assertsPassedIsInt)
-            {
-                Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
-                prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), false);
-            }
-            else
-                prover.Assert(svc.interfaceExprVars[index], false);
-        }
-    
-        MacroSI.PRINT_DETAIL("+ fwd in " + method); 
-        prover.Assert(svc.vcexpr, true);
-    
-        Outcome outcome;
-        var reporter = new StratifiedInliningErrorReporter(callback, this, svc, svc.id);
-        Outcome ret = Outcome.Errors;
-    
-        while (true)
-        {
-            MacroSI.PRINT_DETAIL("  - underapprox in "+method);
-            /* underapproximate query */
-            Push(); 
-    
-            foreach (StratifiedCallSite cs in openCallSites)
-            {
-                prover.Assert(cs.callSiteExpr, false);
-                visitedCallSites.Add(cs);
-                //Console.WriteLine("closing callsite: "+cs.callSite.calleeName+"@"+cs.callSite.callSiteVar);
-            }
-            reporter.underapproximationMode = false;
-            MacroSI.PRINT_DETAIL("    - check");
-            outcome = CheckVC(reporter);
-            Pop(); 
-    
-            MacroSI.PRINT_DETAIL("    - checked: "+outcome);
-            if (outcome != Outcome.Correct)
-            {
-                /* checks all the callers */
-                ret = BackwardVerify(impl, callGraph.callers[procToProc[method]], callback,
-                        currRecursionBound, method, svc, visitedCallSites, openCallSites);
-
-                if (ret != Outcome.Correct)
-                {
-                    foreach (var cs in locallyVisitedCallSites)
-                        removeSVC(cs.callSite.calleeName);
-                    return ret;
-                }
-            }
-
-            foreach (StratifiedCallSite cs in openCallSites)
-            {
-                visitedCallSites.Remove(cs);
-            }
-            MacroSI.PRINT_DETAIL("  - overapprox in " + method);
-            /* overapproximate query */
-            Push(); 
-    
-            foreach (StratifiedCallSite cs in openCallSites)
-            {
-                if (RecursionDepth(cs, impl) == currRecursionBound)
-                    prover.Assert(cs.callSiteExpr, false);
-            }
-            reporter.underapproximationMode = false;
-            reporter.callSitesToExpand = new List<StratifiedCallSite>();
-            MacroSI.PRINT_DETAIL("    - check");
-            outcome = CheckVC(reporter);
-
-            Pop(); 
-            MacroSI.PRINT_DETAIL("    - checked: "+outcome);
-            if (outcome != Outcome.Errors)
-            {
-                if (outcome != Outcome.Correct) break;
-                if (currRecursionBound >= CommandLineOptions.Clo.RecursionBound) break;
-                currRecursionBound++;
-            }
-
-            if (reporter.callSitesToExpand.Count <= 0 && (ret == Outcome.Correct || outcome == Outcome.Correct))
-            {
-                if (currRecursionBound >= CommandLineOptions.Clo.RecursionBound)
-                {
-                    foreach (var cs in locallyVisitedCallSites)
-                        removeSVC(cs.callSite.calleeName);
-
-                    MacroSI.PRINT_DEBUG("no more callsites to inline or no satisfiable context for this method");
-                    return Outcome.Correct;
-                }
-                currRecursionBound++;
-            }
-
-            /* only for parametrisation */
-            if (BFSDFS)
-            {
-                if (reporter.callSitesToExpand.Any(x => !openCallSites.Contains(x)))
-                {
-                    foreach (var cs in locallyVisitedCallSites)
-                        removeSVC(cs.callSite.calleeName);
-
-                    return Outcome.Correct;
-                }
-            }
-
-            /* extends the necessary call-sites */
-            foreach (var scs in reporter.callSitesToExpand)
-            {
-                openCallSites.Remove(scs);
-    
-                stats.numInlined++;
-                stats.stratNumInlined++;
-                visitedCallSites.Add(scs);
-                locallyVisitedCallSites.Add(scs);
-                MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName + "@" + scs.callSite.callSiteVar);
-                var localVC = getNewSVC(scs.callSite.calleeName);
-                foreach (var newCallSite in localVC.CallSites)
-                {
-                    if (visitedCallSites.Contains(newCallSite))
-                        continue;
-                    //Console.WriteLine("new callsite: " + newCallSite.callSite.calleeName);
-                    openCallSites.Add(newCallSite);
-                    parent[newCallSite] = scs;
-                    child[scs] = newCallSite;
-                }
-                prover.Assert(scs.Attach(localVC), true);
-                attachedVC[scs] = localVC;
-            }
-        }
-    
-        foreach (var cs in locallyVisitedCallSites)
-            removeSVC(cs.callSite.calleeName);
-    
-        /* no real bug found from the main to this function below the recursion threshold */
-        return outcome;
-    }
-    
-    /* in the context of several calls to a same function in the same function, distinguishes them */
-    private static bool isCallee(StratifiedCallSite callee, StratifiedCallSite cs)
-    {
-        return (callee.callSite.calleeName == cs.callSite.calleeName 
-            && callee.callSite.callSiteVar.Name == cs.callSite.callSiteVar.Name);
-    }
-    
-    /* backward: goes backward in the callgraph */
-    protected Outcome BackwardVerify(Implementation impl/*only passed for the depth*/, 
-        List<Procedure> setOfCallers, 
-        VerifierCallback callback,
-        int currRecursionBound, 
-        string callee, 
-        StratifiedVC vcCallee, 
-        HashSet<StratifiedCallSite> originalVisitedCallSites,
-        HashSet<StratifiedCallSite> aboveOpenCallSites)
-    {
-        /* local copy */
-        HashSet<StratifiedCallSite> visitedCallSites = new HashSet<StratifiedCallSite>(originalVisitedCallSites);
-
-        /* not reachable from main */
-        if (setOfCallers.Count <= 0)
-        {
-            MacroSI.PRINT_DETAIL("no more callers");
-            return Outcome.Correct;
-        }
-
-        stats.bck++;
-        Outcome outcome = Outcome.Correct;
-        Push();
-
-        foreach (Procedure setOfCS in setOfCallers)
-        {
-            Push();
-
-            if (setOfCS.Name == mainProc.Name)
-            {
-                foreach (var cs in getSVC(setOfCS.Name).CallSites)
-                {
-                    if (cs.callSite.calleeName != callee)
-                        continue;
-
-                    StratifiedCallSite callee_cs = cs;
-
-                    /* callee == real main in the code */
-                    MacroSI.PRINT_DETAIL("+ from " + callee + ", bwd to " + mainProc.Name);
-
-                    /* inline the main in the fake main: */
-                    /* gets a VC for the implementation of the fake main and main */
-                    StratifiedVC fakeMain = getSVC(mainProc.Name);
-                    StratifiedVC mainVC = vcCallee;
-
-                    prover.Assert(AttachByEquality(callee_cs, mainVC), true);
-                    attachedVC[callee_cs] = mainVC;
-                    /* to claim that we consider (in the path) this very callsite */
-                    prover.Assert(callee_cs.callSiteExpr, true);
-
-                    MacroSI.PRINT_DETAIL("+ fwd in " + mainProc);
-                    prover.Assert(fakeMain.vcexpr, true);
-
-                    var reporter = new StratifiedInliningErrorReporter(callback, this, fakeMain, fakeMain.id);
-                    MacroSI.PRINT_DETAIL("  - underapprox");
-                    /* underapproximate query */
-                    reporter.underapproximationMode = true;
-                    MacroSI.PRINT_DETAIL("    - check");
-                    outcome = CheckVC(reporter);
-                    MacroSI.PRINT_DETAIL("    - checked: " + outcome);
-
-                    /* fakeMain just inlines main -- if we have a bug in main, then we also have one in the whole impl */
-                    Debug.Assert(Outcome.Errors == outcome);
-                    return Outcome.Errors;
-                }
-            }
-                
-            /* if this method is not the main neither called, then it is safe */
-            if (!callGraph.callers.ContainsKey(setOfCS))
-            {
-                Pop();
-                continue;
-            }
-
-            /* picks a caller and a callsite for backward call-graph exploration */
-            foreach (var parentSetOfCS in callGraph.callers[setOfCS])
-                foreach (StratifiedCallSite method in getSVC(parentSetOfCS.Name).CallSites)
-                {
-                    if (method.callSite.calleeName != setOfCS.Name)
-                        continue;
-    
-                    foreach (var cs in getSVC(setOfCS.Name).CallSites)
-                    {
-                        if (cs.callSite.calleeName != callee)
-                          continue;
-
-                        /* recursion bound */
-                        if (RecursionDepth(cs) >= CommandLineOptions.Clo.RecursionBound)
-                            continue;
-
-                        StratifiedCallSite callee_cs = cs;
-                        MacroSI.PRINT_DETAIL("+ from " + callee +"@" + callee_cs.callSite.callSiteVar + ", bwd to " + method.callSite.calleeName);
-
-                        /* inline method in the caller: */
-                        /* gets a VC for the implementation of the method currently considered */
-                        StratifiedVC previousSvc = getSVC(method.callSite.calleeName);
-                        StratifiedVC svc = getNewSVC(method.callSite.calleeName);
-                        HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
-
-                        /* we get the corresponding callee in a copy of the VC */
-                        visitedCallSites.Remove(callee_cs);
-                        callee_cs = getCorrespondingCallSite(callee_cs, previousSvc, svc);
-                        visitedCallSites.Add(callee_cs);
-
-                        /* removes the callee (previous method) before attaching VCs */
-                        openCallSites.Remove(callee_cs);
-    
-                        /* DFS/BFS parametrisation (default: DFS)
-                         * --------------------------------------
-                         * + DFS: During an overapproximation, a callsite from a previously visited method can be inlined.
-                         * If we backtrack, the knowledge of the method inlined is lost.
-                         * + BFS: During an overapproximation, a callsite from a previously visited method cannot be inlined.
-                         * If it needs to, there will be a backtrack up to the method containing this callsite.
-                         * In practice, if callsitesToExtend not included in openCallsites, backtrack.
-                         * 
-                         * DFS and BFS can be combined. When to apply BFS? For methods with more than N potential calls.
-                         * (whole DFS: N=+inf; whole BFS: N=0)
-                         * (We take here N=#method.callsites, but we can imagine some more avanced heuristics involving more constants)
-                         */
-                        if (BFSDFS)
-                        {
-                            int N;
-                            if (BFSDFSConst >= 0)
-                                N = BFSDFSConst;
-                            else
-                                N = vcCallee.CallSites.Count;
-
-                            if (callGraph.callers[procToProc[vcCallee.info.function.Name]].Count <= N)
-                            {
-                                /* adds callees' *open*-callsites to method's callsite */
-                                foreach (var newCallSite in aboveOpenCallSites/*vcCallee.CallSites -- has access to all the open callsites above*/)
-                                {
-                                    /* already visited callsites are not open */
-                                    if (visitedCallSites.Contains(newCallSite))
-                                        continue;
-                                    openCallSites.Add(newCallSite);
-                                }
-                            }
-                        }
-                        else 
-                            /* adds callees' *open*-callsites to method's callsite (and the others above) */
-                            foreach (var newCallSite in aboveOpenCallSites/*vcCallee.CallSites*/)
-                            {
-                                /* already visited callsites are not open */
-                                if (visitedCallSites.Contains(newCallSite))
-                                    continue;
-                                openCallSites.Add(newCallSite);
-                            }
-
-                        /* to propagate the parent/child maps */
-                        foreach (var oldCallSite in vcCallee.CallSites)
-                            if (visitedCallSites.Contains(oldCallSite))
-                            {
-                                parent[oldCallSite] = callee_cs;
-                                child[callee_cs] = oldCallSite;
-                            }
-
-                        prover.Assert(AttachByEquality(callee_cs, vcCallee), true);
-                        attachedVC[callee_cs] = vcCallee;
-                        /* to claim that we consider (in the path) this very callsite */
-                        prover.Assert(callee_cs.callSiteExpr, true);
-
-                        /* recursion bound would be reached if backtracking to this method */
-                        outcome = ForwardVerify(impl, method.callSite.calleeName, callback, currRecursionBound,
-                             svc, openCallSites, visitedCallSites);
-
-                        /* removes callees' *open*-callsites to method's callsite */
-                        foreach (var newCallSite in vcCallee.CallSites)
-                        {
-                            openCallSites.Remove(newCallSite);
-                        }
-
-                        /* restores the parent/child maps of before we tried to backtrack (and inline) this function */
-                        foreach (var oldCallSite in vcCallee.CallSites)
-                            if (visitedCallSites.Contains(oldCallSite))
-                            {
-                                parent.Remove(oldCallSite);
-                                child.Remove(callee_cs);
-                            }
-
-                        removeSVC(method.callSite.calleeName);
-    
-                        /* we found a reachable bug */
-                        if (outcome == Outcome.Errors)
-                            return outcome;
-    
-                        Pop();
-                    }
-                }
-        }
-    
-        /* this function doesn't lead to a real bug from Main */
-        return Outcome.Correct;
-    }
-    
-    /* returns the call-site in the copy of the VC which corresponds to the call-site in the original VC */
-    protected StratifiedCallSite getCorrespondingCallSite(StratifiedCallSite callee, StratifiedVC svcCaller, StratifiedVC copy)
-    {
-        int eq = 0;
-        for (eq = 0; eq < svcCaller.CallSites.Count && !isCallee(svcCaller.CallSites[eq],callee); ++eq);
-        Debug.Assert(svcCaller.CallSites.Count != eq);
-        return copy.CallSites[eq];
     }
     
     // 'Attach' inlined from Boogie/StratifiedVC.cs (and made static)
