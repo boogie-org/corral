@@ -88,11 +88,11 @@ namespace ExplainError
             out STATUS status, out Dictionary<string, string> complexCExprsRet)
         {
             HashSet<List<Expr>> preDisjuncts;
-            return Go(impl, pr, tmout, explainErrorFilters, out status, out complexCExprsRet, out preDisjuncts);
+            return Go(impl, pr, tmout, explainErrorFilters, "", out status, out complexCExprsRet, out preDisjuncts);
         }
 
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
-            out STATUS status, out Dictionary<string,string> complexCExprsRet,
+            string extraArgs, out STATUS status, out Dictionary<string,string> complexCExprsRet,
             out HashSet<List<Expr>> preDisjuncts)
         {
             suggestions = new List<Expr>();
@@ -116,6 +116,9 @@ namespace ExplainError
             complexCExprsRet = null;
             timeout = tmout > 0 ? tmout : MAX_TIMEOUT;
             Console.WriteLine("ExplainError:Timeout = {0}", timeout);
+
+            string[] na;
+            ParseArgs(extraArgs.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), out na);
             ////////////////////////////////////
             ExplainError.Toplevel.fieldMapFuncs = new HashSet<string>();
             if (ExplainError.Toplevel.useFieldMapAttribute)
@@ -878,7 +881,7 @@ namespace ExplainError
             var oldArgs = boogieOptions.Split(' ');
             string[] args;
             //Custom parser to look and remove RootCause specific options
-            var help = ParseAndRemoveNonBoogieOptions(oldArgs, out args);
+            var help = ParseArgs(oldArgs, out args);
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
             CommandLineOptions.Clo.Parse(args);
@@ -899,7 +902,8 @@ namespace ExplainError
                 || CheckBooleanFlag(s, flagName + "+", ref flag, true)
                 || CheckBooleanFlag(s, flagName + "-", ref flag, false);
         }
-        private static bool ParseAndRemoveNonBoogieOptions(string[] args, out string[] newargs)
+
+        public static bool ParseArgs(string[] args, out string[] newargs)
         {
             var retArgs = new List<string>();
             bool help = false;
