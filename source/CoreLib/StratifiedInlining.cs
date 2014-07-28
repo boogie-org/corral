@@ -182,6 +182,14 @@ namespace CoreLib
         /* map to stratified VCs (stack of VCs, as we can have several VCs for the same procedure) */
         private Dictionary<string, Stack<StratifiedVC>> implName2SVC;
 
+        /* Call Tree after VerifyImplementation */
+        private HashSet<string> CallTree;
+
+        public HashSet<string> GetCallTree()
+        {
+            return CallTree;
+        }
+
         /* creates or retrieves a VC */
         public StratifiedVC getSVC(string name)
         {
@@ -649,12 +657,11 @@ namespace CoreLib
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
             {
-                var ct = new HashSet<string>();
+                CallTree = new HashSet<string>();
                 var callsites = new HashSet<StratifiedCallSite>();
                 callsites.UnionWith(parent.Keys);
                 callsites.UnionWith(parent.Values);
-                callsites.Iter(scs => ct.Add(GetPersistentID(scs)));
-                StratifiedVCGen.callTree = ct; // unfortunately, this is where we have to stash it
+                callsites.Iter(scs => CallTree.Add(GetPersistentID(scs)));
             }
             #endregion
             
