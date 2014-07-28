@@ -289,20 +289,21 @@ namespace cba.Util
             {
                 CallTreeSize = (vcgen as StratifiedVCGen).numInlined;
                 vcSize = (vcgen as StratifiedVCGen).vcsize;
+                if (options.CallTree != null)
+                {
+                    options.CallTree = VC.StratifiedVCGen.callTree;
+                    VC.StratifiedVCGen.callTree = null;
+                }
             }
             else if (vcgen is CoreLib.StratifiedInlining)
             {
                 CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
                 vcSize = (vcgen as CoreLib.StratifiedInlining).stats.vcSize;
+                if (options.CallTree != null)
+                    options.CallTree = (vcgen as CoreLib.StratifiedInlining).GetCallTree();
             }
             else
                 CallTreeSize = 0;
-
-            if (options.CallTree != null)
-            {
-                options.CallTree = VC.StratifiedVCGen.callTree;
-                VC.StratifiedVCGen.callTree = null;
-            }
 
             vcgen.Close();
             CommandLineOptions.Clo.TheProverFactory.Close();

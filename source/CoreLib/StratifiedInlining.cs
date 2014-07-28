@@ -182,6 +182,14 @@ namespace CoreLib
         /* map to stratified VCs (stack of VCs, as we can have several VCs for the same procedure) */
         private Dictionary<string, Stack<StratifiedVC>> implName2SVC;
 
+        /* Call Tree from last call to VerifyImplementation (an out value) */
+        private HashSet<string> CallTree;
+
+        public HashSet<string> GetCallTree()
+        {
+            return CallTree;
+        }
+
         /* creates or retrieves a VC */
         public StratifiedVC getSVC(string name)
         {
@@ -582,7 +590,7 @@ namespace CoreLib
             Outcome outcome;
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
-            /*
+            
             #region Eager inlining
             // Eager inlining 
             for (int i = 1; i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++) 
@@ -619,11 +627,8 @@ namespace CoreLib
                 } 
             }
             #endregion
-            */
-
-            reporter.underapproximationMode = true;
-            outcome = CheckVC(reporter);
             
+           
             // Stratified Search
             int currRecursionBound = 1;
             while (true)
@@ -648,7 +653,7 @@ namespace CoreLib
 
             Pop();
             CommandLineOptions.Clo.UseLabels = oldUseLabels;
-            /*
+            
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
             {
@@ -657,10 +662,10 @@ namespace CoreLib
                 callsites.UnionWith(parent.Keys);
                 callsites.UnionWith(parent.Values);
                 callsites.Iter(scs => ct.Add(GetPersistentID(scs)));
-                StratifiedVCGen.callTree = ct; // unfortunately, this is where we have to stash it
+                CallTree = ct;
             }
             #endregion
-            */
+            
             return outcome;
         }
 
