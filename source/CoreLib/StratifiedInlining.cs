@@ -356,7 +356,7 @@ namespace CoreLib
 
                     prover.Assert(toassert, true);
                     attachedVC[scs] = svc;
-                    MustNotFail(scs, svc);
+                    if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
                 }
             }
             return outcome;
