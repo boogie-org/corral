@@ -285,11 +285,9 @@ namespace CoreLib
 
         }
 
-        public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
+        public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
             Outcome outcome = Outcome.Inconclusive;
-            var callSitesAttached = new HashSet<StratifiedCallSite>();
-            var parentsAttached = new HashSet<StratifiedCallSite>();
 
             var boundHit = false;
             while (true)
@@ -317,7 +315,7 @@ namespace CoreLib
                 Push();
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
-                    if (RecursionDepth(cs) == CommandLineOptions.Clo.RecursionBound)
+                    if (RecursionDepth(cs) == recBound)
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         boundHit = true;
@@ -367,7 +365,7 @@ namespace CoreLib
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
         {
-            var outcome = Fwd(openCallSites, reporter, svc.info.impl.Name == mainProc.Name);
+            var outcome = Fwd(openCallSites, reporter, svc.info.impl.Name == mainProc.Name, CommandLineOptions.Clo.RecursionBound);
             if (outcome != Outcome.Errors)
                 return outcome;
             if (svc.info.impl.Name == mainProc.Name)
@@ -593,67 +591,24 @@ namespace CoreLib
             */
 
             int currRecursionBound = 1;
-            var boundHit = false;
             while (true)
             {
-                boundHit = false;
-                MacroSI.PRINT_DETAIL("  - underapprox");
-                // underapproximate query
-                Push();
-
-                foreach (StratifiedCallSite cs in openCallSites)
+                outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
+                
+                // timeout?
+                if (outcome == Outcome.Inconclusive || outcome == Outcome.OutOfMemory || outcome == Outcome.TimedOut)
+                    break;
+                
+                // reached bound?
+                if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
                 {
-                    prover.Assert(cs.callSiteExpr, false);
-                }
-                MacroSI.PRINT_DETAIL("    - check");
-                reporter.underapproximationMode = true;
-                outcome = CheckVC(reporter);
-                Pop();
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
-                if (outcome != Outcome.Correct) break;
-
-                MacroSI.PRINT_DETAIL("  - overapprox");
-                // overapproximate query
-                Push();
-                foreach (StratifiedCallSite cs in openCallSites)
-                {
-                    if (RecursionDepth(cs) == currRecursionBound)
-                    {
-                        prover.Assert(cs.callSiteExpr, false);
-                        boundHit = true;
-                    }
-                }
-                MacroSI.PRINT_DETAIL("    - check");
-                reporter.underapproximationMode = false;
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = CheckVC(reporter);
-                Pop();
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
-                if (outcome != Outcome.Errors)
-                {
-                    if (outcome != Outcome.Correct) break;
-                    if (boundHit) outcome = Outcome.ReachedBound;
-                    if (currRecursionBound == CommandLineOptions.Clo.RecursionBound) break;
                     currRecursionBound++;
+                    continue;
                 }
-                foreach (var scs in reporter.callSitesToExpand)
-                {
-                    MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
-                    openCallSites.Remove(scs);
-                    stats.numInlined++;
-                    stats.stratNumInlined++;
-                    svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
-                    foreach (var newCallSite in svc.CallSites)
-                    {
-                        openCallSites.Add(newCallSite);
-                        parent[newCallSite] = scs;
-                    }
-                    var toassert = scs.Attach(svc);
-                    stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
 
-                    prover.Assert(toassert, true);
-                    attachedVC[scs] = svc;
-                }
+                // outcome is either ReachedBound with currRecBound == Max or
+                // Errors or Correct
+                break;
             }
 
             Pop();
