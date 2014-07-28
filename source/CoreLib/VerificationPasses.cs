@@ -166,7 +166,8 @@ namespace cba
 
                 if(prune != null)  etrace = prune.mapBackTrace(etrace);
                 traces.Add(etrace);
-                
+
+                //PrintProgramPath.print(input, etrace, "tt");
             }
 
             return null;

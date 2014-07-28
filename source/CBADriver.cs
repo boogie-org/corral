@@ -293,7 +293,7 @@ namespace cba
             progVerifyOptions = new BoogieVerifyOptions();
             progVerifyOptions.NonUniformUnfolding = config.NonUniformUnfolding;
             progVerifyOptions.newStratifiedInlining = config.newStratifiedInlining;
-            progVerifyOptions.CallTree = config.noCallTreeReuse ? null : new Dictionary<string, int>();
+            progVerifyOptions.CallTree = config.noCallTreeReuse ? null : new HashSet<string>();
             progVerifyOptions.UseProverEvaluate = config.useProverEvaluate;
             progVerifyOptions.StratifiedInliningWithoutModels = progVerifyOptions.UseProverEvaluate ? true : false;
             progVerifyOptions.useFwdBck = config.FwdBckSearch == 1;
@@ -420,7 +420,7 @@ namespace cba
     [Serializable]
     public class CorralState
     {
-        public Dictionary<string,int> CallTree;
+        public HashSet<string> CallTree;
         public HashSet<string> TrackedVariables;
 
         public static CorralState GetCorralState(string file)
@@ -446,12 +446,12 @@ namespace cba
             }
         }
 
-        public static void DumpCorralState(Configs config, Dictionary<string, int> CallTree, HashSet<string> Vars)
+        public static void DumpCorralState(Configs config, HashSet<string> CallTree, HashSet<string> Vars)
         {
             DumpCorralState(config.dumpCorralState, CallTree, Vars);
         }
 
-        public static void DumpCorralState(string file, Dictionary<string, int> CallTree, HashSet<string> Vars)
+        public static void DumpCorralState(string file, HashSet<string> CallTree, HashSet<string> Vars)
         {
             if (file != null)
             {

@@ -364,26 +364,6 @@ namespace CoreLib
             return outcome;
         }
 
-        // Inline
-        public StratifiedVC Expand(StratifiedCallSite scs)
-        {
-            MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
-            stats.numInlined++;
-            stats.stratNumInlined++;
-            var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
-            foreach (var newCallSite in svc.CallSites)
-            {
-                parent[newCallSite] = scs;
-            }
-            var toassert = scs.Attach(svc);
-            stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
-
-            prover.Assert(toassert, true);
-            attachedVC[scs] = svc;
-
-            return svc;
-        }
-
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
         {
@@ -602,18 +582,45 @@ namespace CoreLib
             Outcome outcome;
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
+            /*
+            #region Eager inlining
             // Eager inlining 
             for (int i = 1; i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++) 
             {
                 var nextOpenCallSites = new HashSet<StratifiedCallSite>();
                 foreach (StratifiedCallSite scs in openCallSites)
                 {
+                    if (RecursionDepth(scs) > CommandLineOptions.Clo.RecursionBound) continue;
+
                     var ss = Expand(scs);
                     nextOpenCallSites.UnionWith(ss.CallSites);
                 }
                 openCallSites = nextOpenCallSites;
             }
-    
+            #endregion
+
+            #region Repopulate Call Tree
+            if (cba.Util.BoogieVerify.options.CallTree != null)
+            {
+                while(true)
+                {
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    foreach (StratifiedCallSite scs in openCallSites)
+                    {
+                        if(!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
+                        toRemove.Add(scs);
+                        var ss = Expand(scs);
+                        toAdd.UnionWith(ss.CallSites);
+                    }
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+                    if (toRemove.Count == 0) break;
+                } 
+            }
+            #endregion
+            */
+
             reporter.underapproximationMode = true;
             outcome = CheckVC(reporter);
             
@@ -641,9 +648,58 @@ namespace CoreLib
 
             Pop();
             CommandLineOptions.Clo.UseLabels = oldUseLabels;
+            /*
+            #region Stash call tree
+            if (cba.Util.BoogieVerify.options.CallTree != null)
+            {
+                var ct = new HashSet<string>();
+                var callsites = new HashSet<StratifiedCallSite>();
+                callsites.UnionWith(parent.Keys);
+                callsites.UnionWith(parent.Values);
+                callsites.Iter(scs => ct.Add(GetPersistentID(scs)));
+                StratifiedVCGen.callTree = ct; // unfortunately, this is where we have to stash it
+            }
+            #endregion
+            */
             return outcome;
         }
 
+
+        // Inline
+        private StratifiedVC Expand(StratifiedCallSite scs)
+        {
+            MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
+            stats.numInlined++;
+            stats.stratNumInlined++;
+            var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
+            foreach (var newCallSite in svc.CallSites)
+            {
+                parent[newCallSite] = scs;
+            }
+            var toassert = scs.Attach(svc);
+            stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
+
+            prover.Assert(toassert, true);
+            attachedVC[scs] = svc;
+
+            return svc;
+        }
+
+        // Return unique call ID of a call site
+        private int GetSiCallId(StratifiedCallSite scs)
+        {
+            return QKeyValue.FindIntAttribute(scs.callSite.Attributes, "si_unique_call", -1);
+        }
+
+        // Get persistent ID of a callsite
+        private string GetPersistentID(StratifiedCallSite scs)
+        {
+            if (!parent.ContainsKey(scs))
+                return string.Format("{0}_131_{1}", scs.callSite.calleeName, GetSiCallId(scs));
+
+            var ret = GetPersistentID(parent[scs]);
+            return string.Format("{0}_131_{1}_131_{2}", ret, scs.callSite.calleeName, GetSiCallId(scs));
+        }
         // 'Attach' inlined from Boogie/StratifiedVC.cs (and made static)
         // TODO: add it to Boogie/StratifiedVC.cs
         // ---------------------------------------- 

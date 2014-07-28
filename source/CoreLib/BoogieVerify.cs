@@ -569,7 +569,7 @@ namespace cba.Util
             var ret = new HashSet<string>();
             if (options.CallTree == null) return ret;
 
-            foreach (var s in options.CallTree.Keys)
+            foreach (var s in options.CallTree)
             {
                 var tokens = s.Split(new string[] {"_131_"}, StringSplitOptions.RemoveEmptyEntries);
                 if (tokens.Length < 2) continue;
@@ -781,7 +781,7 @@ namespace cba.Util
 
         public bool NonUniformUnfolding;
 
-        public Dictionary<string, int> CallTree;
+        public HashSet<string> CallTree;
 
         public bool StratifiedInliningWithoutModels;
         public bool UseProverEvaluate;
@@ -823,7 +823,7 @@ namespace cba.Util
             ret.CallTree = CallTree;
             if (CallTree != null)
             {
-                ret.CallTree = new Dictionary<string, int>(CallTree);
+                ret.CallTree = new HashSet<string>(CallTree);
             }
             ret.StratifiedInliningWithoutModels = StratifiedInliningWithoutModels;
             ret.UseProverEvaluate = UseProverEvaluate;
