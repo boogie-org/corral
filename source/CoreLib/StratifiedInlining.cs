@@ -267,7 +267,22 @@ namespace CoreLib
                 if (iter.callSite.calleeName == cs.callSite.calleeName)
                     i++; /* recursion */
             }
-            return i;
+
+            // Usual
+            if (!cba.Util.BoogieVerify.options.extraRecBound.ContainsKey(cs.callSite.calleeName))
+                return i;
+
+            // Usual
+            if (i <= CommandLineOptions.Clo.RecursionBound - 1)
+                return i;
+
+            // Support extraRecBound
+            if (i >= CommandLineOptions.Clo.RecursionBound &&
+                i <= CommandLineOptions.Clo.RecursionBound + cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName] - 1)
+                return CommandLineOptions.Clo.RecursionBound - 1;
+
+            // Support extraRecBound
+            return i - cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName];
         }
 
         /* for measuring Z3 stack */
@@ -339,27 +354,34 @@ namespace CoreLib
 
                 foreach (var scs in reporter.callSitesToExpand)
                 {
-                    MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
                     openCallSites.Remove(scs);
-                    stats.numInlined++;
-                    stats.stratNumInlined++;
-                    var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
-                    //Console.WriteLine("Adding call-sites (fwd): {0}", svc.CallSites.Select(s => s.callSiteExpr.ToString()).Concat(" "));
+                    var svc = Expand(scs);
+                    openCallSites.UnionWith(svc.CallSites);
 
-                    foreach (var newCallSite in svc.CallSites)
-                    {
-                        openCallSites.Add(newCallSite);
-                        parent[newCallSite] = scs;
-                    }
-                    var toassert = scs.Attach(svc);
-                    stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
-
-                    prover.Assert(toassert, true);
-                    attachedVC[scs] = svc;
                     if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
                 }
             }
             return outcome;
+        }
+
+        // Inline
+        public StratifiedVC Expand(StratifiedCallSite scs)
+        {
+            MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
+            stats.numInlined++;
+            stats.stratNumInlined++;
+            var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
+            foreach (var newCallSite in svc.CallSites)
+            {
+                parent[newCallSite] = scs;
+            }
+            var toassert = scs.Attach(svc);
+            stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
+
+            prover.Assert(toassert, true);
+            attachedVC[scs] = svc;
+
+            return svc;
         }
 
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
@@ -544,6 +566,16 @@ namespace CoreLib
             bool oldUseLabels = CommandLineOptions.Clo.UseLabels;
             CommandLineOptions.Clo.UseLabels = false;
 
+            // Sanity checking
+            if (cba.Util.BoogieVerify.options.procsToSkip.Count != 0)
+            {
+                Console.WriteLine("Warning: newSI doesn't support procedure skipping");
+            }
+            if (cba.Util.BoogieVerify.options.NonUniformUnfolding)
+            {
+                Console.WriteLine("Warning: newSI doesn't non-uniform procedure inlining");
+            }
+
             /* the forward/backward approach can only be applied for programs with asserts in calls
             * and single-threaded (multi-threaded programs contain a final assert in the main).
             * Otherwise, use forward approach */
@@ -570,26 +602,22 @@ namespace CoreLib
             Outcome outcome;
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
-            /* 
-            // Eager inlining (works only for hierarchical programs)
-            HashSet<StratifiedCallSite> nextOpenCallSites;
-            while (openCallSites.Count != 0) {
-            nextOpenCallSites = new HashSet<StratifiedCallSite>();
-            foreach (StratifiedCallSite scs in openCallSites) {
-                svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
-                foreach (var newCallSite in svc.CallSites) {
-                nextOpenCallSites.Add(newCallSite);
+            // Eager inlining 
+            for (int i = 1; i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++) 
+            {
+                var nextOpenCallSites = new HashSet<StratifiedCallSite>();
+                foreach (StratifiedCallSite scs in openCallSites)
+                {
+                    var ss = Expand(scs);
+                    nextOpenCallSites.UnionWith(ss.CallSites);
                 }
-                prover.Assert(scs.Attach(svc), true);
-                attachedVC[scs] = svc;
-            }
-            openCallSites = nextOpenCallSites;
+                openCallSites = nextOpenCallSites;
             }
     
             reporter.underapproximationMode = true;
             outcome = CheckVC(reporter);
-            */
-
+            
+            // Stratified Search
             int currRecursionBound = 1;
             while (true)
             {
