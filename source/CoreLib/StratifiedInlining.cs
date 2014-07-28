@@ -182,14 +182,6 @@ namespace CoreLib
         /* map to stratified VCs (stack of VCs, as we can have several VCs for the same procedure) */
         private Dictionary<string, Stack<StratifiedVC>> implName2SVC;
 
-        /* Call Tree from last call to VerifyImplementation (an out value) */
-        private HashSet<string> CallTree;
-
-        public HashSet<string> GetCallTree()
-        {
-            return CallTree;
-        }
-
         /* creates or retrieves a VC */
         public StratifiedVC getSVC(string name)
         {
@@ -628,7 +620,7 @@ namespace CoreLib
             }
             #endregion
             
-           
+
             // Stratified Search
             int currRecursionBound = 1;
             while (true)
@@ -662,7 +654,7 @@ namespace CoreLib
                 callsites.UnionWith(parent.Keys);
                 callsites.UnionWith(parent.Values);
                 callsites.Iter(scs => ct.Add(GetPersistentID(scs)));
-                CallTree = ct;
+                StratifiedVCGen.callTree = ct; // unfortunately, this is where we have to stash it
             }
             #endregion
             
