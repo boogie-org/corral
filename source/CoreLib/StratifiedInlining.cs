@@ -267,7 +267,7 @@ namespace CoreLib
         /* depth of the recursion inlined so far */
         private int RecursionDepth(StratifiedCallSite cs)
         {
-            int i = 0;
+            int i = 1;
             StratifiedCallSite iter = cs;
             while (parent.ContainsKey(iter))
             {
@@ -281,13 +281,15 @@ namespace CoreLib
                 return i;
 
             // Usual
-            if (i <= CommandLineOptions.Clo.RecursionBound - 1)
+            if (i <= CommandLineOptions.Clo.RecursionBound)
                 return i;
 
             // Support extraRecBound
-            if (i >= CommandLineOptions.Clo.RecursionBound &&
-                i <= CommandLineOptions.Clo.RecursionBound + cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName] - 1)
-                return CommandLineOptions.Clo.RecursionBound - 1;
+            // If RecBound = 1 and extraRecBound is 2 then if actual recursion depth
+            // is 1 or 2 or 3, we still return 1. Otherwise we return (actual-extra)
+            if (i > CommandLineOptions.Clo.RecursionBound &&
+                i <= CommandLineOptions.Clo.RecursionBound + cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName])
+                return CommandLineOptions.Clo.RecursionBound;
 
             // Support extraRecBound
             return i - cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName];
@@ -338,7 +340,7 @@ namespace CoreLib
                 Push();
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
-                    if (RecursionDepth(cs) == recBound)
+                    if (RecursionDepth(cs) > recBound)
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         boundHit = true;
@@ -620,6 +622,7 @@ namespace CoreLib
                         toRemove.Add(scs);
                         var ss = Expand(scs);
                         toAdd.UnionWith(ss.CallSites);
+                        MacroSI.PRINT(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
                     }
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
@@ -661,6 +664,7 @@ namespace CoreLib
                 var callsites = new HashSet<StratifiedCallSite>();
                 callsites.UnionWith(parent.Keys);
                 callsites.UnionWith(parent.Values);
+                callsites.ExceptWith(openCallSites);
                 callsites.Iter(scs => CallTree.Add(GetPersistentID(scs)));
             }
             #endregion
