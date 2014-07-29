@@ -264,6 +264,19 @@ namespace CoreLib
                 stats.print();
         }
 
+        /* depth in the call tree */
+        private int StackDepth(StratifiedCallSite cs)
+        {
+            int i = 1;
+            StratifiedCallSite iter = cs;
+            while (parent.ContainsKey(iter))
+            {
+                iter = parent[iter]; /* previous callsite */
+                i++;
+            }
+            return i;
+        }
+
         /* depth of the recursion inlined so far */
         private int RecursionDepth(StratifiedCallSite cs)
         {
@@ -340,7 +353,11 @@ namespace CoreLib
                 Push();
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
-                    if (RecursionDepth(cs) > recBound)
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (RecursionDepth(cs) > recBound ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 && 
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         boundHit = true;
@@ -631,7 +648,6 @@ namespace CoreLib
             }
             #endregion
             
-
             // Stratified Search
             int currRecursionBound = 1;
             while (true)
