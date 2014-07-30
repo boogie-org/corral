@@ -1743,6 +1743,7 @@ namespace cba
         private Dictionary<string, Tuple<Expr,string>> candAsserts; // candidate assertions
         public bool InNonNull, OutNonNull, InImpOutNonNull, InImpOutNull; // a few switches for templates
         public HashSet<KeyValuePair<string, string>> inferred_asserts;
+        public bool addContracts; // add inferred contracts
 
         public SimpleHoudini(HashSet<Variable> templateVars, List<Requires> req, List<Ensures> ens, int InlineDepth,
             int unroll) : base(templateVars, req, ens, InlineDepth, unroll)
@@ -1754,6 +1755,7 @@ namespace cba
             OutNonNull = true;
             InImpOutNonNull = false;
             InImpOutNull = false;
+            addContracts = true;
         }
 
         // simplified version of runCBAPass
@@ -1769,10 +1771,33 @@ namespace cba
 
             (new RewriteCallDontCares()).VisitProgram(program);
             RunHoudini(program, info);
+
             program = (input as PersistentCBAProgram).getCBAProgram();
+            // add inferred contracts
+            if (addContracts)
+                program = addInferredContracts(program, summaries);
 
             return program;
         }
+
+        private CBAProgram addInferredContracts(CBAProgram program, Dictionary<string, List<EExpr>> summaries)
+        {
+            var attr = new QKeyValue(Token.NoToken, "inferred", new List<object>(), null);
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var proc = impl.Proc;
+
+                if (!summaries.Keys.Contains(impl.Name)) continue;
+
+                foreach (var contract in summaries[impl.Name])
+                {
+                    if (contract.IsEnsures) proc.Ensures.Add(new Ensures(Token.NoToken, true, contract.expr, "", attr));
+                    if (contract.IsRequires) proc.Ensures.Add(new Ensures(Token.NoToken, true, addOld(contract.expr), "", attr));
+                }
+            }
+            return program;
+        }
+
 
         // simplified version of RunHoudini
         private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
@@ -1911,29 +1936,29 @@ namespace cba
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
-            #region debug static analysis
+            //#region debug static analysis
 
-            if (!staticAnalysisConstants.IsSubsetOf(trueConstants))
-            {
-                foreach (var c in staticAnalysisConstants.Difference(trueConstants))
-                {
-                    Expr expr = null;
-                    var proc = "";
-                    foreach (var kvp in info)
-                    {
-                        if (!kvp.Value.ContainsKey(c)) continue;
-                        expr = kvp.Value[c].expr;
-                        proc = kvp.Key;
-                        break;
-                    }
-                    Console.WriteLine("The following expr in {0} is not valid", proc);
-                    expr.Emit(new TokenTextWriter(Console.Out));
-                    Console.WriteLine();
-                }
+            //if (!staticAnalysisConstants.IsSubsetOf(trueConstants))
+            //{
+            //    foreach (var c in staticAnalysisConstants.Difference(trueConstants))
+            //    {
+            //        Expr expr = null;
+            //        var proc = "";
+            //        foreach (var kvp in info)
+            //        {
+            //            if (!kvp.Value.ContainsKey(c)) continue;
+            //            expr = kvp.Value[c].expr;
+            //            proc = kvp.Key;
+            //            break;
+            //        }
+            //        Console.WriteLine("The following expr in {0} is not valid", proc);
+            //        expr.Emit(new TokenTextWriter(Console.Out));
+            //        Console.WriteLine();
+            //    }
 
-                Debug.Assert(false, "Bug in static analysis module");
-            }
-            #endregion
+            //    Debug.Assert(false, "Bug in static analysis module");
+            //}
+            //#endregion
 
             // Record new summaries
             int cia = 0;
@@ -1947,6 +1972,7 @@ namespace cba
             Console.WriteLine(string.Format("Total Asserts: {0} out of {1}", cia, candAsserts.Count));
 
             int cic = 0;
+            var attr = new QKeyValue(Token.NoToken, "inferred", new List<object>(), null);
             foreach (var proc in programProcs)
             {
                 if (!info.ContainsKey(proc.Name)) continue;
@@ -1962,26 +1988,23 @@ namespace cba
 
                     // print inferred contracts
                     //Console.WriteLine(string.Format("Inferred: {0}", kvp.Value.expr));
-                    
+
 
                     // check dependencies: if any of them hold then discard this one
-                    var addSummary = true;
-                    if (dependenciesBetConstants.ContainsKey(kvp.Key))
-                    {
-                        var dep = dependenciesBetConstants[kvp.Key];
-                        var depKey = Tuple.Create(proc.Name, dep);
-                        if (namedConstants.ContainsKey(depKey))
-                        {
-                            if (namedConstants[depKey].Intersection(tconsts).Any())
-                                addSummary = false;
-                        }
-                    }
+                    //var addSummary = true;
+                    //if (dependenciesBetConstants.ContainsKey(kvp.Key))
+                    //{
+                    //    var dep = dependenciesBetConstants[kvp.Key];
+                    //    var depKey = Tuple.Create(proc.Name, dep);
+                    //    if (namedConstants.ContainsKey(depKey))
+                    //    {
+                    //        if (namedConstants[depKey].Intersection(tconsts).Any())
+                    //            addSummary = false;
+                    //    }
+                    //}
 
-                    if (addSummary)
-                    {
-                        if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
-                        summaries[proc.Name].Add(kvp.Value);
-                    }
+                    if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
+                    summaries[proc.Name].Add(kvp.Value);
                 }
             }
             Console.WriteLine(string.Format("Total Candidates: {0} out of {1}", trueConstants.Count-cia, cic));

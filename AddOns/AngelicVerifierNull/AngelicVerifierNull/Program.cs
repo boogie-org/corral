@@ -210,7 +210,7 @@ namespace AngelicVerifierNull
                 prog = removeAsserts(inferred_asserts, prog);
 
                 int assert_count = CountAsserts(prog);
-                Console.WriteLine("{0} assertions left after houdini pass", assert_count);
+                Utils.Print(string.Format("#AssertsAftHoudini : {0}", assert_count));
 
                 //Analyze
                 RunCorralForAnalysis(prog);
@@ -278,7 +278,8 @@ namespace AngelicVerifierNull
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
             houdini.InNonNull = true;
-            houdini.OutNonNull = false;
+            houdini.OutNonNull = true;
+            houdini.addContracts = true;
             
             PersistentProgram newP = houdini.run(prog);
             BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
