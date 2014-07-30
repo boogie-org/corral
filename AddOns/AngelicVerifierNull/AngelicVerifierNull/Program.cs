@@ -207,7 +207,10 @@ namespace AngelicVerifierNull
                 if (Options.HoudiniPass)
                     prog = RunHoudiniPass(prog, out inferred_asserts);
 
-                //CleanAssert.printAsserts(inferred_asserts, prog.getProgram());
+                prog = removeAsserts(inferred_asserts, prog);
+
+                int assert_count = CountAsserts(prog);
+                Console.WriteLine("{0} assertions left after houdini pass", assert_count);
 
                 //Analyze
                 RunCorralForAnalysis(prog);
@@ -225,6 +228,37 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
+        }
+
+        // Removes asserts inferred by Houdini pass from the program
+        private static PersistentProgram removeAsserts(HashSet<KeyValuePair<string, string>> inferred_asserts, PersistentProgram inp)
+        {
+            int count = 0;
+            string notfalse = null;
+            var prog = inp.getProgram();
+            foreach (Implementation impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    var removal_list = new HashSet<AssertCmd>();
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                            continue;
+                        else
+                        {
+                            if (inferred_asserts.Contains(new KeyValuePair<string, string>(ac.Expr.ToString(), b.Label)))
+                            {
+                                removal_list.Add(ac);
+                            }
+                            count++;
+                        }
+                    }
+                    foreach (AssertCmd ac in removal_list) b.Cmds.Remove(ac);
+                }
+            }
+            return new PersistentProgram(prog, inp.mainProcName, inp.contextBound);
         }
 
         private static PersistentProgram RunHoudiniPass(PersistentProgram prog, out HashSet<KeyValuePair<string, string>> inferred_asserts)
