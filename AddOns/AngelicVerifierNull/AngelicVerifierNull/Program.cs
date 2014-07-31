@@ -210,7 +210,7 @@ namespace AngelicVerifierNull
                 prog = removeAsserts(inferred_asserts, prog);
 
                 int assert_count = CountAsserts(prog);
-                Utils.Print(string.Format("#AssertsAftHoudini : {0}", assert_count));
+                Utils.Print(string.Format("#AssertsAftHoudini : {0}", assert_count),Utils.PRINT_TAG.AV_STATS);
 
                 //Analyze
                 RunCorralForAnalysis(prog);
