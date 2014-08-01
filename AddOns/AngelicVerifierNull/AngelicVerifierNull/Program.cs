@@ -418,7 +418,7 @@ namespace AngelicVerifierNull
             while (true)
             {
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
-                CommandLineOptions.Clo.RecursionBound = 1; /*HACK: reset recursion bound to 1 to avoid the bug (500)*/
+                
                 Stats.count("corral.count");
                 Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
                 
@@ -795,6 +795,8 @@ namespace AngelicVerifierNull
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
             Dictionary<string, string> eeComplexExprs;
+            // Save commandlineoptions
+            var clo = CommandLineOptions.Clo;
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
@@ -828,6 +830,7 @@ namespace AngelicVerifierNull
             {
                 Console.WriteLine("ExplainError failed with {0}", e);
             }
+            CommandLineOptions.Install(clo);
             return status;
         }
         private static Expr MkBlockExprFromExplainError(Program  nprog, Expr expr, Dictionary<string, Tuple<string, string, int>> allocConsts)
