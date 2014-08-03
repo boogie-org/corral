@@ -196,6 +196,7 @@ namespace cba
         private static int RecBound(string recFunc, Counterexample trace, string traceName)
         {
             var ret = 0;
+            if (trace == null) return ret;
             if (recFunc == traceName)
                 ret++;
 

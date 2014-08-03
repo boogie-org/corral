@@ -453,6 +453,7 @@ namespace cba
 
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
+                BoogieVerify.options.newStratifiedInlining = config.newStratifiedInlining;
                 BoogieVerify.Verify(init, out err);
                 if (err == null || err.Count == 0)
                     Console.WriteLine("All entrypoints verified");
