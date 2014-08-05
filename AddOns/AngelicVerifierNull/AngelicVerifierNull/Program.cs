@@ -33,6 +33,7 @@ namespace AngelicVerifierNull
         public static int numProcsAnalyzed = -1;
         public static int numAssertsBeforeAliasAnalysis = -1;
         public static int numAssertsAfterAliasAnalysis = -1;
+        public static int numAssertsAfterHoudiniPass = -1;
 
         public static Dictionary<string, int> numAssertsPerProc = new Dictionary<string, int>();
         public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
@@ -192,16 +193,6 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
 
-                // count number of assertions per procedure after alias analysis
-                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
-                    .Where(x => x is Implementation))
-                {
-                    var assertVisitor = new Instrumentations.AssertCountVisitor();
-                    assertVisitor.Visit(impl);
-                    Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
-                }
-                Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterAliasAnalysis);
-
                 HashSet<KeyValuePair<string, string>> inferred_asserts = new HashSet<KeyValuePair<string, string>>();
                 // run Houdini pass
                 if (Options.HoudiniPass)
@@ -209,8 +200,22 @@ namespace AngelicVerifierNull
 
                 prog = removeAsserts(inferred_asserts, prog);
 
-                int assert_count = CountAsserts(prog);
-                Utils.Print(string.Format("#AssertsAftHoudini : {0}", assert_count),Utils.PRINT_TAG.AV_STATS);
+                Stats.numAssertsAfterHoudiniPass = CountAsserts(prog);
+                Utils.Print(string.Format("#AssertsAftHoudini : {0}", Stats.numAssertsAfterHoudiniPass),
+                    Utils.PRINT_TAG.AV_STATS);
+
+                // count number of assertions per procedure after alias analysis and houdini pass
+                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
+                    .Where(x => x is Implementation))
+                {
+                    var assertVisitor = new Instrumentations.AssertCountVisitor();
+                    assertVisitor.Visit(impl);
+                    Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
+                }
+                Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterHoudiniPass);
+                Utils.Print(string.Format("#ImplWithAsserts : {0}",
+                    Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
+                    Utils.PRINT_TAG.AV_STATS);
 
                 //Analyze
                 RunCorralForAnalysis(prog);
