@@ -6,11 +6,11 @@
 
 -------------------- t2_err.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t2_err.bpl ------
-[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
+[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
 
 -------------------- t3_err.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t3_err.bpl ------
-[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no NULL constant declared in the input program
+[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no NULL constant declared in the input program
 
 -------------------- t4.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t4.bpl ------
