@@ -20,7 +20,7 @@ namespace AngelicVerifierNull
     class Options
     {
         // Reuse tracked variables and explored call tree across corral runs
-        public static readonly bool UsePrevCorralState = true;
+        public static bool UsePrevCorralState = true;
         // Don't use alias analysis
         public static bool UseAliasAnalysis = true;
         // Do Houdini pass to remove some assertions
@@ -132,6 +132,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noAA"))
                 Options.UseAliasAnalysis = false;
+
+            if (args.Any(s => s == "/noReuse"))
+                Options.UsePrevCorralState = false;
 
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;
@@ -413,6 +416,8 @@ namespace AngelicVerifierNull
         private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p, int corralTimeout)
         {
             Stats.resume("run.corral.iterative");
+            var corralIterativeStartTime = DateTime.Now;
+
             int iterCount = 0;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
@@ -427,6 +432,10 @@ namespace AngelicVerifierNull
                     Stats.resume("run.corral");
                     cex = RunCorral(prog, corralConfig.mainProcName, corralTimeout);
                     Stats.stop("run.corral");
+                    cba.Stats.printStats();
+                    Console.WriteLine("Number of procedures inlined: {0}", cba.Stats.ProgCallTreeSize);
+                    cba.Stats.ProgCallTreeSize = 0;
+                    Console.WriteLine("Time elapsed so far: {0}", (DateTime.Now - corralIterativeStartTime).TotalSeconds);
                 }
                 catch (Exception e)
                 {
@@ -652,6 +661,12 @@ namespace AngelicVerifierNull
                 cba.ConfigManager.progVerifyOptions.CallTree = corralState.CallTree;
             }
 
+            // Remove print commands and sourceline annotations
+            //var prog = inputProg.getProgram();
+            //var pcmdsInfo = cba.PrintSdvPath.DeletePrintCmds(prog);
+            //var scmdsInfo = cba.PrintSdvPath.DeleteSourceInfo(prog);
+            //var curr = new PersistentProgram(prog, inputProg.mainProcName, inputProg.contextBound);
+
             // Rewrite assert commands
             var apass = new cba.RewriteAssertsPass();
             var curr = apass.run(inputProg);
@@ -680,6 +695,8 @@ namespace AngelicVerifierNull
                     return;
                 passes.Where(p => p != null)
                     .Iter(p => trace = p.mapBackTrace(trace));
+                //trace = scmdsInfo.mapBackTrace(trace);
+                //trace = pcmdsInfo.mapBackTrace(trace);
                 cba.PrintConcurrentProgramPath.printCTrace(inputProg, trace, fileName);
                 apass.reset();
             });
@@ -727,6 +744,8 @@ namespace AngelicVerifierNull
                 cexTrace = rcalls.mapBackTrace(cexTrace);
                 //PrintProgramPath.print(rcalls.input, cexTrace, "temp0");
                 cexTrace = apass.mapBackTrace(cexTrace);
+                //cexTrace = scmdsInfo.mapBackTrace(cexTrace);
+                //cexTrace = pcmdsInfo.mapBackTrace(cexTrace);
                 return Tuple.Create(cexTrace, apass.getFailingAssertLocation());
             }
 
