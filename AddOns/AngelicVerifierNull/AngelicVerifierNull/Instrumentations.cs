@@ -446,6 +446,29 @@ namespace AngelicVerifierNull
         }
     }
 
+    // Tokens represent assertions
+    class AssertToken
+    {
+        public int id {get; private set;}
+        static int idCounter = 0;
+        public AssertToken(int id)
+        {
+            this.id = id;
+        }
+        internal static AssertToken GetNextToken()
+        {
+            return new AssertToken(idCounter++);
+        }
+        public override bool Equals(object obj)
+        {
+            return (obj as AssertToken).id == id;
+        }
+        public override int GetHashCode()
+        {
+            return id.GetHashCode();
+        }
+    }
+
     /* Initial instrumentation done before running corral.
      * It gets rid of source line annotation and print commands (because
      * there are too many of them).
@@ -453,19 +476,35 @@ namespace AngelicVerifierNull
      */
     class AvnInstrumentation : cba.CompilerPass
     {
+        // Information for mapping back traces
         cba.ModifyTrans sourceInfo;
         cba.ModifyTrans printInfo;
         cba.CompressBlocks compressBlocks;
         cba.InsertionTrans assertInstrInfo;
 
+        // The harness instrumentation (kept here for
+        // round-robin mode)
         Instrumentations.HarnessInstrumentation harnessInstr;
 
-        Dictionary<int, AssertCmd> originalAssertions;
+        // Token -> assertion representing that token
+        Dictionary<AssertToken, AssertCmd> originalAssertions;
 
-        Dictionary<int, Tuple<string, string>> tokenLocation;
+        // Token -> (procedure,block) where the assertion came from
+        Dictionary<AssertToken, Tuple<string, string>> tokenLocation;
 
+        // procedure -> its set of tokens
+        Dictionary<string, HashSet<AssertToken>> procToTokens;
+
+        // tokens suppressed so far; this only monotonically grows
+        HashSet<AssertToken> suppressedTokens;
+        // temporarily suppress tokens
+        HashSet<AssertToken> tempSuppressedTokens;
+
+        // The program that is constantly updated with blocked assertions
+        // or input constraints.
         Program currProg;
 
+        // Assertion instrumentation
         public readonly string assertsPassedName = "assertsPassed";
         GlobalVariable assertsPassed;
 
@@ -476,8 +515,11 @@ namespace AngelicVerifierNull
             assertsPassed = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
                 "assertsPassed", Microsoft.Boogie.Type.Bool));
             compressBlocks = new cba.CompressBlocks();
-            originalAssertions = new Dictionary<int, AssertCmd>();
-            tokenLocation = new Dictionary<int, Tuple<string, string>>();
+            originalAssertions = new Dictionary<AssertToken, AssertCmd>();
+            tokenLocation = new Dictionary<AssertToken, Tuple<string, string>>();
+            procToTokens = new Dictionary<string, HashSet<AssertToken>>();
+            suppressedTokens = new HashSet<AssertToken>();
+            tempSuppressedTokens = new HashSet<AssertToken>();
             currProg = null;
             this.harnessInstr = harnessInstr;
         }
@@ -497,7 +539,7 @@ namespace AngelicVerifierNull
             compressBlocks.VisitProgram(program);
 
             // Instrument assertions
-            int token = 0;
+            int tokenId = 0;
 
             var impls = BoogieUtil.nameImplMapping(program);
             var pwa = cba.SequentialInstrumentation.procsWithAsserts(program);
@@ -520,11 +562,16 @@ namespace AngelicVerifierNull
                         if (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd))
                         {
                             currCmds.Add(BoogieAstFactory.MkVarEqExpr(assertsPassed, (cmd as AssertCmd).Expr));
+                            
+                            var token = new AssertToken(tokenId);
                             originalAssertions.Add(token, cmd as AssertCmd);
                             tokenLocation.Add(token, Tuple.Create(impl.Name, currLabel));
+                            procToTokens.InitAndAdd(impl.Name, token);
+
                             addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
 
-                            currLabel = addInstr(instrumented, currCmds, currLabel, token++);
+                            currLabel = addInstr(instrumented, currCmds, currLabel, tokenId);
+                            tokenId++;
                             currCmds = new List<Cmd>();
 
                             continue;
@@ -599,6 +646,7 @@ namespace AngelicVerifierNull
             return trace;
         }
 
+        // Return the set of constaints for round-robin blocking
         public IEnumerable<Constant> GetRoundRobinBlockingConstants()
         {
             var blockConstNames = harnessInstr.blockEntryPointConstants.Keys;
@@ -608,6 +656,7 @@ namespace AngelicVerifierNull
             return blockCallConsts;
         }
 
+        // Block all entrypoints but one
         public void BlockAllButThis(Constant constant)
         {
             var blockCallConsts = GetRoundRobinBlockingConstants();
@@ -620,6 +669,7 @@ namespace AngelicVerifierNull
                 new QKeyValue(Token.NoToken, "RRBlocking", new List<object>(), null))); 
         }
 
+        // Unblock entrypoints
         public void RemoveBlockingConstraint()
         {
             var mainProc = currProg.TopLevelDeclarations.OfType<Procedure>()
@@ -628,7 +678,8 @@ namespace AngelicVerifierNull
             mainProc.Requires.RemoveAll(x => QKeyValue.FindBoolAttribute(x.Attributes, "RRBlocking"));
         }
 
-        // returns file and line of the failing assert
+        // Returns file and line of the failing assert. Dumps
+        // error trace to disk.
         public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename)
         {
             trace = mapBackTrace(trace);
@@ -646,39 +697,97 @@ namespace AngelicVerifierNull
             }
         }
 
+        // Get the current program (with blocked assertions and input constraints)
         public PersistentProgram GetCurrProgram()
         {
             return new PersistentProgram(currProg, (output as PersistentProgram).mainProcName,
                 (output as PersistentProgram).contextBound);
         }
 
-        public AssertCmd GetFailingAssert(int token)
+        // The assertion corresponding to the given token
+        public AssertCmd GetFailingAssert(AssertToken token)
         {
             return originalAssertions[token];
 
         }
 
-        public string GetFailingAssertProcName(int token)
+        // Location where the assertion lived
+        public string GetFailingAssertProcName(AssertToken token)
         {
             return tokenLocation[token].Item1;
         }
 
+        // Procs with at least one assertion
+        public HashSet<string> GetProcsWithAsserts()
+        {
+            var ret = new HashSet<string>();
+            procToTokens.Where(kvp => kvp.Value.Count != 0)
+                .Iter(kvp => ret.Add(kvp.Key));
+            return ret;
+        }
+
+        // Suppress assertions in all but one procedure.
+        // Returns the ones left.
+        public HashSet<AssertToken> SuppressAllButOneProcedure(string procName)
+        {
+            Debug.Assert(tempSuppressedTokens.Count == 0);
+            tempSuppressedTokens = new HashSet<AssertToken>();
+            procToTokens.Where(kvp => kvp.Key != procName)
+                .Iter(kvp => tempSuppressedTokens.UnionWith(kvp.Value));
+
+            tempSuppressedTokens.Iter(t => SuppressToken(t));
+
+            var ret = new HashSet<AssertToken>(procToTokens[procName]);
+            ret.ExceptWith(suppressedTokens);
+
+            return ret;
+        }
+
+        // Unsuppress assertions (inverse of SuppressAllButOneProcedure)
+        public void Unsuppress()
+        {
+            foreach (var token in tempSuppressedTokens)
+            {
+                if (suppressedTokens.Contains(token))
+                    continue;
+                UnsuppressToken(token);
+            }
+            tempSuppressedTokens = new HashSet<AssertToken>();
+
+            BoogieUtil.DoModSetAnalysis(currProg);
+        }
+
+
         // precondition: pathProgram has a single implementation
-        public int SuppressAssert(Program pathProgram)
+        // Suppress an assertion (that failed in the pathProgram) and
+        // return its token
+        public AssertToken SuppressAssert(Program pathProgram)
         {
             var impl = pathProgram.TopLevelDeclarations.OfType<Implementation>()
                 .First();
 
-            var token = -1;
+            var tokenId = -1;
             foreach (var acmd in impl.Blocks[0].Cmds.OfType<AssumeCmd>())
             {
-                token = QKeyValue.FindIntAttribute(acmd.Attributes, "avn", -1);
-                if (token == -1) continue;
+                tokenId = QKeyValue.FindIntAttribute(acmd.Attributes, "avn", -1);
+                if (tokenId == -1) continue;
                 break;
             }
 
-            Debug.Assert(token != -1);
+            Debug.Assert(tokenId != -1);
+            var token = new AssertToken(tokenId);
+            
+            SuppressToken(token);
 
+            BoogieUtil.DoModSetAnalysis(currProg);
+
+            suppressedTokens.Add(token);
+
+            return token;
+        }
+
+        public void SuppressToken(AssertToken token)
+        {
             var location = tokenLocation[token];
             var p = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations, location.Item1);
             var block = p.Blocks.Where(blk => blk.Label == location.Item2).FirstOrDefault();
@@ -688,17 +797,39 @@ namespace AngelicVerifierNull
             foreach (var cmd in block.Cmds)
             {
                 if ((cmd is AssignCmd) && (cmd as AssignCmd).Lhss[0].DeepAssignedVariable.Name == assertsPassedName)
-                    ncmds.Add(BoogieAstFactory.MkAssume((cmd as AssignCmd).Rhss[0]));
+                {
+                    var acmd = BoogieAstFactory.MkAssume((cmd as AssignCmd).Rhss[0]) as AssumeCmd;
+                    acmd.Attributes = new QKeyValue(Token.NoToken, "suppressAssert",
+                        new List<object> { Expr.Literal(token.id) }, null);
+                    ncmds.Add(acmd);
+                }
                 else
                     ncmds.Add(cmd);
             }
             block.Cmds = ncmds;
-
-            BoogieUtil.DoModSetAnalysis(currProg);
-
-            return token;
         }
 
+        private void UnsuppressToken(AssertToken token)
+        {
+            var location = tokenLocation[token];
+            var p = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations, location.Item1);
+            var block = p.Blocks.Where(blk => blk.Label == location.Item2).FirstOrDefault();
+
+            // disable assignment to assertsPassed
+            var ncmds = new List<Cmd>();
+            foreach (var cmd in block.Cmds)
+            {
+                if (cmd is AssumeCmd && QKeyValue.FindIntAttribute((cmd as AssumeCmd).Attributes, "suppressAssert", -1) == token.id)
+                {
+                    ncmds.Add(BoogieAstFactory.MkVarEqExpr(assertsPassed, (cmd as AssumeCmd).Expr));
+                }
+                else
+                    ncmds.Add(cmd);
+            }
+            block.Cmds = ncmds;
+        }
+
+        // Suppress an input constraint
         public void SuppressInput(Expr input)
         {
             var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
@@ -759,7 +890,6 @@ namespace AngelicVerifierNull
         }
 
        
-
         // goto label1, label2;
         //
         // label1:
@@ -821,7 +951,7 @@ namespace AngelicVerifierNull
             assertInstrInfo.addTrans(procName, inBlk, inCnt, inCmd, outBlk, curr.Count - 1, cseq);
         }
 
-
+        // Return the entrypoint (procedure called by harness)
         public string GetEntryPoint(cba.ErrorTrace cex, HashSet<string> IdentifiedEntryPoints)
         {
             // knock off top-level main, and then see what is called

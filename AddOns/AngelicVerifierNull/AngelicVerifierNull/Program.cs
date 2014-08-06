@@ -25,6 +25,8 @@ namespace AngelicVerifierNull
         public static bool UseAliasAnalysis = true;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
+        // Use Corral's DeepAssert instrumentation
+        public static bool DeepAsserts = false;
     }
 
     class Stats
@@ -97,8 +99,10 @@ namespace AngelicVerifierNull
         static string boogieOpts = "";
         static string corralOpts = "";
         static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
+        static bool disableAssertRoundRobinPrePass = false;
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
+        static int timeoutAssertRoundRobin = 0;
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
 
@@ -146,6 +150,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/useEntryPoints"))
                 useProvidedEntryPoints = true;
 
+            if (args.Any(s => s == "/deepAsserts"))
+                Options.DeepAsserts = true;
+
             if (args.Any(s => s == "/disableRoundRobinPrePass"))
                 disableRoundRobinPrePass = true;
 
@@ -154,6 +161,12 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
                 .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
+
+            args.Where(s => s.StartsWith("/timeoutAssertRoundRobin:"))
+                .Iter(s => timeoutAssertRoundRobin = int.Parse(s.Substring("/timeoutAssertRoundRobin:".Length)));
+
+            if (timeoutAssertRoundRobin == 0)
+                disableAssertRoundRobinPrePass = true;
 
             if (timeoutRoundRobin == 0)
                 disableRoundRobinPrePass = true;
@@ -417,13 +430,16 @@ namespace AngelicVerifierNull
             addIds = new cba.AddUniqueCallIds();
             addIds.VisitProgram(init);
         }
+
         //Run Corral over different assertions (modulo errorLimit)
-        private static void RunCorralIterative(AvnInstrumentation instr, string p, int corralTimeout)
+        // Returns true if the call finishes conclusively
+        private static bool RunCorralIterative(AvnInstrumentation instr, string p, int corralTimeout)
         {
             Stats.resume("run.corral.iterative");
             var corralIterativeStartTime = DateTime.Now;
 
             int iterCount = 0;
+            var ret = true;
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
@@ -452,6 +468,7 @@ namespace AngelicVerifierNull
                 catch (Exception e)
                 {
                     Console.WriteLine("Corral call terminates inconclusively with {0}...", e.Message);
+                    ret = false;
                     break;
                 }
                 
@@ -531,6 +548,44 @@ namespace AngelicVerifierNull
                 iterCount++;
             }
             Stats.stop("run.corral.iterative");
+            return ret;
+        }
+
+        //Run RunCorralIterative with only one procedure enabled
+        private static void RunCorralAssertRoundRobin(AvnInstrumentation instr, string p)
+        {
+            Utils.Print("Using assert round robin exploration...", Utils.PRINT_TAG.AV_DEBUG);
+
+            foreach (var proc in instr.GetProcsWithAsserts())
+            {
+                Utils.Print(string.Format("Analyzing assertions in procedure {0} in round robin mode", proc),
+                     Utils.PRINT_TAG.AV_DEBUG);
+                Utils.Print(string.Format("number.assertions: {0}", Stats.numAssertsPerProc[proc]),
+                    Utils.PRINT_TAG.AV_DEBUG);
+
+                //enable only the procedure corresponding to proc
+                var left = instr.SuppressAllButOneProcedure(proc);
+
+                //we give less timeout for the individual procedure
+                var startTime = DateTime.Now; // Start time of round robin mode
+                var completed = RunCorralIterative(instr, corralConfig.mainProcName, timeoutAssertRoundRobin);
+                var endTime = DateTime.Now; // End time of round robin mode
+
+                Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
+                    Utils.PRINT_TAG.AV_DEBUG);
+
+                instr.Unsuppress();
+
+                // Did we prove the assertions?
+                if (completed)
+                {
+                    Utils.Print(string.Format("Suppressing {0} assertions", left.Count),
+                        Utils.PRINT_TAG.AV_DEBUG);
+                    left.Iter(t => instr.SuppressToken(t));
+                }
+
+                Stats.printStats();
+            }
         }
 
         //Run RunCorralIterative with only one procedure enabled
@@ -587,6 +642,13 @@ namespace AngelicVerifierNull
             if (!disableRoundRobinPrePass)
                 RunCorralRoundRobin(instr, corralConfig.mainProcName);
             Stats.stop("round.robin");
+
+            Stats.resume("assert.round.robin");
+            //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
+            if (!disableAssertRoundRobinPrePass)
+                RunCorralAssertRoundRobin(instr, corralConfig.mainProcName);
+            Stats.stop("assert.round.robin");
+
 
             // Run Corral outer loop
             RunCorralIterative(instr, corralConfig.mainProcName, timeout);
