@@ -979,17 +979,6 @@ namespace AngelicVerifierNull
                 af.Iter(s => res.aliases.Add(s, true));
             }
 
-            var asites = new HashSet<string>(res.aliases.Keys);
-            res.aliases = new Dictionary<string, bool>();
-            asites.Iter(s =>
-                {
-                    if (s == "aliasQnull3471")
-                        res.aliases[s] = true;
-                    else
-                        res.aliases[s] = false;
-                });
-
-
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
