@@ -418,7 +418,7 @@ namespace AngelicVerifierNull
             addIds.VisitProgram(init);
         }
         //Run Corral over different assertions (modulo errorLimit)
-        private static PersistentProgram RunCorralIterative(PersistentProgram prog, string p, int corralTimeout)
+        private static void RunCorralIterative(AvnInstrumentation instr, string p, int corralTimeout)
         {
             Stats.resume("run.corral.iterative");
             var corralIterativeStartTime = DateTime.Now;
@@ -427,16 +427,19 @@ namespace AngelicVerifierNull
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
+                var prog = instr.GetCurrProgram();
+
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
                 
                 Stats.count("corral.count");
-                Tuple<cba.ErrorTrace, cba.AssertLocation> cex = null;
+                cba.ErrorTrace cex = null;
                 
                 try
                 {
                     Stats.resume("run.corral");
-                    cex = RunCorral(prog, corralConfig.mainProcName, corralTimeout);
+                    cex = RunCorral(prog, corralConfig.mainProcName, instr, corralTimeout);
                     Stats.stop("run.corral");
+
                     cba.Stats.printStats();
                     Console.WriteLine("Number of procedures inlined: {0}", cba.Stats.ProgCallTreeSize);
                     cba.Stats.ProgCallTreeSize = 0;
@@ -447,7 +450,7 @@ namespace AngelicVerifierNull
                     Console.WriteLine("Corral call terminates inconclusively with {0}...", e.Message);
                     break;
                 }
-                var traceType = "";
+                
 
                 if (cex == null)
                 {
@@ -456,118 +459,85 @@ namespace AngelicVerifierNull
                 }
 
                 // Identify the entrypoint that led to the assertion violation.
-                // It will be the entrypoint that main calls
                 var failingEntryPoint =
-                    cex.Item1.Blocks.Select(blk => blk.Cmds.OfType<cba.CallInstr>()).Aggregate((a, b) => a.Concat(b))
-                    .Where(ci => IdentifiedEntryPoints.Contains(ci.callee))
-                    .Select(ci => ci.callee)
-                    .FirstOrDefault();
+                    instr.GetEntryPoint(cex, IdentifiedEntryPoints);
 
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
-                var pprog = GetPathProgram(cex.Item1, prog, out concretize);
+                var pprog = GetPathProgram(cex, prog, out concretize);
                 //pprog.writeToFile("path" + iterCount + ".bpl");
-                var ppprog = pprog.getProgram(); //don't do getProgram on pprog anymore
-                var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);                
+
+                var ppprog = pprog.getProgram();
+                var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);          
+      
                 //call ExplainError 
                 Stats.resume("explain.error");
                 var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
                 Stats.stop("explain.error");
-                //get the program once 
-                var nprog = prog.getProgram();
-                
+
+                var traceType = (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) ? "Suppressed" :
+                    (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS) ? "Angelic" : "Blocked";
+
+                // print the trace to disk
+                Console.WriteLine("Printing trace {0}", traceType + traceCount);
+                var assertLoc = instr.PrintErrorTrace(cex, traceType + traceCount);
+                traceCount++;
+
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
-                    traceType = (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) ? "Suppressed" : "Angelic";
+                    var tok = instr.SuppressAssert(pprog.getProgram());
+                    var failingAssert = instr.GetFailingAssert(tok);
+                    var failingProc = instr.GetFailingAssertProcName(tok);
 
-                    var ret = SupressFailingAssert(nprog, cex.Item2);
-                    if (ret == null)
+                    var output = "";
+                    // screen output
+                    if (assertLoc != null)
                     {
-                        Console.WriteLine("Failure is not an assert, skipping...");
-                        Debug.Assert(false);
-                        continue;
+                        output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
+                            failingProc, assertLoc.Item1, assertLoc.Item2, failingAssert.Expr.ToString(), failingEntryPoint);
+
+                        // result file output
+                        // format: Description, Src File, Line, Procedure, EntryPoint
+                        if (ResultsFile != null)
+                        {
+                            Stats.count("bug.count");
+                            ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
+                                failingAssert.Expr.ToString(), assertLoc.Item1, assertLoc.Item2, failingProc, failingEntryPoint);
+                            ResultsFile.Flush();
+                        }
                     }
                     else
                     {
-                        // screen output
-                        var output = string.Format("Assertion failed in proc {0} at line {1} with expr {2} and entrypoint {3}", 
-                            cex.Item2.procName, ret.Line, ret.Expr.ToString(), failingEntryPoint);
-                        if (printTraceMode == PRINT_TRACE_MODE.Sdv)
-                        {
-                            // Print assertion location in terms of source file
-                            //BoogieUtil.PrintProgram(ppprog, "ppprog.bpl");
-                            var loc = GetFailingLocation(ppprog, string.Format("Assertion failed in proc {0} in file {{0}} line {{1}} with expr {1} and entrypoint {2}", cex.Item2.procName, ret.Expr.ToString(), failingEntryPoint));
-                            if (loc != null) output = loc;                            
-                        }
-
-                        Console.WriteLine(output); //Utils.Print(output, Utils.PRINT_TAG.AV_OUTPUT);
-                        // result file output
-                        // format: Description, Src File, Line, Procedure, EntryPoint
-                        var resultLine = GetFailingLocation(ppprog, string.Format("Assertion {0} failed,{{0}},{{1}},{1},{2}",
-                            ret.Expr.ToString(), cex.Item2.procName, failingEntryPoint));
-                        if (ResultsFile != null && resultLine != null)
-                        {
-                            Stats.count("bug.count");
-                            ResultsFile.WriteLine(resultLine);
-                            ResultsFile.Flush();
-                        }
-                        if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
-                            Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output),Utils.PRINT_TAG.AV_OUTPUT);
+                        output = string.Format("Assertion failed in proc {0} with expr {1} and entrypoint {2}",
+                            failingProc, failingAssert.Expr.ToString(), failingEntryPoint);
                     }
+
+                    Console.WriteLine(output);
+                    if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
+                        Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
                     traceType = "Blocked";
-                    var mainProc = nprog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
-                    if (mainProc == null)
-                        throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
-                    mainProc.Requires.Add(new Requires(false, eeStatus.Item2)); //add the blocking condition and iterate
-
+                    instr.SuppressInput(eeStatus.Item2);
                     Stats.count("blocked.count");
                 }
 
-                // print the trace to disk
-                Console.WriteLine("Printing trace {0}", traceType + traceCount);
-                PrintTrace(cex.Item1, prog, traceType + traceCount);
-                traceCount++;
-
-                prog = new PersistentProgram(nprog, corralConfig.mainProcName, 1);
-                
                 iterCount++;
-                //Print the instrumented program
-                //BoogieUtil.PrintProgram(prog.getProgram(), "corralMain_after_iteration_" + iterCount + ".bpl");
             }
             Stats.stop("run.corral.iterative");
-            return prog;
-        }
-
-        // precondition: prog had a single implementation with a single block
-        private static string GetFailingLocation(Program prog, string format)
-        {
-            var impl = prog.TopLevelDeclarations.OfType<Implementation>().FirstOrDefault();
-            if (impl == null) return null;
-            var block = impl.Blocks[0];
-            foreach (var cmd in block.Cmds.OfType<PredicateCmd>().Reverse())
-            {
-                if (!BoogieUtil.checkAttrExists("sourcefile", cmd.Attributes)) continue;
-                var file = QKeyValue.FindStringAttribute(cmd.Attributes, "sourcefile");
-                var line = QKeyValue.FindIntAttribute(cmd.Attributes, "sourceline", -1);
-                if (file == null || line == -1) continue;
-                return string.Format(format, file, line);
-            }
-            return null;
         }
 
         //Run RunCorralIterative with only one procedure enabled
-        private static PersistentProgram RunCorralRoundRobin(PersistentProgram pprog, string p)
+        private static void RunCorralRoundRobin(AvnInstrumentation instr, string p)
         {
+            var pprog = instr.GetCurrProgram();
+
             Utils.Print("Using round robin exploration...", Utils.PRINT_TAG.AV_DEBUG);
             var prog = pprog.getProgram();
-            var blockConstNames = harnessInstrumentation.blockEntryPointConstants.Keys;
-            var blockCallConsts = prog.TopLevelDeclarations
-                .OfType<Constant>()
-                .Where(x => blockConstNames.Contains(x.Name));
+
+            var blockCallConsts = instr.GetRoundRobinBlockingConstants();
             //TODO: iterate for multiple rounds removing procedures once they are verified
             foreach (var bc in blockCallConsts)
             {
@@ -577,55 +547,45 @@ namespace AngelicVerifierNull
                     Utils.PRINT_TAG.AV_DEBUG);
 
                 //enable only the procedure corresponding to kv
-                var tmp = new HashSet<Constant>(blockCallConsts);
-                tmp.Remove(bc);
-                var blockExpr = tmp.Aggregate((Expr)Expr.True, (x, y) => (Expr.And(x, Expr.Not(IdentifierExpr.Ident(y))))); 
-                var mainProc = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
-                if (mainProc == null)
-                    throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
-                mainProc.Requires.Add(new Requires(false, blockExpr)); //add the blocking condition and iterate
-                pprog = new PersistentProgram(prog, corralConfig.mainProcName, 1);
-                //we give less timeout for the individual procedure
+                instr.BlockAllButThis(bc);
 
+                //we give less timeout for the individual procedure
                 var startTime = DateTime.Now; // Start time of round robin mode
-                pprog = RunCorralIterative(pprog, corralConfig.mainProcName, timeoutRoundRobin);
+                RunCorralIterative(instr, corralConfig.mainProcName, timeoutRoundRobin);
                 var endTime = DateTime.Now; // End time of round robin mode
+
                 Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
                     Utils.PRINT_TAG.AV_DEBUG);
-                
-                //TODO: need to remove the requires corresponding to the blockExpr, but the program has changed 
-                //      and more requires corresponding to blockign clauses may have been added
-                //find the mainProc in the new program
-                prog = pprog.getProgram();
-                mainProc = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == corralConfig.mainProcName).FirstOrDefault();
-                if (mainProc == null)
-                    throw new Exception(String.Format("Cannot find the main procedure {0} to add blocking requires", corralConfig.mainProcName));
-                mainProc.Requires.RemoveAll(x => x.Condition.ToString() == blockExpr.ToString());
+                                
+                instr.RemoveBlockingConstraint();
 
                 Stats.printStats();
             }
-            return new PersistentProgram(prog, corralConfig.mainProcName, 1);
         }
         //Top-level Corral call
         private static void RunCorralForAnalysis(PersistentProgram prog)
         {
+            ////////////////
+            // Initial stuff
+            ////////////////
+
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
+
+            // Rewrite program to a more convinient form
+            var rc = new cba.RewriteCallCmdsPass(true);
+            prog = rc.run(prog);
+
+            var instr = new AvnInstrumentation(harnessInstrumentation);
+            prog = instr.run(prog);
+
             Stats.resume("round.robin");
             //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
             if (!disableRoundRobinPrePass)
-                prog = RunCorralRoundRobin(prog, corralConfig.mainProcName);
+                RunCorralRoundRobin(instr, corralConfig.mainProcName);
             Stats.stop("round.robin");
 
             // Run Corral outer loop
-            RunCorralIterative(prog, corralConfig.mainProcName,timeout);
-        }
-
-        // print trace to disk
-        public static void PrintTrace(cba.ErrorTrace trace, PersistentProgram program, string name)
-        {
-            if(printTraceMode == PRINT_TRACE_MODE.Boogie) 
-                cba.PrintProgramPath.print(program, trace, name);
-            else
-                cba.PrintSdvPath.Print(program.getProgram(), trace, new HashSet<string>(), null, name + ".tt", "stack.txt");
+            RunCorralIterative(instr, corralConfig.mainProcName, timeout);
         }
 
         // Returns the failing assertion, and supresses it in the input program
@@ -649,10 +609,8 @@ namespace AngelicVerifierNull
 
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
-        static Tuple<cba.ErrorTrace, cba.AssertLocation> RunCorral(PersistentProgram inputProg, string main, int corralTimeout)
+        static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string main, AvnInstrumentation instr, int corralTimeout)
         {
-            Debug.Assert(cba.GlobalConfig.isSingleThreaded);
-            Debug.Assert(cba.GlobalConfig.InferPass == null);
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
@@ -666,62 +624,23 @@ namespace AngelicVerifierNull
                 cba.ConfigManager.progVerifyOptions.CallTree = corralState.CallTree;
             }
 
-            // Remove print commands and sourceline annotations
-            //var prog = inputProg.getProgram();
-            //var pcmdsInfo = cba.PrintSdvPath.DeletePrintCmds(prog);
-            //var scmdsInfo = cba.PrintSdvPath.DeleteSourceInfo(prog);
-            //var curr = new PersistentProgram(prog, inputProg.mainProcName, inputProg.contextBound);
-
-            // Rewrite assert commands
-            var apass = new cba.RewriteAssertsPass();
-            var curr = apass.run(inputProg);
-
-            // Rewrite call commands 
-            var rcalls = new cba.RewriteCallCmdsPass(true);
-            curr = rcalls.run(curr);
-
-            // Prune
-            cba.PruneProgramPass.RemoveUnreachable = true;
-            var prune = new cba.PruneProgramPass(false);
-            curr = prune.run(curr);
-            cba.PruneProgramPass.RemoveUnreachable = false;
-
-            // Sequential instrumentation
-            var seqInstr = new cba.SequentialInstrumentation();
-            curr = seqInstr.run(curr);
-
-            ProgTransformation.PersistentProgram.FreeParserMemory();
-
-            // For debugging, create an Action for printing a trace at the source level
-            var passes = new List<cba.CompilerPass>(new cba.CompilerPass[] { seqInstr, prune, rcalls, apass });
-            var printTrace = new Action<cba.ErrorTrace, string>((trace, fileName) =>
-            {
-                if (!cba.GlobalConfig.genCTrace)
-                    return;
-                passes.Where(p => p != null)
-                    .Iter(p => trace = p.mapBackTrace(trace));
-                //trace = scmdsInfo.mapBackTrace(trace);
-                //trace = pcmdsInfo.mapBackTrace(trace);
-                cba.PrintConcurrentProgramPath.printCTrace(inputProg, trace, fileName);
-                apass.reset();
-            });
-
-
             ////////////////////////////////////
             // Verification phase
             ////////////////////////////////////
-            var refinementState = new cba.RefinementState(curr,
-                Driver.trackAllVars ? 
-                /*track all variables*/curr.allVars.Variables : 
-                /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { seqInstr.assertsPassedName })), 
+            var refinementState = new cba.RefinementState(inputProg,
+                Driver.trackAllVars ?
+                /*track all variables*/inputProg.allVars.Variables :
+                /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { instr.assertsPassedName })), 
                 false);
+
+            inputProg.writeToFile("cquery.bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
             {
                 Stats.count("count.check.refine");
                 Stats.resume("check.and.refine");
-                cba.Driver.checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+                cba.Driver.checkAndRefine(inputProg, refinementState, null, out cexTrace);
                 Stats.stop("check.and.refine");
             }
             catch (Exception)
@@ -738,23 +657,7 @@ namespace AngelicVerifierNull
             corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
             corralState.TrackedVariables = refinementState.getVars().Variables;
 
-            ////////////////////////////////////
-            // Output Phase
-            ////////////////////////////////////
-
-            if (cexTrace != null)
-            {
-                cexTrace = seqInstr.mapBackTrace(cexTrace);
-                cexTrace = prune.mapBackTrace(cexTrace);
-                cexTrace = rcalls.mapBackTrace(cexTrace);
-                //PrintProgramPath.print(rcalls.input, cexTrace, "temp0");
-                cexTrace = apass.mapBackTrace(cexTrace);
-                //cexTrace = scmdsInfo.mapBackTrace(cexTrace);
-                //cexTrace = pcmdsInfo.mapBackTrace(cexTrace);
-                return Tuple.Create(cexTrace, apass.getFailingAssertLocation());
-            }
-
-            return null;
+            return cexTrace;
         }
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
@@ -764,12 +667,12 @@ namespace AngelicVerifierNull
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
 
             // convert trace to a path program
-            cba.RestrictToTrace.convertNonFailingAssertsToAssumes = true;
+            //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = true;
             var tinfo = new cba.InsertionTrans();
             var traceProgCons = new cba.RestrictToTrace(program.getProgram(), tinfo);
             traceProgCons.addTrace(trace);
             var tprog = traceProgCons.getProgram();
-            cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
+            //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
             // mark some annotations (that enable optimizations) along the path program
             CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars);
@@ -777,7 +680,7 @@ namespace AngelicVerifierNull
             // convert to a persistent program
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
             // rewrite asserts back to main
-            witness = cba.DeepAssertRewrite.InstrumentTrace(witness);
+            //witness = cba.DeepAssertRewrite.InstrumentTrace(witness);
 
             witness.writeToFile("trace_prog.bpl");
 
@@ -1073,6 +976,15 @@ namespace AngelicVerifierNull
                 af.Iter(s => res.aliases.Add(s, true));
             }
 
+            var asites = new HashSet<string>(res.aliases.Keys);
+            res.aliases = new Dictionary<string, bool>();
+            asites.Iter(s =>
+                {
+                    if (s == "aliasQnull3471")
+                        res.aliases[s] = true;
+                    else
+                        res.aliases[s] = false;
+                });
 
 
             var origProgram = inp.getProgram();
