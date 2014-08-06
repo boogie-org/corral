@@ -76,7 +76,9 @@ namespace AngelicVerifierNull
                         impl.Proc.InParams.ForEach(v =>
                             {
                                 var l = BoogieAstFactory.MkLocal(v.Name + "_" + impl.Name, v.TypedIdent.Type);
-                                l.Attributes = v.Attributes;
+                                // We are delibrately dropping the attributes so that
+                                // all parameters are initialized by allocation
+                                //l.Attributes = v.Attributes;
                                 args.Add(l);
                             });
                         locals.AddRange(args);
@@ -86,7 +88,7 @@ namespace AngelicVerifierNull
                         impl.Proc.InParams.ForEach(v => 
                             {
                                 var g = BoogieAstFactory.MkGlobal(v.Name + "_" + impl.Name, v.TypedIdent.Type);
-                                g.Attributes = v.Attributes;
+                                //g.Attributes = v.Attributes;
                                 args.Add(g);
                             });
                         globalParams.AddRange(args);
@@ -260,6 +262,12 @@ namespace AngelicVerifierNull
                     throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
                         mallocProcedure.Name, mallocProcedure.InParams.Count));
                 }
+
+                // Drop annotations on mallocProcedureFull. We will use it 
+                // as our "unknown" theory
+                mallocProcedure.Requires = new List<Requires>();
+                mallocProcedure.Ensures = new List<Ensures>();
+                mallocProcedure.Modifies = new List<IdentifierExpr>();
             }
             private void FindNULL()
             {
