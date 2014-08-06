@@ -791,6 +791,7 @@ namespace cba.Util
         public string ModelViewFile;
 
         public bool useFwdBck;
+        public bool useDI;
 
         // Printing the program setnt to Boogie
         public bool printProg;
@@ -815,6 +816,7 @@ namespace cba.Util
             procsToSkip = new HashSet<string>();
             extraRecBound = new Dictionary<string, int>();
             useFwdBck = false;
+            useDI = false;
         }
 
         public BoogieVerifyOptions Copy()
@@ -834,6 +836,7 @@ namespace cba.Util
             ret.printProg = printProg;
             ret.progFileName = progFileName;
             ret.useFwdBck = useFwdBck;
+            ret.useDI = useDI;
             ret.procsToSkip = new HashSet<string>(ret.procsToSkip);
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
 
