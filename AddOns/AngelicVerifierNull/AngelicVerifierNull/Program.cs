@@ -429,6 +429,9 @@ namespace AngelicVerifierNull
             {
                 var prog = instr.GetCurrProgram();
 
+                // Don't reuse the call-tree 
+                corralState.CallTree = new HashSet<string>();
+
                 Utils.Print(string.Format("Recursion Bound: {0}", CommandLineOptions.Clo.RecursionBound), Utils.PRINT_TAG.AV_DEBUG);
                 
                 Stats.count("corral.count");
