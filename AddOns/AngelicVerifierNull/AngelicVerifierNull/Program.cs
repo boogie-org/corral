@@ -107,6 +107,7 @@ namespace AngelicVerifierNull
         static int timeoutAssertRoundRobin = 0;
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
+        static bool prePassOnly = false; //only running prepass (for debugging purpose)
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -157,6 +158,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/disableRoundRobinPrePass"))
                 disableRoundRobinPrePass = true;
+
+            if (args.Any(s => s == "/prePassOnly"))
+                prePassOnly = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -238,6 +242,7 @@ namespace AngelicVerifierNull
                     Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
                     Utils.PRINT_TAG.AV_STATS);
 
+                if (prePassOnly) return;
                 //Analyze
                 RunCorralForAnalysis(prog);
             }
@@ -303,8 +308,8 @@ namespace AngelicVerifierNull
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
-            houdini.InNonNull = true;
-            houdini.OutNonNull = true;
+            houdini.InNonNull = false;
+            houdini.OutNonNull = false;
             houdini.addContracts = true;
             
             PersistentProgram newP = houdini.run(prog);
