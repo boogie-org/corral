@@ -25,6 +25,8 @@ namespace AngelicVerifierNull
         public static bool UseAliasAnalysis = true;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
+        // Add unsound options for NULL
+        public static bool UseUnsoundMapSelectNonNull = false;
     }
 
     class Stats
@@ -153,6 +155,9 @@ namespace AngelicVerifierNull
 
             if (timeoutRoundRobin == 0)
                 disableRoundRobinPrePass = true;
+
+            if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
+                Options.UseUnsoundMapSelectNonNull = true;
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -330,6 +335,11 @@ namespace AngelicVerifierNull
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
             //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
+
+            //unsound
+            if (Options.UseUnsoundMapSelectNonNull)
+                (new Instrumentations.AssumeMapSelectsNonNull()).Visit(init);
+
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");

@@ -425,5 +425,37 @@ namespace AngelicVerifierNull
                 }
             }
         }
+
+
+        /// <summary>
+        /// Introduces assume M[x] != null, for any x := op(M[x], ..) 
+        /// </summary>
+        public class AssumeMapSelectsNonNull : StandardVisitor
+        {
+            public AssumeMapSelectsNonNull() { }
+            public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
+            {
+                var newCmdSeq = new List<Cmd>();
+                foreach (Cmd c in cmdSeq) 
+                    if (c is AssignCmd)
+                    {
+                        var ac = c as AssignCmd;
+                        var lookups = new List<Expr>();
+                        ac.Rhss.Iter(x =>
+                            {
+                                if (x is NAryExpr && (x as NAryExpr).Fun is MapSelect)
+                                    lookups.Add(x);
+                            }
+                            );
+                        newCmdSeq.Add(c);
+                        if (lookups.Count() > 0)
+                            lookups.Iter(x =>
+                                {
+                                    newCmdSeq.Add(new AssumeCmd(Token.NoToken, Expr.Neq(x, new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)))));
+                                });
+                    }
+                return base.VisitCmdSeq(newCmdSeq);
+            }
+        }
     }
 }
