@@ -125,6 +125,10 @@ namespace AliasAnalysis
                 .FirstOrDefault();
             if (main != null)
                 BoogieUtil.pruneProcs(program, main.Name);
+
+            // remove aliasing queries
+            program.TopLevelDeclarations = new List<Declaration>(program.TopLevelDeclarations
+                .Where(decl => !(decl is Function && BoogieUtil.checkAttrExists("aliasingQuery", decl.Attributes))));
         }
 
         public override Expr VisitNAryExpr(NAryExpr node)

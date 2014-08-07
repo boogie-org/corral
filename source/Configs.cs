@@ -110,6 +110,7 @@ namespace cba
         public bool siOnly { get; private set; }
         public List<string> annotations { get; private set; }
         public int FwdBckSearch;
+        public bool useDI;
         public string assertsPassed { get; private set; }
         public bool assertsPassedIsInt { get; private set; }
         public bool fwdBckInRef { get; private set; }
@@ -291,6 +292,7 @@ namespace cba
             maxStaticLoopBound = 10;
             NonUniformUnfolding = false;
             FwdBckSearch = 0;
+            useDI = false;
             assertsPassed = "assertsPassed";
             assertsPassedIsInt = false;
             fwdBckInRef = false;
@@ -645,6 +647,10 @@ namespace cba
             else if (flag == "/fwdBck")
             {
                 FwdBckSearch = 1;
+            }
+            else if (flag == "/di")
+            {
+                useDI = true;
             }
             else if (flag.StartsWith("/assertVar:"))
             {

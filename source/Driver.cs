@@ -1290,7 +1290,7 @@ namespace cba
                     Log.WriteLine("Verifying program while tracking: {0}", refinementState.getVars().Variables.Print());
                 else
                     Log.WriteLine("Verifying program while tracking: {0}", refinementState.getVars().ToString());
-                
+
                 // This records the transformation made when "curr" is
                 // transformed to "counterexample"
                 InsertionTrans tinfo = null;

@@ -1,20 +1,20 @@
 
 -------------------- t1.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t1.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 52 with expr a != NULL and entrypoint Foo
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
 
 -------------------- t2_err.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t2_err.bpl ------
-[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
+[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
 
 -------------------- t3_err.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t3_err.bpl ------
-[TAG: AV_OUTPUT] AnglelicVerifier failed with: ABORT: no NULL constant declared in the input program
+[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no NULL constant declared in the input program
 
 -------------------- t4.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t4.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 53 with expr a != NULL and entrypoint Foo
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
 
 -------------------- t5.bpl --------------------
@@ -33,14 +33,14 @@
 -------------------- t8.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t8.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_1(x_2) ==> x_2 != NULL)
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar at line 79 with expr a != NULL and entrypoint Foo_ShowBug
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo_ShowBug
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_2(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_5(x_3) ==> arr[x_3] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> x_2 != NULL)
 
 -------------------- pruned.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo at line 113 with expr !(x == NULL) and entrypoint corralExtraInit
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL) and entrypoint corralExtraInit
 
 -------------------- empty_forall.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------
@@ -48,8 +48,8 @@
 
 -------------------- null.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing null.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo at line 30 with expr b != NULL and entrypoint Foo
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo at line 23 with expr b != NULL and entrypoint Foo
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL and entrypoint Foo
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL and entrypoint Foo
 
 -------------------- generalize.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing generalize.bpl ------
