@@ -880,11 +880,15 @@ namespace cba
                 //ptrace.writeToFile("ptrace.bpl");
 
                 if (da != null)
-                    ptrace = DeepAssertRewrite.InstrumentTrace(ptrace);
+                {
+                    refinementState.Push();
+                    ptrace = DeepAssertRewrite.InstrumentTrace(ptrace, refinementState);
+                }
 
                 //////////////////////////
                 // Check concrete trace
                 //////////////////////////
+
                 Stats.beginTime();
                 BoogieVerify.options = pathVerifyOptions;
 
@@ -937,6 +941,9 @@ namespace cba
                 refinement.doRefinement();
                 Stats.endTime(ref Stats.pathVerificationTime);
 
+                if (da != null)
+                    refinementState.Pop();
+                
                 ProgTransformation.PersistentProgram.FreeParserMemory();
 
                 //CommandLineOptions.Clo.UseLabels = ul;
