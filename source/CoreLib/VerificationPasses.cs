@@ -2760,7 +2760,7 @@ namespace cba
         }
 
         // Instrument deep asserts in a trace
-        public static PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace)
+        public static PersistentCBAProgram InstrumentTrace(PersistentCBAProgram ptrace, GlobalRefinementState refinementState)
         {
             var program = ptrace.getProgram();
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, ptrace.mainProcName);
@@ -2801,6 +2801,10 @@ namespace cba
             program.TopLevelDeclarations.Add(av);
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impl.Proc.Modifies.Add(Expr.Ident(av)));
+
+            // Reflect the addition of a new global variable on
+            // our refinement state
+            refinementState.Add(new AddVarMapping(new VarSet(av.Name, "")));
 
             return new PersistentCBAProgram(program, ptrace.mainProcName, ptrace.contextBound);
         }
