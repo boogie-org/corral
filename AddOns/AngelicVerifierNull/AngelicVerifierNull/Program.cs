@@ -691,8 +691,6 @@ namespace AngelicVerifierNull
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
 
-            //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
-
             // Reuse previous corral state
             if (corralState != null && Options.UsePrevCorralState)
             {
@@ -709,7 +707,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { instr.assertsPassedName })), 
                 false);
 
-            inputProg.writeToFile("cquery.bpl");
+            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
@@ -725,6 +723,9 @@ namespace AngelicVerifierNull
                 corralState = new cba.CorralState();
                 corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
                 corralState.TrackedVariables = refinementState.getVars().Variables;
+
+                DumpProgWithAsserts(inputProg.getProgram(), inputProg.mainProcName, 
+                    "corralinp" + corralIterationCount + ".bpl");
                 throw;
             }
 
@@ -735,6 +736,77 @@ namespace AngelicVerifierNull
 
             return cexTrace;
         }
+
+        // Dump program (corral query) after putting the asserts back in.
+        // Used only for debugging
+        static void DumpProgWithAsserts(Program program, string mainProcName, string filename)
+        {
+            var ap = "assertsPassed";
+
+            // Delete assignment and assertion of assertsPased in the main procedure.
+            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, mainProcName);
+            foreach (var block in main.Blocks)
+            {
+                block.Cmds.RemoveAll(cmd =>
+                    {
+                        var vu = new VarsUsed();
+                        vu.Visit(cmd);
+                        if (vu.globalsUsed.Contains(ap))
+                            return true;
+                        return false;
+                    });
+            }
+
+            // convert assertsPassed := e to assert e
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (impl.Name == mainProcName)
+                    continue;
+                foreach (var block in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in block.Cmds)
+                    {
+                        var acmd = cmd as AssignCmd;
+                        if (acmd == null)
+                        {
+                            ncmds.Add(cmd);
+                            continue;
+                        }
+                        if (acmd.Lhss[0].DeepAssignedVariable.Name == ap)
+                        {
+                            ncmds.Add(new AssertCmd(Token.NoToken, acmd.Rhss[0]));
+                        }
+                        else
+                        {
+                            ncmds.Add(cmd);
+                        }
+                    }
+                    block.Cmds = ncmds;
+                }
+            }
+            
+            // rename assertsPassed to assertsPassedConst and make it a constant equal to true
+            program.TopLevelDeclarations.RemoveAll(decl => decl is GlobalVariable &&
+                (decl as GlobalVariable).Name == ap);
+
+            var substD = new Dictionary<string, Variable>();
+            var apC = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                ap + "const", btype.Bool));
+            substD.Add(ap, apC);
+            var subst = new VarSubstituter(substD, new Dictionary<string, Variable>());
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                subst.VisitImplementation(impl);
+            }
+            program.TopLevelDeclarations.Add(apC);
+            program.TopLevelDeclarations.Add(new Axiom(Token.NoToken,
+                Expr.Eq(Expr.Ident(apC), Expr.Literal(true))));
+
+            BoogieUtil.PrintProgram(program, filename);
+        }
+
+
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
