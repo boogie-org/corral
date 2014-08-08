@@ -265,9 +265,9 @@ namespace AngelicVerifierNull
 
                 // Drop annotations on mallocProcedureFull. We will use it 
                 // as our "unknown" theory
-                mallocProcedure.Requires = new List<Requires>();
-                mallocProcedure.Ensures = new List<Ensures>();
-                mallocProcedure.Modifies = new List<IdentifierExpr>();
+                mallocProcedureFull.Requires = new List<Requires>();
+                mallocProcedureFull.Ensures = new List<Ensures>();
+                mallocProcedureFull.Modifies = new List<IdentifierExpr>();
             }
             private void FindNULL()
             {
