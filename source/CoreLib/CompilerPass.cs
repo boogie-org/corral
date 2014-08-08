@@ -268,6 +268,12 @@ namespace cba
                     var newCmds = new List<Cmd>();
                     for (int i = 0; i < blk.Cmds.Count; i++)
                     {
+                        // disable assertions
+                        if (blk.Cmds[i] is AssertCmd && !BoogieUtil.isAssertTrue(blk.Cmds[i]))
+                        {
+                            newCmds.Add(new AssumeCmd(Token.NoToken, (blk.Cmds[i] as AssertCmd).Expr));
+                            continue;
+                        }
                         var cc = blk.Cmds[i] as CallCmd;
                         if (cc != null && cc.callee == kvp.Key)
                         {
