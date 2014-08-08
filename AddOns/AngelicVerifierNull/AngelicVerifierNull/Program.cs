@@ -25,6 +25,8 @@ namespace AngelicVerifierNull
         public static bool UseAliasAnalysis = true;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
+        // Add unsound options for NULL
+        public static bool UseUnsoundMapSelectNonNull = false;
         // Use Corral's DeepAssert instrumentation
         public static bool DeepAsserts = false;
     }
@@ -105,6 +107,7 @@ namespace AngelicVerifierNull
         static int timeoutAssertRoundRobin = 0;
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
+        static bool prePassOnly = false; //only running prepass (for debugging purpose)
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -156,6 +159,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/disableRoundRobinPrePass"))
                 disableRoundRobinPrePass = true;
 
+            if (args.Any(s => s == "/prePassOnly"))
+                prePassOnly = true;
+
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
 
@@ -170,6 +176,9 @@ namespace AngelicVerifierNull
 
             if (timeoutRoundRobin == 0)
                 disableRoundRobinPrePass = true;
+
+            if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
+                Options.UseUnsoundMapSelectNonNull = true;
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -233,6 +242,7 @@ namespace AngelicVerifierNull
                     Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
                     Utils.PRINT_TAG.AV_STATS);
 
+                if (prePassOnly) return;
                 //Analyze
                 RunCorralForAnalysis(prog);
             }
@@ -298,8 +308,8 @@ namespace AngelicVerifierNull
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
-            houdini.InNonNull = true;
-            houdini.OutNonNull = true;
+            houdini.InNonNull = false;
+            houdini.OutNonNull = false;
             houdini.addContracts = true;
             
             PersistentProgram newP = houdini.run(prog);
@@ -351,6 +361,11 @@ namespace AngelicVerifierNull
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
             //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
+
+            //unsound
+            if (Options.UseUnsoundMapSelectNonNull)
+                (new Instrumentations.AssumeMapSelectsNonNull()).Visit(init);
+
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");
@@ -681,8 +696,6 @@ namespace AngelicVerifierNull
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
 
-            //inputProg.writeToFile("corralinp" + corralIterationCount + ".bpl");
-
             // Reuse previous corral state
             if (corralState != null && Options.UsePrevCorralState)
             {
@@ -699,7 +712,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { instr.assertsPassedName })), 
                 false);
 
-            inputProg.writeToFile("cquery.bpl");
+            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
@@ -715,6 +728,9 @@ namespace AngelicVerifierNull
                 corralState = new cba.CorralState();
                 corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
                 corralState.TrackedVariables = refinementState.getVars().Variables;
+
+                DumpProgWithAsserts(inputProg.getProgram(), inputProg.mainProcName, 
+                    "corralinp" + corralIterationCount + ".bpl");
                 throw;
             }
 
@@ -725,6 +741,77 @@ namespace AngelicVerifierNull
 
             return cexTrace;
         }
+
+        // Dump program (corral query) after putting the asserts back in.
+        // Used only for debugging
+        static void DumpProgWithAsserts(Program program, string mainProcName, string filename)
+        {
+            var ap = "assertsPassed";
+
+            // Delete assignment and assertion of assertsPased in the main procedure.
+            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, mainProcName);
+            foreach (var block in main.Blocks)
+            {
+                block.Cmds.RemoveAll(cmd =>
+                    {
+                        var vu = new VarsUsed();
+                        vu.Visit(cmd);
+                        if (vu.globalsUsed.Contains(ap))
+                            return true;
+                        return false;
+                    });
+            }
+
+            // convert assertsPassed := e to assert e
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (impl.Name == mainProcName)
+                    continue;
+                foreach (var block in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in block.Cmds)
+                    {
+                        var acmd = cmd as AssignCmd;
+                        if (acmd == null)
+                        {
+                            ncmds.Add(cmd);
+                            continue;
+                        }
+                        if (acmd.Lhss[0].DeepAssignedVariable.Name == ap)
+                        {
+                            ncmds.Add(new AssertCmd(Token.NoToken, acmd.Rhss[0]));
+                        }
+                        else
+                        {
+                            ncmds.Add(cmd);
+                        }
+                    }
+                    block.Cmds = ncmds;
+                }
+            }
+            
+            // rename assertsPassed to assertsPassedConst and make it a constant equal to true
+            program.TopLevelDeclarations.RemoveAll(decl => decl is GlobalVariable &&
+                (decl as GlobalVariable).Name == ap);
+
+            var substD = new Dictionary<string, Variable>();
+            var apC = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                ap + "const", btype.Bool));
+            substD.Add(ap, apC);
+            var subst = new VarSubstituter(substD, new Dictionary<string, Variable>());
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                subst.VisitImplementation(impl);
+            }
+            program.TopLevelDeclarations.Add(apC);
+            program.TopLevelDeclarations.Add(new Axiom(Token.NoToken,
+                Expr.Eq(Expr.Ident(apC), Expr.Literal(true))));
+
+            BoogieUtil.PrintProgram(program, filename);
+        }
+
+
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
