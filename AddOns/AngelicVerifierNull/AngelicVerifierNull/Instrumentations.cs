@@ -65,6 +65,7 @@ namespace AngelicVerifierNull
                         continue;
 
                     Stats.numProcsAnalyzed++;
+                    impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                     entrypoints.Add(impl.Name);
 
