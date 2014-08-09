@@ -1083,11 +1083,8 @@ namespace AngelicVerifierNull
             {
                 foreach (var blk in cex.Blocks)
                 {
-                    if (!da.firstBlockToImpl.ContainsKey(blk.blockName))
-                        continue;
-                    if (!IdentifiedEntryPoints.Contains(da.firstBlockToImpl[blk.blockName]))
-                        continue;
-                    return da.firstBlockToImpl[blk.blockName];
+                    var ep = da.EntryBlockToProc(blk.blockName);
+                    if (ep != null && IdentifiedEntryPoints.Contains(ep)) return ep;
                 }
                 Debug.Assert(false);
             }

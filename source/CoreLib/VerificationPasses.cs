@@ -2346,7 +2346,7 @@ namespace cba
     {
         string origMain;
 
-        public Dictionary<string, string> firstBlockToImpl {get; private set;}
+        Dictionary<string, string> firstBlockToImpl;
         
         // newBlock -> <origBlock, Proc>
         Dictionary<string, Tuple<string, string>> blockToOrig;
@@ -2556,8 +2556,19 @@ namespace cba
 
             if (!disableLoops)
             {
-                // detect loops
+                // Get rid of loops in main
                 var l2b = BoogieUtil.labelBlockMapping(mainCopy);
+                foreach (var b in mainCopy.Blocks)
+                {
+                    var tc = b.TransferCmd as GotoCmd;
+                    if (tc == null) continue;
+                    tc.labelTargets = new List<Block>(tc.labelNames.Select(s => l2b[s]));
+                }
+
+                mainCopy.Blocks = LoopUnroll.UnrollLoops(mainCopy.Blocks[0], CommandLineOptions.Clo.RecursionBound, false);
+
+                // detect loops
+                l2b = BoogieUtil.labelBlockMapping(mainCopy);
                 var color = new Dictionary<Block, int>();
                 mainCopy.Blocks.Iter(b => color.Add(b, 0));
                 var Succ = new Func<Block, IEnumerable<Block>>(b =>
@@ -2616,6 +2627,9 @@ namespace cba
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
         {
+            // undo loop unrolling
+            trace = LoopUnrollingPass.undoUnrolling(trace);
+
             // This transformation is: rename blocks, instrument calls, instrument assertions
             var ret = mapBackTraceRec(trace, 0, origMain);
             //PrintProgramPath.print(input, ret, "tr");
@@ -2678,6 +2692,15 @@ namespace cba
             return ret;
         }
 
+        // Maps block label to the procedure that it come from,
+        // when it is the entry block of that procedure
+        public string EntryBlockToProc(string blockLabel)
+        {
+            var label = LoopUnroll.sanitizeLabel(blockLabel);
+            if (!firstBlockToImpl.ContainsKey(label))
+                return null;
+            return firstBlockToImpl[label];
+        }
 
         private static void DFS(Block root, Block parent, Func<Block, IEnumerable<Block>> Succ, Dictionary<Block, int> color, Dictionary<Block, Block> parentTree, List<Block> cycle)
         {

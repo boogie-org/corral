@@ -58,3 +58,7 @@
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: mallocTrigger_0(x_1) ==> b[x_1] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> b[g2] != NULL
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall _z: int :: b[_z] > 0)
+
+-------------------- rec.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing rec.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr false and entrypoint foo

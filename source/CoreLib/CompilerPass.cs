@@ -990,6 +990,12 @@ namespace cba
                 return trace;
             }
 
+            return undoUnrolling(trace);
+        }
+
+        public static ErrorTrace undoUnrolling(ErrorTrace trace)
+        {
+
             // The heuristic used here is to get rid of the "#num" sign in the labels.
             // We assume that is the only way that Boogie.UnrollLoops changes the labels
             ErrorTrace ret = new ErrorTrace(trace.procName);
@@ -1005,7 +1011,7 @@ namespace cba
                         var cc = c as CallInstr;
                         if (cc.calleeTrace != null)
                         {
-                            ret.addInstr(new CallInstr(this.mapBackTrace(cc.calleeTrace), cc.asyncCall, cc.info));
+                            ret.addInstr(new CallInstr(undoUnrolling(cc.calleeTrace), cc.asyncCall, cc.info));
                             continue;
                         }
                     }
@@ -1019,9 +1025,9 @@ namespace cba
 
             return ret;
         }
-        
+
         // Remove the "#num" from the end of lab, if there is something like this
-        private string sanitizeLabel(string lab)
+        public static string sanitizeLabel(string lab)
         {
             if (!lab.Contains('#'))
                 return lab;
