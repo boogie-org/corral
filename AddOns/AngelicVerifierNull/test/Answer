@@ -40,7 +40,7 @@
 
 -------------------- pruned.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL) and entrypoint corralExtraInit
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL) and entrypoint foo
 
 -------------------- empty_forall.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------

@@ -60,6 +60,10 @@ namespace AngelicVerifierNull
                     // skip this impl if it is not marked as an entrypoint
                     if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         continue;
+                    // skip initialization procedure
+                    if (impl.Name == CORRAL_EXTRA_INIT_PROC)
+                        continue;
+
                     Stats.numProcsAnalyzed++;
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                     entrypoints.Add(impl.Name);
@@ -298,7 +302,8 @@ namespace AngelicVerifierNull
             Program prog;
 
             public const string mallocTriggerFuncName = "mallocTrigger_";
-            public Dictionary<Tuple<string, string, int>, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
+            // allocator_call -> trigger function
+            public Dictionary<int, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
 
             public MallocInstrumentation(Program program)
             {
@@ -320,7 +325,7 @@ namespace AngelicVerifierNull
                 {
                     instance = mi;
                     mallocTriggers = new Dictionary<CallCmd, Function>();
-                    instance.mallocTriggersLocation = new Dictionary<Tuple<string, string, int>, string>();
+                    instance.mallocTriggersLocation = new Dictionary<int, string>();
                 }
                 public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
                 {
@@ -338,7 +343,9 @@ namespace AngelicVerifierNull
                                 new List<Variable>() { BoogieAstFactory.MkFormal("a", btype.Int, false) },
                                 BoogieAstFactory.MkFormal("r", btype.Bool, false));
                             mallocTriggers[callCmd] = mallocTriggerFn;
-                            instance.mallocTriggersLocation[Tuple.Create(currImpl.Name, currBlock.Label, callCmdCount)] = mallocTriggerFn.Name;
+                            var callId = QKeyValue.FindIntAttribute(callCmd.Attributes, "allocator_call", -1);
+                            Debug.Assert(callId != -1, "Calls to the allocator must be tagged with a unique ID");
+                            instance.mallocTriggersLocation[callId] = mallocTriggerFn.Name;
                             instance.prog.TopLevelDeclarations.Add(mallocTriggerFn);
                             var fnApp = new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
@@ -513,6 +520,7 @@ namespace AngelicVerifierNull
         cba.ModifyTrans printInfo;
         cba.CompressBlocks compressBlocks;
         cba.InsertionTrans assertInstrInfo;
+        cba.DeepAssertRewrite da;
 
         // The harness instrumentation (kept here for
         // round-robin mode)
@@ -573,103 +581,172 @@ namespace AngelicVerifierNull
             // Instrument assertions
             int tokenId = 0;
 
-            var impls = BoogieUtil.nameImplMapping(program);
-            var pwa = cba.SequentialInstrumentation.procsWithAsserts(program);
+            CBAProgram ret = null;
 
-            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            if (!Options.DeepAsserts)
             {
-                var instrumented = new List<Block>();
-                foreach (var blk in impl.Blocks)
+                // Do error-bit instrumentation
+                var impls = BoogieUtil.nameImplMapping(program);
+                var pwa = cba.SequentialInstrumentation.procsWithAsserts(program);
+
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 {
-                    var currCmds = new List<Cmd>();
-                    var currLabel = blk.Label;
-
-                    assertInstrInfo.addTrans(impl.Name, blk.Label, blk.Label);
-                    var incnt = -1;
-                    foreach (Cmd cmd in blk.Cmds)
+                    var instrumented = new List<Block>();
+                    foreach (var blk in impl.Blocks)
                     {
-                        incnt++;
+                        var currCmds = new List<Cmd>();
+                        var currLabel = blk.Label;
 
-                        // instrument assert
-                        if (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd))
+                        assertInstrInfo.addTrans(impl.Name, blk.Label, blk.Label);
+                        var incnt = -1;
+                        foreach (Cmd cmd in blk.Cmds)
                         {
-                            currCmds.Add(BoogieAstFactory.MkVarEqExpr(assertsPassed, (cmd as AssertCmd).Expr));
-                            
-                            var token = new AssertToken(tokenId);
-                            originalAssertions.Add(token, cmd as AssertCmd);
-                            tokenLocation.Add(token, Tuple.Create(impl.Name, currLabel));
-                            procToTokens.InitAndAdd(impl.Name, token);
+                            incnt++;
 
-                            addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
+                            // instrument assert
+                            if (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd))
+                            {
+                                currCmds.Add(BoogieAstFactory.MkVarEqExpr(assertsPassed, (cmd as AssertCmd).Expr));
 
-                            currLabel = addInstr(instrumented, currCmds, currLabel, tokenId);
-                            tokenId++;
-                            currCmds = new List<Cmd>();
+                                var token = new AssertToken(tokenId);
+                                originalAssertions.Add(token, cmd as AssertCmd);
+                                tokenLocation.Add(token, Tuple.Create(impl.Name, currLabel));
+                                procToTokens.InitAndAdd(impl.Name, token);
 
-                            continue;
-                        }
+                                addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
 
-                        // procedure call 
-                        if (cmd is CallCmd && pwa.Contains((cmd as CallCmd).callee))
-                        {
+                                currLabel = addInstr(instrumented, currCmds, currLabel, tokenId);
+                                tokenId++;
+                                currCmds = new List<Cmd>();
+
+                                continue;
+                            }
+
+                            // procedure call 
+                            if (cmd is CallCmd && pwa.Contains((cmd as CallCmd).callee))
+                            {
+                                currCmds.Add(cmd);
+                                addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
+                                currLabel = addInstr(instrumented, currCmds, currLabel, -1);
+                                currCmds = new List<Cmd>();
+                                continue;
+                            }
+
                             currCmds.Add(cmd);
                             addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
-                            currLabel = addInstr(instrumented, currCmds, currLabel, -1);
-                            currCmds = new List<Cmd>();
-                            continue;
+
                         }
 
-                        currCmds.Add(cmd);
-                        addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
+                        instrumented.Add(new Block(Token.NoToken, currLabel, currCmds, blk.TransferCmd));
 
                     }
 
-                    instrumented.Add(new Block(Token.NoToken, currLabel, currCmds, blk.TransferCmd));
+                    impl.Blocks = instrumented;
+                }
+
+                program.TopLevelDeclarations.Add(assertsPassed);
+                var newMain = addMain(program);
+
+                BoogieUtil.DoModSetAnalysis(program);
+
+                // Set inline attribute
+                // free requires assertsPassed == true;
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    impl.Proc.Requires.Add(new Requires(true, Expr.Ident(assertsPassed)));
+                }
+
+                // convert free ensures e to:
+                //  free ensures assertsPassed == false || e
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>()
+                    .Where(impl => pwa.Contains(impl.Name)))
+                {
+                    foreach (Ensures ens in impl.Proc.Ensures)
+                        ens.Condition = Expr.Or(Expr.Not(Expr.Ident(assertsPassed)), ens.Condition);
+                }
+
+                currProg = program;
+                ret = new CBAProgram(program, newMain, 0);
+            }
+            else
+            {
+                // Use Deep-assert instrumentation
+                da = new cba.DeepAssertRewrite();
+
+                // First, tag assertions with tokens
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    foreach (var blk in impl.Blocks)
+                    {
+                        foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
+                        {
+                            if (BoogieUtil.isAssertTrue(cmd)) continue;
+
+                            var token = new AssertToken(tokenId);
+                            cmd.Attributes = new QKeyValue(Token.NoToken, "avn", new List<object> { Expr.Literal(tokenId) },
+                                cmd.Attributes);
+                            originalAssertions.Add(token, cmd);
+                            tokenLocation.Add(token, Tuple.Create(impl.Name, blk.Label));
+                            procToTokens.InitAndAdd(impl.Name, token);
+                            tokenId++;
+                        }
+                    }
+                }
+
+                // Second, do the rewrite
+                var t1 = new PersistentProgram(program, program.mainProcName, program.contextBound);
+                var t2 = da.run(t1);
+                var daprog = t2.getCBAProgram();
+
+                // Third, revisit the assertions and remember their location
+                // in the output program. This is a bit of a hack. The "tokenLocation"
+                // of a token is the pair (p1,b1) where p1 is the procedure the assertion
+                // originally came from and b1 is the block in the new main that contains
+                // that assertion.
+                var main = BoogieUtil.findProcedureImpl(daprog.TopLevelDeclarations, daprog.mainProcName);
+                foreach (var block in main.Blocks)
+                {
+                    foreach (var cmd in block.Cmds.OfType<AssertCmd>())
+                    {
+                        var tok = QKeyValue.FindIntAttribute(cmd.Attributes, "avn", -1);
+                        if (tok < 0) continue;
+                        var token = new AssertToken(tok);
+
+                        Debug.Assert(tokenLocation.ContainsKey(token));
+                        var oldloc = tokenLocation[token];
+                        tokenLocation[token] = Tuple.Create(oldloc.Item1, block.Label);
+                    }
 
                 }
 
-                impl.Blocks = instrumented;
+                currProg = daprog;
+                ret = daprog;
             }
 
-            program.TopLevelDeclarations.Add(assertsPassed);
-            var newMain = addMain(program);
-
-            BoogieUtil.DoModSetAnalysis(program);
-
-            // Set inline attribute
-            // free requires assertsPassed == true;
-            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
-            {
-                impl.Proc.Requires.Add(new Requires(true, Expr.Ident(assertsPassed)));
-            }
-
-            // convert free ensures e to:
-            //  free ensures assertsPassed == false || e
-            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => pwa.Contains(impl.Name)))
-            {
-                foreach (Ensures ens in impl.Proc.Ensures)
-                    ens.Condition = Expr.Or(Expr.Not(Expr.Ident(assertsPassed)), ens.Condition);
-            }
-
-            currProg = program;
-
-            return new CBAProgram(program, newMain, 0);
+            return ret;
         }
 
         public override cba.ErrorTrace mapBackTrace(cba.ErrorTrace trace)
         {
-            // knock off top-level procedure
-            var OldMainName = (input as PersistentProgram).mainProcName;
             cba.ErrorTrace ptrace = null;
-            foreach (var blk in trace.Blocks)
+            if (!Options.DeepAsserts)
             {
-                var c = blk.Cmds.OfType<cba.CallInstr>().First(cmd => cmd.callee == OldMainName);
-                if (c == null) continue;
-                ptrace = c.calleeTrace;
-                break;
+                // knock off top-level procedure
+                var OldMainName = (input as PersistentProgram).mainProcName;
+                
+                foreach (var blk in trace.Blocks)
+                {
+                    var c = blk.Cmds.OfType<cba.CallInstr>().First(cmd => cmd.callee == OldMainName);
+                    if (c == null) continue;
+                    ptrace = c.calleeTrace;
+                    break;
+                }
+                Debug.Assert(ptrace != null);
             }
-            Debug.Assert(ptrace != null);
+            else
+            {
+                ptrace = da.mapBackTrace(trace);
+            }
 
             trace = assertInstrInfo.mapBackTrace(ptrace);
             trace = compressBlocks.mapBackTrace(trace);
@@ -799,7 +876,7 @@ namespace AngelicVerifierNull
                 .First();
 
             var tokenId = -1;
-            foreach (var acmd in impl.Blocks[0].Cmds.OfType<AssumeCmd>())
+            foreach (var acmd in impl.Blocks[0].Cmds.OfType<PredicateCmd>())
             {
                 tokenId = QKeyValue.FindIntAttribute(acmd.Attributes, "avn", -1);
                 if (tokenId == -1) continue;
@@ -821,6 +898,10 @@ namespace AngelicVerifierNull
         public void SuppressToken(AssertToken token)
         {
             var location = tokenLocation[token];
+
+            if (Options.DeepAsserts)
+                location = Tuple.Create((output as PersistentProgram).mainProcName, location.Item2);
+
             var p = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations, location.Item1);
             var block = p.Blocks.Where(blk => blk.Label == location.Item2).FirstOrDefault();
 
@@ -828,11 +909,17 @@ namespace AngelicVerifierNull
             var ncmds = new List<Cmd>();
             foreach (var cmd in block.Cmds)
             {
-                if ((cmd is AssignCmd) && (cmd as AssignCmd).Lhss[0].DeepAssignedVariable.Name == assertsPassedName)
+                if (!Options.DeepAsserts && (cmd is AssignCmd) && (cmd as AssignCmd).Lhss[0].DeepAssignedVariable.Name == assertsPassedName)
                 {
                     var acmd = BoogieAstFactory.MkAssume((cmd as AssignCmd).Rhss[0]) as AssumeCmd;
                     acmd.Attributes = new QKeyValue(Token.NoToken, "suppressAssert",
                         new List<object> { Expr.Literal(token.id) }, null);
+                    ncmds.Add(acmd);
+                }
+                else if (Options.DeepAsserts && (cmd is AssertCmd)
+                  && QKeyValue.FindIntAttribute((cmd as AssertCmd).Attributes, "avn", -1) == token.id)
+                {
+                    var acmd = new AssumeCmd(Token.NoToken, (cmd as AssertCmd).Expr, (cmd as AssertCmd).Attributes);
                     ncmds.Add(acmd);
                 }
                 else
@@ -851,9 +938,14 @@ namespace AngelicVerifierNull
             var ncmds = new List<Cmd>();
             foreach (var cmd in block.Cmds)
             {
-                if (cmd is AssumeCmd && QKeyValue.FindIntAttribute((cmd as AssumeCmd).Attributes, "suppressAssert", -1) == token.id)
+                if (!Options.DeepAsserts && cmd is AssumeCmd && QKeyValue.FindIntAttribute((cmd as AssumeCmd).Attributes, "suppressAssert", -1) == token.id)
                 {
                     ncmds.Add(BoogieAstFactory.MkVarEqExpr(assertsPassed, (cmd as AssumeCmd).Expr));
+                }
+                else if (Options.DeepAsserts && cmd is AssumeCmd &&
+                  QKeyValue.FindIntAttribute((cmd as AssumeCmd).Attributes, "avn", -1) == token.id)
+                {
+                    ncmds.Add(new AssertCmd(Token.NoToken, (cmd as AssertCmd).Expr, (cmd as AssertCmd).Attributes));
                 }
                 else
                     ncmds.Add(cmd);
@@ -986,12 +1078,25 @@ namespace AngelicVerifierNull
         // Return the entrypoint (procedure called by harness)
         public string GetEntryPoint(cba.ErrorTrace cex, HashSet<string> IdentifiedEntryPoints)
         {
+            if (Options.DeepAsserts)
+            {
+                foreach (var blk in cex.Blocks)
+                {
+                    if (!da.firstBlockToImpl.ContainsKey(blk.blockName))
+                        continue;
+                    if (!IdentifiedEntryPoints.Contains(da.firstBlockToImpl[blk.blockName]))
+                        continue;
+                    return da.firstBlockToImpl[blk.blockName];
+                }
+                Debug.Assert(false);
+            }
+
             // knock off top-level main, and then see what is called
             var OldMainName = (input as PersistentProgram).mainProcName;
             cba.ErrorTrace ptrace = null;
             foreach (var blk in cex.Blocks)
             {
-                var c = blk.Cmds.OfType<cba.CallInstr>().First(cmd => cmd.callee == OldMainName);
+                var c = blk.Cmds.OfType<cba.CallInstr>().FirstOrDefault(cmd => cmd.callee == OldMainName);
                 if (c == null) continue;
                 ptrace = c.calleeTrace;
                 break;

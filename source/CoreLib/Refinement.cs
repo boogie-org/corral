@@ -986,8 +986,48 @@ namespace cba
 
         }
 
+        // Convert assertions to talk only about local variables
+        private void assertLocals(Implementation impl)
+        {
+            int ticker = 0;
+            var GetLocal = new Func<Variable>(() =>
+                BoogieAstFactory.MkLocal("FVA_assert_local_" + (ticker++), Microsoft.Boogie.Type.Bool));
+
+            foreach (var block in impl.Blocks)
+            {
+                var ncmds = new List<Cmd>();
+                foreach (var cmd in block.Cmds)
+                {
+                    var acmd = cmd as AssertCmd;
+                    if (acmd == null)
+                    {
+                        ncmds.Add(cmd);
+                        continue;
+                    }
+                    var vu = new VarsUsed();
+                    vu.Visit(acmd);
+                    if (vu.globalsUsed.Count == 0)
+                    {
+                        ncmds.Add(cmd);
+                        continue;
+                    }
+                    var loc = GetLocal();
+                    impl.LocVars.Add(loc);
+                    // loc := expr
+                    ncmds.Add(
+                        BoogieAstFactory.MkVarEqExpr(loc, acmd.Expr));
+                    // assert loc;
+                    ncmds.Add(
+                        new AssertCmd(acmd.tok, Expr.Ident(loc), acmd.Attributes));
+                }
+                block.Cmds = ncmds;
+            }
+        }
+
         private void doTransformation(Implementation impl)
         {
+            assertLocals(impl);
+
             var newBlocks = new List<Block>();
             foreach (var block in impl.Blocks)
             {

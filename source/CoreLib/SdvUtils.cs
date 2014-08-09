@@ -19,17 +19,15 @@ namespace CoreLib
         readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
         readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
         readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
-        public Dictionary<string, Tuple<string, string, int>> allocConstants;
-        Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation;
+        public Dictionary<string, int> allocConstants;
 
         private HashSet<string> procsWithoutBody;
 
-        public SDVConcretizePathPass(Dictionary<Tuple<string, string, int>, Tuple<string, int>> callIdToLocation)
+        public SDVConcretizePathPass()
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
-            allocConstants = new Dictionary<string, Tuple<string, string, int>>();
-            this.callIdToLocation = callIdToLocation;
+            allocConstants = new Dictionary<string, int>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram p)
@@ -127,14 +125,7 @@ namespace CoreLib
             var rtprog = rt.getProgram();
 
             // Build a map of where the alloc constants are from
-            foreach (var kvp in rt.allocConstantToCall)
-            {
-                var allocConst = kvp.Key;
-                var callId = kvp.Value;
-                // TODO: fix
-                Debug.Assert(callIdToLocation.ContainsKey(callId));
-                allocConstants.Add(allocConst, Tuple.Create(callId.Item1, callIdToLocation[callId].Item1, callIdToLocation[callId].Item2));
-            }
+            allocConstants = rt.allocConstantToCall;
 
             /*
             foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())

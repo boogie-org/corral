@@ -1,7 +1,8 @@
 @echo off
 rem Usage: run.bat
 
-call runtest.bat > Output
+echo Flags: %*
+call runtest.bat %* > Output
 fc /W Answer Output > nul
 fc /W Answer Output > nul
 if not errorlevel 1 goto passTest

@@ -2345,7 +2345,8 @@ namespace cba
     public class DeepAssertRewrite : CompilerPass
     {
         string origMain;
-        Dictionary<string, string> firstBlockToImpl;
+
+        public Dictionary<string, string> firstBlockToImpl {get; private set;}
         
         // newBlock -> <origBlock, Proc>
         Dictionary<string, Tuple<string, string>> blockToOrig;
@@ -2430,6 +2431,7 @@ namespace cba
 
             // delete entrypoint attribute
             main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);
+            main.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", main.Proc.Attributes);
 
             // rename stuff
             implCopy.Values
@@ -2496,7 +2498,7 @@ namespace cba
 
                         // Finish current block
                         currBlock.TransferCmd = new GotoCmd(Token.NoToken, new List<Block> { nblk, eb });
-                        eb.Cmds.Add(new AssertCmd(acmd.tok, acmd.Expr));
+                        eb.Cmds.Add(new AssertCmd(acmd.tok, acmd.Expr, acmd.Attributes));
                         nblk.Cmds.Add(new AssumeCmd(acmd.tok, acmd.Expr));
 
                         newBlocks2.Add(eb);
@@ -2587,6 +2589,7 @@ namespace cba
 
             // Add new main back to the program
             program.TopLevelDeclarations.Add(mainCopy);
+            program.mainProcName = mainCopy.Name;
 
             // add decl for newmain
             var origMainDecl = program.TopLevelDeclarations.OfType<Procedure>()
