@@ -9,6 +9,7 @@ using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
 using btype = Microsoft.Boogie.Type;
 using System.IO;
+using System.Threading;
 
 
 namespace FastAVN
@@ -71,13 +72,16 @@ namespace FastAVN
         }
 
         static int timeout = 0; // system timeout
+        static int avnTimeout = 200; // default AVN timeout
         static int approximationDepth = 0; // k-depth
         //static string boogieOpts = "";
         //static string corralOpts = "";
         //static cba.Configs corralConfig = null;
         static string avnPath = null;
         static bool dumpSlices = false;
-        static string avnArgs = "/sdv /useEntryPoints";
+        static readonly string bugReportFileName = "results.txt";
+        static string avnArgs = "/sdv /useEntryPoints /dumpResults:" + bugReportFileName
+            + " /timeout:" + avnTimeout;
         
 
         static void Main(string[] args)
@@ -191,6 +195,7 @@ namespace FastAVN
         private static void pruneImpl(Program prog, int approximationDepth)
         {
             HashSet<string> entrypoints = new HashSet<string>();
+            HashSet<Tuple<string, int>> mergedBugs = new HashSet<Tuple<string, int>>();
 
             foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
             {
@@ -202,24 +207,75 @@ namespace FastAVN
 
                 // slice the program by entrypoints
                 Program shallowP = pruneDeepProcs(prog, impl.Name, approximationDepth);
-                var pruneFile = dumpSlices ? string.Format("prune_{0}.bpl", impl.Name) : "pruneSlice.bpl";
-                BoogieUtil.PrintProgram(shallowP, pruneFile);
-
-                Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
+                
                 var runAVNargs = " ";
                 try
                 {
+                    Directory.CreateDirectory(impl.Name);
+                    var pruneFile = dumpSlices ? string.Format("{0}\\pruneSlice.bpl", impl.Name) : "pruneSlice.bpl";
+                    Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
+                    BoogieUtil.PrintProgram(shallowP, pruneFile);
+
                     runAVNargs += Path.Combine(Directory.GetCurrentDirectory(), pruneFile) + " " + avnArgs;
-                    var p = new System.Diagnostics.Process();
-                    p.StartInfo.FileName = avnPath;
-                    p.StartInfo.Arguments = runAVNargs;
-                    p.StartInfo.RedirectStandardOutput = true;
-                    p.StartInfo.UseShellExecute = false;
-                    p.StartInfo.CreateNoWindow = true;
-                    p.Start();
-                    p.WaitForExit();
-                    Console.WriteLine(p.StandardOutput.ReadToEnd());
-                    //Process.Start(avnPath, runAVNargs);
+                    using (Process p = new Process())
+                    {
+                        p.StartInfo.FileName = avnPath;
+                        p.StartInfo.Arguments = runAVNargs;
+                        p.StartInfo.WorkingDirectory = Path.Combine(Directory.GetCurrentDirectory(), impl.Name);
+                        p.StartInfo.RedirectStandardOutput = false;
+                        p.StartInfo.RedirectStandardError = false;
+                        p.StartInfo.UseShellExecute = false;
+                        p.StartInfo.CreateNoWindow = true;
+
+                        //StringBuilder output = new StringBuilder();
+                        //StringBuilder error = new StringBuilder();
+
+                        //using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
+                        //using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
+                        //{
+                        //    p.OutputDataReceived += (sender, e) =>
+                        //    {
+                        //        if (e.Data == null)
+                        //            outputWaitHandle.Set();
+                        //        else
+                        //            output.AppendLine(e.Data);
+                        //    };
+                        //    p.ErrorDataReceived += (sender, e) =>
+                        //    {
+                        //        if (e.Data == null)
+                        //            errorWaitHandle.Set();
+                        //        else
+                        //            error.AppendLine(e.Data);
+                        //    };
+
+                        //    p.Start();
+
+                        //    p.BeginOutputReadLine();
+                        //    p.BeginErrorReadLine();
+                        //    if (p.WaitForExit(avnTimeout) && outputWaitHandle.WaitOne(avnTimeout) &&
+                        //            errorWaitHandle.WaitOne(avnTimeout))
+                        //    {
+                        //        readAVNOutput(output.ToString());
+                        //        //Utils.Print("Looking at bug report: " + Path.Combine(p.StartInfo.WorkingDirectory, bugReportFileName));
+                        //        mergedBugs = mergedBugs.Union(
+                        //            collectBugs(Path.Combine(p.StartInfo.WorkingDirectory, 
+                        //            bugReportFileName)));
+                        //        Utils.Print("Bugs found so far: " + mergedBugs.Count);
+                        //    }
+                        //    else
+                        //        Utils.Print("Timeout on: " + impl.Name);
+                        //}
+                        p.Start();
+                        p.WaitForExit();
+
+                        mergedBugs = mergedBugs.Union(
+                                    collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
+                                    bugReportFileName)));
+                        Utils.Print("Bugs found so far: " + mergedBugs.Count);
+                    }
+                        
+                    
+                        
                 }
                 catch (Exception e)
                 {
@@ -229,7 +285,53 @@ namespace FastAVN
                 }
             }
 
-            
+            printBugs(mergedBugs);
+        }
+
+        private static void printBugs(HashSet<Tuple<string, int>> mergedBugs)
+        {
+            Utils.Print("========= Merged Bugs =========", Utils.PRINT_TAG.AV_OUTPUT);
+            foreach (Tuple<string, int> bug in mergedBugs)
+            {
+                Utils.Print(string.Format("Bug: ({0}, {1})", bug.Item1, bug.Item2),Utils.PRINT_TAG.AV_OUTPUT);
+            }
+        }
+
+        private static HashSet<Tuple<string, int>> collectBugs(string p)
+        {
+            HashSet<Tuple<string, int>> ret = new HashSet<Tuple<string, int>>();
+            try
+            {
+                foreach (string line in File.ReadLines(p))
+                {
+                    if (line.StartsWith("Description"))
+                        continue;
+                    var entries = line.Split(',');
+                    ret.Add(new Tuple<string, int>(entries[1].Trim(), int.Parse(entries[2].Trim())));
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                Utils.Print(string.Format("Bug report file not found: {0}", p));
+            }
+            catch (Exception e)
+            {
+                Utils.Print(string.Format("Error when processing bug report: {0}", p));
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+
+            return ret;
+        }
+
+        private static void readAVNOutput(string output)
+        {
+            foreach (string line in output.Split('\n'))
+            {
+                Console.WriteLine(line);
+                if (!line.StartsWith("[TAG: AV_STATS]"))
+                    continue;
+            }
         }
 
         // Prune by removing procedures that are not called
@@ -278,10 +380,10 @@ namespace FastAVN
             var newDecls = new List<Declaration>();
             foreach (var decl in program.TopLevelDeclarations)
             {
-                if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
+                //if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
                 if (decl is Implementation && toRemove.Contains((decl as Implementation).Name)) continue;
                 if (decl is Procedure && ((Procedure)decl).Name != mainProcName)
-                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
+                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes); // leave single entrypoint
                 newDecls.Add(decl);
             }
             program.TopLevelDeclarations = newDecls;
