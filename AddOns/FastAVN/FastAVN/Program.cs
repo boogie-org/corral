@@ -72,11 +72,13 @@ namespace FastAVN
 
         static int timeout = 0; // system timeout
         static int approximationDepth = 0; // k-depth
-        static string boogieOpts = "";
-        static string corralOpts = "";
-        static cba.Configs corralConfig = null;
+        //static string boogieOpts = "";
+        //static string corralOpts = "";
+        //static cba.Configs corralConfig = null;
         static string avnPath = null;
-        static string avnArgs = "";
+        static bool dumpSlices = false;
+        static string avnArgs = "/sdv /useEntryPoints";
+        
 
         static void Main(string[] args)
         {
@@ -88,6 +90,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
+
+            if (args.Any(s => s == "/dumpSlices"))
+                dumpSlices = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -102,7 +107,7 @@ namespace FastAVN
             findAvn();
             Debug.Assert(avnPath != null);
             // Initialize Boogie and Corral
-            corralConfig = InitializeCorral();
+            //corralConfig = InitializeCorral();
 
             Program prog = null;
             try
@@ -139,7 +144,6 @@ namespace FastAVN
             }
             var avn = "AngelicVerifierNull.exe";
             var runDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-
             if (!File.Exists(Path.Combine(runDir, avn)))
             {
                 var enviromentPath = System.Environment.GetEnvironmentVariable("PATH"); // look up in PATH
@@ -151,36 +155,38 @@ namespace FastAVN
                 if (string.IsNullOrWhiteSpace(avnPath))
                     throw new FileNotFoundException("Cannot find executable of AVN!");
             }
-
-            avnPath = Path.Combine(runDir, avn);
+            else
+            {
+                avnPath = Path.Combine(runDir, avn);
+            }
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
         }
 
         // Initialization
-        static cba.Configs InitializeCorral()
-        {
-            CommandLineOptions.Install(new CommandLineOptions());
-            CommandLineOptions.Clo.PrintInstrumented = true;
+        //static cba.Configs InitializeCorral()
+        //{
+        //    CommandLineOptions.Install(new CommandLineOptions());
+        //    CommandLineOptions.Clo.PrintInstrumented = true;
 
-            // Set all defaults for corral
-            corralOpts += " doesntExist.bpl /track:alloc /useProverEvaluate /printVerify ";
-            var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
-            config.boogieOpts += boogieOpts;
-            cba.Driver.Initialize(config);
+        //    // Set all defaults for corral
+        //    corralOpts += " doesntExist.bpl /track:alloc /useProverEvaluate /printVerify ";
+        //    var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+        //    config.boogieOpts += boogieOpts;
+        //    cba.Driver.Initialize(config);
 
-            cba.VerificationPass.usePruning = false;
+        //    cba.VerificationPass.usePruning = false;
 
-            if (!config.useProverEvaluate)
-            {
-                cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = true;
-                if (config.NonUniformUnfolding && !config.useProverEvaluate)
-                    cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = false;
-                if (config.printData == 0)
-                    cba.ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
-            }
+        //    if (!config.useProverEvaluate)
+        //    {
+        //        cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = true;
+        //        if (config.NonUniformUnfolding && !config.useProverEvaluate)
+        //            cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = false;
+        //        if (config.printData == 0)
+        //            cba.ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
+        //    }
 
-            return config;
-        }
+        //    return config;
+        //}
 
         private static void pruneImpl(Program prog, int approximationDepth)
         {
@@ -192,17 +198,35 @@ namespace FastAVN
                 if (!QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                     continue;
                 Stats.count("entry.points");
-                impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                 entrypoints.Add(impl.Name);
 
                 // slice the program by entrypoints
                 Program shallowP = pruneDeepProcs(prog, impl.Name, approximationDepth);
-                var pruneFile = string.Format("prune_{0}.bpl", impl.Name);
+                var pruneFile = dumpSlices ? string.Format("prune_{0}.bpl", impl.Name) : "pruneSlice.bpl";
                 BoogieUtil.PrintProgram(shallowP, pruneFile);
-                avnArgs = " " + pruneFile + " " + avnArgs;
 
-                Utils.Print(string.Format("Start running AVN: {0}", avnArgs), Utils.PRINT_TAG.AV_DEBUG);
-                Process.Start(avnPath, avnArgs);
+                Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
+                var runAVNargs = " ";
+                try
+                {
+                    runAVNargs += Path.Combine(Directory.GetCurrentDirectory(), pruneFile) + " " + avnArgs;
+                    var p = new System.Diagnostics.Process();
+                    p.StartInfo.FileName = avnPath;
+                    p.StartInfo.Arguments = runAVNargs;
+                    p.StartInfo.RedirectStandardOutput = true;
+                    p.StartInfo.UseShellExecute = false;
+                    p.StartInfo.CreateNoWindow = true;
+                    p.Start();
+                    p.WaitForExit();
+                    Console.WriteLine(p.StandardOutput.ReadToEnd());
+                    //Process.Start(avnPath, runAVNargs);
+                }
+                catch (Exception e)
+                {
+                    Utils.Print("Error running: " + avnPath + " " + runAVNargs);
+                    Console.WriteLine(e.Message);
+                    Console.WriteLine(e.StackTrace);
+                }
             }
 
             
@@ -256,6 +280,8 @@ namespace FastAVN
             {
                 if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
                 if (decl is Implementation && toRemove.Contains((decl as Implementation).Name)) continue;
+                if (decl is Procedure && ((Procedure)decl).Name != mainProcName)
+                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
                 newDecls.Add(decl);
             }
             program.TopLevelDeclarations = newDecls;
@@ -265,7 +291,10 @@ namespace FastAVN
 
         private static Program GetProgram(string filename)
         {
-            Program init = BoogieUtil.ReadAndOnlyResolve(filename);
+            CommandLineOptions.Install(new CommandLineOptions());
+            //Program init = BoogieUtil.ReadAndOnlyResolve(filename);
+            Program init = BoogieUtil.ParseProgram(filename);
+            init.Resolve();
             return init; 
         }
     }
