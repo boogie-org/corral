@@ -883,6 +883,17 @@ namespace AngelicVerifierNull
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
+            // Remove axioms on alloc constants
+            var HasAllocConstant = new Func<Expr, bool>(e =>
+            {
+                var vu = new VarsUsed();
+                vu.VisitExpr(e);
+                if (vu.varsUsed.Intersect(concretize.allocConstants.Keys).Any())
+                    return true;
+                return false;
+            });
+            nprog.TopLevelDeclarations.RemoveAll(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
+
             Dictionary<string, string> eeComplexExprs;
             // Save commandlineoptions
             var clo = CommandLineOptions.Clo;

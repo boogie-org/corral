@@ -38,6 +38,10 @@
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_5(x_3) ==> arr[x_3] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> x_2 != NULL)
 
+-------------------- t9.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t9.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: mallocTrigger_0(x_1) ==> x_1 != NULL)
+
 -------------------- pruned.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL) and entrypoint foo
