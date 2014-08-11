@@ -1237,6 +1237,20 @@ namespace cba
                 extra.Remove(t.Name);
             }
 
+            if (config.trainSummaries)
+            {
+                // Track variables mentioned in the templates
+                var trainingProc = program.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(proc => BoogieUtil.checkAttrExists("trainingPredicates", proc.Attributes))
+                    .FirstOrDefault();
+                if (trainingProc != null)
+                {
+                    var vu = new VarsUsed();
+                    trainingProc.Ensures.Iter(e => vu.VisitExpr(e.Condition));
+                    extra.UnionWith(vu.globalsUsed);
+                }
+            }
+
             program.TopLevelDeclarations = newDecls;
             ContractInfer.runAbsHoudiniConfig = config.runAbsHoudini;
             GlobalConfig.InferPass = new ContractInfer(templateVarNames, req, ens, config.runHoudini, -1);
