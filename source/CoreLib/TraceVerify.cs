@@ -31,7 +31,7 @@ namespace cba
         // Add concretization assignments
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
-        public Dictionary<string, Tuple<string, string, int>> allocConstantToCall;
+        public Dictionary<string, int> allocConstantToCall;
         // Convert non-failing asserts to assumes
         public static bool convertNonFailingAssertsToAssumes = false;
 
@@ -47,7 +47,7 @@ namespace cba
             tinfo = t;
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
-            allocConstantToCall = new Dictionary<string, Tuple<string, string, int>>();
+            allocConstantToCall = new Dictionary<string, int>();
         }
 
         private string addIntToString(string s, int i)
@@ -227,11 +227,8 @@ namespace cba
                                 output.TopLevelDeclarations.Add(constant);
                                 output.TopLevelDeclarations.Add(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
 
-                                var id = QKeyValue.FindIntAttribute(cc.Attributes, "si_old_unique_call", -1); // hack to get around multiple unique calls labels
-                                if (id == -1) id = QKeyValue.FindIntAttribute(cc.Attributes, "si_unique_call", -1);
-                                var origProcName = QKeyValue.FindStringAttribute(impl.Attributes, "origRTname");
-                                if (origProcName == null) origProcName = trace.procName;
-                                if (id != -1) allocConstantToCall.Add(constant.Name, Tuple.Create(origProcName, cc.callee, id));
+                                var id = QKeyValue.FindIntAttribute(cc.Attributes, "allocator_call", -1);
+                                if (id != -1) allocConstantToCall.Add(constant.Name, id);
                             }
 
                         }

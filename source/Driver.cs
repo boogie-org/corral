@@ -990,16 +990,19 @@ namespace cba
                                    .Iter(cp => buggyTrace = cp.mapBackTrace(buggyTrace));
 
                 buggyTrace = captureTrans.mapBackTrace(buggyTrace);
-                if (mainTrans != null) buggyTrace = mainTrans.mapBackTrace(buggyTrace);
+                if (mainTrans != null)
+                {
+                    buggyTrace = mainTrans.mapBackTrace(buggyTrace);
 
-                // knock off fakeMain
-                ErrorTrace tempt = null;
-                buggyTrace.Blocks.Iter(blk =>
-                    {
-                        var cmain = blk.Cmds.OfType<CallInstr>().Where(ci => ci.callee == config.mainProcName).FirstOrDefault();
-                        if (cmain != null) tempt = cmain.calleeTrace;
-                    });
-                buggyTrace = tempt;
+                    // knock off fakeMain
+                    ErrorTrace tempt = null;
+                    buggyTrace.Blocks.Iter(blk =>
+                        {
+                            var cmain = blk.Cmds.OfType<CallInstr>().Where(ci => ci.callee == config.mainProcName).FirstOrDefault();
+                            if (cmain != null) tempt = cmain.calleeTrace;
+                        });
+                    buggyTrace = tempt;
+                }
 
                 //serialize the buggyTrace
                 BinaryFormatter serializer = new BinaryFormatter();

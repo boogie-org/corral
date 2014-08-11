@@ -357,6 +357,16 @@ namespace AngelicVerifierNull
             // Update mod sets
             BoogieUtil.DoModSetAnalysis(init);
 
+            // tag calls to the allocator with a unique ID
+            var id = 0;
+            init.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(block => block.Cmds.OfType<CallCmd>()
+                        .Where(cc => BoogieUtil.checkAttrExists("allocator", cc.Proc.Attributes))
+                        .Iter(cc => cc.Attributes = new QKeyValue(Token.NoToken, "allocator_call",
+                            new List<object> { Expr.Literal(id++) }, cc.Attributes)
+                            )));
+
             //Various instrumentations on the well-formed program
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
             mallocInstrumentation.DoInstrument();
@@ -441,7 +451,6 @@ namespace AngelicVerifierNull
             Debug.Assert(cba.SequentialInstrumentation.isSingleThreadProgram(init, corralConfig.mainProcName));
             cba.GlobalConfig.isSingleThreaded = true;
 
-            // Massage the input program
             addIds = new cba.AddUniqueCallIds();
             addIds.VisitProgram(init);
         }
@@ -839,7 +848,7 @@ namespace AngelicVerifierNull
 
             // Concretize non-determinism
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
-            concretize = new CoreLib.SDVConcretizePathPass(addIds.callIdToLocation);
+            concretize = new CoreLib.SDVConcretizePathPass();
 
             // TODO: set a reasonable timeout here
             BoogieVerify.setTimeOut(0);
@@ -873,6 +882,17 @@ namespace AngelicVerifierNull
             // else //inconclusive/timeout/.. Suppress
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
+
+            // Remove axioms on alloc constants
+            var HasAllocConstant = new Func<Expr, bool>(e =>
+            {
+                var vu = new VarsUsed();
+                vu.VisitExpr(e);
+                if (vu.varsUsed.Intersect(concretize.allocConstants.Keys).Any())
+                    return true;
+                return false;
+            });
+            nprog.TopLevelDeclarations.RemoveAll(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
             Dictionary<string, string> eeComplexExprs;
             // Save commandlineoptions
@@ -913,7 +933,7 @@ namespace AngelicVerifierNull
             CommandLineOptions.Install(clo);
             return status;
         }
-        private static Expr MkBlockExprFromExplainError(Program  nprog, Expr expr, Dictionary<string, Tuple<string, string, int>> allocConsts)
+        private static Expr MkBlockExprFromExplainError(Program  nprog, Expr expr, Dictionary<string, int> allocConsts)
         {
             //- given expr, allocConsts (string)
             //- usedVars = varsUsedIn(expr)
@@ -929,7 +949,7 @@ namespace AngelicVerifierNull
 
             Utils.Print(String.Format("The list of allocConsts along trace = {0}", String.Join(", ",
                         allocConsts
-                        .Select(x => "(" + x.Key + " -> [" + x.Value.Item1 + ", " + x.Value.Item2 + ", " + x.Value.Item3 + "])"))
+                        .Select(x => "(" + x.Key + " -> " + x.Value + ")"))
             ));
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
             int allocConstCount = 0;
