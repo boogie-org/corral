@@ -1069,7 +1069,7 @@ namespace cba
             // fake abs houdini to get the template instantiation correct
             runAbsHoudiniConfig = "";
             // We don't want predicates from "main"
-            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, "main");
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
             if (impl != null) impl.AddAttribute("entrypoint");
 
             var info = Instantiate(program);

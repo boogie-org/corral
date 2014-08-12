@@ -428,6 +428,34 @@ namespace AngelicVerifierNull
             }
         }
 
+        public class AssertWithAttributeCountVisitor : StandardVisitor
+        {
+            public int assertCountAll = 0;
+            public int assertsNotRemovedCount = 0;
+            public string notfalse = null;
+            private string attrName;
+
+            public AssertWithAttributeCountVisitor(string attributeName)
+            {
+                attrName = attributeName;
+                notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            }
+
+            public override Cmd VisitAssertCmd(AssertCmd node)
+            {
+                if (QKeyValue.FindExprAttribute(node.Attributes, attrName) == null) 
+                    return base.VisitAssertCmd(node);
+                assertCountAll++;
+                // disregard true and !false
+                if (node.Expr.ToString() == Expr.True.ToString() ||
+                    node.Expr.ToString() == notfalse)
+                    return base.VisitAssertCmd(node);
+
+                assertsNotRemovedCount++;
+                return base.VisitAssertCmd(node);
+            }
+        }
+
 
         /// <summary>
         /// Useful for rewriting an expr (with only constants) from one PersistentProgram to another
@@ -457,30 +485,73 @@ namespace AngelicVerifierNull
         /// <summary>
         /// Introduces assume M[x] != null, for any x := op(M[x], ..) 
         /// </summary>
-        public class AssumeMapSelectsNonNull : StandardVisitor
+        public class AssertMapSelectsNonNull : StandardVisitor
         {
-            public AssumeMapSelectsNonNull() { }
+            public const string attrName = "MapValuesNonNull";
+            public string notfalse = null;
+
+            public AssertMapSelectsNonNull() {
+            }
             public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
             {
                 var newCmdSeq = new List<Cmd>();
-                foreach (Cmd c in cmdSeq) 
+                foreach (Cmd c in cmdSeq)
+                {
+                    newCmdSeq.Add(c);
                     if (c is AssignCmd)
                     {
                         var ac = c as AssignCmd;
                         var lookups = new List<Expr>();
-                        ac.Rhss.Iter(x =>
-                            {
-                                if (x is NAryExpr && (x as NAryExpr).Fun is MapSelect)
-                                    lookups.Add(x);
-                            }
-                            );
-                        newCmdSeq.Add(c);
+                        for (int i = 0; i < ac.Lhss.Count; ++i)
+                        {
+                            var x = ac.Rhss[i];
+                            if (x is NAryExpr && (x as NAryExpr).Fun is MapSelect)
+                                lookups.Add(x);
+                        }
                         if (lookups.Count() > 0)
                             lookups.Iter(x =>
                                 {
-                                    newCmdSeq.Add(new AssumeCmd(Token.NoToken, Expr.Neq(x, new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)))));
+                                    //newCmdSeq.Add(new AssumeCmd(Token.NoToken, Expr.Neq(x, new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)))));
+                                    var expr = Expr.Neq(x, new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
+                                    AssertCmd assertCmd = new AssertCmd(Token.NoToken, expr);
+                                    assertCmd.Attributes = new QKeyValue(Token.NoToken, attrName, new List<object> { expr }, null);
+                                    newCmdSeq.Add(assertCmd);
                                 });
                     }
+                }
+                return base.VisitCmdSeq(newCmdSeq);
+            }
+        }
+
+        public class AssumeMapSelectsNonNull : StandardVisitor
+        {
+            public string notfalse = null;
+            public AssumeMapSelectsNonNull()
+            {
+                notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            }
+            public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
+            {
+                var newCmdSeq = new List<Cmd>();
+                foreach (Cmd c in cmdSeq)
+                {
+                    if (c is AssertCmd)
+                    {
+                        var ac = c as AssertCmd;
+                        var e = QKeyValue.FindExprAttribute(ac.Attributes, AssertMapSelectsNonNull.attrName);
+                        if (e == null) { newCmdSeq.Add(c); continue; }
+                        if (ac.Expr.ToString() == Expr.True.ToString() || ac.Expr.ToString() == notfalse)
+                        {
+                            var expr = Expr.Neq(e, new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
+                            var assumeCmd = new AssumeCmd(Token.NoToken, expr);
+                            newCmdSeq.Add(assumeCmd);
+                        }
+                        //don't add the assert otherwise
+                    } else
+                    {
+                        newCmdSeq.Add(c);
+                    }
+                }
                 return base.VisitCmdSeq(newCmdSeq);
             }
         }
