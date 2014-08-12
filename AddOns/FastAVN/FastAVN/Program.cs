@@ -26,6 +26,7 @@ namespace FastAVN
                     Console.WriteLine("[TAG: {0}] {1}", tag, msg);
             }
         }
+
         class Stats
         {
             public static int numProcs = -1;
@@ -71,18 +72,19 @@ namespace FastAVN
             }
         }
 
-        static int timeout = 0; // system timeout
-        static int avnTimeout = 200; // default AVN timeout
-        static int approximationDepth = 0; // k-depth
         //static string boogieOpts = "";
         //static string corralOpts = "";
         //static cba.Configs corralConfig = null;
-        static string avnPath = null;
-        static bool dumpSlices = false;
-        static readonly string bugReportFileName = "results.txt";
+        static int timeout = 0; // system timeout
+        static int avnTimeout = 200; // default AVN timeout
+        static int approximationDepth = 0; // k-depth
+        static int verbose = 1; // default verbosity level
+        static string avnPath = null; // path to AVN binary
+        static bool dumpSlices = false; // dump sliced program for each entrypoint
+        static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = "/sdv /useEntryPoints /dumpResults:" + bugReportFileName
-            + " /timeout:" + avnTimeout;
-        
+            + " /timeout:" + avnTimeout; // default AVN arguments
+
 
         static void Main(string[] args)
         {
@@ -98,12 +100,19 @@ namespace FastAVN
             if (args.Any(s => s == "/dumpSlices"))
                 dumpSlices = true;
 
+            // user definded verbose level
+            args.Where(s => s.StartsWith("/verbose:"))
+                .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
+
+            // user defined AVN timeout
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
 
+            // depth k used by implementation pruning
             args.Where(s => s.StartsWith("/depth:"))
                 .Iter(s => approximationDepth = int.Parse(s.Substring("/depth:".Length)));
 
+            // user defined path to AVN binary
             args.Where(s => s.StartsWith("/avn:"))
                 .Iter(s => avnPath = s.Substring("/avn:".Length));
 
@@ -118,7 +127,7 @@ namespace FastAVN
             {
                 Stats.resume("fastavn");
                 // Get input program
-                Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------", 
+                Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]); // get the input program
 
@@ -138,6 +147,7 @@ namespace FastAVN
             }
         }
 
+        // locate AVN binary in the system
         private static void findAvn()
         {
             if (avnPath != null)
@@ -192,10 +202,28 @@ namespace FastAVN
         //    return config;
         //}
 
+        // run AVN binary on pruned programs
         private static void pruneImpl(Program prog, int approximationDepth)
         {
             HashSet<string> entrypoints = new HashSet<string>();
             HashSet<Tuple<string, int>> mergedBugs = new HashSet<Tuple<string, int>>();
+
+            // build the call graph
+            var edges = new Dictionary<string, HashSet<string>>();
+            foreach (var decl in prog.TopLevelDeclarations)
+            {
+                var impl = decl as Implementation;
+                if (impl == null) continue;
+                edges.Add(impl.Name, new HashSet<string>());
+                foreach (var blk in impl.Blocks)
+                {
+                    blk.Cmds.OfType<CallCmd>()
+                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
+                    blk.Cmds.OfType<ParCallCmd>()
+                        .Iter(pcmd => pcmd.CallCmds
+                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
+                }
+            }
 
             foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
             {
@@ -206,15 +234,15 @@ namespace FastAVN
                 entrypoints.Add(impl.Name);
 
                 // slice the program by entrypoints
-                Program shallowP = pruneDeepProcs(prog, impl.Name, approximationDepth);
-                
+                Program shallowP = pruneDeepProcs(prog, ref edges, impl.Name, approximationDepth);
+
                 var runAVNargs = " ";
                 try
                 {
-                    Directory.CreateDirectory(impl.Name);
+                    Directory.CreateDirectory(impl.Name); // create new directory for each entrypoint
                     var pruneFile = dumpSlices ? string.Format("{0}\\pruneSlice.bpl", impl.Name) : "pruneSlice.bpl";
                     Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
-                    BoogieUtil.PrintProgram(shallowP, pruneFile);
+                    BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
                     runAVNargs += Path.Combine(Directory.GetCurrentDirectory(), pruneFile) + " " + avnArgs;
                     using (Process p = new Process())
@@ -222,60 +250,47 @@ namespace FastAVN
                         p.StartInfo.FileName = avnPath;
                         p.StartInfo.Arguments = runAVNargs;
                         p.StartInfo.WorkingDirectory = Path.Combine(Directory.GetCurrentDirectory(), impl.Name);
-                        p.StartInfo.RedirectStandardOutput = false;
-                        p.StartInfo.RedirectStandardError = false;
+                        p.StartInfo.RedirectStandardOutput = true;
+                        p.StartInfo.RedirectStandardError = true;
                         p.StartInfo.UseShellExecute = false;
                         p.StartInfo.CreateNoWindow = true;
 
-                        //StringBuilder output = new StringBuilder();
-                        //StringBuilder error = new StringBuilder();
+                        StringBuilder output = new StringBuilder();
+                        StringBuilder error = new StringBuilder();
 
-                        //using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
-                        //using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
-                        //{
-                        //    p.OutputDataReceived += (sender, e) =>
-                        //    {
-                        //        if (e.Data == null)
-                        //            outputWaitHandle.Set();
-                        //        else
-                        //            output.AppendLine(e.Data);
-                        //    };
-                        //    p.ErrorDataReceived += (sender, e) =>
-                        //    {
-                        //        if (e.Data == null)
-                        //            errorWaitHandle.Set();
-                        //        else
-                        //            error.AppendLine(e.Data);
-                        //    };
+                        using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
+                        using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
+                        {
+                            p.OutputDataReceived += (sender, e) =>
+                            {
+                                if (e.Data == null)
+                                    outputWaitHandle.Set();
+                                else
+                                    output.AppendLine(e.Data);
+                            };
+                            p.ErrorDataReceived += (sender, e) =>
+                            {
+                                if (e.Data == null)
+                                    errorWaitHandle.Set();
+                                else
+                                    error.AppendLine(e.Data);
+                            };
 
-                        //    p.Start();
+                            p.Start();
+                            // asyncronous read of stdout and stderr to avoid deadlock
+                            p.BeginOutputReadLine();
+                            p.BeginErrorReadLine();
 
-                        //    p.BeginOutputReadLine();
-                        //    p.BeginErrorReadLine();
-                        //    if (p.WaitForExit(avnTimeout) && outputWaitHandle.WaitOne(avnTimeout) &&
-                        //            errorWaitHandle.WaitOne(avnTimeout))
-                        //    {
-                        //        readAVNOutput(output.ToString());
-                        //        //Utils.Print("Looking at bug report: " + Path.Combine(p.StartInfo.WorkingDirectory, bugReportFileName));
-                        //        mergedBugs = mergedBugs.Union(
-                        //            collectBugs(Path.Combine(p.StartInfo.WorkingDirectory, 
-                        //            bugReportFileName)));
-                        //        Utils.Print("Bugs found so far: " + mergedBugs.Count);
-                        //    }
-                        //    else
-                        //        Utils.Print("Timeout on: " + impl.Name);
-                        //}
-                        p.Start();
-                        p.WaitForExit();
+                            p.WaitForExit(); // wait untill AVN terminates
+                            // TODO: we can also wait only a predefined amount of time
+                            readAVNOutput(output.ToString());
 
-                        mergedBugs = mergedBugs.Union(
-                                    collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
-                                    bugReportFileName)));
-                        Utils.Print("Bugs found so far: " + mergedBugs.Count);
+                            mergedBugs = mergedBugs.Union(
+                                        collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
+                                        bugReportFileName)));
+                            Utils.Print("Bugs found so far: " + mergedBugs.Count);
+                        }
                     }
-                        
-                    
-                        
                 }
                 catch (Exception e)
                 {
@@ -285,18 +300,20 @@ namespace FastAVN
                 }
             }
 
-            printBugs(mergedBugs);
+            printBugs(ref mergedBugs);
         }
 
-        private static void printBugs(HashSet<Tuple<string, int>> mergedBugs)
+        // output merged bug report to console
+        private static void printBugs(ref HashSet<Tuple<string, int>> mergedBugs)
         {
             Utils.Print("========= Merged Bugs =========", Utils.PRINT_TAG.AV_OUTPUT);
             foreach (Tuple<string, int> bug in mergedBugs)
             {
-                Utils.Print(string.Format("Bug: ({0}, {1})", bug.Item1, bug.Item2),Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print(string.Format("Bug: ({0}, {1})", bug.Item1, bug.Item2), Utils.PRINT_TAG.AV_OUTPUT);
             }
         }
 
+        // collect bug from the bug report file produce by AVN
         private static HashSet<Tuple<string, int>> collectBugs(string p)
         {
             HashSet<Tuple<string, int>> ret = new HashSet<Tuple<string, int>>();
@@ -324,46 +341,37 @@ namespace FastAVN
             return ret;
         }
 
+        // process AVN console output
+        // TODO: collect individual stats for AVN run
         private static void readAVNOutput(string output)
         {
             foreach (string line in output.Split('\n'))
             {
-                Console.WriteLine(line);
+                if (verbose >= 1)
+                    Console.WriteLine(line);
                 if (!line.StartsWith("[TAG: AV_STATS]"))
                     continue;
             }
         }
 
-        // Prune by removing procedures that are not called
-        private static Program pruneDeepProcs(Program origProgram, string mainProcName, int k)
+        // Prune by removing implementations that are not called within depth k (k>0)
+        // When k <= 0, only prune implementations that are never called.
+        private static Program pruneDeepProcs(Program origProgram, 
+            ref Dictionary<string, HashSet<string>> edges,
+            string mainProcName, int k)
         {
             if (mainProcName == null)
                 return origProgram;
 
-            var boundedDepth = (k > 0);
+            var boundedDepth = (k > 0); // do we have a bounded depth
 
             Program program = (new FixedDuplicator(false)).VisitProgram(origProgram);
 
-            var edges = new Dictionary<string, HashSet<string>>();
-            foreach (var decl in program.TopLevelDeclarations)
-            {
-                var impl = decl as Implementation;
-                if (impl == null) continue;
-                edges.Add(impl.Name, new HashSet<string>());
-                foreach (var blk in impl.Blocks)
-                {
-                    blk.Cmds.OfType<CallCmd>()
-                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
-                    blk.Cmds.OfType<ParCallCmd>()
-                        .Iter(pcmd => pcmd.CallCmds
-                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
-                }
-            }
             var reachable = new HashSet<string>();
             reachable.Add(mainProcName);
 
             var delta = new HashSet<string>(reachable);
-            while (delta.Count != 0 && (!boundedDepth  || k-- > 0))
+            while (delta.Count != 0 && (!boundedDepth || k-- > 0))
             {
                 var nf = new HashSet<string>();
                 foreach (var n in delta)
@@ -397,7 +405,7 @@ namespace FastAVN
             //Program init = BoogieUtil.ReadAndOnlyResolve(filename);
             Program init = BoogieUtil.ParseProgram(filename);
             init.Resolve();
-            return init; 
+            return init;
         }
     }
 }
