@@ -26,7 +26,7 @@ namespace AngelicVerifierNull
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
         // Add unsound options for NULL
-        public static bool UseUnsoundMapSelectNonNull = false;
+        public static bool AddMapSelectNonNullAssumptions = false;
         // Use Corral's DeepAssert instrumentation
         public static bool DeepAsserts = false;
     }
@@ -178,7 +178,7 @@ namespace AngelicVerifierNull
                 disableRoundRobinPrePass = true;
 
             if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
-                Options.UseUnsoundMapSelectNonNull = true;
+                Options.AddMapSelectNonNullAssumptions = true;
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -207,10 +207,15 @@ namespace AngelicVerifierNull
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
                 Stats.stop("alias.analysis");
-
-                
-                
+                               
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
+
+                if (Options.AddMapSelectNonNullAssumptions)
+                {
+                    int mapNonNullTotalAsserts, mapNonNullAssertsRemaining;
+                    mapNonNullAssertsRemaining = CountAssertsWithAttribute(prog, Instrumentations.AssertMapSelectsNonNull.attrName, out mapNonNullTotalAsserts);
+                    Utils.Print(string.Format("#MapReadsPossiblyNullAfterAA = {0}/{1}", mapNonNullAssertsRemaining, mapNonNullTotalAsserts));
+                }
 
                 Utils.Print(string.Format("#Procs : {0}",Stats.numProcs),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#EntryPoints : {0}",Stats.numProcsAnalyzed),Utils.PRINT_TAG.AV_STATS);
@@ -372,10 +377,8 @@ namespace AngelicVerifierNull
             mallocInstrumentation.DoInstrument();
             //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
 
-            //unsound
-            if (Options.UseUnsoundMapSelectNonNull)
-                (new Instrumentations.AssumeMapSelectsNonNull()).Visit(init);
-
+            if (Options.AddMapSelectNonNullAssumptions)
+                (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
 
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");
@@ -393,6 +396,14 @@ namespace AngelicVerifierNull
             assertVisitor.Visit(prog.getProgram());
             return assertVisitor.assertCount;
         }
+        private static int CountAssertsWithAttribute(PersistentProgram prog, string attributeName, out int totalCount)
+        {
+            var assertVisitor = new Instrumentations.AssertWithAttributeCountVisitor(attributeName);
+            assertVisitor.Visit(prog.getProgram());
+            totalCount = assertVisitor.assertCountAll;
+            return assertVisitor.assertsNotRemovedCount;
+        }
+
         #endregion
 
         #region Corral related
