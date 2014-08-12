@@ -108,6 +108,7 @@ namespace AngelicVerifierNull
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
+        static bool dumpTimedoutCorralQueries = false;
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -161,6 +162,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/prePassOnly"))
                 prePassOnly = true;
+
+            if (args.Any(s => s == "/dumpTimedoutCorralQueries"))
+                dumpTimedoutCorralQueries = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -738,8 +742,9 @@ namespace AngelicVerifierNull
                 corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
                 corralState.TrackedVariables = refinementState.getVars().Variables;
 
-                DumpProgWithAsserts(inputProg.getProgram(), inputProg.mainProcName, 
-                    "corralinp" + corralIterationCount + ".bpl");
+                if(dumpTimedoutCorralQueries)
+                    DumpProgWithAsserts(inputProg.getProgram(), inputProg.mainProcName, 
+                        "corralinp" + corralIterationCount + ".bpl");
                 throw;
             }
 
