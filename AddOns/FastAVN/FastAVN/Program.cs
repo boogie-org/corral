@@ -10,7 +10,7 @@ using PersistentProgram = cba.PersistentCBAProgram;
 using btype = Microsoft.Boogie.Type;
 using System.IO;
 using System.Threading;
-
+using System.Collections.Concurrent;
 
 namespace FastAVN
 {
@@ -80,10 +80,12 @@ namespace FastAVN
         static int approximationDepth = 0; // k-depth
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
-        static bool dumpSlices = false; // dump sliced program for each entrypoint
+        static bool dumpSlices = true; // dump sliced program for each entrypoint
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = "/sdv /useEntryPoints /dumpResults:" + bugReportFileName
             + " /timeout:" + avnTimeout; // default AVN arguments
+        static string mergedBugReportName = "bugs.txt";
+        static int numThreads = 4; // default number of parallel AVN instances
 
 
         static void Main(string[] args)
@@ -97,8 +99,8 @@ namespace FastAVN
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
 
-            if (args.Any(s => s == "/dumpSlices"))
-                dumpSlices = true;
+            if (args.Any(s => s == "/noDumpSlices"))
+                dumpSlices = false;
 
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -113,8 +115,11 @@ namespace FastAVN
                 .Iter(s => approximationDepth = int.Parse(s.Substring("/depth:".Length)));
 
             // user defined path to AVN binary
-            args.Where(s => s.StartsWith("/avn:"))
-                .Iter(s => avnPath = s.Substring("/avn:".Length));
+            args.Where(s => s.StartsWith("/avnPath:"))
+                .Iter(s => avnPath = s.Substring("/avnPath:".Length));
+
+            args.Where(s => s.StartsWith("/numThreads:"))
+                .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
 
             // Find AVN executable
             findAvn();
@@ -206,7 +211,8 @@ namespace FastAVN
         private static void pruneImpl(Program prog, int approximationDepth)
         {
             HashSet<string> entrypoints = new HashSet<string>();
-            HashSet<Tuple<string, int>> mergedBugs = new HashSet<Tuple<string, int>>();
+            //HashSet<string> mergedBugs = new HashSet<string>();
+            ConcurrentDictionary<string, int> mergedBugs = new ConcurrentDictionary<string, int>();
 
             // build the call graph
             var edges = new Dictionary<string, HashSet<string>>();
@@ -225,11 +231,13 @@ namespace FastAVN
                 }
             }
 
-            foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
+            Parallel.ForEach (prog.TopLevelDeclarations.Where(x => x is Implementation), 
+                new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
             {
+                var impl = (Implementation)i;
                 // skip this impl if it is not marked as an entrypoint
                 if (!QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
-                    continue;
+                    return;
                 Stats.count("entry.points");
                 entrypoints.Add(impl.Name);
 
@@ -285,9 +293,15 @@ namespace FastAVN
                             // TODO: we can also wait only a predefined amount of time
                             readAVNOutput(output.ToString());
 
-                            mergedBugs = mergedBugs.Union(
-                                        collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
-                                        bugReportFileName)));
+                            var bugs = collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
+                                    bugReportFileName));
+                            bugs.Iter(b =>
+                            {
+                                if (!mergedBugs.ContainsKey(b))
+                                    mergedBugs[b] = 1;
+                                else
+                                    mergedBugs[b] += 1;
+                            });
                             Utils.Print("Bugs found so far: " + mergedBugs.Count);
                         }
                     }
@@ -298,33 +312,41 @@ namespace FastAVN
                     Console.WriteLine(e.Message);
                     Console.WriteLine(e.StackTrace);
                 }
-            }
+            });
 
             printBugs(ref mergedBugs);
         }
 
         // output merged bug report to console
-        private static void printBugs(ref HashSet<Tuple<string, int>> mergedBugs)
+        private static void printBugs(ref ConcurrentDictionary<string, int> mergedBugs)
         {
-            Utils.Print("========= Merged Bugs =========", Utils.PRINT_TAG.AV_OUTPUT);
-            foreach (Tuple<string, int> bug in mergedBugs)
+            using (StreamWriter bugReport = new StreamWriter(
+                Path.Combine(Directory.GetCurrentDirectory(),
+                mergedBugReportName)))
             {
-                Utils.Print(string.Format("Bug: ({0}, {1})", bug.Item1, bug.Item2), Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print("========= Merged Bugs =========", Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print("Description,Src File,Line,Procedure", Utils.PRINT_TAG.AV_OUTPUT);
+                bugReport.WriteLine("Description,Src File,Line,Procedure");
+                foreach (string bug in mergedBugs.Keys)
+                {
+                    Utils.Print(string.Format("Bug: {0} Count: {1}", bug, mergedBugs[bug]), Utils.PRINT_TAG.AV_OUTPUT);
+                    bugReport.WriteLine(bug);
+                }
             }
         }
 
         // collect bug from the bug report file produce by AVN
-        private static HashSet<Tuple<string, int>> collectBugs(string p)
+        private static HashSet<string> collectBugs(string p)
         {
-            HashSet<Tuple<string, int>> ret = new HashSet<Tuple<string, int>>();
+            HashSet<string> ret = new HashSet<string>();
             try
             {
                 foreach (string line in File.ReadLines(p))
                 {
                     if (line.StartsWith("Description"))
                         continue;
-                    var entries = line.Split(',');
-                    ret.Add(new Tuple<string, int>(entries[1].Trim(), int.Parse(entries[2].Trim())));
+                    // extract line from bug report but ignore the entrypoint info
+                    ret.Add(line.Substring(0, line.LastIndexOf(",")));
                 }
             }
             catch (FileNotFoundException)
@@ -347,7 +369,8 @@ namespace FastAVN
         {
             foreach (string line in output.Split('\n'))
             {
-                if (verbose >= 1)
+                if (verbose >= 1 && numThreads <= 1) 
+                    // disable printing when running mutiple threads
                     Console.WriteLine(line);
                 if (!line.StartsWith("[TAG: AV_STATS]"))
                     continue;
