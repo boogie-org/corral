@@ -556,12 +556,11 @@ namespace AngelicVerifierNull
                     {
                         output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
                             failingProc, assertLoc.Item1, assertLoc.Item2, failingAssert.Expr.ToString(), failingEntryPoint);
-
+                        Stats.count("bug.count");
                         // result file output
                         // format: Description, Src File, Line, Procedure, EntryPoint
                         if (ResultsFile != null)
                         {
-                            Stats.count("bug.count");
                             ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
                                 failingAssert.Expr.ToString(), assertLoc.Item1, assertLoc.Item2, failingProc, failingEntryPoint);
                             ResultsFile.Flush();

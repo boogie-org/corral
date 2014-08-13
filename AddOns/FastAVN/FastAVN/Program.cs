@@ -290,6 +290,8 @@ namespace FastAVN
                             p.BeginErrorReadLine();
 
                             p.WaitForExit(); // wait untill AVN terminates
+                            outputWaitHandle.WaitOne();
+                            errorWaitHandle.WaitOne();
                             // TODO: we can also wait only a predefined amount of time
                             readAVNOutput(output.ToString());
 
@@ -412,9 +414,17 @@ namespace FastAVN
             foreach (var decl in program.TopLevelDeclarations)
             {
                 //if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
-                if (decl is Implementation && toRemove.Contains((decl as Implementation).Name)) continue;
-                if (decl is Procedure && ((Procedure)decl).Name != mainProcName)
-                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes); // leave single entrypoint
+                if (decl is Implementation)
+                {
+                    if ((decl as Implementation).Name != mainProcName)
+                        decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
+                    if (toRemove.Contains((decl as Implementation).Name) &&
+                        (decl as Implementation).Name != "corralExtraInit") // keep instrumentation function
+                        continue;
+                }
+                if (decl is Procedure && (decl as Procedure).Name != mainProcName)
+                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
+
                 newDecls.Add(decl);
             }
             program.TopLevelDeclarations = newDecls;
