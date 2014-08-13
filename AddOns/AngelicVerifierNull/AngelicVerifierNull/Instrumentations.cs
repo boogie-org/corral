@@ -592,6 +592,7 @@ namespace AngelicVerifierNull
         cba.ModifyTrans printInfo;
         cba.CompressBlocks compressBlocks;
         cba.InsertionTrans assertInstrInfo;
+        cba.InsertionTrans blanksInfo;
         cba.DeepAssertRewrite da;
 
         // The harness instrumentation (kept here for
@@ -624,6 +625,7 @@ namespace AngelicVerifierNull
         {
             passName = "SequentialInstrumentation"; 
             assertInstrInfo = new cba.InsertionTrans();
+            blanksInfo = new cba.InsertionTrans();
             assertsPassed = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
                 "assertsPassed", Microsoft.Boogie.Type.Bool));
             compressBlocks = new cba.CompressBlocks();
@@ -638,6 +640,9 @@ namespace AngelicVerifierNull
 
         public override CBAProgram runCBAPass(CBAProgram program)
         {
+            // Add blanks
+            blanksInfo = AddBlanks(program);
+
             // Remove unreachable procedures
             BoogieUtil.pruneProcs(program, program.mainProcName);
 
@@ -798,6 +803,45 @@ namespace AngelicVerifierNull
             return ret;
         }
 
+        // This is to avoid a corner-case with ModifyTrans where some statements
+        // that are deleted by the transformation are picked up at the end of the 
+        // trace while mapping back. 
+        // We avoid this by adding "assume true" right after procedure calls
+        private cba.InsertionTrans AddBlanks(Program program)
+        {
+            var tinfo = new cba.InsertionTrans();
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    var currCmds = new List<Cmd>();
+
+                    tinfo.addTrans(impl.Name, blk.Label, blk.Label);
+                    var incnt = -1;
+                    foreach (Cmd cmd in blk.Cmds)
+                    {
+                        incnt++;
+
+                        // procedure call 
+                        if (cmd is CallCmd)
+                        {
+                            currCmds.Add(cmd);
+                            tinfo.addTrans(impl.Name, blk.Label, incnt, cmd, blk.Label, currCmds.Count - 1, new List<Cmd>{ currCmds.Last() });
+                            currCmds.Add(BoogieAstFactory.MkAssume(Expr.True));
+                            continue;
+                        }
+
+                        currCmds.Add(cmd);
+                        tinfo.addTrans(impl.Name, blk.Label, incnt, cmd, blk.Label, currCmds.Count - 1, new List<Cmd> { currCmds.Last() });
+                    }
+                    blk.Cmds = currCmds;
+                }
+            }
+
+            return tinfo;
+        }
+
         public override cba.ErrorTrace mapBackTrace(cba.ErrorTrace trace)
         {
             cba.ErrorTrace ptrace = null;
@@ -824,6 +868,7 @@ namespace AngelicVerifierNull
             trace = compressBlocks.mapBackTrace(trace);
             //trace = printInfo.mapBackTrace(trace);
             trace = sourceInfo.mapBackTrace(trace);
+            trace = blanksInfo.mapBackTrace(trace);
             return trace;
         }
 
