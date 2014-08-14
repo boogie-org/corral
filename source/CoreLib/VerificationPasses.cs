@@ -2944,20 +2944,31 @@ namespace cba
             newVars.Add(flag.Name);
 
             // constants for arguments
-            var argConstants = new List<Constant>();
+            var argConstants = new Dictionary<Microsoft.Boogie.Type, List<Constant>>();
             var argCnt = 0;
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>().Where(i => asyncProcs.Contains(i.Name)))
             {
-                if (impl.InParams.Any(v => !v.TypedIdent.Type.IsInt))
-                    throw new NotImplementedException("Non-int parameters to async procedures not allowed at the moment");
-                argCnt = Math.Max(argCnt, impl.InParams.Count);
+                var myCnt = new Dictionary<Microsoft.Boogie.Type, int>();
+                foreach (var v in impl.InParams)
+                {
+                    var vType = v.TypedIdent.Type;
+                    if (!myCnt.ContainsKey(vType))
+                    {
+                        myCnt[vType] = 0;
+                    }
+                    if (!argConstants.ContainsKey(vType))
+                    {
+                        argConstants[vType] = new List<Constant>();
+                    }
+                    if (argConstants[vType].Count == myCnt[vType])
+                    {
+                        argConstants[vType].Add(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "daArg" + argCnt.ToString(), vType)));
+                        argCnt++;
+                    }
+                    myCnt[vType] = myCnt[vType] + 1;
+                }
             }
             Console.WriteLine("Creating {0} constants for async proc arguments", argCnt);
-            for (int i = 0; i < argCnt; i++)
-            {
-                argConstants.Add(new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                    "daArg" + i.ToString(), Microsoft.Boogie.Type.Int)));
-            }
 
             var mainName = main.Name;
 
@@ -3076,8 +3087,18 @@ namespace cba
 
                 var blk = new Block(Token.NoToken, GetNewLabel(), new List<Cmd>(), BoogieAstFactory.MkGotoCmd(implToFirstBlock[p].Label));
                 var pcopy = implCopy[p];
-                for (int i = 0; i < pcopy.InParams.Count; i++)
-                    blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqVar(pcopy.InParams[i], argConstants[i]));
+                var myCnt = new Dictionary<Microsoft.Boogie.Type, int>();
+                foreach (var v in pcopy.InParams)
+                {
+                    var vType = v.TypedIdent.Type;
+                    if (!myCnt.ContainsKey(vType))
+                    {
+                        myCnt[vType] = 0;
+                    }
+                    var idx = myCnt[vType];
+                    blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqVar(v, argConstants[vType][idx]));
+                    myCnt[vType] = idx + 1;
+                }
                 blk.Cmds.Add(BoogieAstFactory.MkAssumeVarEqConst(flag, procToNum[p]));
                 threadEntryBlocks.Add(p, blk);
             }
@@ -3109,7 +3130,10 @@ namespace cba
             newMainImpl.Blocks = nb;
 
             program.TopLevelDeclarations.Add(flag);
-            program.TopLevelDeclarations.AddRange(argConstants);
+            foreach (var cnsts in argConstants.Values)
+            {
+                program.TopLevelDeclarations.AddRange(cnsts);
+            }
 
             // Instrument async in original procedures
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -3139,8 +3163,18 @@ namespace cba
 
                         // lab1: set args; flag := T; goto lab3;
                         var cmds1 = new List<Cmd>();
-                        for(int i = 0; i < ccmd.Ins.Count; i++) 
-                            cmds1.Add(BoogieAstFactory.MkAssume(Expr.Eq(ccmd.Ins[i], Expr.Ident(argConstants[i]))));
+                        var myCnt = new Dictionary<Microsoft.Boogie.Type, int>();
+                        for (int i = 0; i < ccmd.Ins.Count; i++)
+                        {
+                            var vType = ccmd.Proc.InParams[i].TypedIdent.Type;
+                            if (!myCnt.ContainsKey(vType))
+                            {
+                                myCnt[vType] = 0;
+                            }
+                            var idx = myCnt[vType];
+                            cmds1.Add(BoogieAstFactory.MkAssume(Expr.Eq(ccmd.Ins[i], Expr.Ident(argConstants[vType][idx]))));
+                            myCnt[vType] = idx + 1;
+                        }
                         cmds1.Add(BoogieAstFactory.MkVarEqConst(flag, procToNum[ccmd.callee]));
                         newBlocks.Add(new Block(Token.NoToken, lab1, cmds1, 
                             BoogieAstFactory.MkGotoCmd(lab3)));
