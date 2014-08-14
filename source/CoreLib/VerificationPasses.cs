@@ -2881,6 +2881,12 @@ namespace cba
                 .FirstOrDefault();
             if (main == null && program.mainProcName != null)
                 main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+            if (main.OutParams.Count != 0)
+            {
+                // create a dummy main that calls the original one
+                main = CreateDummyMain(program, main);
+                program.mainProcName = main.Name;
+            }
             SequentialInstrumentation.isSingleThreadProgram(program, main.Name);
 
             // Prepare for stratified inlining with assertions
@@ -3201,6 +3207,54 @@ namespace cba
 
             return program;
         }
+
+        private Implementation CreateDummyMain(Program program, Implementation main) 
+        {
+            var dup = new FixedDuplicator();
+            var newMain = dup.VisitImplementation(main);
+            var newProc = dup.VisitProcedure(main.Proc);
+
+            newMain.Name = "DA_dummy_" + main.Name;
+            newProc.Name = "DA_dummy_" + main.Name;
+            newMain.Proc = newProc;
+
+            // drop out params -- make them locals
+            newMain.LocVars = new List<Variable>();
+            newMain.LocVars.AddRange(newMain.OutParams);
+            newMain.OutParams = new List<Variable>();
+            newProc.OutParams = new List<Variable>();
+
+            var mainIns = new List<Expr>();
+            foreach (Variable v in newMain.InParams)
+            {
+                mainIns.Add(Expr.Ident(v));
+            }
+            var mainOuts = new List<IdentifierExpr>();
+            foreach (Variable v in newMain.LocVars)
+            {
+                mainOuts.Add(Expr.Ident(v));
+            }
+
+            var callMain = new CallCmd(Token.NoToken, main.Name, mainIns, mainOuts);
+            callMain.Proc = main.Proc;
+
+            var blk = new Block(Token.NoToken, "start", new List<Cmd>{callMain}, new ReturnCmd(Token.NoToken));
+            newMain.Blocks = new List<Block>();
+            newMain.Blocks.Add(blk);
+
+            program.TopLevelDeclarations.Add(newProc);
+            program.TopLevelDeclarations.Add(newMain);
+
+            // Set entrypoint
+            main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);
+            main.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", main.Proc.Attributes);
+
+            newMain.AddAttribute("entrypoint");
+            newMain.Proc.AddAttribute("entrypoint");
+
+            return newMain;
+        }
+
 
         public static HashSet<string> procsThatCanSequentiallyReachAsserts(Program program)
         {
