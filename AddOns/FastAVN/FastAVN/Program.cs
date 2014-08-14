@@ -210,11 +210,11 @@ namespace FastAVN
         // run AVN binary on pruned programs
         private static void pruneImpl(Program prog, int approximationDepth)
         {
-            HashSet<string> entrypoints = new HashSet<string>();
+            ConcurrentBag<string> entryPoints = new ConcurrentBag<string>();
             //HashSet<string> mergedBugs = new HashSet<string>();
             ConcurrentDictionary<string, int> mergedBugs = new ConcurrentDictionary<string, int>();
 
-            // build the call graph
+            // build the call graph once
             var edges = new Dictionary<string, HashSet<string>>();
             foreach (var decl in prog.TopLevelDeclarations)
             {
@@ -238,9 +238,8 @@ namespace FastAVN
                 // skip this impl if it is not marked as an entrypoint
                 if (!QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                     return;
-                Stats.count("entry.points");
-                entrypoints.Add(impl.Name);
 
+                entryPoints.Add(impl.Name);
                 // slice the program by entrypoints
                 Program shallowP = pruneDeepProcs(prog, ref edges, impl.Name, approximationDepth);
 
@@ -316,17 +315,18 @@ namespace FastAVN
                 }
             });
 
-            printBugs(ref mergedBugs);
+            printBugs(ref mergedBugs, entryPoints.Count);
         }
 
         // output merged bug report to console
-        private static void printBugs(ref ConcurrentDictionary<string, int> mergedBugs)
+        private static void printBugs(ref ConcurrentDictionary<string, int> mergedBugs, int numEntries)
         {
             using (StreamWriter bugReport = new StreamWriter(
                 Path.Combine(Directory.GetCurrentDirectory(),
                 mergedBugReportName)))
             {
-                Utils.Print("========= Merged Bugs =========", Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print(string.Format("========= Merged Bugs for {0} Entry Points =========", numEntries),
+                    Utils.PRINT_TAG.AV_OUTPUT);
                 Utils.Print("Description,Src File,Line,Procedure", Utils.PRINT_TAG.AV_OUTPUT);
                 bugReport.WriteLine("Description,Src File,Line,Procedure");
                 foreach (string bug in mergedBugs.Keys)

@@ -43,8 +43,20 @@ namespace AngelicVerifierNull
             {
                 FindMalloc();
                 FindNULL();
+                AddSystemModel();
                 CreateMainProcedure();
                 ChangeStubsIntoUnkowns();
+            }
+
+            private void AddSystemModel()
+            {
+                // Add System Models
+                Stats.resume("add.models");
+                Console.WriteLine("Adding system models");
+                DefaultModels dmodels = new DefaultModels(prog);
+                prog = dmodels.AddModels();
+                //BoogieUtil.PrintProgram(prog, "model.bpl");
+                Stats.stop("add.models");
             }
             
             private void CreateMainProcedure()
@@ -268,6 +280,8 @@ namespace AngelicVerifierNull
                         mallocProcedure.Name, mallocProcedure.InParams.Count));
                 }
 
+                BufferInstrument(mallocProcedure);
+
                 // Drop annotations on mallocProcedureFull. We will use it 
                 // as our "unknown" theory
                 mallocProcedureFull.Requires = new List<Requires>();
@@ -281,6 +295,30 @@ namespace AngelicVerifierNull
                     .Where(x => x is Constant && x.ToString().Equals("NULL"));
                 if (!nulls.Any())
                     throw new InputProgramDoesNotMatchExn("ABORT: no NULL constant declared in the input program");
+            }
+            // instrumentation functions for buffer overflow detection
+            private void BufferInstrument(Procedure mallocProcedure)
+            {
+                var sizeFun = new Function(Token.NoToken, "Size",
+                    new List<Variable>() { BoogieAstFactory.MkFormal("x", btype.Int, false) },
+                    BoogieAstFactory.MkFormal("r", btype.Int, false));
+                sizeFun.AddAttribute("buffersize");
+                var baseFun = new Function(Token.NoToken, "Base",
+                    new List<Variable>() { BoogieAstFactory.MkFormal("x", btype.Int, false) },
+                    BoogieAstFactory.MkFormal("r", btype.Int, false));
+                baseFun.AddAttribute("bufferbase");
+
+                prog.TopLevelDeclarations.Add(sizeFun);
+                prog.TopLevelDeclarations.Add(baseFun);
+
+                var mallocRet = Expr.Ident(mallocProcedure.OutParams[0]);
+                mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
+                    new NAryExpr(Token.NoToken, new FunctionCall(baseFun),
+                        new List<Expr>() { mallocRet }), mallocRet)));
+                var mallocIn = Expr.Ident(mallocProcedure.InParams[0]);
+                mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
+                    new NAryExpr(Token.NoToken, new FunctionCall(sizeFun),
+                        new List<Expr>() { mallocRet }), mallocIn)));
             }
             private List<Variable> GetPointerVars(List<Variable> vars)
             {
