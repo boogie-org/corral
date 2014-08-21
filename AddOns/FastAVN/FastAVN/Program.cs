@@ -72,9 +72,6 @@ namespace FastAVN
             }
         }
 
-        //static string boogieOpts = "";
-        //static string corralOpts = "";
-        //static cba.Configs corralConfig = null;
         static int timeout = 0; // system timeout
         static int avnTimeout = 200; // default AVN timeout
         static int approximationDepth = 0; // k-depth
@@ -86,8 +83,10 @@ namespace FastAVN
             + " /timeout:" + avnTimeout; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
         static int numThreads = 4; // default number of parallel AVN instances
+        private static string CORRAL_EXTRA_INIT = "corralExtraInit";
+        static bool fieldNonNull = true; // include angelic field non-null harness
 
-
+        
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -121,6 +120,9 @@ namespace FastAVN
             args.Where(s => s.StartsWith("/numThreads:"))
                 .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
 
+            if (args.Any(s => s == "/noFieldNonNull"))
+                fieldNonNull = false;
+
             // Find AVN executable
             findAvn();
             Debug.Assert(avnPath != null);
@@ -135,12 +137,13 @@ namespace FastAVN
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]); // get the input program
-
+                
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
                 pruneImpl(prog, approximationDepth);
 
                 Stats.stop("fastavn");
+
                 Stats.printStats();
             }
             catch (Exception e)
@@ -181,32 +184,6 @@ namespace FastAVN
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
         }
 
-        // Initialization
-        //static cba.Configs InitializeCorral()
-        //{
-        //    CommandLineOptions.Install(new CommandLineOptions());
-        //    CommandLineOptions.Clo.PrintInstrumented = true;
-
-        //    // Set all defaults for corral
-        //    corralOpts += " doesntExist.bpl /track:alloc /useProverEvaluate /printVerify ";
-        //    var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
-        //    config.boogieOpts += boogieOpts;
-        //    cba.Driver.Initialize(config);
-
-        //    cba.VerificationPass.usePruning = false;
-
-        //    if (!config.useProverEvaluate)
-        //    {
-        //        cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = true;
-        //        if (config.NonUniformUnfolding && !config.useProverEvaluate)
-        //            cba.ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = false;
-        //        if (config.printData == 0)
-        //            cba.ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
-        //    }
-
-        //    return config;
-        //}
-
         // run AVN binary on pruned programs
         private static void pruneImpl(Program prog, int approximationDepth)
         {
@@ -220,6 +197,8 @@ namespace FastAVN
             {
                 var impl = decl as Implementation;
                 if (impl == null) continue;
+
+                Stats.count("impl.count");
                 edges.Add(impl.Name, new HashSet<string>());
                 foreach (var blk in impl.Blocks)
                 {
@@ -231,7 +210,7 @@ namespace FastAVN
                 }
             }
 
-            Parallel.ForEach (prog.TopLevelDeclarations.Where(x => x is Implementation), 
+            Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation),
                 new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
             {
                 var impl = (Implementation)i;
@@ -247,7 +226,8 @@ namespace FastAVN
                 try
                 {
                     Directory.CreateDirectory(impl.Name); // create new directory for each entrypoint
-                    var pruneFile = dumpSlices ? string.Format("{0}\\pruneSlice.bpl", impl.Name) : "pruneSlice.bpl";
+                    var pruneFile = (dumpSlices || numThreads > 1) ?
+                        string.Format("{0}\\pruneSlice.bpl", impl.Name) : "pruneSlice.bpl";
                     Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
@@ -303,7 +283,7 @@ namespace FastAVN
                                 else
                                     mergedBugs[b] += 1;
                             });
-                            Utils.Print("Bugs found so far: " + mergedBugs.Count);
+                            Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
                         }
                     }
                 }
@@ -316,6 +296,8 @@ namespace FastAVN
             });
 
             printBugs(ref mergedBugs, entryPoints.Count);
+            Utils.Print(string.Format("#EntryPoints : {0}", entryPoints.Count), Utils.PRINT_TAG.AV_STATS);
+            Utils.Print(string.Format("#Bugs : {0}", mergedBugs.Count), Utils.PRINT_TAG.AV_STATS);
         }
 
         // output merged bug report to console
@@ -371,7 +353,7 @@ namespace FastAVN
         {
             foreach (string line in output.Split('\n'))
             {
-                if (verbose >= 1 && numThreads <= 1) 
+                if (verbose >= 1 && numThreads <= 1)
                     // disable printing when running mutiple threads
                     Console.WriteLine(line);
                 if (!line.StartsWith("[TAG: AV_STATS]"))
@@ -381,16 +363,18 @@ namespace FastAVN
 
         // Prune by removing implementations that are not called within depth k (k>0)
         // When k <= 0, only prune implementations that are never called.
-        private static Program pruneDeepProcs(Program origProgram, 
+        private static Program pruneDeepProcs(Program origProgram,
             ref Dictionary<string, HashSet<string>> edges,
             string mainProcName, int k)
         {
             if (mainProcName == null)
                 return origProgram;
 
+
             var boundedDepth = (k > 0); // do we have a bounded depth
 
             Program program = (new FixedDuplicator(false)).VisitProgram(origProgram);
+                        Procedure malloc = FindMalloc(program);
 
             var reachable = new HashSet<string>();
             reachable.Add(mainProcName);
@@ -410,17 +394,26 @@ namespace FastAVN
             var allProcs = new HashSet<string>(edges.Keys);
             var toRemove = allProcs.Difference(reachable);
 
+            //Console.WriteLine(string.Format("Removing {0} procedures...", toRemove.Count));
+
             var newDecls = new List<Declaration>();
             foreach (var decl in program.TopLevelDeclarations)
             {
                 //if (decl is Procedure && toRemove.Contains((decl as Procedure).Name)) continue;
                 if (decl is Implementation)
                 {
-                    if ((decl as Implementation).Name != mainProcName)
+                    var impl = decl as Implementation;
+                    if (impl.Name != mainProcName)
                         decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
-                    if (toRemove.Contains((decl as Implementation).Name) &&
-                        (decl as Implementation).Name != "corralExtraInit") // keep instrumentation function
+                    if (toRemove.Contains(impl.Name) &&
+                        !(fieldNonNull && impl.Name == CORRAL_EXTRA_INIT))
+                    // keep instrumentation function
+                    {
+                        var approxImpl = AngelicImpl(impl, program, malloc);
+                        if (approxImpl != null)
+                            newDecls.Add(approxImpl);
                         continue;
+                    }
                 }
                 if (decl is Procedure && (decl as Procedure).Name != mainProcName)
                     decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
@@ -432,13 +425,108 @@ namespace FastAVN
             return program;
         }
 
+        #region Angelic Approximation
+        // Create an angelic implementation to approximate the real one
+        private static Implementation AngelicImpl(Implementation impl, Program prog, Procedure mallocProc)
+        {
+            if (BoogieUtil.checkAttrExists("allocator", impl.Attributes))
+                return null;
+
+            List<Cmd> cmds = new List<Cmd>();
+            List<Variable> localVars = new List<Variable>();
+            foreach (var op in impl.OutParams)
+            {
+                if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op, mallocProc));
+                else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
+            }
+            foreach (var ip in impl.InParams)
+            {
+                if (!BoogieUtil.checkAttrExists("ref", ip.Attributes)) continue;
+                string mapName = QKeyValue.FindStringAttribute(ip.Attributes, "ref");
+                if (mapName == null)
+                {
+                    Utils.Print(String.Format("Expecting a map <name> with {:ref <name>} annotation on procedure {0}", impl.Name),
+                        Utils.PRINT_TAG.AV_WARNING);
+                    continue;
+                }
+                var mapVars = prog.TopLevelDeclarations.OfType<Variable>().
+                    Where(x => x.Name == mapName && x.TypedIdent.Type.IsMap);
+                if (mapVars.Count() != 1)
+                {
+                    Utils.Print(String.Format("Mapname {0} provided in {:ref} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
+                        mapName, ip.Name, impl.Name, mapVars.Count()),
+                        Utils.PRINT_TAG.AV_WARNING);
+                    continue;
+                }
+                var tmpVar = BoogieAstFactory.MkLocal("__tmp_" + ip.Name, ip.TypedIdent.Type);
+                localVars.Add(tmpVar);
+                cmds.Add(AllocatePointerAsUnknown(tmpVar, mallocProc));
+                cmds.Add(BoogieAstFactory.MkMapAssign(mapVars.First(), IdentifierExpr.Ident(ip), IdentifierExpr.Ident(tmpVar)));
+            }
+            if (cmds.Count == 0) return null; //don't create a body if no statements
+            var blk = BoogieAstFactory.MkBlock(cmds, new ReturnCmd(Token.NoToken));
+            var blks = new List<Block>() { blk };
+            //don't insert the proc as it already exists
+            var implpair = BoogieAstFactory.MkImpl(impl.Name,
+                DropAnnotations(impl.InParams),
+                DropAnnotations(impl.OutParams),
+                new List<Variable>(), blks);
+            Implementation ret = implpair[1] as Implementation;
+            ret.LocVars.AddRange(localVars);
+            ret.AddAttribute("angelic");
+            return ret;
+        }
+        private static bool IsPointerVariable(Variable x)
+        {
+            return x.TypedIdent.Type.IsInt &&
+                !BoogieUtil.checkAttrExists("scalar", x.Attributes); //we will err on the side of treating variables as references
+        }
+        private static Cmd AllocatePointerAsUnknown(Variable x, Procedure malloc)
+        {
+            return BoogieAstFactory.MkCall(malloc,
+                new List<Expr>() { new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE) },
+                new List<Variable>() { x });
+        }
+
+        // create a copy ofthe variables without annotations
+        private static List<Variable> DropAnnotations(List<Variable> vars)
+        {
+            var ret = new List<Variable>();
+            var dup = new Duplicator();
+            vars.Select(v => dup.VisitVariable(v)).Iter(v =>
+            {
+                v.Attributes = null;
+                ret.Add(v);
+            });
+            return ret;
+        }
+        #endregion
         private static Program GetProgram(string filename)
         {
             CommandLineOptions.Install(new CommandLineOptions());
             //Program init = BoogieUtil.ReadAndOnlyResolve(filename);
             Program init = BoogieUtil.ParseProgram(filename);
             init.Resolve();
+
             return init;
+        }
+
+        private static Procedure FindMalloc(Program prog)
+        {
+            Procedure mallocProc = null;
+            //find the malloc and malloc-full procedures
+            foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+            {
+                var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
+                if (attr == null) mallocProc = proc;
+            }
+
+            if (mallocProc == null)
+            {
+                throw new Exception("ABORT: no malloc procedure with {:allocator} declared in the input program");
+            }
+            return mallocProc;
         }
     }
 }

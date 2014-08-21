@@ -1,0 +1,14 @@
+references/*
+obj
+bin
+cba.v11.suo
+cba.v12.suo
+AddOns/FastAVN/FastAVN/bin
+AddOns/FastAVN/FastAVN/obj
+AddOns/AliasAnalysis/AliasAnalysis.v11.suo
+AddOns/AngelicVerifierNull/AngelicVerifierNull.psess
+AddOns/AngelicVerifierNull/AngelicVerifierNull.sdf
+AddOns/AngelicVerifierNull/AngelicVerifierNull.v11.suo
+AddOns/AngelicVerifierNull/AngelicVerifierNull/AngelicVerifierNull.csproj.user
+AddOns/FastAVN/FastAVN/FastAVN.csproj.user
+AddOns/FastAVN/FastAVN/FastAVN.v11.suo

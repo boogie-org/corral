@@ -41,11 +41,21 @@
     <Reference Include="Core">
       <HintPath>..\..\..\references\Core.dll</HintPath>
     </Reference>
-    <Reference Include="CorralUtil">
-      <HintPath>..\..\..\source\Util\bin\Debug\CorralUtil.dll</HintPath>
+    <Reference Include="ExecutionEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\references\ExecutionEngine.dll</HintPath>
     </Reference>
-    <Reference Include="Graph">
+    <Reference Include="Graph, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\source\Util\bin\Debug\Graph.dll</HintPath>
+    </Reference>
+    <Reference Include="Model, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\source\Util\bin\Debug\Model.dll</HintPath>
+    </Reference>
+    <Reference Include="ParserHelper, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\source\Util\bin\Debug\ParserHelper.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -80,6 +90,10 @@
     <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
       <Name>ProgTransformation</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
+      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
+      <Name>CorralUtil</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

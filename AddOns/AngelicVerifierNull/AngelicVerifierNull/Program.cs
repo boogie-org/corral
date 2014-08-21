@@ -29,6 +29,10 @@ namespace AngelicVerifierNull
         public static bool AddMapSelectNonNullAssumptions = false;
         // Use Corral's DeepAssert instrumentation
         public static bool DeepAsserts = false;
+        // Use field non-null assumption
+        public static bool FieldNonNull = true;
+        // do buffer overrun detection
+        public static bool bufferDetect = false; 
     }
 
     class Stats
@@ -109,6 +113,8 @@ namespace AngelicVerifierNull
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
+        static bool deadCodeDetect = false; // do dead code detection
+        
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -163,8 +169,17 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/prePassOnly"))
                 prePassOnly = true;
 
+            if (args.Any(s => s == "/deadCodeDetection"))
+                deadCodeDetect = true;
+
+            if (args.Any(s => s == "/bufferDetection"))
+                Options.bufferDetect = true;
+
             if (args.Any(s => s == "/dumpTimedoutCorralQueries"))
                 dumpTimedoutCorralQueries = true;
+
+            if (args.Any(s => s == "/noFieldNonNull"))
+                Options.FieldNonNull = false;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -203,7 +218,16 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
-                
+
+                if (deadCodeDetect)
+                {
+                    // Run dead code analysis
+                    Stats.resume("dead.code");
+                    Console.WriteLine("Running dead code detection");
+                    prog = DeadCodeDetection.Detect(prog, corralConfig);
+                    Stats.stop("dead.code");
+                }
+
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
                 
                 // Run alias analysis
@@ -392,6 +416,8 @@ namespace AngelicVerifierNull
             var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
             ProgTransformation.PersistentProgram.FreeParserMemory();
 
+            
+
             return inputProg;
         }
         private static int CountAsserts(PersistentProgram prog)
@@ -496,6 +522,7 @@ namespace AngelicVerifierNull
                 try
                 {
                     Stats.resume("run.corral");
+                    BoogieUtil.PrintProgram(prog.getProgram(), "runcorral.bpl");
                     cex = RunCorral(prog, corralConfig.mainProcName, instr, corralTimeout);
                     Stats.stop("run.corral");
 

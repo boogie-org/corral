@@ -43,18 +43,18 @@ namespace AngelicVerifierNull
             {
                 FindMalloc();
                 FindNULL();
-                AddSystemModel();
+                if(Options.bufferDetect)
+                    AddSystemModels(); // TODO: add system models for buffer detection
                 CreateMainProcedure();
                 ChangeStubsIntoUnkowns();
             }
 
-            private void AddSystemModel()
+            private void AddSystemModels()
             {
                 // Add System Models
                 Stats.resume("add.models");
                 Console.WriteLine("Adding system models");
-                DefaultModels dmodels = new DefaultModels(prog);
-                prog = dmodels.AddModels();
+                prog = DefaultModels.AddModels(ref prog);
                 //BoogieUtil.PrintProgram(prog, "model.bpl");
                 Stats.stop("add.models");
             }
@@ -149,7 +149,7 @@ namespace AngelicVerifierNull
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit
                 var inits = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == CORRAL_EXTRA_INIT_PROC);
-                if (inits.Count() > 0)
+                if (inits.Count() > 0 && Options.FieldNonNull)
                     globalCmds.Add(BoogieAstFactory.MkCall(inits.First(), new List<Expr>(), new List<Variable>()));
 
                 // initialize globals
@@ -280,7 +280,8 @@ namespace AngelicVerifierNull
                         mallocProcedure.Name, mallocProcedure.InParams.Count));
                 }
 
-                BufferInstrument(mallocProcedure);
+                if (Options.bufferDetect)
+                    BufferInstrument(mallocProcedure);
 
                 // Drop annotations on mallocProcedureFull. We will use it 
                 // as our "unknown" theory
@@ -302,14 +303,20 @@ namespace AngelicVerifierNull
                 var sizeFun = new Function(Token.NoToken, "Size",
                     new List<Variable>() { BoogieAstFactory.MkFormal("x", btype.Int, false) },
                     BoogieAstFactory.MkFormal("r", btype.Int, false));
-                sizeFun.AddAttribute("buffersize");
+                sizeFun.AddAttribute("buffer", new Object[]{"size"});
+
                 var baseFun = new Function(Token.NoToken, "Base",
                     new List<Variable>() { BoogieAstFactory.MkFormal("x", btype.Int, false) },
                     BoogieAstFactory.MkFormal("r", btype.Int, false));
-                baseFun.AddAttribute("bufferbase");
+                baseFun.AddAttribute("buffer", new Object[] { "base" });
+
+                var allocMap = BoogieAstFactory.MkGlobal("Allocated", 
+                    BoogieAstFactory.MkMapType(btype.Int, btype.Bool));
+                allocMap.AddAttribute("buffer", new Object[] { "free" });
 
                 prog.TopLevelDeclarations.Add(sizeFun);
                 prog.TopLevelDeclarations.Add(baseFun);
+                prog.TopLevelDeclarations.Add(allocMap);
 
                 var mallocRet = Expr.Ident(mallocProcedure.OutParams[0]);
                 mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
@@ -319,6 +326,9 @@ namespace AngelicVerifierNull
                 mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
                     new NAryExpr(Token.NoToken, new FunctionCall(sizeFun),
                         new List<Expr>() { mallocRet }), mallocIn)));
+                mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
+                    BoogieAstFactory.MkMapAccessExpr(allocMap, mallocRet),
+                    Expr.True)));
             }
             private List<Variable> GetPointerVars(List<Variable> vars)
             {
