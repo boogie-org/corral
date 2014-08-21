@@ -1,4 +1,6 @@
-references/*
+references/*.dll
+references/*.pdb
+references/*.exe
 obj
 bin
 cba.v11.suo
