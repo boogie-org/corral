@@ -74,7 +74,7 @@ namespace FastAVN
 
         static int timeout = 0; // system timeout
         static int avnTimeout = 200; // default AVN timeout
-        static int approximationDepth = 0; // k-depth
+        static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
         static bool dumpSlices = true; // dump sliced program for each entrypoint
@@ -86,7 +86,7 @@ namespace FastAVN
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
         static bool fieldNonNull = true; // include angelic field non-null harness
 
-        
+
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -126,8 +126,6 @@ namespace FastAVN
             // Find AVN executable
             findAvn();
             Debug.Assert(avnPath != null);
-            // Initialize Boogie and Corral
-            //corralConfig = InitializeCorral();
 
             Program prog = null;
             try
@@ -137,10 +135,10 @@ namespace FastAVN
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]); // get the input program
-                
+
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
-                pruneImpl(prog, approximationDepth);
+                sliceAndRunAVN(prog, approximationDepth);
 
                 Stats.stop("fastavn");
 
@@ -184,8 +182,8 @@ namespace FastAVN
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
         }
 
-        // run AVN binary on pruned programs
-        private static void pruneImpl(Program prog, int approximationDepth)
+        // run AVN binary on sliced programs
+        private static void sliceAndRunAVN(Program prog, int approximationDepth)
         {
             ConcurrentBag<string> entryPoints = new ConcurrentBag<string>();
             //HashSet<string> mergedBugs = new HashSet<string>();
@@ -361,8 +359,11 @@ namespace FastAVN
             }
         }
 
-        // Prune by removing implementations that are not called within depth k (k>0)
-        // When k <= 0, only prune implementations that are never called.
+        /**
+         * Prune by removing implementations that are not called within depth k (k>=0)
+         * When k < 0, only prune implementations that are never called
+         * Leave corralExtraInint alone.
+        */
         private static Program pruneDeepProcs(Program origProgram,
             ref Dictionary<string, HashSet<string>> edges,
             string mainProcName, int k)
@@ -371,10 +372,10 @@ namespace FastAVN
                 return origProgram;
 
 
-            var boundedDepth = (k > 0); // do we have a bounded depth
+            var boundedDepth = (k >= 0); // do we have a bounded depth
 
             Program program = (new FixedDuplicator(false)).VisitProgram(origProgram);
-                        Procedure malloc = FindMalloc(program);
+            Procedure malloc = FindMalloc(program);
 
             var reachable = new HashSet<string>();
             reachable.Add(mainProcName);
@@ -394,8 +395,6 @@ namespace FastAVN
             var allProcs = new HashSet<string>(edges.Keys);
             var toRemove = allProcs.Difference(reachable);
 
-            //Console.WriteLine(string.Format("Removing {0} procedures...", toRemove.Count));
-
             var newDecls = new List<Declaration>();
             foreach (var decl in program.TopLevelDeclarations)
             {
@@ -409,6 +408,8 @@ namespace FastAVN
                         !(fieldNonNull && impl.Name == CORRAL_EXTRA_INIT))
                     // keep instrumentation function
                     {
+                        // replace implementations to be removed by
+                        // angelic approximations
                         var approxImpl = AngelicImpl(impl, program, malloc);
                         if (approxImpl != null)
                             newDecls.Add(approxImpl);
@@ -501,6 +502,8 @@ namespace FastAVN
             return ret;
         }
         #endregion
+
+        // read program from the disk
         private static Program GetProgram(string filename)
         {
             CommandLineOptions.Install(new CommandLineOptions());
@@ -511,6 +514,7 @@ namespace FastAVN
             return init;
         }
 
+        // locate HAVOC_MALLOC
         private static Procedure FindMalloc(Program prog)
         {
             Procedure mallocProc = null;
