@@ -101,6 +101,9 @@ namespace FastAVN
             if (args.Any(s => s == "/noDumpSlices"))
                 dumpSlices = false;
 
+            args.Where(s => s.StartsWith("/aopt:"))
+                .Iter(s => avnArgs += " /" + s.Substring("/aopt:".Length) + " ");
+
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
@@ -189,24 +192,7 @@ namespace FastAVN
             //HashSet<string> mergedBugs = new HashSet<string>();
             ConcurrentDictionary<string, int> mergedBugs = new ConcurrentDictionary<string, int>();
 
-            // build the call graph once
-            var edges = new Dictionary<string, HashSet<string>>();
-            foreach (var decl in prog.TopLevelDeclarations)
-            {
-                var impl = decl as Implementation;
-                if (impl == null) continue;
-
-                Stats.count("impl.count");
-                edges.Add(impl.Name, new HashSet<string>());
-                foreach (var blk in impl.Blocks)
-                {
-                    blk.Cmds.OfType<CallCmd>()
-                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
-                    blk.Cmds.OfType<ParCallCmd>()
-                        .Iter(pcmd => pcmd.CallCmds
-                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
-                }
-            }
+            var edges = buildCallGraph(prog);
 
             Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation),
                 new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
@@ -296,6 +282,29 @@ namespace FastAVN
             printBugs(ref mergedBugs, entryPoints.Count);
             Utils.Print(string.Format("#EntryPoints : {0}", entryPoints.Count), Utils.PRINT_TAG.AV_STATS);
             Utils.Print(string.Format("#Bugs : {0}", mergedBugs.Count), Utils.PRINT_TAG.AV_STATS);
+        }
+
+        private static Dictionary<string, HashSet<string>> buildCallGraph(Program prog)
+        {
+            // build the call graph once
+            var edges = new Dictionary<string, HashSet<string>>();
+            foreach (var decl in prog.TopLevelDeclarations)
+            {
+                var impl = decl as Implementation;
+                if (impl == null) continue;
+
+                Stats.count("impl.count");
+                edges.Add(impl.Name, new HashSet<string>());
+                foreach (var blk in impl.Blocks)
+                {
+                    blk.Cmds.OfType<CallCmd>()
+                        .Iter(ccmd => edges[impl.Name].Add(ccmd.callee));
+                    blk.Cmds.OfType<ParCallCmd>()
+                        .Iter(pcmd => pcmd.CallCmds
+                            .Iter(ccmd => edges[impl.Name].Add(ccmd.callee)));
+                }
+            }
+            return edges;
         }
 
         // output merged bug report to console

@@ -43,20 +43,36 @@ namespace AngelicVerifierNull
             {
                 FindMalloc();
                 FindNULL();
-                if(Options.bufferDetect)
+                if (Options.bufferDetect)
+                {
+                    //DisableNonNullAsserts();
                     AddSystemModels(); // TODO: add system models for buffer detection
+                }
                 CreateMainProcedure();
                 ChangeStubsIntoUnkowns();
+                if (Options.bufferDetect)
+                {
+                    BufferInstrumentations();
+                }
+            }
+
+            private void BufferInstrumentations()
+            {
+                Console.WriteLine("Doing buffer instrumentation");
+                prog = DefaultModels.BufferInstrument(ref prog);
+            }
+
+            private void DisableNonNullAsserts()
+            {
+                RemoveAssertNonNull rn = new RemoveAssertNonNull();
+                prog = rn.VisitProgram(prog);
             }
 
             private void AddSystemModels()
             {
                 // Add System Models
-                Stats.resume("add.models");
                 Console.WriteLine("Adding system models");
                 prog = DefaultModels.AddModels(ref prog);
-                //BoogieUtil.PrintProgram(prog, "model.bpl");
-                Stats.stop("add.models");
             }
             
             private void CreateMainProcedure()
@@ -310,7 +326,7 @@ namespace AngelicVerifierNull
                     BoogieAstFactory.MkFormal("r", btype.Int, false));
                 baseFun.AddAttribute("buffer", new Object[] { "base" });
 
-                var allocMap = BoogieAstFactory.MkGlobal("Allocated", 
+                var allocMap = BoogieAstFactory.MkGlobal("nonfree", 
                     BoogieAstFactory.MkMapType(btype.Int, btype.Bool));
                 allocMap.AddAttribute("buffer", new Object[] { "free" });
 
@@ -326,9 +342,8 @@ namespace AngelicVerifierNull
                 mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
                     new NAryExpr(Token.NoToken, new FunctionCall(sizeFun),
                         new List<Expr>() { mallocRet }), mallocIn)));
-                mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
-                    BoogieAstFactory.MkMapAccessExpr(allocMap, mallocRet),
-                    Expr.True)));
+                //mallocProcedure.Ensures.Add(new Ensures(true, 
+                //    BoogieAstFactory.MkMapAccessExpr(allocMap, mallocRet)));
             }
             private List<Variable> GetPointerVars(List<Variable> vars)
             {
@@ -599,6 +614,28 @@ namespace AngelicVerifierNull
                     {
                         newCmdSeq.Add(c);
                     }
+                }
+                return base.VisitCmdSeq(newCmdSeq);
+            }
+        }
+
+        public class RemoveAssertNonNull : StandardVisitor
+        {
+            public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
+            {
+                var newCmdSeq = new List<Cmd>();
+                foreach (Cmd c in cmdSeq)
+                {
+                    if (c is AssertCmd)
+                    {
+                        var ac = c as AssertCmd;
+                        if (BoogieUtil.checkAttrExists("nonnull", ac.Attributes)) continue;
+                        newCmdSeq.Add(c);
+                    }
+                    else
+                    {
+                        newCmdSeq.Add(c);
+                    } 
                 }
                 return base.VisitCmdSeq(newCmdSeq);
             }
@@ -967,6 +1004,8 @@ namespace AngelicVerifierNull
             {
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", "stack.txt");
+                //if (cba.PrintSdvPath.lastDriverLocation == null) // TODO: error trace for buffer asserts
+                //    return Tuple.Create(".//models.c", 1);
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
             }
         }

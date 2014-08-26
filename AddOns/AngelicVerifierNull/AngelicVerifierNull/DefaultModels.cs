@@ -16,13 +16,14 @@ namespace AngelicVerifierNull
         static Function baseFun = null;
         static GlobalVariable allocMap = null;
         static Procedure mallocProcedure = null;
+        static Procedure mallocProcedureFull = null;
         Program prog = null;
 
-        public DefaultModels (ref Program _prog)
+        public DefaultModels(ref Program _prog)
         {
             prog = _prog;
-            allocMap = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "Allocated");
-            
+            allocMap = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "nonfree");
+
             // locate Function Size(x) and Base(x)
             foreach (Function func in prog.TopLevelDeclarations
                 .Where(x => x is Function))
@@ -34,7 +35,7 @@ namespace AngelicVerifierNull
                         sizeFun = func;
                     else if (attr == "base")
                         baseFun = func;
-                    
+
                     else throw new Exception("Buffer instrumentation function with unexpected attributes");
                 }
             }
@@ -48,24 +49,11 @@ namespace AngelicVerifierNull
         {
             var dmodels = new DefaultModels(ref _prog);
             HashSet<SystemModel> models = new HashSet<SystemModel>();
+            FindMalloc(dmodels);
 
-            // Propogate Base(x) through assignments.
-            // Adding assertions for buffer access.
-            BufferAssert.InsertBufferAsserts(dmodels.prog);
-            
             foreach (Procedure proc in dmodels.prog.TopLevelDeclarations
                 .Where(x => x is Procedure))
-            {
-                // locate malloc
-                if (BoogieUtil.checkAttrExists("allocator", proc.Attributes))
-                {
-                    var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
-                    if (attr == null) mallocProcedure = proc;
-                }
-                if (mallocProcedure == null)
-                    new InputProgramDoesNotMatchExn(
-                        "ABORT: no malloc procedure with {:allocator} declared in the input program");
-
+            {    
                 // locate procedures without body
                 SystemModel model = null;
                 switch (proc.Name)
@@ -88,7 +76,57 @@ namespace AngelicVerifierNull
             }
             models.Iter(m => dmodels.prog.TopLevelDeclarations.Add(m.impl));
 
+            // Propogate Base(x) through assignments.
+            // Adding assertions for buffer access.
+            
+
             return dmodels.prog;
+        }
+
+        public static Program BufferInstrument(ref Program _prog)
+        {
+            return BufferAssert.InsertBufferAsserts(_prog);
+        }
+
+        // create a copy ofthe variables without annotations
+        private static List<Variable> DropAnnotations(List<Variable> vars)
+        {
+            var ret = new List<Variable>();
+            var dup = new Duplicator();
+            vars.Select(v => dup.VisitVariable(v)).Iter(v =>
+            {
+                v.Attributes = null;
+                ret.Add(v);
+            });
+            return ret;
+        }
+
+        private static void FindMalloc(DefaultModels dmodels)
+        {
+            foreach (var proc in dmodels.prog.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+            {
+                var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
+                if (attr == null) mallocProcedure = proc;
+                else if (attr == "full") mallocProcedureFull = proc;
+            }
+            if (mallocProcedure == null)
+                new InputProgramDoesNotMatchExn(
+                    "ABORT: no malloc procedure with {:allocator} declared in the input program");
+            if (mallocProcedureFull == null)
+            {
+                throw new InputProgramDoesNotMatchExn(
+                    "ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
+            }
+
+            //var mallocImpl = BoogieAstFactory.MkImpl(mallocProcedure, DropAnnotations(mallocProcedure.InParams),
+            //    DropAnnotations(mallocProcedure.OutParams), new List<Variable>(){}, 
+            //    new List<Block>(){
+            //    BoogieAstFactory.MkBlock(
+            //        BoogieAstFactory.MkMapAssign(allocMap, Expr.Ident(mallocProcedure.OutParams[0]), Expr.True)
+            //        //BoogieAstFactory.MkAssert(Expr.False)
+            //    )});
+            //dmodels.prog.TopLevelDeclarations.Add(mallocImpl);
         }
 
         static Expr mkBaseFun(Variable x)
@@ -175,6 +213,11 @@ namespace AngelicVerifierNull
 
             throw new NotImplementedException("call cmd in extractvars not handled");
         }
+        static bool IsPointerVariable(Variable x)
+        {
+            return x.TypedIdent.Type.IsInt &&
+                !BoogieUtil.checkAttrExists("scalar", x.Attributes); //we will err on the side of treating variables as references
+        }
 
         class BufferAssert : FixedVisitor
         {
@@ -188,9 +231,94 @@ namespace AngelicVerifierNull
             }
             public static Program InsertBufferAsserts(Program prog)
             {
-                var iba = new BufferAssert(prog);
-                return iba.VisitProgram(prog);
-            } 
+                //var iba = new BufferAssert(prog);
+                //return iba.VisitProgram(prog);
+                prog.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(imp =>
+                    {
+                        //List<Variable> mapBaseVars = new List<Variable>(); // tmp vars for map
+                        //List<Variable> tmpVars = new List<Variable>();
+                        imp.Blocks.Iter(node =>
+                        {
+                            List<Cmd> cmdSeq = new List<Cmd>(); // new command sequence
+
+                            foreach (Cmd c in node.Cmds)
+                            {
+                                if (c is AssignCmd)
+                                {
+                                    var ptrAssig = c as AssignCmd;
+                                    var lhsvars = extractVars(ptrAssig, true, false); // lhs vars
+                                    var rhsvars = extractVars(ptrAssig, false, true); // rhs vars
+                                    
+                                    cmdSeq.Add(c);
+                                    if (lhsvars.Count == 1 && rhsvars.Count == 1)
+                                    {
+                                        //if (lhsvars[0].TypedIdent.Type.IsMap) // map
+                                        //{
+                                        //    var tmp = BoogieAstFactory.MkLocal("mapBaseTmp_" + (counter++), btype.Int);
+                                        //    mapBaseVars.Add(tmp);
+
+                                        //    node.Cmds.Insert(++i, BoogieAstFactory.MkAssign(tmp, lhsvars[0]));
+                                        //    node.Cmds.Insert(++i, BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(tmp),
+                                        //        mkBaseFun(rhsvars[0]))));
+                                        //}
+                                        //else if (lhsvars[0].TypedIdent.Type.IsInt)
+                                        //{
+                                        //    node.Cmds.Insert(++i,
+                                        //        BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(lhsvars[0]),
+                                        //        mkBaseFun(rhsvars[0]))));
+                                        //}
+                                        //else Console.WriteLine(ptrAssig);
+                                        if (lhsvars[0].TypedIdent.Type.IsInt && rhsvars[0].TypedIdent.Type.IsInt)
+                                        {
+                                            cmdSeq.Add(BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(lhsvars[0]),
+                                                mkBaseFun(rhsvars[0]))));
+                                        }
+                                    }
+                                    continue;
+                                }
+                                else if (c is CallCmd)
+                                {
+                                    var cal = c as CallCmd;
+                                    if (cal.callee == "ExFreePoolWithTag" ||
+                                        cal.callee == "ExFreePool")
+                                    {
+                                        //AssertCmd lineinfo = (AssertCmd)BoogieAstFactory.MkAssert(Expr.True);
+                                        //lineinfo.Attributes = new QKeyValue(Token.NoToken, "sourcefile",
+                                        //    new List<object> { ".\\models.h" },
+                                        //    new QKeyValue(Token.NoToken, "sourceline",
+                                        //        new List<object>() { "1" },
+                                        //        new QKeyValue(Token.NoToken, "print",
+                                        //            new List<object>() { "ExFreeFun" }, null)));
+                                        //cmdSeq.Add(lineinfo);
+                                        AssertCmd nonfreeAssert = (AssertCmd)BoogieAstFactory.MkAssert(
+                                            BoogieAstFactory.MkMapAccessExpr(allocMap, cal.Ins[0]));
+                                        nonfreeAssert.Attributes = new QKeyValue(Token.NoToken,
+                                            "nonfree", new List<Object>() { }, null);
+                                        cmdSeq.Add(nonfreeAssert);
+                                        cmdSeq.Add(BoogieAstFactory.MkAssume(
+                                            BoogieAstFactory.MkMapAccessExpr(allocMap, cal.Ins[0])));
+                                        cmdSeq.Add(c);
+                                        continue;
+                                    }
+                                    else if (cal.callee == mallocProcedure.Name 
+                                        || cal.callee == mallocProcedureFull.Name)
+                                    {
+                                        cmdSeq.Add(c);
+                                        //cmdSeq.Add(BoogieAstFactory.MkAssume(BoogieAstFactory.MkMapAccessExpr(
+                                        //    allocMap, cal.Outs[0])));
+                                        cmdSeq.Add(BoogieAstFactory.MkMapAssign(allocMap,
+                                            cal.Outs[0], Expr.True));
+                                        continue;
+                                    }
+                                }
+                                cmdSeq.Add(c);
+                            }
+                            node.Cmds = cmdSeq;
+                        });
+                    });
+                return prog;
+            }
 
             public override Block VisitBlock(Block node)
             {
@@ -201,23 +329,24 @@ namespace AngelicVerifierNull
                         var ptrAssig = node.Cmds[i] as AssignCmd;
                         var lhsvars = extractVars(ptrAssig, true, false); // lhs vars
                         var rhsvars = extractVars(ptrAssig, false, true); // rhs vars
-                        
+
                         if (lhsvars.Count == 1 && rhsvars.Count == 1)
                         {
-                            if (lhsvars[0].TypedIdent.Type.IsMap) // map
-                            {
-                                var tmp = BoogieAstFactory.MkLocal("mapBaseTmp_" + (counter++), btype.Int);
-                                node.Cmds.Insert(i + 1, BoogieAstFactory.MkAssign(tmp, lhsvars[0]));
-                                node.Cmds.Insert(i + 2, BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(tmp),
-                                    mkBaseFun(rhsvars[0]))));
-                            }
-                            else if (lhsvars[0].TypedIdent.Type.IsInt)
+                            //if (lhsvars[0].TypedIdent.Type.IsMap) // map
+                            //{
+                            //    var tmp = BoogieAstFactory.MkLocal("mapBaseTmp_" + (counter++), btype.Int);
+                            //    node.Cmds.Insert(i + 1, BoogieAstFactory.MkAssign(tmp, lhsvars[0]));
+                            //    node.Cmds.Insert(i + 2, BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(tmp),
+                            //        mkBaseFun(rhsvars[0]))));
+                            //}
+                            if (IsPointerVariable(lhsvars[0]) && IsPointerVariable(rhsvars[0]))
+                            //if (lhsvars[0].TypedIdent.Type.IsInt && rhsvars[0].TypedIdent.Type.IsInt)
                             {
                                 node.Cmds.Insert(i + 1,
                                     BoogieAstFactory.MkAssume(Expr.Eq(mkBaseFun(lhsvars[0]),
                                     mkBaseFun(rhsvars[0]))));
                             }
-                            else Console.WriteLine(ptrAssig);
+                            //else Console.WriteLine(ptrAssig);
                         }
                         //else Console.WriteLine(ptrAssig);
                     }
@@ -232,7 +361,7 @@ namespace AngelicVerifierNull
             public abstract string modelName { get; }
             public Implementation impl { get { return _impl; } }
             public abstract Implementation GenerateBody(Procedure proc);
-            public SystemModel(Procedure p) 
+            public SystemModel(Procedure p)
             {
                 _impl = GenerateBody(p);
             }
@@ -260,6 +389,10 @@ namespace AngelicVerifierNull
             }
         }
 
+        /**
+         * Nondeterministically allocate memory of given size
+         * OR return NULL
+         */
         class ExAllocatePoolWithTag : SystemModel
         {
             public override string modelName
@@ -275,28 +408,43 @@ namespace AngelicVerifierNull
                 Debug.Assert(proc.OutParams.Count == 1);
 
                 List<Variable> locals = new List<Variable>();
-                List<Block> blocks = new List<Block>();
 
-                var cmds = new List<Cmd>() {
-                    BoogieAstFactory.MkCall(mallocProcedure,
+
+                //var cmds = new List<Cmd>() {
+                //    BoogieAstFactory.MkCall(mallocProcedure,
+                //    new List<Expr>() { (Expr)IdentifierExpr.Ident(proc.InParams[1]) },
+                //    new List<Variable>() {proc.OutParams[0]})};
+                //var txCmd = new ReturnCmd(Token.NoToken);
+                //var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
+                //blocks.Add(blk);
+
+                var mallocCall = (CallCmd)BoogieAstFactory.MkCall(mallocProcedure,
                     new List<Expr>() { (Expr)IdentifierExpr.Ident(proc.InParams[1]) },
-                    new List<Variable>() {proc.OutParams[0]})};
-                var txCmd = new ReturnCmd(Token.NoToken);
-                var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
-                blocks.Add(blk);
+                    new List<Variable>() {proc.OutParams[0]});
+                mallocCall.Proc = mallocProcedure;
+
+                var cmds = new List<List<Cmd>>() {
+                    new List<Cmd>(){mallocCall},
+                    new List<Cmd>(){BoogieAstFactory.MkAssign(proc.OutParams[0], 0)
+                    }
+                };
+                List<Block> blocks = BoogieAstFactory.MkNondetSwitch(cmds);
 
                 var ret = new Implementation(Token.NoToken, modelName,
                     proc.TypeParameters,
                     DropAnnotations(proc.InParams),
                     DropAnnotations(proc.OutParams), locals, blocks);
                 ret.Attributes = (new FixedDuplicator(false)).CopyAttr(proc.Attributes);
-
                 ret.Proc = proc;
 
                 return ret;
             }
         }
 
+        /**
+         * Check the input pointer is at the base address of the
+         * region. Mark the base address as NOT allocated (free).
+         */
         class ExFreePoolWithTag : SystemModel
         {
             public override string modelName
@@ -319,8 +467,8 @@ namespace AngelicVerifierNull
                 Expr allocBase = BoogieAstFactory.MkMapAccessExpr(allocMap, baseX); // Allocated[Base(x0)]
 
                 var cmds = new List<Cmd>() {
-                    BoogieAstFactory.MkAssert(Expr.Eq(Expr.Ident(proc.InParams[0]), baseX)),
-                    BoogieAstFactory.MkAssert(allocBase),
+                    //BoogieAstFactory.MkAssert(Expr.Eq(Expr.Ident(proc.InParams[0]), baseX)),
+                    //BoogieAstFactory.MkAssert(allocBase),
                     BoogieAstFactory.MkMapAssign(allocMap, Expr.Ident(proc.InParams[0]), Expr.False)
                 };
 
@@ -339,6 +487,9 @@ namespace AngelicVerifierNull
             }
         }
 
+        /**
+         * Same bahaviors as ExFreePoolWithTag
+         */
         class ExFreePool : SystemModel
         {
             public override string modelName
@@ -360,8 +511,8 @@ namespace AngelicVerifierNull
                 Expr allocBase = BoogieAstFactory.MkMapAccessExpr(allocMap, baseX); // Allocated[Base(x0)]
 
                 var cmds = new List<Cmd>() {
-                    BoogieAstFactory.MkAssert(Expr.Eq(Expr.Ident(proc.InParams[0]), baseX)),
-                    BoogieAstFactory.MkAssert(allocBase),
+                    //BoogieAstFactory.MkAssert(Expr.Eq(Expr.Ident(proc.InParams[0]), baseX)),
+                    //BoogieAstFactory.MkAssert(allocBase),
                     BoogieAstFactory.MkMapAssign(allocMap, Expr.Ident(proc.InParams[0]), Expr.False)
                 };
 

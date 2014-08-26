@@ -1008,6 +1008,16 @@ namespace cba.Util
             return new List<Declaration>(new Declaration[] { pr, im });
         }
 
+        //public static Implementation MkImpl(Procedure proc, List<Variable> ins, List<Variable> outs,
+        //    List<Variable> locals, IEnumerable<Block> blocks)
+        //{
+        //    var im = new Implementation(
+        //        Token.NoToken, proc.Name, new List<TypeVariable>(),
+        //        ins, outs, locals, new List<Block>(blocks));
+        //    im.Proc = proc;
+        //    return im;
+        //}
+
         public static List<Declaration> MkImpl(string name, List<Variable> ins, List<Variable> outs,
             List<Variable> locals, IEnumerable<Cmd> cs)
         {
