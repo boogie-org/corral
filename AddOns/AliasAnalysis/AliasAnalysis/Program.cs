@@ -55,7 +55,6 @@ namespace AliasAnalysis
 
             AliasAnalysis.dbg = dbg;
             AliasConstraintSolver.dbg = dbg;
-
             var ret =
             AliasAnalysis.DoAliasAnalysis(program);
 
@@ -742,6 +741,7 @@ namespace AliasAnalysis
             worklist = new HashSet<string>();
             solved = false;
         }
+
 
         public void Add(AliasConstraint constraint)
         {

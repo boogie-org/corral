@@ -85,6 +85,7 @@ namespace FastAVN
         static int numThreads = 4; // default number of parallel AVN instances
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
         static bool fieldNonNull = true; // include angelic field non-null harness
+        static bool outputToFile = false; // dump AVN output to disk
 
 
         static void Main(string[] args)
@@ -126,6 +127,9 @@ namespace FastAVN
             if (args.Any(s => s == "/noFieldNonNull"))
                 fieldNonNull = false;
 
+            if (args.Any(s => s == "/dumpAVNOutput"))
+                outputToFile = true;
+
             // Find AVN executable
             findAvn();
             Debug.Assert(avnPath != null);
@@ -144,7 +148,6 @@ namespace FastAVN
                 sliceAndRunAVN(prog, approximationDepth);
 
                 Stats.stop("fastavn");
-
                 Stats.printStats();
             }
             catch (Exception e)
@@ -185,7 +188,11 @@ namespace FastAVN
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
         }
 
-        // run AVN binary on sliced programs
+        /// <summary>
+        /// Run AVN binary on sliced programs
+        /// </summary>
+        /// <param name="prog">Original program</param>
+        /// <param name="approximationDepth">Depth k beyond which angelic approximation is applied</param>
         private static void sliceAndRunAVN(Program prog, int approximationDepth)
         {
             ConcurrentBag<string> entryPoints = new ConcurrentBag<string>();
@@ -226,9 +233,9 @@ namespace FastAVN
                         p.StartInfo.UseShellExecute = false;
                         p.StartInfo.CreateNoWindow = true;
 
+                        // redirect output
                         StringBuilder output = new StringBuilder();
                         StringBuilder error = new StringBuilder();
-
                         using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
                         using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
                         {
@@ -258,6 +265,18 @@ namespace FastAVN
                             // TODO: we can also wait only a predefined amount of time
                             readAVNOutput(output.ToString());
 
+                            if (outputToFile)
+                            {
+                                // print redirected console output
+                                using (StreamWriter sw = new StreamWriter(Path.Combine(p.StartInfo.WorkingDirectory,
+                                    "stdout.txt")))
+                                    sw.Write(output.ToString());
+                                using (StreamWriter sw = new StreamWriter(Path.Combine(p.StartInfo.WorkingDirectory,
+                                    "stderr.txt")))
+                                    sw.Write(error.ToString());
+                            }
+
+                            // collect and merge bugs
                             var bugs = collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
                                     bugReportFileName));
                             bugs.Iter(b =>

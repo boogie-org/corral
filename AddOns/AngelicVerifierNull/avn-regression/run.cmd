@@ -21,7 +21,7 @@ if not exist avn-bin (
 
 rem ..\brunch.py --bench ..\drivers --threads 8 --format 'Status:Base:Cpu:#Procs:#EntryPoints:#AssertsBeforeAA:#AssertsAfterAA:InstrumentTime(ms):blocked.count:alias.analysis(s):explain.error(s):run.corral(s):run.corral.iterative(s):corral.count:bug.count' -- avn-bin\AngelicVerifierNull.exe {f} /sdv /useEntryPoints /timeout:4000 /copt:newStratifiedInlining /copt:recursionBound:1 /copt:fwdBck /copt:v:1 /dumpResults:results.csv
 
-..\brunch.py --bench ..\drivers --threads 6 --format 'Status:Base:Result:Cpu:#Procs:#EntryPoints:#AssertsBeforeAA:#AssertsAfterAA:#AssertsAftHoudini:#ImplWithAsserts:InstrumentTime(ms):houdini(s):alias.analysis(s):explain.error(s):run.corral(s):run.corral.iterative(s):corral.count:blocked.count:bug.count' -- avn-bin\AngelicVerifierNull.exe {f} /sdv /useEntryPoints /timeoutRoundRobin:30 /timeout:3600 /houdini /dumpResults:results.csv
+..\brunch.py --bench ..\drivers --threads 6 --format 'Status:Base:Result:Cpu:#Procs:#EntryPoints:#AssertsBeforeAA:#AssertsAfterAA:#AssertsAftHoudini:#ImplWithAsserts:InstrumentTime(ms):houdini(s):alias.analysis(s):explain.error(s):run.corral(s):run.corral.iterative(s):corral.count:blocked.count:bug.count' -- avn-bin\AngelicVerifierNull.exe {f} /sdv /useEntryPoints /timeoutAssertRoundRobin:30 /timeout:3600 /houdini /dumpResults:results.csv
 
 echo Finished!
 popd

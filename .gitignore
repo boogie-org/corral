@@ -14,3 +14,12 @@ AddOns/AngelicVerifierNull/AngelicVerifierNull.v11.suo
 AddOns/AngelicVerifierNull/AngelicVerifierNull/AngelicVerifierNull.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.v11.suo
+AddOns/AngelicVerifierNull/test/Angelic*
+AddOns/AngelicVerifierNull/test/Blocked*
+AddOns/AngelicVerifierNull/test/Output
+AddOns/AngelicVerifierNull/test/corralMain.bpl
+AddOns/AngelicVerifierNull/test/corraldebug.out
+AddOns/AngelicVerifierNull/test/last_query.bpl
+AddOns/AngelicVerifierNull/test/runcorral.bpl
+AddOns/AngelicVerifierNull/test/temp_rar.bpl
+AddOns/AngelicVerifierNull/test/trace_prog.bpl

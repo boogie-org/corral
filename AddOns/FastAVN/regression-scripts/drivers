@@ -1,0 +1,15 @@
+..\bench\.sdxroot..drivers.wdf.kmdf.samples.public.powerfx.driver.multicomp.lib.bpl
+..\bench\.sdxroot..drivers.gpio.gpioclx.sys.bpl
+..\bench\.sdxroot..drivers.input.game.xusb.bpl
+..\bench\.sdxroot..drivers.input.hid.miniports.hidir.bpl
+#..\bench\.sdxroot..drivers.ksfilter.soccapturesim.sys.bpl
+..\bench\.sdxroot..drivers.storage.mpio.control.bpl
+..\bench\.sdxroot..drivers.storage.mpio.msdsm.bpl
+..\bench\.sdxroot..drivers.storage.port.diskdump.bpl
+..\bench\.sdxroot..drivers.storage.port.spaces.db.bpl
+..\bench\.sdxroot..drivers.storage.port.spaces.io.bpl
+..\bench\.sdxroot..drivers.storage.port.spaces.port.bpl
+..\bench\.sdxroot..drivers.storage.port.usb.usbstor.bpl
+..\bench\.sdxroot..drivers.storage.scsiport.bpl
+..\bench\.sdxroot..drivers.wdm.audio.backpln.adapters.hdaudio.hdaudiofunc.hdaudio.bpl
+..\bench\.sdxroot..drivers.wdm.usb.hub.usbhub.bpl

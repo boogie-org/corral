@@ -1363,6 +1363,9 @@ namespace AngelicVerifierNull
             Debug.Assert(nil != null);
 
             // add the assert false
+            var assertFlase = BoogieAstFactory.MkAssert(Expr.False);
+            (assertFlase as AssertCmd).Attributes = new QKeyValue(Token.NoToken,
+                "deadcode", new List<object>() { }, null);
             program = inp.getProgram();
             var id = 0;
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -1379,8 +1382,8 @@ namespace AngelicVerifierNull
                         if (!ib.id2Func.ContainsKey(id))
                             continue;
                         var asites = res.allocationSites[ib.id2Func[id].Name];
-                        if (asites.Contains(nil))
-                            ncmds.Add(new AssertCmd(Token.NoToken, Expr.False));
+                        if (!asites.Contains(nil) && asites.Count  != 0)
+                            ncmds.Add(assertFlase);
                     }
                     blk.Cmds = ncmds;
 
@@ -1433,9 +1436,9 @@ namespace AngelicVerifierNull
                     if (!(expr.Fun is BinaryOperator) || (expr.Fun as BinaryOperator).Op != BinaryOperator.Opcode.Eq)
                         continue;
                     Expr x = null;
-                    if (expr.Args[0].ToString() == "NULL" && expr.Args[1] is IdentifierExpr)
+                    if (expr.Args[0].ToString() == "NULL")
                         x = expr.Args[1];
-                    else if (expr.Args[1].ToString() == "NULL" && expr.Args[0] is IdentifierExpr)
+                    else if (expr.Args[1].ToString() == "NULL")
                         x = expr.Args[0];
                     if (x == null) continue;
 

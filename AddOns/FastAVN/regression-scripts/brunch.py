@@ -30,12 +30,6 @@ def collectStats (stats, tag, file):
     with open (file, 'r') as f:
         try:
             for line in f:
-                # Result depends on the last appearance
-                if 'Corral call terminates inconclusively with Z3 ran out of resources...' in line:
-                    stats['Result'] = 'TIMEOUT'
-                if 'No more counterexamples found, Corral returns verified...' in line:
-                    stats['Result'] = 'VERIFIED'
-                if not line.startswith (tag): continue
                 # Process other stats
                 fld = line.replace(tag, '').strip()
                 if not ':' in fld: continue

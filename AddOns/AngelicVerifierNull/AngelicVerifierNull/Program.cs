@@ -219,26 +219,28 @@ namespace AngelicVerifierNull
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
 
+                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
+
+                
+
+                // Run alias analysis
+                Stats.resume("alias.analysis");
+                Console.WriteLine("Running alias analysis");
+                //Dictionary<string, HashSet<string>> pointsTo = new Dictionary<string, HashSet<string>>();
+                prog = RunAliasAnalysis(prog);
+                Stats.stop("alias.analysis");
+
+                prog.writeToFile("alias.bpl");
+
+                // Do dead code detection
                 if (deadCodeDetect)
                 {
-                    // Run dead code analysis
                     Stats.resume("dead.code");
                     Console.WriteLine("Running dead code detection");
                     prog = DeadCodeDetection.Detect(prog, corralConfig);
                     Stats.stop("dead.code");
                 }
 
-                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
-                
-                // Run alias analysis
-                Stats.resume("alias.analysis");
-                Console.WriteLine("Running alias analysis");
-                prog = RunAliasAnalysis(prog);
-                Stats.stop("alias.analysis");
-
-                //prog.writeToFile("b1.bpl");
-                //var tt = InstrumentBranches.Run(prog);
-                //tt.writeToFile("b2.bpl");
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -262,22 +264,7 @@ namespace AngelicVerifierNull
 
                 prog = removeAsserts(inferred_asserts, prog);
 
-                Stats.numAssertsAfterHoudiniPass = CountAsserts(prog);
-                Utils.Print(string.Format("#AssertsAftHoudini : {0}", Stats.numAssertsAfterHoudiniPass),
-                    Utils.PRINT_TAG.AV_STATS);
-
-                // count number of assertions per procedure after alias analysis and houdini pass
-                foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
-                    .Where(x => x is Implementation))
-                {
-                    var assertVisitor = new Instrumentations.AssertCountVisitor();
-                    assertVisitor.Visit(impl);
-                    Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
-                }
-                Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterHoudiniPass);
-                Utils.Print(string.Format("#ImplWithAsserts : {0}",
-                    Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
-                    Utils.PRINT_TAG.AV_STATS);
+                PrintAssertStats(prog);
 
                 if (prePassOnly) return;
                 //Analyze
@@ -296,6 +283,26 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
+        }
+
+        private static void PrintAssertStats(PersistentProgram prog)
+        {
+            Stats.numAssertsAfterHoudiniPass = CountAsserts(prog);
+            Utils.Print(string.Format("#AssertsAftHoudini : {0}", Stats.numAssertsAfterHoudiniPass),
+                Utils.PRINT_TAG.AV_STATS);
+
+            // count number of assertions per procedure after alias analysis and houdini pass
+            foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
+                .Where(x => x is Implementation))
+            {
+                var assertVisitor = new Instrumentations.AssertCountVisitor();
+                assertVisitor.Visit(impl);
+                Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
+            }
+            Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterHoudiniPass);
+            Utils.Print(string.Format("#ImplWithAsserts : {0}",
+                Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
+                Utils.PRINT_TAG.AV_STATS);
         }
 
         // Removes asserts inferred by Houdini pass from the program
@@ -376,7 +383,8 @@ namespace AngelicVerifierNull
         static PersistentProgram GetProgram(string filename)
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
-
+            //Instrumentations.RemoveAssertNonNull ra = new Instrumentations.RemoveAssertNonNull();
+            //BoogieUtil.PrintProgram(ra.VisitProgram(init), "noassert.bpl");
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
 
@@ -419,8 +427,6 @@ namespace AngelicVerifierNull
             GlobalCorralSpecificPass(init);
             var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
             ProgTransformation.PersistentProgram.FreeParserMemory();
-
-            
 
             return inputProg;
         }
@@ -526,7 +532,6 @@ namespace AngelicVerifierNull
                 try
                 {
                     Stats.resume("run.corral");
-                    BoogieUtil.PrintProgram(prog.getProgram(), "runcorral.bpl");
                     cex = RunCorral(prog, corralConfig.mainProcName, instr, corralTimeout);
                     Stats.stop("run.corral");
 
@@ -870,7 +875,7 @@ namespace AngelicVerifierNull
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
-        static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program, out CoreLib.SDVConcretizePathPass concretize)
+        public static PersistentProgram GetPathProgram(cba.ErrorTrace trace, PersistentProgram program, out CoreLib.SDVConcretizePathPass concretize)
         {
             BoogieVerify.options = cba.ConfigManager.pathVerifyOptions;
 
@@ -1180,14 +1185,13 @@ namespace AngelicVerifierNull
             }
             Console.WriteLine("#AssertsAfterOptimization : {0}", count);
 
-
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
             AliasAnalysis.AliasAnalysisResults res = null;
             if (Options.UseAliasAnalysis)
             {
                 res =
-                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);   
             }
             else
             {
@@ -1197,8 +1201,6 @@ namespace AngelicVerifierNull
 
             var origProgram = inp.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
-
-            
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }

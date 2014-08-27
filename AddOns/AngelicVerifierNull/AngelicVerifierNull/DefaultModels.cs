@@ -222,12 +222,10 @@ namespace AngelicVerifierNull
         class BufferAssert : FixedVisitor
         {
             Program origprog;
-            static int counter;
 
             public BufferAssert(Program _prog)
             {
                 origprog = _prog;
-                counter = 0;
             }
             public static Program InsertBufferAsserts(Program prog)
             {
