@@ -255,8 +255,11 @@ namespace cba
                 ret.addInstr(inst);
                 
                 // Are we done?
-                if(inst is CallInstr && (inst as CallInstr).calleeTrace != null &&
-                    !(inst as CallInstr).calleeTrace.returns)
+                if(inst is CallInstr && (inst as CallInstr).calleeTrace != null && (
+                    !(inst as CallInstr).calleeTrace.returns || (
+                       (inst as CallInstr).calleeTrace.raisesException && !(inst as CallInstr).asyncCall
+                    )
+                   ))
                     break;
 
                 count += it.Size;
