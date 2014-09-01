@@ -1793,7 +1793,7 @@ namespace cba
     // This class only instruments async calls. It does not modify the control flow
     // of the program.
     //
-    // call {:async} local_tid := foo(a,b,c) is rewritten as:
+    // call {:async} foo(a,b,c) is rewritten as:
     // 
     // save vars
     // old_k := k
@@ -1811,7 +1811,7 @@ namespace cba
     // havoc thread-locals
     // call foo(a,b,c);
     // restore thread-locals
-    // local_tid = tid;
+    // child-tid := tid
     //
     // // did the thread finish?
     // finished[tid] := not(raiseException);
@@ -1845,6 +1845,9 @@ namespace cba
         // A local variable to represent old_atomic
         private Variable old_atomic;
 
+        // A local variable for child tid
+        private Variable childTid;
+
         // Thread local variables and their Local versions
         private Dictionary<string, GlobalVariable> threadLocalGlobals;
         private Dictionary<string, LocalVariable> threadLocalLocals;
@@ -1872,6 +1875,7 @@ namespace cba
             implName = node.Name;
             old_tidCount = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "old_tidCount", vmgr.tidCountVar.TypedIdent.Type));
             old_atomic = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "old_atomic", Microsoft.Boogie.Type.Bool));
+            childTid = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "child_tid_var_loc", vmgr.tidCountVar.TypedIdent.Type));
 
             node = base.VisitImplementation(node);
             if (hasAsync)
@@ -1881,6 +1885,7 @@ namespace cba
                 node.LocVars.Add(vmgr.getOldtidLocalVar(implName));
                 node.LocVars.Add(old_tidCount);
                 node.LocVars.Add(old_atomic);
+                node.LocVars.Add(childTid);
                 
                 // Add declarations for local versions of each thread-local vars
                 foreach (var l in threadLocalLocals)
@@ -1923,6 +1928,15 @@ namespace cba
                 }
 
                 CallCmd ccmd = cmd as CallCmd;
+
+                if (ccmd.callee == LanguageSemantics.getChildThreadIDName())
+                {
+                    var outv = ccmd.Outs[0];
+                    // outv := child_tid                    
+                    lcmds.Add(BoogieAstFactory.MkVarEqVar(outv.Decl, childTid));
+                    addedTrans(implName, block.Label, inCnt, cmd, lcmds);
+                    continue;
+                }
 
                 // Ignore non-async calls 
                 if (!ccmd.IsAsync)
@@ -1993,22 +2007,11 @@ namespace cba
 
                 ccmd = new CallCmd(ccmd.tok, ccmd.Proc.Name, ccmd.Ins, ccmd.Outs, ccmd.Attributes, false);
 
-                Debug.Assert(ccmd.Outs.Count <= 1);
-                Variable local_tid = null;
-                if (ccmd.Outs.Count != 0)
-                {
-                    if (ccmd.Outs[0] != null)
-                    {
-                        local_tid = ccmd.Outs[0].Decl;
-                    }
-                    ccmd.Outs[0] = null;
-                }
-
                 lcmds.Add(ccmd);
                 addedTrans(implName, block.Label, inCnt, cmd, lcmds);
 
-                if (local_tid != null)
-                    lcmds.Add(BoogieAstFactory.MkVarEqVar(local_tid, vmgr.tidVar));
+                // child-tid := tid;
+                lcmds.Add(BoogieAstFactory.MkVarEqVar(childTid, vmgr.tidVar));
 
                 // restore thread-locals
                 foreach (var tl in threadLocalLocals.Keys)

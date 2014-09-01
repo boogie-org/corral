@@ -33,6 +33,12 @@ namespace cba
             return "corral_getThreadID";
         }
 
+        // The procedure that returns the child thread ID
+        public static string getChildThreadIDName()
+        {
+            return "corral_getChildThreadID";
+        }
+
         // Name of the "is_reachable" procedure
         public static string assertNotReachableName()
         {
