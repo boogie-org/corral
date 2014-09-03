@@ -235,7 +235,11 @@ namespace AngelicVerifierNull
                 Console.WriteLine("Running alias analysis");
                 prog = RunAliasAnalysis(prog);
                 Stats.stop("alias.analysis");
-                               
+
+                //prog.writeToFile("b1.bpl");
+                //var tt = InstrumentBranches.Run(prog);
+                //tt.writeToFile("b2.bpl");
+
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
                 if (Options.AddMapSelectNonNullAssumptions)

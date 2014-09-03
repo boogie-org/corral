@@ -1312,4 +1312,146 @@ namespace AngelicVerifierNull
 
         }
     }
+
+    // Replace "assume x == NULL" with "assume x == NULL; assert false;"
+    // provided x can indeed alias NULL
+    public class InstrumentBranches
+    {
+        Program program;
+        Dictionary<int, Function> id2Func;
+        List<Function> queries;
+        Function nullQuery;
+        int id;
+
+        InstrumentBranches(Program program)
+        {
+            this.program = program;
+            queries = new List<Function>();
+            id2Func = new Dictionary<int, Function>();
+            nullQuery = null;
+        }
+
+        // Replace "assume x == NULL" with "assume x == NULL; assert false;"
+        // provided x can indeed alias NULL
+        public static PersistentProgram Run(PersistentProgram inp)
+        {
+            var program = inp.getProgram();
+            var ib = new InstrumentBranches(program);
+            ib.instrument(inp.mainProcName);
+
+            // Make sure that aliasing queries are on identifiers only
+            var af =
+                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
+
+            // Do SSA
+            program =
+                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+
+            BoogieUtil.PrintProgram(program, "b3.bpl");
+
+            // Run AA
+            AliasAnalysis.AliasAnalysisResults res = 
+                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+
+            // allocation site of null
+            var nil = res.allocationSites[ib.nullQuery.Name].FirstOrDefault();
+            Debug.Assert(nil != null);
+
+            // add the assert false
+            program = inp.getProgram();
+            var id = 0;
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in blk.Cmds)
+                    {
+                        ncmds.Add(cmd);
+                        var acmd = cmd as AssumeCmd;
+                        if (acmd == null) continue;
+                        id++;
+
+                        var asites = res.allocationSites[ib.id2Func[id].Name];
+                        if (asites.Contains(nil))
+                            ncmds.Add(new AssertCmd(Token.NoToken, Expr.False));
+                    }
+                    blk.Cmds = ncmds;
+
+                }
+            }
+
+            return new PersistentProgram(program, inp.mainProcName, 0);
+        }
+
+        void instrument(string main)
+        {
+            // find the entrypoint
+            var ep = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => impl.Name == main)
+                .FirstOrDefault();
+            Debug.Assert(ep != null);
+
+            // find NULL
+            var nil = program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => c.Name == "NULL")
+                .First();
+            
+            // Instrument branches
+            id = 0;
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => instrument(impl));
+
+            // Get the allocation site for NULL
+            nullQuery = GetQueryFunc();
+            ep.Blocks[0].Cmds.Add(GetQuery(nullQuery, Expr.Ident(nil)));
+
+            program.TopLevelDeclarations.AddRange(queries);
+        }
+
+        void instrument(Implementation impl)
+        {
+            foreach (var blk in impl.Blocks)
+            {
+                var ncmds = new List<Cmd>();
+                foreach (var cmd in blk.Cmds)
+                {
+                    ncmds.Add(cmd);
+                    var acmd = cmd as AssumeCmd;
+                    id++;
+                    if (acmd == null || !(acmd.Expr is NAryExpr))
+                        continue;
+                    var expr = acmd.Expr as NAryExpr;
+                    if (!(expr.Fun is BinaryOperator) || (expr.Fun as BinaryOperator).Op != BinaryOperator.Opcode.Eq)
+                        continue;
+                    Expr x = null;
+                    if (expr.Args[0].ToString() == "NULL" && expr.Args[1] is IdentifierExpr)
+                        x = expr.Args[1];
+                    else if (expr.Args[1].ToString() == "NULL" && expr.Args[0] is IdentifierExpr)
+                        x = expr.Args[0];
+                    if (x == null) continue;
+
+                    var func = GetQueryFunc();
+                    id2Func.Add(id, func);
+                    ncmds.Add(GetQuery(func, x));
+                }
+                blk.Cmds = ncmds;
+            }
+        }
+
+        Function GetQueryFunc()
+        {
+            var f = new Function(Token.NoToken, "ASquery" + queries.Count,
+                new List<Variable> { BoogieAstFactory.MkFormal("x", btype.Int, true) },
+                BoogieAstFactory.MkFormal("y", btype.Bool, false));
+            f.AddAttribute("aliasingQuery", "allocationsites");
+            queries.Add(f);
+            return f;                
+        }
+
+        AssumeCmd GetQuery(Function func, Expr arg)
+        {
+            return new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr> { arg }));
+        }
+    }
 }
