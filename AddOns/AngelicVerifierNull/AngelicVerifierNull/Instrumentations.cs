@@ -312,6 +312,11 @@ namespace AngelicVerifierNull
                     .Where(x => x is Constant && x.ToString().Equals("NULL"));
                 if (!nulls.Any())
                     throw new InputProgramDoesNotMatchExn("ABORT: no NULL constant declared in the input program");
+
+                var nil = nulls.First();
+                // make NULL an "allocated" constant, if it isn't one already
+                if (!QKeyValue.FindBoolAttribute(nil.Attributes, "allocated"))
+                    nil.AddAttribute("allocated");
             }
             // instrumentation functions for buffer overflow detection
             private void BufferInstrument(Procedure mallocProcedure)
@@ -1347,7 +1352,7 @@ namespace AngelicVerifierNull
             program =
                 SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
-            BoogieUtil.PrintProgram(program, "b3.bpl");
+            //BoogieUtil.PrintProgram(program, "b3.bpl");
 
             // Run AA
             AliasAnalysis.AliasAnalysisResults res = 
@@ -1371,7 +1376,8 @@ namespace AngelicVerifierNull
                         var acmd = cmd as AssumeCmd;
                         if (acmd == null) continue;
                         id++;
-
+                        if (!ib.id2Func.ContainsKey(id))
+                            continue;
                         var asites = res.allocationSites[ib.id2Func[id].Name];
                         if (asites.Contains(nil))
                             ncmds.Add(new AssertCmd(Token.NoToken, Expr.False));
@@ -1418,8 +1424,10 @@ namespace AngelicVerifierNull
                 {
                     ncmds.Add(cmd);
                     var acmd = cmd as AssumeCmd;
+                    if (acmd == null) continue;
                     id++;
-                    if (acmd == null || !(acmd.Expr is NAryExpr))
+
+                    if (!(acmd.Expr is NAryExpr))
                         continue;
                     var expr = acmd.Expr as NAryExpr;
                     if (!(expr.Fun is BinaryOperator) || (expr.Fun as BinaryOperator).Op != BinaryOperator.Opcode.Eq)
