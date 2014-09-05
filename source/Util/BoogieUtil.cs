@@ -1870,13 +1870,13 @@ namespace cba.Util
         }
 
         // Check if an expression is NULL expression
-        private bool checkIfNull(Expr expr)
+        public static bool checkIfNull(Expr expr)
         {
             return (expr as IdentifierExpr).ToString().Equals("NULL");
         }
 
         // Check if AssertCmd is assert (var != NULL)
-        private bool validAssert(AssertCmd ac)
+        public static bool validAssert(AssertCmd ac)
         {
             if (ac.Expr.ToString() == Expr.True.ToString() ||
                             ac.Expr.ToString() == null) return false;
@@ -1890,13 +1890,18 @@ namespace cba.Util
         }
 
         // Extracting variable name from AssertCmd
-        private IdentifierExpr getVarFromAssert(AssertCmd ac)
+        public static IdentifierExpr getVarFromAssert(AssertCmd ac)
         {
             return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.OfType<IdentifierExpr>().First();
         }
 
+        public static string getQueryFromAssert(AssertCmd ac)
+        {
+            return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Fun.FunctionName;
+        }
+
         // Check if AssumeCmd is assume (var != NULL)
-        private bool validAssume(AssumeCmd asc)
+        public static bool validAssume(AssumeCmd asc)
         {
             if (asc.Expr is NAryExpr)
             {
@@ -1905,6 +1910,8 @@ namespace cba.Util
                     asc_expr.Fun is BinaryOperator &&
                     ((BinaryOperator)asc_expr.Fun).Op == BinaryOperator.Opcode.Neq &&
                     asc_expr.Args.Count == 2 &&
+                    asc_expr.Args[0] is IdentifierExpr &&
+                    BoogieUtil.checkAttrExists("pointer", (asc_expr.Args[0] as IdentifierExpr).Decl.Attributes) &&  
                     asc_expr.Args[1] is IdentifierExpr &&
                     checkIfNull(asc_expr.Args[1])) return true;
                 else return false;
@@ -1913,7 +1920,7 @@ namespace cba.Util
         }
 
         // Extract variable name from AssumeCmd
-        private IdentifierExpr getVarFromAssume(AssumeCmd asc)
+        public static IdentifierExpr getVarFromAssume(AssumeCmd asc)
         {
             return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
         }
