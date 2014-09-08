@@ -407,7 +407,7 @@ namespace AliasAnalysis
         {
             var csfsaa = new CSFSAliasAnalysis(program);
             csfsaa.CSFSProcess();
-            csfsaa.PreciseMapAnalyze();
+            csfsaa.SoundAnalyze();
             return csfsaa.AnalysisResults;
         }
 
@@ -613,20 +613,31 @@ namespace AliasAnalysis
 
     }
 
+    /*
+     * CSFS Alias Analysis :- Context Sensitive Flow Sensitive Alias Analysis
+     * 1. Build an intraprocedural flow sensitive transfer function for each procedure which takes in the allocation sites of the input parameters, and returns the output parameters.
+     * 2. The transfer function has levels, upto a context bound, which can be increased to improve precision.
+     * 3. The transfer function is a recursive function, which calls the transfer function of immediately lesser depth for the callees.
+     * 4. The transfer function of depth 0 just falls on the old alias analysis.
+     * 5. Once the transfer function is built, we analyze every procedure with the biggest overapproximation of the input parameters obtained from the old alias analysis.
+     * 6. We introduce asserts at a certain depth, since it gives context sensitivity, and the transfer function gives flow sensitivity.
+     * 7. For scalability reasons, we have set the context bound to 3, and we add asserts at a depth of 1.
+    */
+
     public class CSFSAliasAnalysis
     {
         Program program;
         int Context_Bound;
         int Assert_Depth;
         int Caller_Bound;
-        static Dictionary<string, HashSet<string>> PointsTo = null;
-        Dictionary<string, Implementation> name2Impl;
-        static Dictionary<Tuple<Implementation, Block, Cmd>, string> cmd2AllocationConstraint = null;
-        static Dictionary<Implementation, Dictionary<int, HashSet<string>>> ret_allocSites = null;
-        Dictionary<Tuple<Implementation, int>, Func<Dictionary<int, HashSet<string>>, Dictionary<int, HashSet<string>>>> transfer_function;
-        public Dictionary<string, bool> AnalysisResults;
-        HashSet<string> singleAllocSites;
-        bool dbg = false;
+        static Dictionary<string, HashSet<string>> PointsTo = null;             // Keep a copy of the Points To Set
+        Dictionary<string, Implementation> name2Impl;                           // Mapping from implementation name to implementation object
+        static Dictionary<Tuple<Implementation, Block, Cmd>, string> cmd2AllocationConstraint = null;       // Use the same allocation sites as the old alias analysis, hence using a mapping between commands and allocation sites
+        static Dictionary<Implementation, Dictionary<int, HashSet<string>>> ret_allocSites = null;          // Dictionary from implementation to the allocation sites of the output parameters
+        Dictionary<Tuple<Implementation, int>, Func<Dictionary<int, HashSet<string>>, Dictionary<int, HashSet<string>>>> transfer_function;     // Dictionary of transfer functions for each level for each implementation
+        public Dictionary<string, bool> AnalysisResults;                    // Store the results of analysis here
+        HashSet<string> singleAllocSites;                                   // The allocation sites which correspond to at most 1 concrete heap location
+        bool dbg = false;                                                   // Debugging flag
 
         public CSFSAliasAnalysis(Program prog)
         {
@@ -640,6 +651,10 @@ namespace AliasAnalysis
             singleAllocSites = new HashSet<string>();
         }
 
+        /*
+         * Looks at the old alias analysis to figure out the biggest overapproximation of the allocation sites of the output parameters of each implementation
+         * Used as a widen operator, to get sound overapproximate analysis
+        */
         public void getReturnAllocSites(Dictionary<Implementation, Dictionary<int, HashSet<string>>> dict, Dictionary<string, HashSet<string>> PTS)
         {
             ret_allocSites = dict;
@@ -647,13 +662,21 @@ namespace AliasAnalysis
             if (dbg) PointsTo.Keys.Iter(s => Console.WriteLine(s));
         }
 
+        /*
+         * Mapping from (implementation, block, command) -> allocation site
+        */
         public void getcmd2AllocMapping(Dictionary<Tuple<Implementation, Block, Cmd>, string> dict)
         {
             cmd2AllocationConstraint = dict;
         }
 
+        /*
+         * Creates the transfer function for each implementation of each depth.
+         * The main idea behind the transfer function is an Andersen based analysis, with some strong updates.
+        */
         private void CreateTransferFunction(int current_depth)
         {
+            // Finding allocator procedures, so that we can add allocation sites for such procedure calls
             var allocators = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Where(proc => BoogieUtil.checkAttrExists("allocator", proc.Attributes))
@@ -663,20 +686,27 @@ namespace AliasAnalysis
                 .Where(proc => QKeyValue.FindStringAttribute(proc.Attributes, "allocator") == "full")
                 .Iter(proc => allocators.Add(proc.Name));
 
+            // BlockPointsTo contains the points to set for each block in an implementation
             Dictionary<Block, Dictionary<string, HashSet<string>>> BlockPointsTo;
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
+                // Creating transfer function of a certain depth
                 transfer_function[new Tuple<Implementation, int>(impl, current_depth)] =
                     (in_params) =>
                     {
                         if (dbg) Console.WriteLine(impl.Name + " => ");
+
+                        // Topological sorting on the blocks
                         IEnumerable<Block> sortedBlocks;
                         impl.ComputePredecessorsForBlocks();
                         Microsoft.Boogie.GraphUtil.Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
                         sortedBlocks = dag.TopologicalSort();
+
+                        // Adding the allocation sites of the input parameters of the implementation in the BlockPointsTo of entry block
                         BlockPointsTo = new Dictionary<Block, Dictionary<string, HashSet<string>>>();
                         BlockPointsTo.Add(sortedBlocks.First(), new Dictionary<string, HashSet<string>>());
                         if (dbg) Console.WriteLine("InParams for {0} :-", impl.Name);
+
                         for (int i = 0; i < impl.Proc.InParams.Count; i++)
                         {
                             BlockPointsTo[sortedBlocks.First()][impl.Proc.InParams[i].Name] = new HashSet<string>();
@@ -688,11 +718,17 @@ namespace AliasAnalysis
                             }
                             if (dbg) Console.WriteLine();
                         }
+
+                        // List of exit blocks of implementation
                         List<Block> return_blocks = new List<Block>();
+
+                        // Do the analysis for each block in the implementation in a topological order
                         foreach (Block b in sortedBlocks)
                         {
                             if (dbg) Console.WriteLine(b.Label + " -> ");
                             if (!BlockPointsTo.ContainsKey(b)) BlockPointsTo[b] = new Dictionary<string, HashSet<string>>();
+
+                            // Calculate the allocation sites of each variable in each predecessor, and union them up
                             foreach (Block blk in b.Predecessors)
                             {
                                 if (dbg) Console.WriteLine(blk.Label + " -> ");
@@ -708,26 +744,39 @@ namespace AliasAnalysis
                                     if (dbg) Console.WriteLine();
                                 }
                             }
+
+                            // If implementation can return from here, add the block to return blocks
                             if (b.TransferCmd is ReturnCmd) return_blocks.Add(b);
+
+                            // Analyze for each command in the block
                             foreach (Cmd c in b.Cmds)
                             {
                                 if (dbg) Console.WriteLine("{0}{1} {2} {3} {4}", c.ToString(), c.GetType(), impl.Name, b.Label, current_depth);
+
                                 if (c is AssignCmd)
                                 {
                                     var ac = c as AssignCmd;
-                                    foreach (string st in BlockPointsTo[b].Keys) if (dbg) Console.WriteLine("PTS contains {0}", st);
+                                    if (dbg) foreach (string st in BlockPointsTo[b].Keys) Console.WriteLine("PTS contains {0}", st);
+                                    
+                                    // Analyze each assign statement in assign cmd
                                     for (int i = 0; i < ac.Lhss.Count; i++)
                                     {
+                                        // LHS is a variable, which means we can perform strong updates
                                         if (ac.Lhss[i] is SimpleAssignLhs)
                                         {
                                             var lhs = ac.Lhss[i] as SimpleAssignLhs;
                                             if (dbg) Console.WriteLine("Simple -> {0} ", lhs.DeepAssignedVariable.Name);
+                                            
                                             if (!BlockPointsTo[b].ContainsKey(ac.Lhss[i].DeepAssignedVariable.Name))
                                             {
                                                 BlockPointsTo[b].Add(ac.Lhss[i].DeepAssignedVariable.Name, new HashSet<string>());
                                                 if (dbg) Console.WriteLine("Adding {0} to PTS", ac.Lhss[i].DeepAssignedVariable.Name);
                                             }
+                                            
+                                            // Remove allocation sites from LHS
                                             BlockPointsTo[b][ac.Lhss[i].DeepAssignedVariable.Name].Clear();
+                                            
+                                            // Put allocation sites of RHS into LHS
                                             foreach (string aS in getExprPointsTo(ac.Rhss[i], BlockPointsTo[b]))
                                             {
                                                 BlockPointsTo[b][ac.Lhss[i].DeepAssignedVariable.Name].Add(aS);
@@ -737,6 +786,7 @@ namespace AliasAnalysis
                                         }
                                         else
                                         {
+                                            // LHS is a map, since we perform no improvement in precision, we do nothing here
                                             var massign = ac.Lhss[i] as MapAssignLhs;
                                             Debug.Assert(massign.Indexes.Count == 1);
                                             /*
@@ -745,18 +795,24 @@ namespace AliasAnalysis
                                         }
                                     }
                                 }
-                                if (c is CallCmd)
+                                else if (c is CallCmd)
                                 {
                                     var cc = c as CallCmd;
                                     var ins = new Dictionary<int, HashSet<string>>();
+
+                                    // Get allocation sites for input parameters of callee
                                     for (int i = 0 ; i < cc.Ins.Count ; i++) ins[i] = getExprPointsTo(cc.Ins[i], BlockPointsTo[b]);
                                     var outs = new Dictionary<int, HashSet<string>>();
+
+                                    // Check if callee is an allocator, if not, call transfer function of immediately lower depth
                                     if (allocators.Contains(cc.callee) && cc.Outs.Count == 1)
                                     {
                                         outs[0] = new HashSet<string>();
                                         outs[0].Add(cmd2AllocationConstraint[new Tuple<Implementation, Block, Cmd>(impl, b, c)]);
                                     }
                                     else if (name2Impl.ContainsKey(cc.callee)) outs = transfer_function[new Tuple<Implementation, int>(name2Impl[cc.callee], current_depth - 1)](ins);
+
+                                    // Put allocation sites in output parameters of callee
                                     for (int i = 0 ; i < cc.Outs.Count ; i++)
                                     {
                                         IdentifierExpr id = cc.Outs[i];
@@ -774,8 +830,10 @@ namespace AliasAnalysis
                                         if (dbg) Console.WriteLine();
                                     }
                                 }
-                                if (c is AssumeCmd)
+                                else if (c is AssumeCmd)
                                 {
+                                    // assume (var != NULL)
+                                    // Remove allocation site corresponding to NULL from BlockPointsTo
                                     string null_alloc_site = PointsTo["NULL"].First();
                                     var asc = c as AssumeCmd;
                                     if (CleanAssert.validAssume(asc))
@@ -793,9 +851,10 @@ namespace AliasAnalysis
                                         if (BlockPointsTo[b][id.Decl.Name].Contains(null_alloc_site)) BlockPointsTo[b][id.Decl.Name].Remove(null_alloc_site);
                                     }
                                 }
-                                
-                                if (c is AssertCmd)
+                                else if (c is AssertCmd)
                                 {
+                                    // assert (M[x] != NULL), assert (var != NULL)
+                                    // Analyze assertion, and delete it if BlockPointsTo says it never fails
                                     var ac = c as AssertCmd;
                                     string null_alloc_site = PointsTo["NULL"].First();
                                     if (CleanAssert.validAssert(ac))
@@ -822,24 +881,31 @@ namespace AliasAnalysis
                                 
                             }
                         }
+
+                        // Build output parameters of implementation
                         var out_params = new Dictionary<int, HashSet<string>>();
                         if (dbg) Console.WriteLine("OutParams for {0} :-", impl.Name);
-                        for (int i = 0 ; i < impl.Proc.OutParams.Count() ; i++)
+                        for (int i = 0; i < impl.Proc.OutParams.Count(); i++)
                         {
                             out_params[i] = new HashSet<string>();
                             if (dbg) Console.WriteLine(impl.Proc.OutParams[i].Name);
-                            foreach (Block blk in return_blocks)
+                            if (return_blocks.Count != 0)
                             {
-                                if (BlockPointsTo[blk].ContainsKey(impl.Proc.OutParams[i].Name))
+                                // Figure out allocation sites of each output parameter in each return block
+                                foreach (Block blk in return_blocks)
                                 {
-                                    foreach (string aS in BlockPointsTo[blk][impl.Proc.OutParams[i].Name])
+                                    if (BlockPointsTo[blk].ContainsKey(impl.Proc.OutParams[i].Name))
                                     {
-                                        out_params[i].Add(aS);
-                                        if (dbg) Console.Write(aS + " ");
+                                        foreach (string aS in BlockPointsTo[blk][impl.Proc.OutParams[i].Name])
+                                        {
+                                            out_params[i].Add(aS);
+                                            if (dbg) Console.Write(aS + " ");
+                                        }
+                                        if (dbg) Console.WriteLine();
                                     }
-                                    if (dbg) Console.WriteLine();
                                 }
                             }
+                            else out_params = ret_allocSites[impl];
                         }
                         return out_params;
                     };
@@ -992,6 +1058,11 @@ namespace AliasAnalysis
             }
         }
 
+        /*
+         * Gives back the allocation sites an expression can occupy
+         * If expression is a scalar, it returns an empty set
+         * Recursive function for recursive maps, M1[M2[M3...[x]...]]
+        */
         private HashSet<string> getExprPointsTo(Expr expr, Dictionary<string, HashSet<string>> PTS)
         {
             var set = new HashSet<string>();
@@ -1052,6 +1123,14 @@ namespace AliasAnalysis
             return "allocConstruct$" + o + "$" + f;
         }
 
+        private bool isODotf(string of)
+        {
+            return of.StartsWith("allocConstruct$");
+        }
+
+        /*
+         * Creating transfer function for all implementations
+        */
         public void CSFSProcess()
         {
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -1131,13 +1210,19 @@ namespace AliasAnalysis
             }
         }
 
+        /*
+         * Do analysis once the transfer functions are created
+        */
         public void SoundAnalyze()
         {
+            // Go to each implementation
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 Assert_Depth = Context_Bound - Caller_Bound;
                 Dictionary<int, HashSet<string>> in_params = new Dictionary<int, HashSet<string>>();
                 Dictionary<int, HashSet<string>> out_params = new Dictionary<int, HashSet<string>>();
+
+                // Figure out the biggest overapproximations of the input parameters of the implementation
                 for (int i = 0 ; i < impl.Proc.InParams.Count ; i++)
                 {
                     HashSet<string> set = new HashSet<string>();
@@ -1226,6 +1311,19 @@ namespace AliasAnalysis
         public void PreciseMapAnalyze()
         {
             getSingleAllocSites();
+
+            var MapPointsTo = new Dictionary<string, HashSet<string>>();
+
+            foreach (string st in PointsTo.Keys)
+            {
+                MapPointsTo.Add(st, new HashSet<string>());
+                if (!isODotf(st))
+                {
+                    foreach (string aS in PointsTo[st]) MapPointsTo[st].Add(aS);
+                }
+            }
+
+
         }
 
         private void getSingleAllocSites()
@@ -1265,13 +1363,10 @@ namespace AliasAnalysis
                     if (!Pred.ContainsKey(impl)) single_impl.Add(impl);
                     else if (Pred[impl].Count == 0) single_impl.Add(impl);
                     else if (!Pred[impl].Contains(impl)) single_impl.Add(impl);
-                    else Console.WriteLine(impl.Name);
+                    //else Console.WriteLine(impl.Name);
                 }
             }
             cmd2AllocationConstraint.Keys.Where(key => single_impl.Contains(key.Item1)).Iter(key => singleAllocSites.Add(cmd2AllocationConstraint[key]));
-            
-            single_impl.Iter(v => Console.WriteLine(v.Name));
-            singleAllocSites.Iter(v => Console.WriteLine(v));
         }
 
         public static void removeAsserts(Program origProgram, Dictionary<string, bool> csfs_ret)
