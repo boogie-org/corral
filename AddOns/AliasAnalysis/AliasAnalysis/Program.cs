@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Microsoft.Boogie;
 using btype = Microsoft.Boogie.Type;
 using cba.Util;
+using Microsoft.Boogie.GraphUtil;
 
 namespace AliasAnalysis
 {
@@ -348,6 +349,7 @@ namespace AliasAnalysis
         AliasConstraintSolver solver;
         int counter;
         public static bool dbg = false;
+        CSFSAliasAnalysis csfsAnalysis;
 
         private AliasAnalysis(Program program)
         {
@@ -355,6 +357,25 @@ namespace AliasAnalysis
             this.allocatedConstants = new HashSet<string>();
             solver = new AliasConstraintSolver();
             counter = 0;
+            csfsAnalysis = new CSFSAliasAnalysis(program);
+        }
+
+        private void getReturnAllocSites(Dictionary<string, HashSet<string>> PointsTo)
+        {
+            var impl2aS = new Dictionary<Implementation, Dictionary<int, HashSet<string>>>();
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var out2aS = new Dictionary<int, HashSet<string>>();
+                for (int i = 0; i < impl.Proc.OutParams.Count; i++ )
+                {
+                    Variable v = impl.Proc.OutParams[i];
+                    string s = ConstructVariableName(v, impl.Name);
+                    if (PointsTo.ContainsKey(s)) out2aS[i] = PointsTo[s];
+                    else out2aS[i] = new HashSet<string>();
+                }
+                impl2aS[impl] = out2aS;
+            }
+            csfsAnalysis.getReturnAllocSites(impl2aS, PointsTo);
         }
 
         public static AliasAnalysisResults DoAliasAnalysis(Program program)
@@ -365,6 +386,7 @@ namespace AliasAnalysis
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             aa.solver.Solve();
+            aa.getReturnAllocSites(aa.solver.GetPointsToSet());
             if (dbg) Console.WriteLine("Done");
 
             // Solve the queries
@@ -378,6 +400,14 @@ namespace AliasAnalysis
                     new Func<Variable, Implementation, HashSet<string>>((v1, impl) => aa.solver.AllocationSites(
                     aa.ConstructVariableName(v1, impl.Name)))
                     );
+        }
+
+        public static Dictionary<string, bool> DoCSFSAliasAnalysis(Program program)
+        {
+            var csfsaa = new CSFSAliasAnalysis(program);
+            csfsaa.CSFSProcess();
+            csfsaa.SoundAnalyze();
+            return csfsaa.AnalysisResults;
         }
 
         class AliasQuerySolver : FixedVisitor
@@ -472,6 +502,7 @@ namespace AliasAnalysis
         private void Process()
         {
             // Find the allocators
+            var cmd2AllocationConstraint = new Dictionary<Tuple<Implementation, Block, Cmd>, string>();
             var allocators = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Where(proc => BoogieUtil.checkAttrExists("allocator", proc.Attributes))
@@ -507,7 +538,10 @@ namespace AliasAnalysis
                         if (ccmd != null)
                         {
                             if (allocators.Contains(ccmd.callee) && ccmd.Outs.Count == 1)
+                            {
+                                cmd2AllocationConstraint.Add(new Tuple<Implementation, Block, Cmd>(impl, block, ccmd), AllocationConstraint.getSite());
                                 solver.Add(new AllocationConstraint(ConstructVariableName(ccmd.Outs[0].Decl, impl.Name), funkyAllocators.Contains(ccmd.callee)));
+                            }
                             else if (nameToImpl.ContainsKey(ccmd.callee))
                             {
                                 var callee = nameToImpl[ccmd.callee];
@@ -524,6 +558,7 @@ namespace AliasAnalysis
                     }
                 }
             }
+            csfsAnalysis.getcmd2AllocMapping(cmd2AllocationConstraint);
         }
 
         private void ProcessAssignment(AssignLhs target, string targetProcName, Expr source, string sourceProcName)
@@ -575,6 +610,790 @@ namespace AliasAnalysis
         }
 
 
+    }
+
+    /*
+     * CSFS Alias Analysis :- Context Sensitive Flow Sensitive Alias Analysis
+     * 1. Build an intraprocedural flow sensitive transfer function for each procedure which takes in the allocation sites of the input parameters, and returns the output parameters.
+     * 2. The transfer function has levels, upto a context bound, which can be increased to improve precision.
+     * 3. The transfer function is a recursive function, which calls the transfer function of immediately lesser depth for the callees.
+     * 4. The transfer function of depth 0 just falls on the old alias analysis.
+     * 5. Once the transfer function is built, we analyze every procedure with the biggest overapproximation of the input parameters obtained from the old alias analysis.
+     * 6. We introduce asserts at a certain depth, since it gives context sensitivity, and the transfer function gives flow sensitivity.
+     * 7. For scalability reasons, we have set the context bound to 3, and we add asserts at a depth of 1.
+    */
+
+    public class CSFSAliasAnalysis
+    {
+        Program program;
+        int Context_Bound;
+        int Assert_Depth;
+        int Caller_Bound;
+        static Dictionary<string, HashSet<string>> PointsTo = null;             // Keep a copy of the Points To Set
+        Dictionary<string, Implementation> name2Impl;                           // Mapping from implementation name to implementation object
+        static Dictionary<Tuple<Implementation, Block, Cmd>, string> cmd2AllocationConstraint = null;       // Use the same allocation sites as the old alias analysis, hence using a mapping between commands and allocation sites
+        static Dictionary<Implementation, Dictionary<int, HashSet<string>>> ret_allocSites = null;          // Dictionary from implementation to the allocation sites of the output parameters
+        Dictionary<Tuple<Implementation, int>, Func<Dictionary<int, HashSet<string>>, Dictionary<int, HashSet<string>>>> transfer_function;     // Dictionary of transfer functions for each level for each implementation
+        public Dictionary<string, bool> AnalysisResults;                    // Store the results of analysis here
+        HashSet<string> singleAllocSites;                                   // The allocation sites which correspond to at most 1 concrete heap location
+        bool dbg = false;                                                   // Debugging flag
+
+        public CSFSAliasAnalysis(Program prog)
+        {
+            program = prog;
+            Context_Bound = 3;
+            Caller_Bound = 1;
+            transfer_function = new Dictionary<Tuple<Implementation, int>, Func<Dictionary<int, HashSet<string>>, Dictionary<int, HashSet<string>>>>();
+            name2Impl = BoogieUtil.nameImplMapping(prog);
+            AnalysisResults = new Dictionary<string, bool>();
+            Debug.Assert(Caller_Bound <= Context_Bound);
+            singleAllocSites = new HashSet<string>();
+        }
+
+        /*
+         * Looks at the old alias analysis to figure out the biggest overapproximation of the allocation sites of the output parameters of each implementation
+         * Used as a widen operator, to get sound overapproximate analysis
+        */
+        public void getReturnAllocSites(Dictionary<Implementation, Dictionary<int, HashSet<string>>> dict, Dictionary<string, HashSet<string>> PTS)
+        {
+            ret_allocSites = dict;
+            PointsTo = PTS;
+            if (dbg) PointsTo.Keys.Iter(s => Console.WriteLine(s));
+        }
+
+        /*
+         * Mapping from (implementation, block, command) -> allocation site
+        */
+        public void getcmd2AllocMapping(Dictionary<Tuple<Implementation, Block, Cmd>, string> dict)
+        {
+            cmd2AllocationConstraint = dict;
+        }
+
+        /*
+         * Creates the transfer function for each implementation of each depth.
+         * The main idea behind the transfer function is an Andersen based analysis, with some strong updates.
+        */
+        private void CreateTransferFunction(int current_depth)
+        {
+            // Finding allocator procedures, so that we can add allocation sites for such procedure calls
+            var allocators = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => BoogieUtil.checkAttrExists("allocator", proc.Attributes))
+                .Iter(proc => allocators.Add(proc.Name));
+
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => QKeyValue.FindStringAttribute(proc.Attributes, "allocator") == "full")
+                .Iter(proc => allocators.Add(proc.Name));
+
+            // BlockPointsTo contains the points to set for each block in an implementation
+            Dictionary<Block, Dictionary<string, HashSet<string>>> BlockPointsTo;
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                // Creating transfer function of a certain depth
+                transfer_function[new Tuple<Implementation, int>(impl, current_depth)] =
+                    (in_params) =>
+                    {
+                        if (dbg) Console.WriteLine(impl.Name + " => ");
+
+                        // Topological sorting on the blocks
+                        IEnumerable<Block> sortedBlocks;
+                        impl.ComputePredecessorsForBlocks();
+                        Microsoft.Boogie.GraphUtil.Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
+                        sortedBlocks = dag.TopologicalSort();
+
+                        // Adding the allocation sites of the input parameters of the implementation in the BlockPointsTo of entry block
+                        BlockPointsTo = new Dictionary<Block, Dictionary<string, HashSet<string>>>();
+                        BlockPointsTo.Add(sortedBlocks.First(), new Dictionary<string, HashSet<string>>());
+                        if (dbg) Console.WriteLine("InParams for {0} :-", impl.Name);
+
+                        for (int i = 0; i < impl.Proc.InParams.Count; i++)
+                        {
+                            BlockPointsTo[sortedBlocks.First()][impl.Proc.InParams[i].Name] = new HashSet<string>();
+                            if (dbg) Console.WriteLine(impl.Proc.InParams[i].Name);
+                            foreach (var aS in in_params[i])
+                            {
+                                if (dbg) Console.Write(aS + " ");
+                                BlockPointsTo[sortedBlocks.First()][impl.Proc.InParams[i].Name].Add(aS);
+                            }
+                            if (dbg) Console.WriteLine();
+                        }
+
+                        // List of exit blocks of implementation
+                        List<Block> return_blocks = new List<Block>();
+
+                        // Do the analysis for each block in the implementation in a topological order
+                        foreach (Block b in sortedBlocks)
+                        {
+                            if (dbg) Console.WriteLine(b.Label + " -> ");
+                            if (!BlockPointsTo.ContainsKey(b)) BlockPointsTo[b] = new Dictionary<string, HashSet<string>>();
+
+                            // Calculate the allocation sites of each variable in each predecessor, and union them up
+                            foreach (Block blk in b.Predecessors)
+                            {
+                                if (dbg) Console.WriteLine(blk.Label + " -> ");
+                                foreach (string st in BlockPointsTo[blk].Keys)
+                                {
+                                    if (!BlockPointsTo[b].ContainsKey(st)) BlockPointsTo[b][st] = new HashSet<string>();
+                                    if (dbg) Console.WriteLine("Block - {0}, String - {1}", blk.Label, st);
+                                    foreach (string aS in BlockPointsTo[blk][st])
+                                    {
+                                        if (!BlockPointsTo[b][st].Contains(aS)) BlockPointsTo[b][st].Add(aS);
+                                        if (dbg) Console.Write(aS + " ");
+                                    }
+                                    if (dbg) Console.WriteLine();
+                                }
+                            }
+
+                            // If implementation can return from here, add the block to return blocks
+                            if (b.TransferCmd is ReturnCmd) return_blocks.Add(b);
+
+                            // Analyze for each command in the block
+                            foreach (Cmd c in b.Cmds)
+                            {
+                                if (dbg) Console.WriteLine("{0}{1} {2} {3} {4}", c.ToString(), c.GetType(), impl.Name, b.Label, current_depth);
+
+                                if (c is AssignCmd)
+                                {
+                                    var ac = c as AssignCmd;
+                                    if (dbg) foreach (string st in BlockPointsTo[b].Keys) Console.WriteLine("PTS contains {0}", st);
+                                    
+                                    // Analyze each assign statement in assign cmd
+                                    for (int i = 0; i < ac.Lhss.Count; i++)
+                                    {
+                                        // LHS is a variable, which means we can perform strong updates
+                                        if (ac.Lhss[i] is SimpleAssignLhs)
+                                        {
+                                            var lhs = ac.Lhss[i] as SimpleAssignLhs;
+                                            if (dbg) Console.WriteLine("Simple -> {0} ", lhs.DeepAssignedVariable.Name);
+                                            
+                                            if (!BlockPointsTo[b].ContainsKey(ac.Lhss[i].DeepAssignedVariable.Name))
+                                            {
+                                                BlockPointsTo[b].Add(ac.Lhss[i].DeepAssignedVariable.Name, new HashSet<string>());
+                                                if (dbg) Console.WriteLine("Adding {0} to PTS", ac.Lhss[i].DeepAssignedVariable.Name);
+                                            }
+                                            
+                                            // Remove allocation sites from LHS
+                                            BlockPointsTo[b][ac.Lhss[i].DeepAssignedVariable.Name].Clear();
+                                            
+                                            // Put allocation sites of RHS into LHS
+                                            foreach (string aS in getExprPointsTo(ac.Rhss[i], BlockPointsTo[b]))
+                                            {
+                                                BlockPointsTo[b][ac.Lhss[i].DeepAssignedVariable.Name].Add(aS);
+                                                if (dbg) Console.Write(aS + " ");
+                                            }
+                                            if (dbg) Console.WriteLine();
+                                        }
+                                        else
+                                        {
+                                            // LHS is a map, since we perform no improvement in precision, we do nothing here
+                                            var massign = ac.Lhss[i] as MapAssignLhs;
+                                            Debug.Assert(massign.Indexes.Count == 1);
+                                            /*
+                                             * Should something be done here?
+                                             */
+                                        }
+                                    }
+                                }
+                                else if (c is CallCmd)
+                                {
+                                    var cc = c as CallCmd;
+                                    var ins = new Dictionary<int, HashSet<string>>();
+
+                                    // Get allocation sites for input parameters of callee
+                                    for (int i = 0 ; i < cc.Ins.Count ; i++) ins[i] = getExprPointsTo(cc.Ins[i], BlockPointsTo[b]);
+                                    var outs = new Dictionary<int, HashSet<string>>();
+
+                                    // Check if callee is an allocator, if not, call transfer function of immediately lower depth
+                                    if (allocators.Contains(cc.callee) && cc.Outs.Count == 1)
+                                    {
+                                        outs[0] = new HashSet<string>();
+                                        outs[0].Add(cmd2AllocationConstraint[new Tuple<Implementation, Block, Cmd>(impl, b, c)]);
+                                    }
+                                    else if (name2Impl.ContainsKey(cc.callee)) outs = transfer_function[new Tuple<Implementation, int>(name2Impl[cc.callee], current_depth - 1)](ins);
+
+                                    // Put allocation sites in output parameters of callee
+                                    for (int i = 0 ; i < cc.Outs.Count ; i++)
+                                    {
+                                        IdentifierExpr id = cc.Outs[i];
+                                        if (!BlockPointsTo[b].ContainsKey(id.Decl.Name))
+                                        {
+                                            BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
+                                            if (dbg) Console.WriteLine("Adding {0} to PTS", id.Decl.Name);
+                                        }
+                                        BlockPointsTo[b][id.Decl.Name].Clear();
+                                        foreach (string aS in outs[i])
+                                        {
+                                            BlockPointsTo[b][id.Decl.Name].Add(aS);
+                                            if (dbg) Console.Write(aS + " ");
+                                        }
+                                        if (dbg) Console.WriteLine();
+                                    }
+                                }
+                                else if (c is AssumeCmd)
+                                {
+                                    // assume (var != NULL)
+                                    // Remove allocation site corresponding to NULL from BlockPointsTo
+                                    string null_alloc_site = PointsTo["NULL"].First();
+                                    var asc = c as AssumeCmd;
+                                    if (CleanAssert.validAssume(asc))
+                                    {
+                                        IdentifierExpr id = CleanAssert.getVarFromAssume(asc);
+                                        if (id.Decl is GlobalVariable)
+                                        {
+                                            if (!BlockPointsTo[b].ContainsKey(id.Decl.Name))
+                                            {
+                                                BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
+                                                foreach (var aS in PointsTo[id.Decl.Name]) BlockPointsTo[b][id.Decl.Name].Add(aS);
+                                            }
+                                        }
+                                        if (!BlockPointsTo[b].ContainsKey(id.Decl.Name)) BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
+                                        if (BlockPointsTo[b][id.Decl.Name].Contains(null_alloc_site)) BlockPointsTo[b][id.Decl.Name].Remove(null_alloc_site);
+                                    }
+                                }
+                                else if (c is AssertCmd)
+                                {
+                                    // assert (M[x] != NULL), assert (var != NULL)
+                                    // Analyze assertion, and delete it if BlockPointsTo says it never fails
+                                    var ac = c as AssertCmd;
+                                    string null_alloc_site = PointsTo["NULL"].First();
+                                    if (CleanAssert.validAssert(ac))
+                                    {
+                                        IdentifierExpr id = CleanAssert.getVarFromAssert(ac);
+                                        string query = CleanAssert.getQueryFromAssert(ac);
+                                        if (current_depth == Assert_Depth && !AnalysisResults.ContainsKey(query))
+                                        {
+                                            AnalysisResults.Add(query, true);
+                                            if (dbg) Console.WriteLine(query);
+                                        }
+                                        if (id.Decl is GlobalVariable)
+                                        {
+                                            if (!BlockPointsTo[b].ContainsKey(id.Decl.Name))
+                                            {
+                                                BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
+                                                foreach (var aS in PointsTo[id.Decl.Name]) BlockPointsTo[b][id.Decl.Name].Add(aS);
+                                            }
+                                        }
+                                        if (!BlockPointsTo[b].ContainsKey(id.Decl.Name)) BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
+                                        if (BlockPointsTo[b][id.Decl.Name].Contains(null_alloc_site) && current_depth == Assert_Depth) AnalysisResults[query] = false;
+                                    }
+                                }
+                                
+                            }
+                        }
+
+                        // Build output parameters of implementation
+                        var out_params = new Dictionary<int, HashSet<string>>();
+                        if (dbg) Console.WriteLine("OutParams for {0} :-", impl.Name);
+                        for (int i = 0; i < impl.Proc.OutParams.Count(); i++)
+                        {
+                            out_params[i] = new HashSet<string>();
+                            if (dbg) Console.WriteLine(impl.Proc.OutParams[i].Name);
+                            if (return_blocks.Count != 0)
+                            {
+                                // Figure out allocation sites of each output parameter in each return block
+                                foreach (Block blk in return_blocks)
+                                {
+                                    if (BlockPointsTo[blk].ContainsKey(impl.Proc.OutParams[i].Name))
+                                    {
+                                        foreach (string aS in BlockPointsTo[blk][impl.Proc.OutParams[i].Name])
+                                        {
+                                            out_params[i].Add(aS);
+                                            if (dbg) Console.Write(aS + " ");
+                                        }
+                                        if (dbg) Console.WriteLine();
+                                    }
+                                }
+                            }
+                            else out_params = ret_allocSites[impl];
+                        }
+                        return out_params;
+                    };
+            }
+        }
+
+        private void UseAssumeCmds()
+        {
+            int counter = 0;
+            BoogieUtil.PrintProgram(program, "test_aa.bpl");
+            string null_alloc_site = PointsTo["NULL"].First();
+            Dictionary<Block,Dictionary<string,HashSet<string>>> BlockPointsTo;
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (dbg) Console.WriteLine(impl.Name + " => ");
+                BlockPointsTo = new Dictionary<Block,Dictionary<string,HashSet<string>>>();
+                IEnumerable<Block> sortedBlocks;
+                impl.ComputePredecessorsForBlocks();
+                Microsoft.Boogie.GraphUtil.Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
+                sortedBlocks = dag.TopologicalSort();
+                foreach (Block b in sortedBlocks)
+                {
+                    var removal_list = new HashSet<AssertCmd>();
+                    if (dbg) Console.WriteLine(b.Label + " -> ");
+                    BlockPointsTo[b] = new Dictionary<string, HashSet<string>>();
+                    foreach (Block blk in b.Predecessors)
+                    {
+                        foreach (string st in BlockPointsTo[blk].Keys)
+                        {
+                            if (!BlockPointsTo[b].ContainsKey(st)) BlockPointsTo[b][st] = new HashSet<string>();
+                            if (dbg) Console.WriteLine("Block - {0}, String - {1}", blk.Label, st);
+                            foreach (string aS in BlockPointsTo[blk][st]) if (!BlockPointsTo[b][st].Contains(aS)) BlockPointsTo[b][st].Add(aS);
+                        }
+                    }
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (dbg) Console.Write(c.ToString());
+                        if (c is AssumeCmd)
+                        {
+                            var asc = c as AssumeCmd;
+                            if (CleanAssert.validAssume(asc))
+                            {
+                                IdentifierExpr id = CleanAssert.getVarFromAssume(asc);
+                                string var_name = ConstructVariableName(id.Decl, impl.Name);
+                                if (dbg) Console.WriteLine(var_name);
+                                if (!BlockPointsTo[b].ContainsKey(var_name)) BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                if (BlockPointsTo[b][var_name].Contains(null_alloc_site)) BlockPointsTo[b][var_name].Remove(null_alloc_site);
+                            }
+                        }
+                        if (c is AssertCmd)
+                        {
+                            var ac = c as AssertCmd;
+                            if (CleanAssert.validAssert(ac))
+                            {
+                                IdentifierExpr id = CleanAssert.getVarFromAssert(ac);
+                                string var_name = ConstructVariableName(id.Decl, impl.Name);
+                                if (dbg) Console.WriteLine(var_name);
+                                if (id.Decl is GlobalVariable)
+                                {
+                                    BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                    foreach (var aS in PointsTo[var_name]) BlockPointsTo[b][var_name].Add(aS);
+                                }
+                                if (!PointsTo.ContainsKey(var_name)) continue;
+                                if (!BlockPointsTo[b].ContainsKey(var_name)) BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                //foreach (string s in PointsTo[var_name]) BlockPointsTo[b][var_name].Add(s);
+                                if (!BlockPointsTo[b][var_name].Contains(null_alloc_site))
+                                {
+                                    removal_list.Add(ac);
+                                    counter++;
+                                    if (dbg) Console.Write("Removing assert : {0}", ac);
+                                }
+                            }
+                        }
+                        if (c is CallCmd)
+                        {
+                            var cc = c as CallCmd;
+                            foreach (IdentifierExpr id in cc.Outs)
+                            {
+                                string var_name = ConstructVariableName(id.Decl, impl.Name);
+                                if (!BlockPointsTo[b].ContainsKey(var_name)) BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                BlockPointsTo[b][var_name].Clear();
+                                if (PointsTo.ContainsKey(var_name)) foreach (string s in PointsTo[var_name]) BlockPointsTo[b][var_name].Add(s);
+                            }
+                        }
+                        if (c is AssignCmd)
+                        {
+                            var asc = c as AssignCmd;
+                            for (int i = 0; i < asc.Lhss.Count; i++)
+                            {
+                                if (asc.Lhss[i] is SimpleAssignLhs)
+                                {
+                                    var lhs = asc.Lhss[i] as SimpleAssignLhs;
+                                    string var_name = ConstructVariableName(lhs.DeepAssignedVariable, impl.Name);
+                                    if (!BlockPointsTo[b].ContainsKey(var_name)) BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                    BlockPointsTo[b][var_name].Clear();
+                                    BlockPointsTo[b][var_name] = getExprPointsTo(asc.Rhss[i], impl.Name);
+                                    if (dbg) Console.WriteLine("Simple -> {0} ", lhs.DeepAssignedVariable.Name);
+                                }
+                                else
+                                {
+                                    var massign = asc.Lhss[i] as MapAssignLhs;
+                                    Debug.Assert(massign.Indexes.Count == 1);
+                                    string map = massign.DeepAssignedVariable.Name;
+                                    HashSet<string> rhs = getExprPointsTo(asc.Rhss[i], impl.Name);
+                                    foreach (string aS in getExprPointsTo(massign.Indexes[0], impl.Name))
+                                    {
+                                        string var_name = GetODotf(aS, map);
+                                        if (!BlockPointsTo[b].ContainsKey(var_name)) BlockPointsTo[b].Add(var_name, new HashSet<string>());
+                                        foreach (string site in rhs) BlockPointsTo[b][var_name].Add(site);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    foreach (AssertCmd ac in removal_list) b.Cmds.Remove(ac);
+                }
+            }
+            Console.WriteLine("{0} asserts removed by Using Assume Cmds", counter);
+        }
+
+        private HashSet<string> getExprPointsTo(Expr expr, string procName)
+        {
+            var set = new HashSet<string>();
+            if (expr is IdentifierExpr)
+            {
+                IdentifierExpr id = expr as IdentifierExpr;
+                string var_name = ConstructVariableName(id.Decl, procName);
+                if (!BoogieUtil.checkAttrExists("pointer", id.Decl.Attributes) || !PointsTo.ContainsKey(var_name)) return set;
+                foreach (var aS in PointsTo[var_name]) set.Add(aS);
+                return set;
+            }
+            else if (expr is NAryExpr)
+            {
+                NAryExpr nexpr = expr as NAryExpr;
+                if (dbg) Console.WriteLine("NAryExpr :- {0}, {1}", nexpr.ToString(), nexpr.Fun.FunctionName.ToString());
+                string map = nexpr.Fun.FunctionName;
+                foreach (string aS in getExprPointsTo(nexpr.Args[0], procName))
+                {
+                    string var_name = GetODotf(aS, map);
+                    if (!PointsTo.ContainsKey(var_name)) continue;
+                    foreach (string site in PointsTo[var_name]) set.Add(site);
+                }
+                if (dbg) Console.WriteLine();
+                return set;
+            }
+            else
+            {
+                if (dbg) Console.WriteLine("Invalid Expression :- {0}", expr.ToString());
+                return set;
+            }
+        }
+
+        /*
+         * Gives back the allocation sites an expression can occupy
+         * If expression is a scalar, it returns an empty set
+         * Recursive function for recursive maps, M1[M2[M3...[x]...]]
+        */
+        private HashSet<string> getExprPointsTo(Expr expr, Dictionary<string, HashSet<string>> PTS)
+        {
+            var set = new HashSet<string>();
+            if (expr is IdentifierExpr)
+            {
+                IdentifierExpr id = expr as IdentifierExpr;
+                string var_name = id.Decl.Name;
+                if (dbg) Console.WriteLine("Points-To for IdentifierExpr {0}", id.ToString());
+                if (id.Decl is GlobalVariable || id.Decl is Constant)
+                {
+                    if (PointsTo.ContainsKey(id.Decl.Name)) foreach (string aS in PointsTo[id.Decl.Name]) set.Add(aS);
+                    return set;
+                }
+                if (PTS.ContainsKey(var_name))
+                {
+                    foreach (var aS in PTS[var_name]) set.Add(aS);
+                }
+                return set;
+            }
+            else if (expr is NAryExpr)
+            {
+                NAryExpr nexpr = expr as NAryExpr;
+                if (dbg) Console.WriteLine("Points-To for NAryExpr {0}", nexpr.ToString());
+                if (nexpr.Fun is MapSelect)
+                {
+                    string map = ((IdentifierExpr)nexpr.Args[0]).Decl.Name;
+                    if (dbg) Console.WriteLine("Map -> {0}", map);
+                    foreach (string aS in getExprPointsTo(nexpr.Args[1], PTS))
+                    {
+                        string var_name = GetODotf(aS, map);
+                        Debug.Assert(PointsTo.ContainsKey(var_name));
+                        foreach (string alloc in PointsTo[var_name]) set.Add(alloc);
+                    }
+                    return set;
+                }
+                else
+                {
+                    if (dbg) Console.WriteLine("Invalid NAryExpr :- {0}", nexpr.ToString());
+                    return set;
+                }
+            }
+            else
+            {
+                if (dbg) Console.WriteLine("Invalid Expression :- {0}", expr.ToString());
+                return set;
+            }
+        }
+
+        private string ConstructVariableName(Variable v, string procName)
+        {
+            if (v is GlobalVariable)
+                return v.Name;
+            return v.Name + "$" + procName;
+        }
+
+        private string GetODotf(string o, string f)
+        {
+            return "allocConstruct$" + o + "$" + f;
+        }
+
+        private bool isODotf(string of)
+        {
+            return of.StartsWith("allocConstruct$");
+        }
+
+        /*
+         * Creating transfer function for all implementations
+        */
+        public void CSFSProcess()
+        {
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                transfer_function[new Tuple<Implementation, int>(impl, 0)] =
+                    (in_params) =>
+                    {
+                        return ret_allocSites[impl];
+                    };
+            }
+            for (int i = 1 ; i <= Context_Bound ; i++) CreateTransferFunction(i);
+            BoogieUtil.PrintProgram(program, "test_aa.bpl");
+            //UseAssumeCmds();
+        }
+
+        public void CallerSoundAnalyze()
+        {
+            var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
+            var Pred = new Dictionary<Implementation, HashSet<Implementation>>();
+            name2Impl.Values.Iter(impl => Succ.Add(impl, new HashSet<Implementation>()));
+            name2Impl.Values.Iter(impl => Pred.Add(impl, new HashSet<Implementation>()));
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                    {
+                        if (!name2Impl.ContainsKey(cmd.callee)) continue;
+                        Succ[impl].Add(name2Impl[cmd.callee]);
+                        Pred[name2Impl[cmd.callee]].Add(impl);
+                    }
+                }
+            }
+
+            var callers = new Dictionary<Implementation, HashSet<Tuple<Implementation, int>>>();
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                callers.Add(impl, new HashSet<Tuple<Implementation, int>>());
+                Queue<Tuple<Implementation, int>> pred_queue = new Queue<Tuple<Implementation, int>>();
+                pred_queue.Enqueue(new Tuple<Implementation, int>(impl, 0));
+                while (pred_queue.Count != 0)
+                {
+                    var tup = pred_queue.Dequeue();
+                    Debug.Assert(Pred.ContainsKey(tup.Item1));
+                    if (Pred[tup.Item1].Count == 0 || tup.Item2 == Caller_Bound)
+                    {
+                        if (!callers[impl].Contains(tup)) callers[impl].Add(tup);
+                    }
+                    else foreach (Implementation pred_impl in Pred[tup.Item1]) pred_queue.Enqueue(new Tuple<Implementation, int>(pred_impl, tup.Item2 + 1));
+                }
+            }
+            Dictionary<Implementation, Dictionary<int, HashSet<string>>> in_params = new Dictionary<Implementation, Dictionary<int, HashSet<string>>>();
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                in_params.Add(impl, new Dictionary<int,HashSet<string>>());
+                for (int i = 0 ; i < impl.Proc.InParams.Count ; i++)
+                {
+                    HashSet<string> set = new HashSet<string>();
+                    string var_name = ConstructVariableName(impl.Proc.InParams[i], impl.Name);
+                    if (PointsTo.ContainsKey(var_name))
+                    {
+                        foreach (string aS in PointsTo[var_name]) set.Add(aS);
+                    }
+                    in_params[impl].Add(i, set);
+                }
+            }
+
+            Dictionary<int, HashSet<string>> out_params = new Dictionary<int, HashSet<string>>();
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Tuple<Implementation, int> tup in callers[impl])
+                {
+                    Assert_Depth = Context_Bound - tup.Item2;
+                    out_params = transfer_function[new Tuple<Implementation, int>(tup.Item1, Context_Bound)](in_params[tup.Item1]);
+                }
+            }
+        }
+
+        /*
+         * Do analysis once the transfer functions are created
+        */
+        public void SoundAnalyze()
+        {
+            // Go to each implementation
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                Assert_Depth = Context_Bound - Caller_Bound;
+                Dictionary<int, HashSet<string>> in_params = new Dictionary<int, HashSet<string>>();
+                Dictionary<int, HashSet<string>> out_params = new Dictionary<int, HashSet<string>>();
+
+                // Figure out the biggest overapproximations of the input parameters of the implementation
+                for (int i = 0 ; i < impl.Proc.InParams.Count ; i++)
+                {
+                    HashSet<string> set = new HashSet<string>();
+                    string var_name = ConstructVariableName(impl.Proc.InParams[i], impl.Name);
+                    if (PointsTo.ContainsKey(var_name))
+                    {
+                        foreach (string aS in PointsTo[var_name]) set.Add(aS);
+                    }
+                    in_params.Add(i, set);
+                }
+                out_params = transfer_function[new Tuple<Implementation, int>(impl, Context_Bound)](in_params);
+            }
+        }
+
+        public void UnsoundAnalyze()
+        {
+            // Construct the call graph and compute strongly connected components
+            var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
+            var Pred = new Dictionary<Implementation, HashSet<Implementation>>();
+            name2Impl.Values.Iter(impl => Succ.Add(impl, new HashSet<Implementation>()));
+            name2Impl.Values.Iter(impl => Pred.Add(impl, new HashSet<Implementation>()));
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                    {
+                        if (!name2Impl.ContainsKey(cmd.callee)) continue;
+                        Succ[impl].Add(name2Impl[cmd.callee]);
+                        Pred[name2Impl[cmd.callee]].Add(impl);
+                    }
+                }
+            }
+
+            // Build SCC
+            var sccs = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
+                new Adjacency<Implementation>(n => Succ[n]),
+                new Adjacency<Implementation>(n => Pred[n]));
+            sccs.Compute();
+
+            Graph<HashSet<Implementation>> impl_dag = new Graph<HashSet<Implementation>>();     // Construct a new graph where each SCC is reduced to a point, and each node is a set of implementations, which belong to the same SCC
+            Dictionary<Implementation, HashSet<Implementation>> impl2set = new Dictionary<Implementation, HashSet<Implementation>>();   // implementation -> SCC containing implementation
+            foreach (var scc in sccs)
+            {
+                var impl_set = new HashSet<Implementation>();
+                foreach (var impl in scc)
+                {
+                    impl_set.Add(impl);
+                    impl2set.Add(impl, impl_set);
+                }
+                impl_dag.AddSource(impl_set);
+            }
+
+            foreach (Implementation impl in Succ.Keys)
+            {
+                foreach (Implementation succ_impl in Succ[impl])
+                {
+                    if (!impl2set[impl].Equals(impl2set[succ_impl]) && !impl_dag.Edge(impl2set[impl], impl2set[succ_impl])) impl_dag.AddEdge(impl2set[impl], impl2set[succ_impl]);
+                }
+            }
+
+            // Run topological sort on the reduced call graph
+            IEnumerable<HashSet<Implementation>> sortedImplSet;
+            sortedImplSet = impl_dag.TopologicalSort();
+
+            if (dbg) Console.WriteLine("{0} {1}", sortedImplSet.First().First().Name, sortedImplSet.First().Count);
+
+            Implementation main = sortedImplSet.First().First();
+
+            var dict = new Dictionary<int, HashSet<string>>();
+            dict = transfer_function[new Tuple<Implementation, int>(main, Context_Bound)](dict);
+
+            int count = 0;
+            foreach (string query in AnalysisResults.Keys)
+            {
+                if (AnalysisResults[query])
+                {
+                    if (dbg) Console.WriteLine(query);
+                    count++;
+                }
+            }
+            Console.WriteLine("Removing {0} asserts", count);
+        }
+
+        public void PreciseMapAnalyze()
+        {
+            getSingleAllocSites();
+
+            var MapPointsTo = new Dictionary<string, HashSet<string>>();
+
+            foreach (string st in PointsTo.Keys)
+            {
+                MapPointsTo.Add(st, new HashSet<string>());
+                if (!isODotf(st))
+                {
+                    foreach (string aS in PointsTo[st]) MapPointsTo[st].Add(aS);
+                }
+            }
+
+
+        }
+
+        private void getSingleAllocSites()
+        {
+            // Construct the call graph and compute strongly connected components
+            var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
+            var Pred = new Dictionary<Implementation, HashSet<Implementation>>();
+            name2Impl.Values.Iter(impl => Succ.Add(impl, new HashSet<Implementation>()));
+            name2Impl.Values.Iter(impl => Pred.Add(impl, new HashSet<Implementation>()));
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<CallCmd>())
+                    {
+                        if (!name2Impl.ContainsKey(cmd.callee)) continue;
+                        Succ[impl].Add(name2Impl[cmd.callee]);
+                        Pred[name2Impl[cmd.callee]].Add(impl);
+                    }
+                }
+            }
+
+            // Build SCC
+            var sccs = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
+                new Adjacency<Implementation>(n => Succ[n]),
+                new Adjacency<Implementation>(n => Pred[n]));
+            sccs.Compute();
+
+            HashSet<Implementation> single_impl = new HashSet<Implementation>();
+
+            foreach (var scc in sccs)
+            {
+                if (scc.Count != 1) continue;
+                foreach (Implementation impl in scc)
+                {
+                    if (!Pred.ContainsKey(impl)) single_impl.Add(impl);
+                    else if (Pred[impl].Count == 0) single_impl.Add(impl);
+                    else if (!Pred[impl].Contains(impl)) single_impl.Add(impl);
+                    //else Console.WriteLine(impl.Name);
+                }
+            }
+            cmd2AllocationConstraint.Keys.Where(key => single_impl.Contains(key.Item1)).Iter(key => singleAllocSites.Add(cmd2AllocationConstraint[key]));
+        }
+
+        public static void removeAsserts(Program origProgram, Dictionary<string, bool> csfs_ret)
+        {
+            foreach (Implementation impl in origProgram.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    var removal_list = new List<AssertCmd>();
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (c is AssertCmd)
+                        {
+                            var ac = c as AssertCmd;
+                            if (CleanAssert.validAssert(ac))
+                            {
+                                if (csfs_ret.ContainsKey(CleanAssert.getQueryFromAssert(ac)) && csfs_ret[CleanAssert.getQueryFromAssert(ac)])
+                                {
+                                    removal_list.Add(ac);
+                                    Console.Write("Removing assert :- {0}", ac.ToString());
+                                }
+                            }
+                        }
+                    }
+                    foreach (AssertCmd ac in removal_list) b.Cmds.Remove(ac);
+                }
+            }
+        }
     }
 
     public class ReadSet : FixedVisitor
@@ -661,6 +1480,11 @@ namespace AliasAnalysis
             this.full = full;
         }
 
+        public static string getSite()
+        {
+            return ("allocSite" + counter.ToString());
+        }
+
         public override void GatherMentionedVars(ref HashSet<string> vars)
         {
             vars.Add(target);
@@ -732,6 +1556,7 @@ namespace AliasAnalysis
         bool solved;
         const int environmentPointersUnroll = 0;
         public static bool dbg = false;
+        string null_allocSite;
 
         public AliasConstraintSolver()
         {
@@ -740,6 +1565,7 @@ namespace AliasAnalysis
             PointsToDelta = new Dictionary<string, HashSet<string>>();
             worklist = new HashSet<string>();
             solved = false;
+            null_allocSite = null;
         }
 
 
@@ -851,6 +1677,7 @@ namespace AliasAnalysis
                 PointsTo[n].UnionWith(PointsToDelta[n]);
                 PointsToDelta[n] = new HashSet<string>();
             }
+            null_allocSite = PointsTo["NULL"].First();
             #region stats
             if (dbg)
             {
@@ -860,6 +1687,11 @@ namespace AliasAnalysis
             }
             #endregion
             solved = true;
+        }
+
+        public Dictionary<string, HashSet<string>> GetPointsToSet()
+        {
+            return PointsTo;
         }
 
         // For debugging only

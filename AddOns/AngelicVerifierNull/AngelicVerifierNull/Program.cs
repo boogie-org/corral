@@ -23,6 +23,8 @@ namespace AngelicVerifierNull
         public static bool UsePrevCorralState = true;
         // Don't use alias analysis
         public static bool UseAliasAnalysis = true;
+        // Don't use flow sensitive alias analysis
+        public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
         // Add unsound options for NULL
@@ -147,6 +149,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noAA"))
                 Options.UseAliasAnalysis = false;
+
+            if (args.Any(s => s == "/noCSFSAA"))
+                Options.UseCSFSAliasAnalysis = false;
 
             if (args.Any(s => s == "/noReuse"))
                 Options.UsePrevCorralState = false;
@@ -1200,6 +1205,13 @@ namespace AngelicVerifierNull
             }
 
             var origProgram = inp.getProgram();
+            Dictionary<string, bool> csfs_ret = null;
+            if (Options.UseCSFSAliasAnalysis)
+            {
+                csfs_ret = AliasAnalysis.AliasAnalysis.DoCSFSAliasAnalysis(program);
+                AliasAnalysis.CSFSAliasAnalysis.removeAsserts(origProgram, csfs_ret);
+            }
+
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
