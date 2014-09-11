@@ -1583,8 +1583,30 @@ namespace cba.Util
                         }
                     }
                 }
+
+                #region Assume_Cmds
+                int index = 0, add_index = -1;
+                Cmd add_cmd = null;
+                foreach (Cmd cmd in blk.Cmds)
+                {
+                    index++;
+                    if (cmd is AssumeCmd)
+                    {
+                        var ac = cmd as AssumeCmd;
+                        if (CleanAssert.validAssume(ac))
+                        {
+                            Variable v = CleanAssert.getVarFromAssume(ac).Decl;
+                            add_cmd = BoogieAstFactory.MkVarEqVar(v, v);
+                            add_index = index;
+                        }
+                    }
+                }
+                if (add_cmd != null) blk.Cmds.Insert(add_index, add_cmd);
+                #endregion
+
                 // Now that we have reachDefIn, compute reachDefOut
                 var defsOut = new Dictionary<Variable, int>(reachDefIn[blk]);
+
                 foreach (Cmd cmd in blk.Cmds)
                 {
                     defsOut = ProcessCmd(cmd, defsOut, maxVersion, varInstances);
@@ -1921,7 +1943,6 @@ namespace cba.Util
                     ((BinaryOperator)asc_expr.Fun).Op == BinaryOperator.Opcode.Neq &&
                     asc_expr.Args.Count == 2 &&
                     asc_expr.Args[0] is IdentifierExpr &&
-                    BoogieUtil.checkAttrExists("pointer", (asc_expr.Args[0] as IdentifierExpr).Decl.Attributes) &&  
                     asc_expr.Args[1] is IdentifierExpr &&
                     checkIfNull(asc_expr.Args[1])) return true;
                 else return false;

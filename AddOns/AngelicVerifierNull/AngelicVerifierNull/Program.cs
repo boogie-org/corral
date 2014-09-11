@@ -23,7 +23,7 @@ namespace AngelicVerifierNull
         public static bool UsePrevCorralState = true;
         // Don't use alias analysis
         public static bool UseAliasAnalysis = true;
-        // Don't use flow sensitive alias analysis
+        // Don't use context and flow sensitive alias analysis
         public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
@@ -150,8 +150,8 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/noAA"))
                 Options.UseAliasAnalysis = false;
 
-            if (args.Any(s => s == "/noCSFSAA"))
-                Options.UseCSFSAliasAnalysis = false;
+            if (args.Any(s => s == "/CSFSAA"))
+                Options.UseCSFSAliasAnalysis = true;
 
             if (args.Any(s => s == "/noReuse"))
                 Options.UsePrevCorralState = false;
@@ -1192,6 +1192,7 @@ namespace AngelicVerifierNull
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
+            BoogieUtil.PrintProgram(program, "test_aa.bpl");
             AliasAnalysis.AliasAnalysisResults res = null;
             if (Options.UseAliasAnalysis)
             {

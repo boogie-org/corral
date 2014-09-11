@@ -350,6 +350,7 @@ namespace AliasAnalysis
         int counter;
         public static bool dbg = false;
         CSFSAliasAnalysis csfsAnalysis;
+        public static HashSet<string> non_null_vars = null; 
 
         private AliasAnalysis(Program program)
         {
@@ -378,11 +379,49 @@ namespace AliasAnalysis
             csfsAnalysis.getReturnAllocSites(impl2aS, PointsTo);
         }
 
+        private void ProcessAssumes()
+        {
+            non_null_vars = new HashSet<string>();
+            bool found = false;
+            int index = 0, found_index = -1;
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    index = 0;
+                    found_index = -1;
+                    found = false;
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (c is AssumeCmd)
+                        {
+                            var ac = c as AssumeCmd;
+                            if (CleanAssert.validAssume(ac))
+                            {
+                                found = true;
+                                found_index = index+1;
+                            }
+                        }
+                        if (found && index == found_index)
+                        {
+                            Debug.Assert(c is AssignCmd);
+                            found = false;
+                            found_index = -1;
+                            var asc = c as AssignCmd;
+                            non_null_vars.Add(ConstructVariableName(asc.Lhss[0].DeepAssignedVariable, impl.Name));
+                        }
+                        index++;
+                    }
+                }
+            }
+        }
+
         public static AliasAnalysisResults DoAliasAnalysis(Program program)
         {
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
+            aa.ProcessAssumes();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             aa.solver.Solve();
@@ -406,7 +445,8 @@ namespace AliasAnalysis
         {
             var csfsaa = new CSFSAliasAnalysis(program);
             csfsaa.CSFSProcess();
-            csfsaa.SoundAnalyze();
+            if (csfsaa.use_map) csfsaa.PreciseMapAnalyze();
+            else csfsaa.SoundAnalyze();
             return csfsaa.AnalysisResults;
         }
 
@@ -637,17 +677,26 @@ namespace AliasAnalysis
         public Dictionary<string, bool> AnalysisResults;                    // Store the results of analysis here
         HashSet<string> singleAllocSites;                                   // The allocation sites which correspond to at most 1 concrete heap location
         bool dbg = false;                                                   // Debugging flag
+        StronglyConnectedComponents<Implementation> stronglyConnectedComponents;
+        Dictionary<string, HashSet<string>> MapPointsTo;
+        public bool use_map = false;
+        Dictionary<Implementation, HashSet<Implementation>> Pred;
+        HashSet<Implementation> implementationsUptoBound;
+        private static string null_alloc_site;
 
         public CSFSAliasAnalysis(Program prog)
         {
             program = prog;
             Context_Bound = 3;
-            Caller_Bound = 1;
+            Caller_Bound = 0;
             transfer_function = new Dictionary<Tuple<Implementation, int>, Func<Dictionary<int, HashSet<string>>, Dictionary<int, HashSet<string>>>>();
             name2Impl = BoogieUtil.nameImplMapping(prog);
             AnalysisResults = new Dictionary<string, bool>();
             Debug.Assert(Caller_Bound <= Context_Bound);
             singleAllocSites = new HashSet<string>();
+            MapPointsTo = new Dictionary<string, HashSet<string>>();
+            Pred = new Dictionary<Implementation, HashSet<Implementation>>();
+            implementationsUptoBound = new HashSet<Implementation>();
         }
 
         /*
@@ -658,7 +707,13 @@ namespace AliasAnalysis
         {
             ret_allocSites = dict;
             PointsTo = PTS;
-            if (dbg) PointsTo.Keys.Iter(s => Console.WriteLine(s));
+            if (dbg) PointsTo.Keys.Iter(s =>
+                {
+                    Console.WriteLine(s);
+                    foreach (string aS in PointsTo[s]) Console.Write(aS + " ");
+                    Console.WriteLine();
+                });
+            null_alloc_site = PointsTo["NULL"].First();
         }
 
         /*
@@ -785,12 +840,23 @@ namespace AliasAnalysis
                                         }
                                         else
                                         {
-                                            // LHS is a map, since we perform no improvement in precision, we do nothing here
+                                            // LHS is a map, since we perform no improvement in precision of maps, we do nothing here
                                             var massign = ac.Lhss[i] as MapAssignLhs;
                                             Debug.Assert(massign.Indexes.Count == 1);
                                             /*
                                              * Should something be done here?
                                              */
+                                            if (use_map)
+                                            {
+                                                HashSet<string> load_aS = getExprPointsTo(massign.Indexes.First(), BlockPointsTo[b]);
+                                                if (load_aS.Count == 1 && singleAllocSites.Contains(load_aS.First()))
+                                                {
+                                                    string var_name = GetODotf(load_aS.First(), massign.DeepAssignedVariable.Name);
+                                                    Debug.Assert(MapPointsTo.ContainsKey(var_name));
+                                                    MapPointsTo[var_name].Clear();
+                                                    foreach (string aS in getExprPointsTo(ac.Rhss[i], BlockPointsTo[b])) MapPointsTo[var_name].Add(aS);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -810,7 +876,6 @@ namespace AliasAnalysis
                                         outs[0].Add(cmd2AllocationConstraint[new Tuple<Implementation, Block, Cmd>(impl, b, c)]);
                                     }
                                     else if (name2Impl.ContainsKey(cc.callee)) outs = transfer_function[new Tuple<Implementation, int>(name2Impl[cc.callee], current_depth - 1)](ins);
-
                                     // Put allocation sites in output parameters of callee
                                     for (int i = 0 ; i < cc.Outs.Count ; i++)
                                     {
@@ -833,7 +898,6 @@ namespace AliasAnalysis
                                 {
                                     // assume (var != NULL)
                                     // Remove allocation site corresponding to NULL from BlockPointsTo
-                                    string null_alloc_site = PointsTo["NULL"].First();
                                     var asc = c as AssumeCmd;
                                     if (CleanAssert.validAssume(asc))
                                     {
@@ -852,15 +916,23 @@ namespace AliasAnalysis
                                 }
                                 else if (c is AssertCmd)
                                 {
-                                    // assert (M[x] != NULL), assert (var != NULL)
+                                    // assert (var != NULL)
                                     // Analyze assertion, and delete it if BlockPointsTo says it never fails
                                     var ac = c as AssertCmd;
-                                    string null_alloc_site = PointsTo["NULL"].First();
+                                    
                                     if (CleanAssert.validAssert(ac))
                                     {
                                         IdentifierExpr id = CleanAssert.getVarFromAssert(ac);
                                         string query = CleanAssert.getQueryFromAssert(ac);
-                                        if (current_depth == Assert_Depth && !AnalysisResults.ContainsKey(query))
+                                        if (use_map)
+                                        {
+                                            if (!AnalysisResults.ContainsKey(query))
+                                            {
+                                                if (implementationsUptoBound.Contains(impl)) AnalysisResults.Add(query, true);
+                                                else AnalysisResults.Add(query, false);
+                                            }
+                                        }
+                                        else if (current_depth == Assert_Depth && !AnalysisResults.ContainsKey(query))
                                         {
                                             AnalysisResults.Add(query, true);
                                             if (dbg) Console.WriteLine(query);
@@ -874,7 +946,7 @@ namespace AliasAnalysis
                                             }
                                         }
                                         if (!BlockPointsTo[b].ContainsKey(id.Decl.Name)) BlockPointsTo[b].Add(id.Decl.Name, new HashSet<string>());
-                                        if (BlockPointsTo[b][id.Decl.Name].Contains(null_alloc_site) && current_depth == Assert_Depth) AnalysisResults[query] = false;
+                                        if (BlockPointsTo[b][id.Decl.Name].Contains(null_alloc_site) && (current_depth == Assert_Depth || use_map)) AnalysisResults[query] = false;
                                     }
                                 }
                                 
@@ -914,7 +986,6 @@ namespace AliasAnalysis
         private void UseAssumeCmds()
         {
             int counter = 0;
-            BoogieUtil.PrintProgram(program, "test_aa.bpl");
             string null_alloc_site = PointsTo["NULL"].First();
             Dictionary<Block,Dictionary<string,HashSet<string>>> BlockPointsTo;
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -1065,49 +1136,59 @@ namespace AliasAnalysis
         private HashSet<string> getExprPointsTo(Expr expr, Dictionary<string, HashSet<string>> PTS)
         {
             var set = new HashSet<string>();
-            if (expr is IdentifierExpr)
+            var map_set = new HashSet<string>();
+            var ret = new HashSet<string>();
+            var rs = ReadSet.Get(expr);
+            int count = 0;
+            if (dbg) Console.WriteLine(expr.ToString());
+            foreach (var tup in rs)
             {
-                IdentifierExpr id = expr as IdentifierExpr;
-                string var_name = id.Decl.Name;
-                if (dbg) Console.WriteLine("Points-To for IdentifierExpr {0}", id.ToString());
-                if (id.Decl is GlobalVariable || id.Decl is Constant)
+                if (dbg)
                 {
-                    if (PointsTo.ContainsKey(id.Decl.Name)) foreach (string aS in PointsTo[id.Decl.Name]) set.Add(aS);
+                    Console.WriteLine("{0} -> {1}", count, tup.Item1);
+                    foreach (string mp in tup.Item2) Console.Write(mp + " ");
+                    Console.WriteLine();
+                    count++;
+                }
+                string var_name = tup.Item1.Name;
+                if (dbg) Console.WriteLine(var_name);
+                if (tup.Item1 is GlobalVariable || tup.Item1 is Constant)
+                {
+                    if (PointsTo.ContainsKey(var_name)) foreach (string aS in PointsTo[var_name]) set.Add(aS);
                     return set;
                 }
                 if (PTS.ContainsKey(var_name))
                 {
-                    foreach (var aS in PTS[var_name]) set.Add(aS);
-                }
-                return set;
-            }
-            else if (expr is NAryExpr)
-            {
-                NAryExpr nexpr = expr as NAryExpr;
-                if (dbg) Console.WriteLine("Points-To for NAryExpr {0}", nexpr.ToString());
-                if (nexpr.Fun is MapSelect)
-                {
-                    string map = ((IdentifierExpr)nexpr.Args[0]).Decl.Name;
-                    if (dbg) Console.WriteLine("Map -> {0}", map);
-                    foreach (string aS in getExprPointsTo(nexpr.Args[1], PTS))
+                    foreach (var aS in PTS[var_name])
                     {
-                        string var_name = GetODotf(aS, map);
-                        Debug.Assert(PointsTo.ContainsKey(var_name));
-                        foreach (string alloc in PointsTo[var_name]) set.Add(alloc);
+                        if (dbg) Console.Write(aS + " ");
+                        set.Add(aS);
                     }
-                    return set;
+                    if (dbg) Console.WriteLine();
+                }
+                if (tup.Item2.Count == 0)
+                {
+                    foreach (var aS in set) ret.Add(aS);
                 }
                 else
                 {
-                    if (dbg) Console.WriteLine("Invalid NAryExpr :- {0}", nexpr.ToString());
-                    return set;
+                    for (int i = tup.Item2.Count - 1 ; i >= 0 ; i--)
+                    {
+                        string map = tup.Item2.ElementAt(i);
+                        foreach (var aS in set)
+                        {
+                            string of = GetODotf(aS, map);
+                            if (PointsTo.ContainsKey(of)) foreach (var alloc_site in PointsTo[of]) map_set.Add(alloc_site);
+                        }
+                        set.Clear();
+                        foreach (var alloc_site in map_set) set.Add(alloc_site);
+                        map_set.Clear();
+                    }
+                    foreach (var aS in set) ret.Add(aS);
                 }
             }
-            else
-            {
-                if (dbg) Console.WriteLine("Invalid Expression :- {0}", expr.ToString());
-                return set;
-            }
+            if (ret.Count == 0) if (dbg) Console.WriteLine("IGNORE!");
+            return ret;
         }
 
         private string ConstructVariableName(Variable v, string procName)
@@ -1141,8 +1222,6 @@ namespace AliasAnalysis
                     };
             }
             for (int i = 1 ; i <= Context_Bound ; i++) CreateTransferFunction(i);
-            BoogieUtil.PrintProgram(program, "test_aa.bpl");
-            //UseAssumeCmds();
         }
 
         public void CallerSoundAnalyze()
@@ -1307,29 +1386,10 @@ namespace AliasAnalysis
             Console.WriteLine("Removing {0} asserts", count);
         }
 
-        public void PreciseMapAnalyze()
-        {
-            getSingleAllocSites();
-
-            var MapPointsTo = new Dictionary<string, HashSet<string>>();
-
-            foreach (string st in PointsTo.Keys)
-            {
-                MapPointsTo.Add(st, new HashSet<string>());
-                if (!isODotf(st))
-                {
-                    foreach (string aS in PointsTo[st]) MapPointsTo[st].Add(aS);
-                }
-            }
-
-
-        }
-
-        private void getSingleAllocSites()
+        private void buildSCC()
         {
             // Construct the call graph and compute strongly connected components
             var Succ = new Dictionary<Implementation, HashSet<Implementation>>();
-            var Pred = new Dictionary<Implementation, HashSet<Implementation>>();
             name2Impl.Values.Iter(impl => Succ.Add(impl, new HashSet<Implementation>()));
             name2Impl.Values.Iter(impl => Pred.Add(impl, new HashSet<Implementation>()));
 
@@ -1347,25 +1407,59 @@ namespace AliasAnalysis
             }
 
             // Build SCC
-            var sccs = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
+            stronglyConnectedComponents = new StronglyConnectedComponents<Implementation>(name2Impl.Values,
                 new Adjacency<Implementation>(n => Succ[n]),
                 new Adjacency<Implementation>(n => Pred[n]));
-            sccs.Compute();
+            stronglyConnectedComponents.Compute();
+        }
+
+        public void PreciseMapAnalyze()
+        {
+            getSingleAllocSites();
+            getImplementationsUptoBound();
+
+            foreach (string st in PointsTo.Keys)
+            {
+                MapPointsTo.Add(st, new HashSet<string>());
+                if (!isODotf(st))
+                {
+                    foreach (string aS in PointsTo[st]) MapPointsTo[st].Add(aS);
+                }
+            }
+
+            Implementation entry = stronglyConnectedComponents.First().First();
+
+            Dictionary<int, HashSet<string>> dummy_dict = new Dictionary<int, HashSet<string>>();
+
+            dummy_dict = transfer_function[new Tuple<Implementation, int>(entry, Context_Bound)](dummy_dict);
+        }
+
+        private void getSingleAllocSites()
+        {
+            buildSCC();
 
             HashSet<Implementation> single_impl = new HashSet<Implementation>();
 
-            foreach (var scc in sccs)
+            foreach (var scc in stronglyConnectedComponents)
             {
                 if (scc.Count != 1) continue;
-                foreach (Implementation impl in scc)
-                {
-                    if (!Pred.ContainsKey(impl)) single_impl.Add(impl);
-                    else if (Pred[impl].Count == 0) single_impl.Add(impl);
-                    else if (!Pred[impl].Contains(impl)) single_impl.Add(impl);
-                    //else Console.WriteLine(impl.Name);
-                }
+                Implementation impl = scc.First();
+                if (!Pred.ContainsKey(impl)) single_impl.Add(impl);
+                else if (Pred[impl].Count == 0) single_impl.Add(impl);
+                else if (!Pred[impl].Contains(impl)) single_impl.Add(impl);
             }
             cmd2AllocationConstraint.Keys.Where(key => single_impl.Contains(key.Item1)).Iter(key => singleAllocSites.Add(cmd2AllocationConstraint[key]));
+        }
+
+        private void getImplementationsUptoBound()
+        {
+            int depth = 0;
+            foreach (var scc in stronglyConnectedComponents)
+            {
+                if (depth == Context_Bound) break;
+                if (scc.Count == 1 && !Pred[scc.First()].Contains(scc.First())) implementationsUptoBound.Add(scc.First());
+                depth++;
+            }
         }
 
         public static void removeAsserts(Program origProgram, Dictionary<string, bool> csfs_ret)
@@ -1677,7 +1771,6 @@ namespace AliasAnalysis
                 PointsTo[n].UnionWith(PointsToDelta[n]);
                 PointsToDelta[n] = new HashSet<string>();
             }
-            null_allocSite = PointsTo["NULL"].First();
             #region stats
             if (dbg)
             {
@@ -1776,6 +1869,12 @@ namespace AliasAnalysis
 
             var change = new HashSet<string>(srcSet);
             change.ExceptWith(PointsTo[n]);
+            if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
+            {
+                null_allocSite = PointsTo["NULL"].First();
+                if (AliasAnalysis.non_null_vars.Contains(n)) change.Remove(null_allocSite);
+            }
+            
             if (!change.IsSubsetOf(PointsToDelta[n]))
                 worklist.Add(n);
 
