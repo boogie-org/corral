@@ -379,7 +379,8 @@ namespace AliasAnalysis
             csfsAnalysis.getReturnAllocSites(impl2aS, PointsTo);
         }
 
-        private void ProcessAssumes()
+        /* Looks at the assumes and asserts, figures out their SSA, and ensures that the allocation site corresponding to NULL does not flow into these variables */
+        private void ProcessAssumes_Asserts()
         {
             non_null_vars = new HashSet<string>();
             bool found = false;
@@ -393,13 +394,25 @@ namespace AliasAnalysis
                     found = false;
                     foreach (Cmd c in b.Cmds)
                     {
-                        if (c is AssumeCmd)
+                        if (c is AssumeCmd || c is AssertCmd)
                         {
                             var ac = c as AssumeCmd;
-                            if (CleanAssert.validAssume(ac))
+                            if (ac != null)
                             {
-                                found = true;
-                                found_index = index+1;
+                                if (CleanAssert.validAssume(ac))
+                                {
+                                    found = true;
+                                    found_index = index + 1;
+                                }
+                            }
+                            var acmd = c as AssertCmd;
+                            if (acmd != null)
+                            {
+                                if (CleanAssert.validAssert(acmd))
+                                {
+                                    found = true;
+                                    found_index = index + 1;
+                                }
                             }
                         }
                         if (found && index == found_index)
@@ -421,7 +434,7 @@ namespace AliasAnalysis
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
-            aa.ProcessAssumes();
+            aa.ProcessAssumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             aa.solver.Solve();
@@ -1869,6 +1882,8 @@ namespace AliasAnalysis
 
             var change = new HashSet<string>(srcSet);
             change.ExceptWith(PointsTo[n]);
+
+            // If the variable is known to be non null, remove allocation site of NULL from its points to set
             if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
             {
                 null_allocSite = PointsTo["NULL"].First();

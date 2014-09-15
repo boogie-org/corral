@@ -1584,9 +1584,10 @@ namespace cba.Util
                     }
                 }
 
-                #region Assume_Cmds
-                int index = 0, add_index = -1;
-                Cmd add_cmd = null;
+                #region Assert_Assume_Cmds
+                int index = 0;
+                List<int> add_index = new List<int>();
+                List<Cmd> add_cmd = new List<Cmd>();
                 foreach (Cmd cmd in blk.Cmds)
                 {
                     index++;
@@ -1596,12 +1597,22 @@ namespace cba.Util
                         if (CleanAssert.validAssume(ac))
                         {
                             Variable v = CleanAssert.getVarFromAssume(ac).Decl;
-                            add_cmd = BoogieAstFactory.MkVarEqVar(v, v);
-                            add_index = index;
+                            add_cmd.Add(BoogieAstFactory.MkVarEqVar(v, v));
+                            add_index.Add(index);
+                        }
+                    }
+                    else if (cmd is AssertCmd)
+                    {
+                        var ac = cmd as AssertCmd;
+                        if (CleanAssert.validAssert(ac))
+                        {
+                            Variable v = CleanAssert.getVarFromAssert(ac).Decl;
+                            add_cmd.Add(BoogieAstFactory.MkVarEqVar(v, v));
+                            add_index.Add(index);
                         }
                     }
                 }
-                if (add_cmd != null) blk.Cmds.Insert(add_index, add_cmd);
+                for (int i = 0 ; i < add_index.Count ; i++) blk.Cmds.Insert(add_index[i]+i, add_cmd[i]);
                 #endregion
 
                 // Now that we have reachDefIn, compute reachDefOut
