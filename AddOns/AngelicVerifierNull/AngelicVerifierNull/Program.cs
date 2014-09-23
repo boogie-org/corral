@@ -1150,13 +1150,14 @@ namespace AngelicVerifierNull
 
             bool dbg = false;
 
-            // Make sure that aliasing queries are on identifiers only
-            var af =
-                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             // Do SSA
             program =
                 SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+
+            // Make sure that aliasing queries are on identifiers only
+            var af =
+                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
             Stopwatch sw = new Stopwatch();
             sw.Start();

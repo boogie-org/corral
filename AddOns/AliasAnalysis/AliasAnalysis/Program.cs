@@ -380,50 +380,26 @@ namespace AliasAnalysis
         }
 
         /* Looks at the assumes and asserts, figures out their SSA, and ensures that the allocation site corresponding to NULL does not flow into these variables */
-        private void ProcessAssumes_Asserts()
+        private void Process_Assumes_Asserts()
         {
             non_null_vars = new HashSet<string>();
-            bool found = false;
-            int index = 0, found_index = -1;
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 foreach (Block b in impl.Blocks)
                 {
-                    index = 0;
-                    found_index = -1;
-                    found = false;
                     foreach (Cmd c in b.Cmds)
                     {
-                        if (c is AssumeCmd || c is AssertCmd)
+                        if (c is AssignCmd)
                         {
-                            var ac = c as AssumeCmd;
-                            if (ac != null)
+                            var ac = c as AssignCmd;
+                            foreach (AssignLhs lhs in ac.Lhss)
                             {
-                                if (CleanAssert.validAssume(ac))
+                                if (lhs is SimpleAssignLhs && lhs.DeepAssignedVariable.Name.StartsWith("cseTmp"))
                                 {
-                                    found = true;
-                                    found_index = index + 1;
-                                }
-                            }
-                            var acmd = c as AssertCmd;
-                            if (acmd != null)
-                            {
-                                if (CleanAssert.validAssert(acmd))
-                                {
-                                    found = true;
-                                    found_index = index + 1;
+                                    non_null_vars.Add(ConstructVariableName(lhs.DeepAssignedVariable, impl.Name));
                                 }
                             }
                         }
-                        if (found && index == found_index)
-                        {
-                            Debug.Assert(c is AssignCmd);
-                            found = false;
-                            found_index = -1;
-                            var asc = c as AssignCmd;
-                            non_null_vars.Add(ConstructVariableName(asc.Lhss[0].DeepAssignedVariable, impl.Name));
-                        }
-                        index++;
                     }
                 }
             }
@@ -434,7 +410,7 @@ namespace AliasAnalysis
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
-            aa.ProcessAssumes_Asserts();
+            aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             aa.solver.Solve();
