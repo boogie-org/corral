@@ -1148,9 +1148,6 @@ namespace AngelicVerifierNull
         {
             var program = inp.getProgram();
 
-            bool dbg = false;
-
-
             // Do SSA
             program =
                 SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
@@ -1158,38 +1155,6 @@ namespace AngelicVerifierNull
             // Make sure that aliasing queries are on identifiers only
             var af =
                 AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
-
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            Stats.resume("OptimizationTime");
-
-            program = CleanAssert.CleanAssertStmt(program);
-
-            Console.WriteLine("Optimization Time : {0}ms", sw.ElapsedMilliseconds);
-            Stats.stop("OptimizationTime");
-            int count = 0;
-            if (dbg) Console.WriteLine("After AA:-");
-            string notfalse = null;
-            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (Block b in impl.Blocks)
-                {
-                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                    {
-                        if (ac.Expr.ToString() == Expr.True.ToString() ||
-                            ac.Expr.ToString() == notfalse)
-                            continue;
-                        else
-                        {
-                            if (dbg) Console.Write(impl.ToString() + " :- ");
-                            if (dbg) Console.Write(ac.ToString());
-                            Stats.count("#AssertsAfterOptimization");
-                            count++;
-                        }
-                    }
-                }
-            }
-            Console.WriteLine("#AssertsAfterOptimization : {0}", count);
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
