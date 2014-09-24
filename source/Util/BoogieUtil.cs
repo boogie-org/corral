@@ -1436,7 +1436,7 @@ namespace cba.Util
             program.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impl_names.Add(impl.Name));
 
             // CodeCopier to keep a copy of the old expressions in the dictionaries built in each implementation
-            CodeCopier cd = new CodeCopier();
+            FixedDuplicator dup = new FixedDuplicator();
 
             int counter = 0;
 
@@ -1490,9 +1490,9 @@ namespace cba.Util
                             if (CleanAssert.validAssumeCmd(ac))
                             {
                                 if (dbg) Console.WriteLine("Valid Assume");
-                                Expr node = cd.CopyExpr(CleanAssert.getExprFromAssume(ac));
+                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssume(ac));
                                 LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
-                                var2expr.Add(lv, node);
+                                var2expr.Add(lv, dup.VisitExpr(node));
                                 live_vars.Add(lv);
                                 if (dbg) Console.WriteLine("Added {0} {1} to block2livevars", node.ToString(), lv.Name);
 
@@ -1513,9 +1513,9 @@ namespace cba.Util
                             if (CleanAssert.validAssertCmd(ac))
                             {
                                 if (dbg) Console.WriteLine("Valid Assert");
-                                Expr node = cd.CopyExpr(CleanAssert.getExprFromAssert(ac));
+                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssert(ac));
                                 LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
-                                var2expr.Add(lv, node);
+                                var2expr.Add(lv, dup.VisitExpr(node));
                                 live_vars.Add(lv);
                                 if (dbg) Console.WriteLine("Added {0} {1} to block2livevars", node.ToString(), lv.Name);
 

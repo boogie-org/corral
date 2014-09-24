@@ -1193,7 +1193,6 @@ namespace AngelicVerifierNull
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
-            BoogieUtil.PrintProgram(program, "test_aa.bpl");
             AliasAnalysis.AliasAnalysisResults res = null;
             if (Options.UseAliasAnalysis)
             {
