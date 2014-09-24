@@ -14,11 +14,12 @@ namespace cba.Util
         {
             CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
 
-            var quotes = clo.Split(new char[] { '\"' }, StringSplitOptions.RemoveEmptyEntries);
+            var quotes = (" " + clo + " ").Split(new char[] { '\"' }, StringSplitOptions.RemoveEmptyEntries);
             var args = new List<string>();
+            // for every odd i, quotes[i] appears inside quotes
             for (int i = 0; i < quotes.Length; i++)
             {
-                if (i == 0 || i == quotes.Length - 1)
+                if (i % 2 == 0)
                     args.AddRange(quotes[i].Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
                 else
                     args.Add(quotes[i]);
