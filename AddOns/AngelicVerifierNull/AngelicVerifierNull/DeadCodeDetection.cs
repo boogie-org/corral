@@ -348,7 +348,7 @@ namespace AngelicVerifierNull
         {
             InstrumentedProg = _instProg;
             globalPointers = new HashSet<string>();
-            GetPointerDecls(_instProg.getProgram().GlobalVariables())
+            GetPointerDecls(_instProg.getProgram().GlobalVariables)
                 .Iter(g => { globalPointers.Add(g.Name); });
 
             CollectAssumptions();

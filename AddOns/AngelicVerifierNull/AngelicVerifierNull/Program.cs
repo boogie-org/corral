@@ -857,7 +857,7 @@ namespace AngelicVerifierNull
             }
             
             // rename assertsPassed to assertsPassedConst and make it a constant equal to true
-            program.TopLevelDeclarations.RemoveAll(decl => decl is GlobalVariable &&
+            program.RemoveTopLevelDeclarations(decl => decl is GlobalVariable &&
                 (decl as GlobalVariable).Name == ap);
 
             var substD = new Dictionary<string, Variable>();
@@ -869,8 +869,8 @@ namespace AngelicVerifierNull
             {
                 subst.VisitImplementation(impl);
             }
-            program.TopLevelDeclarations.Add(apC);
-            program.TopLevelDeclarations.Add(new Axiom(Token.NoToken,
+            program.AddTopLevelDeclaration(apC);
+            program.AddTopLevelDeclaration(new Axiom(Token.NoToken,
                 Expr.Eq(Expr.Ident(apC), Expr.Literal(true))));
 
             BoogieUtil.PrintProgram(program, filename);
@@ -948,7 +948,7 @@ namespace AngelicVerifierNull
                     return true;
                 return false;
             });
-            nprog.TopLevelDeclarations.RemoveAll(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
+            nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
             Dictionary<string, string> eeComplexExprs;
             // Save commandlineoptions

@@ -74,7 +74,7 @@ namespace AngelicVerifierNull
                         continue;
                 }
             }
-            models.Iter(m => dmodels.prog.TopLevelDeclarations.Add(m.impl));
+            models.Iter(m => dmodels.prog.AddTopLevelDeclaration(m.impl));
 
             // Propogate Base(x) through assignments.
             // Adding assertions for buffer access.
@@ -126,7 +126,7 @@ namespace AngelicVerifierNull
             //        BoogieAstFactory.MkMapAssign(allocMap, Expr.Ident(mallocProcedure.OutParams[0]), Expr.True)
             //        //BoogieAstFactory.MkAssert(Expr.False)
             //    )});
-            //dmodels.prog.TopLevelDeclarations.Add(mallocImpl);
+            //dmodels.prog.AddTopLevelDeclaration(mallocImpl);
         }
 
         static Expr mkBaseFun(Variable x)

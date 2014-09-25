@@ -155,9 +155,9 @@ namespace AngelicVerifierNull
                     mainBlocks.Add(blk);
                 }
                 // add global variables to prog
-                // globals.Iter(x => prog.TopLevelDeclarations.Add(x)); 
+                // globals.Iter(x => prog.AddTopLevelDeclaration(x)); 
                 //add the constants to the prog
-                blockCallConsts.Iter(x => prog.TopLevelDeclarations.Add(x));
+                blockCallConsts.Iter(x => prog.AddTopLevelDeclaration(x));
                 //TODO: get globals of type refs/pointers and maps
                 var initCmd = (AssumeCmd) BoogieAstFactory.MkAssume(Expr.True);
                 //TODO: find a reusable API to add attributes to cmds
@@ -169,10 +169,10 @@ namespace AngelicVerifierNull
                     globalCmds.Add(BoogieAstFactory.MkCall(inits.First(), new List<Expr>(), new List<Variable>()));
 
                 // initialize globals
-                globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables().ConvertAll(x => (Variable)x)));
+                globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
 
                 // globals for parameters
-                prog.TopLevelDeclarations.AddRange(globalParams);
+                prog.AddTopLevelDeclarations(globalParams);
 
                 //first block
                 var transferCmd =
@@ -183,7 +183,7 @@ namespace AngelicVerifierNull
                 blocks.AddRange(mainBlocks);
                 var mainProcImpl = BoogieAstFactory.MkImpl("CorralMain", new List<Variable>(), new List<Variable>(), locals, blocks);
                 mainProcImpl[0].AddAttribute("entrypoint");
-                prog.TopLevelDeclarations.AddRange(mainProcImpl);
+                prog.AddTopLevelDeclarations(mainProcImpl);
             }
             
             // create a copy ofthe variables without annotations
@@ -212,7 +212,7 @@ namespace AngelicVerifierNull
                     if (BoogieUtil.checkAttrExists("allocator", p.Attributes)) continue;
                     MkStubImplementation(stubImpls, p);
                 }
-                prog.TopLevelDeclarations.AddRange(stubImpls);
+                prog.AddTopLevelDeclarations(stubImpls);
             }
             //Change the body of any stub that returns a pointer into calling malloc()
             //TODO: only do this for procedures with a single return with a pointer type            
@@ -335,9 +335,9 @@ namespace AngelicVerifierNull
                     BoogieAstFactory.MkMapType(btype.Int, btype.Bool));
                 allocMap.AddAttribute("buffer", new Object[] { "free" });
 
-                prog.TopLevelDeclarations.Add(sizeFun);
-                prog.TopLevelDeclarations.Add(baseFun);
-                prog.TopLevelDeclarations.Add(allocMap);
+                prog.AddTopLevelDeclaration(sizeFun);
+                prog.AddTopLevelDeclaration(baseFun);
+                prog.AddTopLevelDeclaration(allocMap);
 
                 var mallocRet = Expr.Ident(mallocProcedure.OutParams[0]);
                 mallocProcedure.Ensures.Add(new Ensures(true, Expr.Eq(
@@ -415,7 +415,7 @@ namespace AngelicVerifierNull
                             var callId = QKeyValue.FindIntAttribute(callCmd.Attributes, "allocator_call", -1);
                             Debug.Assert(callId != -1, "Calls to the allocator must be tagged with a unique ID");
                             instance.mallocTriggersLocation[callId] = mallocTriggerFn.Name;
-                            instance.prog.TopLevelDeclarations.Add(mallocTriggerFn);
+                            instance.prog.AddTopLevelDeclaration(mallocTriggerFn);
                             var fnApp = new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
                                 new List<Expr> () {retCall});
@@ -468,7 +468,7 @@ namespace AngelicVerifierNull
                         new TypedIdent(Token.NoToken, "_assert_guard_" + assertGuardConsts.Count(), btype.Bool), false);
                     node.Expr = Expr.Imp(IdentifierExpr.Ident(guardConst), node.Expr);
                     assertGuardConsts[node] = guardConst;
-                    instance.prog.TopLevelDeclarations.Add(guardConst);
+                    instance.prog.AddTopLevelDeclaration(guardConst);
                     return base.VisitAssertCmd(node);
                 }
             }
@@ -811,7 +811,7 @@ namespace AngelicVerifierNull
                     impl.Blocks = instrumented;
                 }
 
-                program.TopLevelDeclarations.Add(assertsPassed);
+                program.AddTopLevelDeclaration(assertsPassed);
                 var newMain = addMain(program);
 
                 BoogieUtil.DoModSetAnalysis(program);
@@ -1208,8 +1208,8 @@ namespace AngelicVerifierNull
             newMain.Blocks = new List<Block>();
             newMain.Blocks.Add(blk);
 
-            program.TopLevelDeclarations.Add(newProc);
-            program.TopLevelDeclarations.Add(newMain);
+            program.AddTopLevelDeclaration(newProc);
+            program.AddTopLevelDeclaration(newMain);
 
             program.mainProcName = newMain.Name;
 
@@ -1415,7 +1415,7 @@ namespace AngelicVerifierNull
             nullQuery = GetQueryFunc();
             ep.Blocks[0].Cmds.Add(GetQuery(nullQuery, Expr.Ident(nil)));
 
-            program.TopLevelDeclarations.AddRange(queries);
+            program.AddTopLevelDeclarations(queries);
         }
 
         void instrument(Implementation impl)

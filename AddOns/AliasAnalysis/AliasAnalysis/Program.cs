@@ -95,7 +95,7 @@ namespace AliasAnalysis
             {
                 // type AS;
                 var asType = new TypeCtorDecl(Token.NoToken, "AS", 0);
-                program.TopLevelDeclarations.Add(asType);
+                program.AddTopLevelDeclaration(asType);
                 // add AS constants
                 var sites = new HashSet<string>();
                 result.allocationSites.Values.Iter(v => sites.UnionWith(v));
@@ -105,13 +105,13 @@ namespace AliasAnalysis
                             new TypedIdent(Token.NoToken, "AS_" + s, new CtorType(Token.NoToken, asType, new List<btype>())),
                             true);
                     asToAS.Add(s, c);
-                    program.TopLevelDeclarations.Add(c);
+                    program.AddTopLevelDeclaration(c);
                 }
                 // Add: function AllocationSites(int) : AS
                 AllocationSites = new Function(Token.NoToken, "AllocationSites", new List<Variable>{
                     new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true)},
                     new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), false));
-                program.TopLevelDeclarations.Add(AllocationSites);
+                program.AddTopLevelDeclaration(AllocationSites);
             }
 
             var prune = new PruneAliasingQueries(result, AllocationSites, asToAS);
