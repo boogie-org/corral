@@ -1039,13 +1039,13 @@ namespace ExplainError
                 i.Proc = p;
                 var cexList = new List<Counterexample>();
                 var mList = new List<Model>();
-                prog.TopLevelDeclarations.Add(i);
-                prog.TopLevelDeclarations.Add(p);
+                prog.AddTopLevelDeclaration(i);
+                prog.AddTopLevelDeclaration(p);
                 prog.Resolve();
                 prog.Typecheck();
                 var result = (MyVerifyImplementation(i, ref cexList, ref mList) == VC.ConditionGeneration.Outcome.Correct);
-                prog.TopLevelDeclarations.Remove(i);
-                prog.TopLevelDeclarations.Remove(p);
+                prog.RemoveTopLevelDeclaration(i);
+                prog.RemoveTopLevelDeclaration(p);
                 prog.Resolve();
                 prog.Typecheck();
                 Console.Write(".");

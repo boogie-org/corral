@@ -123,7 +123,7 @@ namespace cba
             // For convinience, introduce alloc variable if there isn't one
             if (BoogieUtil.findVarDecl(inProg.TopLevelDeclarations, "alloc") == null)
             {
-                inProg.TopLevelDeclarations.Add(
+                inProg.AddTopLevelDeclaration(
                     BoogieAstFactory.MkGlobal("alloc", Microsoft.Boogie.Type.Int));
             }
 
@@ -143,7 +143,7 @@ namespace cba
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
                 impl.Blocks
-                    .ForEach(blk =>
+                    .Iter(blk =>
                         blk.Cmds.OfType<CallCmd>()
                         .Iter(cc => callGraph[impl.Name].Add(cc.callee)));
             }
@@ -312,7 +312,7 @@ namespace cba
             var corralNondet = BoogieUtil.findProcedureDecl(outProg.TopLevelDeclarations, "corral_nondet");
             if (corralNondet != null)
             {
-                outProg.TopLevelDeclarations.Add(detChoice);
+                outProg.AddTopLevelDeclaration(detChoice);
                 corralNondet.Modifies.Add(new IdentifierExpr(Token.NoToken, nonDetCounter));
 
                 var ret = corralNondet.OutParams[0] as Variable;
@@ -788,32 +788,32 @@ namespace cba
                 {
                     var impl = decl as Implementation;
                     if (leafProcs.Contains(impl.Name))
-                        outProg.TopLevelDeclarations.Add(dup.VisitImplementation(impl));
+                        outProg.AddTopLevelDeclaration(dup.VisitImplementation(impl));
                     else if (loops.ContainsKey(impl.Name))
-                        outProg.TopLevelDeclarations.Add(loops[impl.Name]);
+                        outProg.AddTopLevelDeclaration(loops[impl.Name]);
                 }
                 else if (decl is Procedure)
                 {
                     var name = (decl as Procedure).Name;
                     if (leafProcs.Contains(name) || loops.ContainsKey(name))
-                        outProg.TopLevelDeclarations.Add(dup.VisitProcedure(decl as Procedure));
+                        outProg.AddTopLevelDeclaration(dup.VisitProcedure(decl as Procedure));
                 }
                 else
                 {
-                    outProg.TopLevelDeclarations.Add(decl);
+                    outProg.AddTopLevelDeclaration(decl);
                 }
             }
 
             // declare new globals
             foreach (var g in inProg.TopLevelDeclarations.OfType<GlobalVariable>())
             {
-                outProg.TopLevelDeclarations.Add(varInitCopy[g.Name] as GlobalVariable);
-                outProg.TopLevelDeclarations.Add(varFinalCopy[g.Name] as GlobalVariable);
-                outProg.TopLevelDeclarations.Add(varFinal2Copy[g.Name] as GlobalVariable);
+                outProg.AddTopLevelDeclaration(varInitCopy[g.Name] as GlobalVariable);
+                outProg.AddTopLevelDeclaration(varFinalCopy[g.Name] as GlobalVariable);
+                outProg.AddTopLevelDeclaration(varFinal2Copy[g.Name] as GlobalVariable);
             }
 
-            outProg.TopLevelDeclarations.Add(nonDetCounter);
-            outProg.TopLevelDeclarations.Add(nonDetCounterInit);
+            outProg.AddTopLevelDeclaration(nonDetCounter);
+            outProg.AddTopLevelDeclaration(nonDetCounterInit);
 
             // Entry points
             outProg.TopLevelDeclarations.OfType<Implementation>()
@@ -1301,7 +1301,7 @@ namespace cba
                     continue;
                 }
 
-                acmd.Rhss.ForEach(rhs => vused.Visit(rhs));
+                acmd.Rhss.Iter(rhs => vused.Visit(rhs));
                 read.UnionWith(vused.varsUsed);
                 vused.reset();
 
@@ -1316,7 +1316,7 @@ namespace cba
                     {
                         var mlhs = lhs as MapAssignLhs;
                         written.Add(mlhs.DeepAssignedVariable.Name);
-                        mlhs.Indexes.ForEach(e => vused.Visit(e));
+                        mlhs.Indexes.Iter(e => vused.Visit(e));
                         read.UnionWith(vused.varsUsed);
                     }
                 }
@@ -1703,7 +1703,7 @@ namespace cba
                 var proc = BoogieAstFactory.MkProc("corral_nondet", new List<Variable>(), new List<Variable>(new Variable[] {
                     new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), true)}));
 
-                p.TopLevelDeclarations.Add(proc);
+                p.AddTopLevelDeclaration(proc);
                 corralNondet = proc as Procedure;
             }
 

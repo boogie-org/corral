@@ -40,8 +40,8 @@ namespace ConcurrentHoudini
                     new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", settype), false));
             mapunion.AddAttribute("builtin", "MapOr");
 
-            program.TopLevelDeclarations.Add(mapconstbool);
-            program.TopLevelDeclarations.Add(mapunion);
+            program.AddTopLevelDeclaration(mapconstbool);
+            program.AddTopLevelDeclaration(mapunion);
 
             // Get hold of all implementations
             var impls = new HashSet<string>();
@@ -225,7 +225,7 @@ namespace ConcurrentHoudini
                     impl.LocVars.Add(permOut2);
             }
 
-            program.TopLevelDeclarations.AddRange(newFuncs);
+            program.AddTopLevelDeclarations(newFuncs);
 
             // Insert the Split procedure as a string
             BoogieUtil.PrintProgram(program, "temp_rar.bpl");
@@ -345,7 +345,7 @@ namespace ConcurrentHoudini
             program = BoogieUtil.ReResolve(program, "og__temp.bp");
 
             var allocate = CreateAllocateTid();
-            program.TopLevelDeclarations.Add(allocate);
+            program.AddTopLevelDeclaration(allocate);
 
             // Add {:linear "Tid"} annotation
             program.TopLevelDeclarations.OfType<Procedure>()
@@ -727,7 +727,7 @@ namespace ConcurrentHoudini
                 }
             }
 
-            program.TopLevelDeclarations.AddRange(newFuncs);
+            program.AddTopLevelDeclarations(newFuncs);
             return BoogieUtil.ReResolve(program);
         }
 
@@ -869,7 +869,7 @@ namespace ConcurrentHoudini
                 tidProc = new Procedure(Token.NoToken, Driver.con.corralTidProc, new List<TypeVariable>(), new List<Variable>(),
                     new List<Variable>(new Variable[] { new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "tid", Microsoft.Boogie.Type.Int), false) }),
                     new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-                program.TopLevelDeclarations.Add(tidProc);
+                program.AddTopLevelDeclaration(tidProc);
             }
             var getTid = new CallCmd(Token.NoToken, tidProc.Name, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(lv) }));
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -1432,9 +1432,9 @@ namespace ConcurrentHoudini
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(Instantiate);
 
-            program.TopLevelDeclarations.AddRange(newExistentialFunctions);
+            program.AddTopLevelDeclarations(newExistentialFunctions);
 
-            program.TopLevelDeclarations.RemoveAll(decl => QKeyValue.FindBoolAttribute(decl.Attributes, "template"));
+            program.RemoveTopLevelDeclarations(decl => QKeyValue.FindBoolAttribute(decl.Attributes, "template"));
         }
 
         public void Instantiate(Implementation impl)

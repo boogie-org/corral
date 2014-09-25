@@ -2359,7 +2359,7 @@ namespace cba
 
             if (!hasDecl)
             {
-                inp.TopLevelDeclarations.Add(
+                inp.AddTopLevelDeclaration(
                     new Procedure(
                         Token.NoToken, LanguageSemantics.assertNotReachableName(),
                         new List<TypeVariable>(), new List<Variable>(), new List<Variable>(),
@@ -2921,7 +2921,7 @@ namespace cba
                 impl.Blocks = instrumented;
             }
 
-            program.TopLevelDeclarations.Add(assertsPassed);
+            program.AddTopLevelDeclaration(assertsPassed);
             addMain(program);
 
             BoogieUtil.DoModSetAnalysis(program);
@@ -2983,8 +2983,8 @@ namespace cba
             newMain.Blocks = new List<Block>();
             newMain.Blocks.Add(blk);
 
-            program.TopLevelDeclarations.Add(newProc);
-            program.TopLevelDeclarations.Add(newMain);
+            program.AddTopLevelDeclaration(newProc);
+            program.AddTopLevelDeclaration(newMain);
 
             program.mainProcName = newMain.Name;
 

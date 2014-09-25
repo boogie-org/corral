@@ -190,7 +190,7 @@ namespace cba
                 intDecl = new Procedure(Token.NoToken, recordIntArgProc, new List<TypeVariable>(), inv, new List<Variable>(), new List<Requires>(),
                     new List<IdentifierExpr>(), new List<Ensures>());
 
-                program.TopLevelDeclarations.Add(intDecl);
+                program.AddTopLevelDeclaration(intDecl);
             }
 
             Procedure boolDecl = BoogieUtil.findProcedureDecl(program.TopLevelDeclarations, recordBoolArgProc);
@@ -202,12 +202,12 @@ namespace cba
                 boolDecl = new Procedure(Token.NoToken, recordBoolArgProc, new List<TypeVariable>(), inv, new List<Variable>(), new List<Requires>(),
                     new List<IdentifierExpr>(), new List<Ensures>());
 
-                program.TopLevelDeclarations.Add(boolDecl);
+                program.AddTopLevelDeclaration(boolDecl);
             }
 
             // Get the set of implementations in the program
             var impls = new HashSet<string>();
-            BoogieUtil.GetImplementations(program).ForEach(impl => impls.Add(impl.Name));
+            BoogieUtil.GetImplementations(program).Iter(impl => impls.Add(impl.Name));
 
             // Gather the set of constants whose values have to be recorded
             var constantsToRecord = new HashSet<Constant>();
@@ -847,6 +847,7 @@ namespace cba
                 {
                     var proc = impl.Proc;
                     if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")) continue;
+                    var nocandidates = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "nohoudini");
                     if (!template.Match(proc)) continue;
 
                     if (!ret.ContainsKey(proc.Name)) ret.Add(proc.Name, new Dictionary<string, EExpr>());
@@ -868,6 +869,7 @@ namespace cba
                             if (template.IsRequires) proc.Requires.Add(new Requires(true, expr));
                             continue;
                         }
+                        if (nocandidates) continue;
 
                         Expr e = null;
 
@@ -982,7 +984,7 @@ namespace cba
                 }
             }
 
-            program.TopLevelDeclarations.AddRange(constants);
+            program.AddTopLevelDeclarations(constants);
 
             return ret;
         }
@@ -1096,7 +1098,7 @@ namespace cba
                     proc2Exprs.Add(foo.Name, exprArgs);
                 }
 
-                program.TopLevelDeclarations.AddRange(newFns);
+                program.AddTopLevelDeclarations(newFns);
             }
 
             // Massage program
@@ -1375,7 +1377,7 @@ namespace cba
             // Add old summaries
             var allGlobals = BoogieUtil.GetGlobalVariables(program);
             var globals = new Dictionary<string, Variable>();
-            allGlobals.ForEach(g => globals.Add(g.Name, g));
+            allGlobals.Iter(g => globals.Add(g.Name, g));
 
             foreach (var decl in program.TopLevelDeclarations)
             {
@@ -1498,7 +1500,7 @@ namespace cba
                         axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
                         newAxioms.Add(new Axiom(Token.NoToken, axiom));
                     }
-                    origProg.TopLevelDeclarations.AddRange(newAxioms);
+                    origProg.AddTopLevelDeclarations(newAxioms);
                     //BoogieUtil.PrintProgram(origProg, "h2.bpl");
 
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
@@ -1685,7 +1687,7 @@ namespace cba
 
             new public static void ProcessImplementation(Program program, Implementation impl)
             {
-                ProcessImplementation(impl, new CallInliner(program));
+                ProcessImplementation(program, impl, new CallInliner(program));
             }
 
             protected override int GetInlineCount(CallCmd callCmd, Implementation impl)
@@ -1710,6 +1712,7 @@ namespace cba
                 bool r = impl.Proc.Ensures.Any(en => !en.Free);
                 return r;
             });
+
             var ignoreImpl = new Predicate<Implementation>(impl =>
             {
                 bool r = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "nohoudini");
@@ -1717,7 +1720,7 @@ namespace cba
             });
 
             program.TopLevelDeclarations =
-                program.TopLevelDeclarations.Filter(decl => !(decl is Implementation) || implHasEnsures(decl as Implementation) || ignoreImpl(decl as Implementation));
+                program.TopLevelDeclarations.Where(decl => !(decl is Implementation) || (implHasEnsures(decl as Implementation) && !ignoreImpl(decl as Implementation)));
         }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
@@ -1894,7 +1897,7 @@ namespace cba
                         axiom.TypeParameters = SimpleTypeParamInstantiation.EMPTY;
                         newAxioms.Add(new Axiom(Token.NoToken, axiom));
                     }
-                    origProg.TopLevelDeclarations.AddRange(newAxioms);
+                    origProg.AddTopLevelDeclarations(newAxioms);
                     //BoogieUtil.PrintProgram(origProg, "h2.bpl");
 
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
@@ -2089,7 +2092,7 @@ namespace cba
                 }
             }
 
-            program.TopLevelDeclarations.AddRange(candCons);
+            program.AddTopLevelDeclarations(candCons);
             //BoogieUtil.PrintProgram(program, "bfHoudini.bpl");
             return ret;
         }
@@ -2599,7 +2602,7 @@ namespace cba
             }
 
             // Add new main back to the program
-            program.TopLevelDeclarations.Add(mainCopy);
+            program.AddTopLevelDeclaration(mainCopy);
             program.mainProcName = mainCopy.Name;
 
             // add decl for newmain
@@ -2609,7 +2612,7 @@ namespace cba
             var newMainDecl = (new Duplicator()).VisitProcedure(origMainDecl);
             newMainDecl.Name = mainCopy.Name;
             mainCopy.Proc = newMainDecl;
-            program.TopLevelDeclarations.Add(newMainDecl);
+            program.AddTopLevelDeclaration(newMainDecl);
 
             if (disableLoops)
             {
@@ -2824,7 +2827,7 @@ namespace cba
             main.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
                 .Iter(blk => blk.Cmds.Add(BoogieAstFactory.MkAssert(Expr.Ident(av))));
 
-            program.TopLevelDeclarations.Add(av);
+            program.AddTopLevelDeclaration(av);
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impl.Proc.Modifies.Add(Expr.Ident(av)));
 
@@ -3129,10 +3132,10 @@ namespace cba
             nb.AddRange(newMainImpl.Blocks);
             newMainImpl.Blocks = nb;
 
-            program.TopLevelDeclarations.Add(flag);
+            program.AddTopLevelDeclaration(flag);
             foreach (var cnsts in argConstants.Values)
             {
-                program.TopLevelDeclarations.AddRange(cnsts);
+                program.AddTopLevelDeclarations(cnsts);
             }
 
             // Instrument async in original procedures
@@ -3233,11 +3236,11 @@ namespace cba
             }
                     
             // Add new main back to the program
-            program.TopLevelDeclarations.Add(newMainImpl);
+            program.AddTopLevelDeclaration(newMainImpl);
 
             // add decl for newmain
             newMainImpl.Proc = newMainProc;
-            program.TopLevelDeclarations.Add(newMainProc);
+            program.AddTopLevelDeclaration(newMainProc);
 
             return program;
         }
@@ -3276,8 +3279,8 @@ namespace cba
             newMain.Blocks = new List<Block>();
             newMain.Blocks.Add(blk);
 
-            program.TopLevelDeclarations.Add(newProc);
-            program.TopLevelDeclarations.Add(newMain);
+            program.AddTopLevelDeclaration(newProc);
+            program.AddTopLevelDeclaration(newMain);
 
             // Set entrypoint
             main.Attributes = BoogieUtil.removeAttr("entrypoint", main.Attributes);

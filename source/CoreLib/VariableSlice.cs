@@ -123,9 +123,8 @@ namespace cba
             HashSet<string> declaredGlobals = new HashSet<string>();
 
             // Partition the list into global declarations and others
-            var part = node.TopLevelDeclarations.Partition(x => x is GlobalVariable);
-            var globals = part.fst;
-            var rest = part.snd;
+            var globals = node.TopLevelDeclarations.OfType<GlobalVariable>().ToList();
+            var rest = node.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable)).ToList();
 
             // Gather all declared global variables
             foreach (Declaration d in globals)
@@ -148,8 +147,9 @@ namespace cba
                 rest[i] = this.VisitDeclaration(rest[i]);
 
             // Remove globals that are not tracked
-            node.TopLevelDeclarations = globals.Filter(x => isTrackedVariable(x as GlobalVariable));
-            node.TopLevelDeclarations.AddRange(rest);
+            node.TopLevelDeclarations = globals.Where(x => isTrackedVariable(x as GlobalVariable));
+
+            node.AddTopLevelDeclarations(rest);
 
             foreach (var proc in slicedEnsures)
             {
@@ -640,17 +640,19 @@ namespace cba
             }
 
             // Go through all procedures and implementations (slice locals)
-            for (int i = 0; i < node.TopLevelDeclarations.Count; i++)
+            var TopLevelDeclarations = node.TopLevelDeclarations.ToList();
+            for (int i = 0; i < TopLevelDeclarations.Count; i++)
             {
-                if (node.TopLevelDeclarations[i] is Implementation)
+                if (TopLevelDeclarations[i] is Implementation)
                 {
-                    node.TopLevelDeclarations[i] = processImplementation(node.TopLevelDeclarations[i] as Implementation);
+                    TopLevelDeclarations[i] = processImplementation(TopLevelDeclarations[i] as Implementation);
                 }
-                else if (node.TopLevelDeclarations[i] is Procedure)
+                else if (TopLevelDeclarations[i] is Procedure)
                 {
-                    processProcedure(node.TopLevelDeclarations[i] as Procedure);
+                    processProcedure(TopLevelDeclarations[i] as Procedure);
                 }
             }
+            node.TopLevelDeclarations = TopLevelDeclarations;
 
             if (onlyLocals) return node;
 

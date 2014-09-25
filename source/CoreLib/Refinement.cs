@@ -89,7 +89,7 @@ namespace cba
             var elim = new UnReadVarEliminator();
             prog = elim.run(prog);
             var globalsRead = new HashSet<string>();
-            BoogieUtil.GetGlobalVariables(prog).ForEach(v => globalsRead.Add(v.Name));
+            BoogieUtil.GetGlobalVariables(prog).Iter(v => globalsRead.Add(v.Name));
 
             BoogieUtil.DoModSetAnalysis(prog);
             HashSet<string> globalsModified = new HashSet<string>();
@@ -808,7 +808,7 @@ namespace cba
             foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
                 doTransformation(proc);
 
-            program.TopLevelDeclarations.AddRange(tokenVarMap.Values);
+            program.AddTopLevelDeclarations(tokenVarMap.Values);
 
             boolVars = new HashSet<string>();
             foreach (var t in tokenVarMap.Values)
@@ -951,9 +951,9 @@ namespace cba
 
             newMainImpl.Proc = newMainProc;
 
-            program.TopLevelDeclarations.Add(newMainProc);
-            program.TopLevelDeclarations.Add(newMainImpl);
-            program.TopLevelDeclarations.Add(assertVar);
+            program.AddTopLevelDeclaration(newMainProc);
+            program.AddTopLevelDeclaration(newMainImpl);
+            program.AddTopLevelDeclaration(assertVar);
 
             return newMainImpl;
         }
@@ -1330,8 +1330,8 @@ namespace cba
             var procs = BoogieUtil.GetProcedures(instrumentedProg);
             mainProcName = (inst.input as PersistentCBAProgram).mainProcName;
 
-            globals.Iterate(g => allVars.Add(g.Name));
-            procs.Iterate(p => allProcs.Add(p.Name));
+            globals.Iter(g => allVars.Add(g.Name));
+            procs.Iter(p => allProcs.Add(p.Name));
 
             newProcsAdded = inst.getInstrumentedProcedures();
 
@@ -1471,9 +1471,9 @@ namespace cba
             // Get hold of variables that were deleted
             var outProg = cp.output.getProgram();
             var inGlobals = new HashSet<string>();
-            BoogieUtil.GetGlobalVariables(inProg).Iterate(g => inGlobals.Add(g.Name));
+            BoogieUtil.GetGlobalVariables(inProg).Iter(g => inGlobals.Add(g.Name));
             var outGlobals = new HashSet<string>();
-            BoogieUtil.GetGlobalVariables(outProg).Iterate(g => outGlobals.Add(g.Name));
+            BoogieUtil.GetGlobalVariables(outProg).Iter(g => outGlobals.Add(g.Name));
             varsDeleted = inGlobals.Difference(outGlobals);
            
         }

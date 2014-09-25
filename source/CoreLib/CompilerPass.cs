@@ -115,7 +115,7 @@ namespace cba
 
             // remove main from the program because it has an assert
             var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            program.TopLevelDeclarations.Remove(main);
+            program.RemoveTopLevelDeclaration(main);
 
             // remove non-free ensures and requires
             program.TopLevelDeclarations.OfType<Procedure>()
@@ -304,19 +304,19 @@ namespace cba
             var ret = new Program();
             program.TopLevelDeclarations
                 .Where(decl => !(decl is Implementation))
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+                .Iter(decl => ret.AddTopLevelDeclaration(decl));
 
             loopProcsCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+                .Iter(decl => ret.AddTopLevelDeclaration(decl));
 
             loopCallerImplCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+                .Iter(decl => ret.AddTopLevelDeclaration(decl));
 
             loopCallerProcCopy.Values
-                .Iter(decl => ret.TopLevelDeclarations.Add(decl));
+                .Iter(decl => ret.AddTopLevelDeclaration(decl));
 
             loopImpls
-                .Iter(impl => ret.TopLevelDeclarations.Add(impl));
+                .Iter(impl => ret.AddTopLevelDeclaration(impl));
 
             loopCallerImplCopy.Values
                 .Iter(impl => impl.AddAttribute("entrypoint"));
@@ -547,7 +547,7 @@ namespace cba
 
             // Copy of OnlyBoogie.EliminateDeadVariablesAndInline
 
-            List<Declaration> TopLevelDeclarations = p.TopLevelDeclarations;
+            var TopLevelDeclarations = p.TopLevelDeclarations;
             bool inline = false;
             foreach (Declaration d in TopLevelDeclarations)
             {
@@ -594,7 +594,8 @@ namespace cba
 
             if (CommandLineOptions.Clo.InlineDepth < 0)
                 return;
-
+            /*
+             * TODO: FIX!
             foreach (Implementation impl in impls)
             {
                 var inlineRequiresVisitor = new Microsoft.Boogie.Houdini.InlineRequiresVisitor();
@@ -606,7 +607,7 @@ namespace cba
                 var freeRequiresVisitor = new Microsoft.Boogie.Houdini.FreeRequiresVisitor();
                 freeRequiresVisitor.Visit(impl);
             }
-
+            */
             foreach (Implementation impl in impls)
             {
                 var inlineEnsuresVisitor = new Microsoft.Boogie.Houdini.InlineEnsuresVisitor();

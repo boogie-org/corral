@@ -137,7 +137,7 @@ namespace cba
             
             foreach (var trace in verifier.traces)
             {
-                // trace.getProcs().ForEach(s => ret.Add(s));
+                // trace.getProcs().Iter(s => ret.Add(s));
                 ret.UnionWith(trace.getProcs());
             }
 
@@ -164,7 +164,7 @@ namespace cba
                     new GlobalVariable(Token.NoToken,
                         new TypedIdent(Token.NoToken, "ep_var_" + str, Microsoft.Boogie.Type.Bool)));
 
-                program.TopLevelDeclarations.Add(procVars[str]);
+                program.AddTopLevelDeclaration(procVars[str]);
             }
 
             // Add the new variables to each procedures' modifies clause

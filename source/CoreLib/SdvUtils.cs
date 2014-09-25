@@ -83,8 +83,8 @@ namespace CoreLib
                 ncmds.AddRange(impl.Blocks[0].Cmds);
                 impl.Blocks[0].Cmds = ncmds;
             }
-            p.TopLevelDeclarations.Add(reLocProcInt);
-            p.TopLevelDeclarations.Add(reLocProcBool);
+            p.AddTopLevelDeclaration(reLocProcInt);
+            p.AddTopLevelDeclaration(reLocProcBool);
 
             // save the current program
             var fd = new FixedDuplicator(true);
@@ -98,8 +98,8 @@ namespace CoreLib
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameBool) == null);
 
-            p.TopLevelDeclarations.Add(reProcInt);
-            p.TopLevelDeclarations.Add(reProcBool);
+            p.AddTopLevelDeclaration(reProcInt);
+            p.AddTopLevelDeclaration(reProcBool);
             var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
             if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
                 tmainimpl.AddAttribute("entrypoint");
@@ -443,7 +443,7 @@ namespace CoreLib
             }
 
             program.TopLevelDeclarations = newDecls;
-            program.TopLevelDeclarations.Add(U);
+            program.AddTopLevelDeclaration(U);
 
             // print program
             BoogieUtil.DoModSetAnalysis(program);
@@ -508,7 +508,7 @@ namespace CoreLib
                 .Iter(Instrument);
 
             var decl = BoogieAstFactory.MkProc(recordProc, new List<Variable>(new Variable[] { BoogieAstFactory.MkFormal("address", Microsoft.Boogie.Type.Int, true) }), new List<Variable>());
-            program.TopLevelDeclarations.Add(decl);
+            program.AddTopLevelDeclaration(decl);
         }
 
         static CallCmd Read(Variable map)

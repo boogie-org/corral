@@ -13,8 +13,8 @@ namespace cba
         public static VarSet GetAllVars(Program p)
         {
             //List<GlobalVariable> globalDecls = BoogieUtil.GetGlobalVariables(p);
-            List<Procedure> procedures = BoogieUtil.GetProcedures(p);
-            List<Implementation> implementations = BoogieUtil.GetImplementations(p);
+            var procedures = BoogieUtil.GetProcedures(p);
+            var implementations = BoogieUtil.GetImplementations(p);
             var allVars = new VarSet();
 
             foreach (var proc in procedures)

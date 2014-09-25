@@ -105,10 +105,10 @@ namespace BctCleanup
         }
 
         private static void replaceFECalls(Program prog) {
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_begin", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_atomic_end", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+          prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "corral_atomic_begin", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+          prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "corral_atomic_end", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
           Formal id = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "id", Microsoft.Boogie.Type.Int), false);
-          prog.TopLevelDeclarations.Add(new Procedure(Token.NoToken, "corral_getThreadID", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(new Variable[] { id }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+          prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "corral_getThreadID", new List<TypeVariable>(), new List<Variable>(), new List<Variable>(new Variable[] { id }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
           HashSet<Declaration> declsToRemove = new HashSet<Declaration>();
           foreach (Declaration decl in prog.TopLevelDeclarations) {
             Procedure proc = decl as Procedure;
@@ -139,7 +139,7 @@ namespace BctCleanup
             }
           }
           foreach (Declaration decl in declsToRemove)
-            prog.TopLevelDeclarations.Remove(decl);
+            prog.RemoveTopLevelDeclaration(decl);
         }
 
         private static void addInitializersToMain(Program prog, string mainProcName)
@@ -210,7 +210,7 @@ namespace BctCleanup
             // Create initialization of track variable for GetMeHere
             {
               GlobalVariable trackVariable = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "$GetMeHereTracker", Microsoft.Boogie.Type.Int));
-              prog.TopLevelDeclarations.Add(trackVariable);
+              prog.AddTopLevelDeclaration(trackVariable);
               List<AssignLhs> lhss = new List<AssignLhs>();
               lhss.Add(new SimpleAssignLhs(Token.NoToken, Expr.Ident(trackVariable)));
               List<Expr> rhss = new List<Expr>();
@@ -244,7 +244,7 @@ namespace BctCleanup
             }
 
             var flags = FlagReader.read(rest);
-            flags.ForEach(f => processFlag(f));
+            flags.Iter(f => processFlag(f));
 
             return true;
         }

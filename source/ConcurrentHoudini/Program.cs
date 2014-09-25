@@ -343,7 +343,7 @@ namespace ConcurrentHoudini
             if (printAssignment)
             {
                 using (var tt = new TokenTextWriter(Console.Out))
-                    answer.ToList().ForEach(func => func.Emit(tt, 0));
+                    answer.ToList().Iter(func => func.Emit(tt, 0));
             }
 
 
@@ -353,8 +353,8 @@ namespace ConcurrentHoudini
             program = yieldedProgram.getProgram();
 
             // remove existential functions
-            program.TopLevelDeclarations.RemoveAll(decl => (decl is Function) && QKeyValue.FindBoolAttribute((decl as Function).Attributes, "existential"));
-            program.TopLevelDeclarations.AddRange(answer);
+            program.RemoveTopLevelDeclarations(decl => (decl is Function) && QKeyValue.FindBoolAttribute((decl as Function).Attributes, "existential"));
+            program.AddTopLevelDeclarations(answer);
 
             program = og.PruneProvedAsserts(program, f => provedAsserts[f] );
 
@@ -418,7 +418,7 @@ namespace ConcurrentHoudini
             if (outcome.outcome != VC.ConditionGeneration.Outcome.Correct)
             {
                 Console.WriteLine("Some assert failed while running AbsHoudini, aborting");
-                outcome.errors.ForEach(error => og.PrintError(error));
+                outcome.errors.Iter(error => og.PrintError(error));
             }
 
             return abs.GetAssignment();

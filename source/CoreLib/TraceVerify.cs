@@ -74,7 +74,7 @@ namespace cba
             string newName = getNewName(trace.procName);
             Procedure proc = nameToProc[trace.procName];
 
-            output.TopLevelDeclarations.Add(
+            output.AddTopLevelDeclaration(
                 new Procedure(Token.NoToken, newName, proc.TypeParameters, proc.InParams,
                     proc.OutParams, proc.Requires, proc.Modifies, proc.Ensures,
                     proc.Attributes));
@@ -224,8 +224,8 @@ namespace cba
                                 const_counter++;
 
                                 traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqVar(cc.Outs[0].Decl, constant));
-                                output.TopLevelDeclarations.Add(constant);
-                                output.TopLevelDeclarations.Add(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
+                                output.AddTopLevelDeclaration(constant);
+                                output.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
 
                                 var id = QKeyValue.FindIntAttribute(cc.Attributes, "allocator_call", -1);
                                 if (id != -1) allocConstantToCall.Add(constant.Name, id);
@@ -263,7 +263,7 @@ namespace cba
             //tinfo.addTrans(newName, trace.Blocks[0].blockName, trace.Blocks[0].blockName);
             tinfo.addProcNameTrans(trace.procName, newName);
 
-            output.TopLevelDeclarations.Add(
+            output.AddTopLevelDeclaration(
                 new Implementation(Token.NoToken, newName, impl.TypeParameters,
                     impl.InParams, impl.OutParams, impl.LocVars, traceBlocks,
                     QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") == null ?
@@ -371,14 +371,14 @@ namespace cba
             {
                 if ((decl is Procedure) || (decl is Implementation))
                     continue;
-                output.TopLevelDeclarations.Add(decl);
+                output.AddTopLevelDeclaration(decl);
             }
             
             // Add procedure declarations (ones without an implementation), as required
             foreach (string str in calledProcsNoImpl)
             {
                 newProcsToAdd.Remove(str);
-                output.TopLevelDeclarations.Add(nameToProc[str]);
+                output.AddTopLevelDeclaration(nameToProc[str]);
                 tinfo.addProcNameTrans(str, str);
             }
 
@@ -387,7 +387,7 @@ namespace cba
             {
                 var proc = new Procedure(Token.NoToken, p, new List<TypeVariable>(),
                     new List<Variable>(), new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-                output.TopLevelDeclarations.Add(proc);
+                output.AddTopLevelDeclaration(proc);
             }
 
             //string outfile = "trace.bpl";

@@ -1023,20 +1023,20 @@ namespace cba.Util
             {
                 if (decl is GlobalVariable)
                 {
-                    newProg.TopLevelDeclarations.Add(decl);
+                    newProg.AddTopLevelDeclaration(decl);
                 }
                 else if (decl is Procedure)
                 {
                     Procedure tmp = decl as Procedure;
                     if (calledProcs.Contains(tmp.Name))
                     {
-                        newProg.TopLevelDeclarations.Add(decl);
+                        newProg.AddTopLevelDeclaration(decl);
                     }
                     else if (tmp.Name == impl.Name)
                     {
                         Procedure pex = new Procedure(Token.NoToken, tmp.Name + "_cex", tmp.TypeParameters, tmp.InParams,
                             tmp.OutParams, tmp.Requires, tmp.Modifies, tmp.Ensures, tmp.Attributes);
-                        newProg.TopLevelDeclarations.Add(pex);
+                        newProg.AddTopLevelDeclaration(pex);
                     }
                 }
                 else if (decl is Implementation)
@@ -1047,11 +1047,11 @@ namespace cba.Util
                 else
                 {
                     // Just add the other guys (axioms, functions, etc.)
-                    newProg.TopLevelDeclarations.Add(decl);
+                    newProg.AddTopLevelDeclaration(decl);
                 }
             }
 
-            newProg.TopLevelDeclarations.Add(traceImpl);
+            newProg.AddTopLevelDeclaration(traceImpl);
 
             newProg = BoogieUtil.ReResolve(newProg, "cex.bpl");
             Program newProgCopy = BoogieUtil.ReadAndResolve("cex.bpl");

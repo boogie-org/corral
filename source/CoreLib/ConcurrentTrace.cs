@@ -375,7 +375,7 @@ namespace cba
             varNamesChanged = false;
             varNameMap = new Dictionary<string, string>();
             var globals = BoogieUtil.GetGlobalVariables(program);
-            globals.ForEach(g => varNameMap.Add(g.Name + "__0", g.Name));
+            globals.Iter(g => varNameMap.Add(g.Name + "__0", g.Name));
         }
 
         // Model variable names changed?
@@ -628,7 +628,7 @@ namespace cba
         private static void arrangeEventsOld()
         {
             // Check that all events are valid
-            events.ForEach(ev => Debug.Assert(ev.tid > 0 && ev.k >= 0));
+            events.Iter(ev => Debug.Assert(ev.tid > 0 && ev.k >= 0));
 
             // Split the list of events based on tid and k
             var conEvents = new Dictionary<int, Dictionary<int, List<Event>>>();
@@ -698,7 +698,7 @@ namespace cba
         private static void arrangeEvents()
         {
             // Check that all events are valid
-            events.ForEach(ev => Debug.Assert(ev.tid > 0 && ev.k >= 0));
+            events.Iter(ev => Debug.Assert(ev.tid > 0 && ev.k >= 0));
 
             // Split the list of events based on k. 
             // Also construct a map from k to the set of threads that

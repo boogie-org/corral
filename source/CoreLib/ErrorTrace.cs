@@ -241,7 +241,7 @@ namespace cba
         public List<string> getBlockLabels()
         {
             var ret = new List<string>();
-            Blocks.ForEach(blk => ret.Add(blk.blockName));
+            Blocks.Iter(blk => ret.Add(blk.blockName));
             return ret;
         }
 
@@ -255,7 +255,7 @@ namespace cba
         {
             if (blockMap != null) return;
             blockMap = new Dictionary<string, ErrorTraceBlock>();
-            Blocks.ForEach(blk => blockMap.Add(blk.blockName, blk));
+            Blocks.Iter(blk => blockMap.Add(blk.blockName, blk));
         }
 
         // Return the set of procedures that the trace passes through
@@ -2048,7 +2048,7 @@ namespace cba
             var inliner = new InlineToTrace(program, null);
 
             traceStack.Push(FindCallsOnTrace(entryPoint, trace));
-            Inliner.ProcessImplementation(entryPoint, inliner);
+            Inliner.ProcessImplementation(program, entryPoint, inliner);
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {

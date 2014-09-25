@@ -260,7 +260,7 @@ namespace CoreLib {
         private void attachEnsures(Implementation impl)
         {
             List<Variable> functionInterfaceVars = new List<Variable>();
-            foreach (Variable v in vcgen.program.GlobalVariables())
+            foreach (Variable v in BoogieUtil.GetGlobalVariables(vcgen.program))
             {
                 functionInterfaceVars.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "", v.TypedIdent.Type), true));
             }
@@ -282,7 +282,7 @@ namespace CoreLib {
             prover.Context.DeclareFunction(function, "");
 
             List<Expr> exprs = new List<Expr>();
-            foreach (Variable v in vcgen.program.GlobalVariables())
+            foreach (Variable v in BoogieUtil.GetGlobalVariables(vcgen.program))
             {
                 Contract.Assert(v != null);
                 exprs.Add(new OldExpr(Token.NoToken, new IdentifierExpr(Token.NoToken, v)));

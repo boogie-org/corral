@@ -383,9 +383,9 @@ namespace cba.Util
             }
         }
 
-        public static List<GlobalVariable> GetGlobalVariables(Program p)
+        public static IEnumerable<GlobalVariable> GetGlobalVariables(Program p)
         {
-            return p.TopLevelDeclarations.Filter(x => x is GlobalVariable).Map(x => x as GlobalVariable);
+            return p.TopLevelDeclarations.OfType<GlobalVariable>();
         }
 
         public static List<GlobalVariable> GetModifiedGlobalVariables(Program p)
@@ -407,31 +407,31 @@ namespace cba.Util
             return ret;
         }
 
-        public static List<Procedure> GetProcedures(Program p)
+        public static IEnumerable<Procedure> GetProcedures(Program p)
         {
-            return p.TopLevelDeclarations.Filter(x => x is Procedure).Map(x => x as Procedure);
+            return p.TopLevelDeclarations.OfType<Procedure>();
         }
 
         public static HashSet<string> GetAllProcNames(Program p)
         {
             var ret = new HashSet<string>();
-            p.TopLevelDeclarations.Filter(x => x is Procedure).ForEach(x => ret.Add((x as Procedure).Name));
+            p.TopLevelDeclarations.OfType<Procedure>().Iter(x => ret.Add((x as Procedure).Name));
             return ret;
         }
 
         public static HashSet<string> GetAllImplNames(Program p)
         {
             var ret = new HashSet<string>();
-            p.TopLevelDeclarations.Filter(x => x is Implementation).ForEach(x => ret.Add((x as Implementation).Name));
+            p.TopLevelDeclarations.OfType<Implementation>().Iter(x => ret.Add((x as Implementation).Name));
             return ret;
         }
 
-        public static List<Implementation> GetImplementations(Program p)
+        public static IEnumerable<Implementation> GetImplementations(Program p)
         {
-            return p.TopLevelDeclarations.Filter(x => x is Implementation).Map(x => x as Implementation);
+            return p.TopLevelDeclarations.OfType<Implementation>();
         }
 
-        public static GlobalVariable findVarDecl(List<Declaration> decls, string varname)
+        public static GlobalVariable findVarDecl(IEnumerable<Declaration> decls, string varname)
         {
             foreach (Declaration d in decls)
             {
@@ -444,7 +444,7 @@ namespace cba.Util
             return null;
         }
 
-        public static Procedure findProcedureDecl(List<Declaration> decls, string procname)
+        public static Procedure findProcedureDecl(IEnumerable<Declaration> decls, string procname)
         {
             foreach (Declaration d in decls)
             {
@@ -457,7 +457,7 @@ namespace cba.Util
             return null;
         }
 
-        public static Implementation findProcedureImpl(List<Declaration> decls, string procname)
+        public static Implementation findProcedureImpl(IEnumerable<Declaration> decls, string procname)
         {
             foreach (Declaration d in decls)
             {
@@ -1724,7 +1724,7 @@ namespace cba.Util
                 .Where(impl => !irreducible.Contains(impl.Name))
                 .Iter(SSARename);
 
-            program.TopLevelDeclarations.AddRange(phiProcsDecl);
+            program.AddTopLevelDeclarations(phiProcsDecl);
 
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
         }

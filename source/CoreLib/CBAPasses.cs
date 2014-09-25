@@ -96,8 +96,8 @@ namespace cba
             if (pinfo.threadIdType.IsBv)
             {
                 TidArithmetic.useIntArithmetic = false;
-                p.TopLevelDeclarations.Add(TidArithmetic.getBvAdd());
-                p.TopLevelDeclarations.Add(TidArithmetic.getBvGt());
+                p.AddTopLevelDeclaration(TidArithmetic.getBvAdd());
+                p.AddTopLevelDeclaration(TidArithmetic.getBvGt());
             }
             else
             {
@@ -141,7 +141,7 @@ namespace cba
 
             // Step5: Carry out the K-split instrumentation
             inst = new Instrumenter(policy, vmgr, pinfo, tinfo_instrument);
-            List<Declaration> newDecls = inst.instrument(p.TopLevelDeclarations);
+            List<Declaration> newDecls = inst.instrument(p.TopLevelDeclarations.ToList());
             foreach (var trp in inst.blocksWithFixedK)
             {
                 blockExecutionContextMap.Add(trp.fst + "::" + trp.snd, trp.trd);
@@ -452,15 +452,15 @@ namespace cba
                         Log.WriteLine(Log.Debug, "Deleting " + impl.Name);
                         continue;
                     }
-                    ret.TopLevelDeclarations.Add(d);
+                    ret.AddTopLevelDeclaration(d);
                 }
                 else
                 {
-                    ret.TopLevelDeclarations.Add(d);
+                    ret.AddTopLevelDeclaration(d);
                 }
             }
 
-            Log.WriteLine(Log.Debug, "Empty Mod Sets: Deleted " + (p.TopLevelDeclarations.Count - ret.TopLevelDeclarations.Count).ToString() +
+            Log.WriteLine(Log.Debug, "Empty Mod Sets: Deleted " + (p.TopLevelDeclarations.Count() - ret.TopLevelDeclarations.Count()).ToString() +
                 " implementations");
             return ret;
         }
@@ -792,8 +792,8 @@ namespace cba
                 foreach (var name in scc)
                 {
                     var impl = nameImplMap[name];
-                    program.TopLevelDeclarations.Remove(impl);
-                    program.TopLevelDeclarations.Remove(impl.Proc);
+                    program.RemoveTopLevelDeclaration(impl);
+                    program.RemoveTopLevelDeclaration(impl.Proc);
 
                     for (int i = 0; i < CommandLineOptions.Clo.RecursionBound; i++)
                     {
@@ -805,8 +805,8 @@ namespace cba
                         nproc.Name += string.Format("#{0}", i);
                         nimpl.Proc = nproc;
 
-                        program.TopLevelDeclarations.Add(nimpl);
-                        program.TopLevelDeclarations.Add(nproc);
+                        program.AddTopLevelDeclaration(nimpl);
+                        program.AddTopLevelDeclaration(nproc);
 
                         procCopies.Add(Tuple.Create(impl.Name, i), nproc);
                         implCopies.Add(Tuple.Create(impl.Name, i), nimpl);

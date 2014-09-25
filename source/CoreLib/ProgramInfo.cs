@@ -107,7 +107,7 @@ namespace cba
         {
             Debug.Assert(!infoGathered);
 
-            node.TopLevelDeclarations = this.VisitDeclarationList(node.TopLevelDeclarations);
+            node.TopLevelDeclarations = this.VisitDeclarationList(node.TopLevelDeclarations.ToList());
 
             if (!mainProcExists)
             {

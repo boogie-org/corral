@@ -215,7 +215,7 @@ namespace cba
             var prune = new PruneProgramPass(false);
             curr = prune.run(curr);
             PruneProgramPass.RemoveUnreachable = false;
-            
+
             // Sequential instrumentation
             ExtractLoopsPass elPass = null;
             var seqInstr = new SequentialInstrumentation();
@@ -279,7 +279,7 @@ namespace cba
 
             var refinementState = new RefinementState(curr, config.trackedVars, config.useLocalVariableAbstraction);
 
-            ErrorTrace cexTrace = null;
+            ErrorTrace cexTrace = null; 
             checkAndRefine(curr, refinementState, printTrace, out cexTrace);
 
             ////////////////////////////////////
@@ -1181,8 +1181,8 @@ namespace cba
             newMainImpl.Blocks.Add(new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken)));
             newMainImpl.Proc = newMainProc;
 
-            program.TopLevelDeclarations.Add(newMainProc);
-            program.TopLevelDeclarations.Add(newMainImpl);
+            program.AddTopLevelDeclaration(newMainProc);
+            program.AddTopLevelDeclaration(newMainImpl);
 
             return newMainImpl.Name;
         }
@@ -1510,7 +1510,7 @@ namespace cba
         // that need to be tracked initially (according to command-line arguments)
         private static HashSet<string> getTrackedVars(Program prog, Configs config)
         {
-            List<GlobalVariable> globalVars = BoogieUtil.GetGlobalVariables(prog);
+            var globalVars = BoogieUtil.GetGlobalVariables(prog);
             VarSet allVars = VarSet.GetAllVars(prog);
             HashSet<string> procs = allVars.Procedures;
 

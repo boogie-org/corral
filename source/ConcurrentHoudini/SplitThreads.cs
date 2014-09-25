@@ -146,8 +146,8 @@ namespace ConcurrentHoudini
                         newImplsPerThread[threadName][procName] = impl;
 
                         //Add to the program
-                        originalProgram.TopLevelDeclarations.Add(proc);
-                        originalProgram.TopLevelDeclarations.Add(impl);
+                        originalProgram.AddTopLevelDeclaration(proc);
+                        originalProgram.AddTopLevelDeclaration(impl);
 
                         var s1 = new HashSet<string>();
                         var s2 = new HashSet<string>();
@@ -282,14 +282,14 @@ namespace ConcurrentHoudini
             {
                 if (!(toplvl is bpl.Implementation) && !(toplvl is bpl.Procedure))
                 {
-                    originalProgram.TopLevelDeclarations.Add(toplvl);
+                    originalProgram.AddTopLevelDeclaration(toplvl);
                     continue;
                 }
                 var name = (toplvl as bpl.NamedDeclaration).Name;
                 if (unreachableImpls.Contains(name))
                     System.Console.WriteLine("Removing Uncreachable Implementation " + name);
                 else
-                    originalProgram.TopLevelDeclarations.Add(toplvl);
+                    originalProgram.AddTopLevelDeclaration(toplvl);
             }
         }
 
