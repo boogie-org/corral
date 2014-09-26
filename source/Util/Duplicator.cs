@@ -181,7 +181,9 @@ namespace cba.Util
         }
         public override Program VisitProgram(Program node)
         {
-            return base.VisitProgram((Program)node.Clone());
+            var cloned = new Program();
+            cloned.AddTopLevelDeclarations(node.TopLevelDeclarations);
+            return base.VisitProgram(cloned);
         }
         public override QuantifierExpr VisitQuantifierExpr(QuantifierExpr node)
         {
