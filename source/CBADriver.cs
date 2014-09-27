@@ -331,7 +331,8 @@ namespace cba
 
             // Refinement
             refinementVerifyOptions = pathVerifyOptions.Copy();
-            refinementVerifyOptions.UseProverEvaluate = false;
+            //refinementVerifyOptions.UseProverEvaluate = false;
+            refinementVerifyOptions.UseProverEvaluate = config.newStratifiedInlining;
             refinementVerifyOptions.StratifiedInliningWithoutModels = true;
             refinementVerifyOptions.ModelViewFile = null;
             refinementVerifyOptions.useFwdBck = false;

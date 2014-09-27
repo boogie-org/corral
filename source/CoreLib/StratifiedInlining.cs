@@ -703,7 +703,7 @@ namespace CoreLib
             }
             var toassert = prover.VCExprGen.Implies(scs.callSiteExpr, scs.Attach(svc)); 
             stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
-
+            //Console.WriteLine("VC of {0} is {1}", scs.callSite.calleeName, svc.info.vcexpr);
             prover.Assert(toassert, true);
             attachedVC[scs] = svc;
 
