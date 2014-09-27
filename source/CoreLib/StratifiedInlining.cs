@@ -336,6 +336,7 @@ namespace CoreLib
                 // underapproximate query
                 Push();
 
+
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     prover.Assert(cs.callSiteExpr, false);
@@ -356,7 +357,7 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (RecursionDepth(cs) > recBound ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 && 
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
                         StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
@@ -580,7 +581,7 @@ namespace CoreLib
             }
             if (cba.Util.BoogieVerify.options.NonUniformUnfolding)
             {
-                Console.WriteLine("Warning: newSI doesn't non-uniform procedure inlining");
+                Console.WriteLine("Warning: newSI doesn't support non-uniform procedure inlining");
             }
 
             /* the forward/backward approach can only be applied for programs with asserts in calls
@@ -700,7 +701,7 @@ namespace CoreLib
             {
                 parent[newCallSite] = scs;
             }
-            var toassert = scs.Attach(svc);
+            var toassert = prover.VCExprGen.Implies(scs.callSiteExpr, scs.Attach(svc)); 
             stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
 
             prover.Assert(toassert, true);
@@ -970,9 +971,16 @@ namespace CoreLib
 
             var start = DateTime.Now;
             List<Absy> absyList = new List<Absy>();
-            foreach (var label in labels)
+            if (!CommandLineOptions.Clo.SIBoolControlVC)
             {
-                absyList.Add(Label2Absy(mainVC.info.impl.Name, label));
+                foreach (var label in labels)
+                {
+                    absyList.Add(Label2Absy(mainVC.info.impl.Name, label));
+                }
+            }
+            else
+            {
+                absyList = GetAbsyTrace(mainVC);
             }
 
             orderedStateIds = new List<Tuple<int, int>>();
@@ -989,6 +997,41 @@ namespace CoreLib
                 //this.PrintModel(model);
             }
             ttime += (DateTime.Now - start);
+        }
+
+        // returns a list of blocks followed by a fake assert
+        private List<Absy> GetAbsyTrace(StratifiedVC svc)
+        {
+            Debug.Assert(CommandLineOptions.Clo.UseProverEvaluate, "Must use prover evaluate option with boolControlVC"); 
+            
+            var ret = new List<Absy>();
+            var impl = svc.info.impl;
+            var block = impl.Blocks[0];
+
+            while (true)
+            {
+                ret.Add(block);
+                var gc = block.TransferCmd as GotoCmd;
+                if (gc == null) break;
+                Block next = null;
+                foreach (var succ in gc.labelTargets)
+                {
+                    var succtaken = (bool)svc.info.vcgen.prover.Evaluate(svc.blockToControlVar[succ]);
+                    if (succtaken)
+                    {
+                        next = succ;
+                        break;
+                    }
+                }
+                Debug.Assert(next != null, "Must find a successor");
+                Debug.Assert(!ret.Contains(next), "CFG cannot be cyclic");
+                block = next;
+            }
+
+            // fake assert
+            ret.Add(new AssertCmd(Token.NoToken, Expr.True));
+
+            return ret;
         }
 
         private Counterexample NewTrace(StratifiedVC svc, List<Absy> absyList, Model model)
@@ -1014,12 +1057,20 @@ namespace CoreLib
                         }
                         else
                         {
-                            string[] labels = si.prover.CalculatePath(si.attachedVC[scs].id);
                             List<Absy> calleeAbsyList = new List<Absy>();
-                            foreach (string label in labels)
+                            if (!CommandLineOptions.Clo.SIBoolControlVC)
                             {
-                                calleeAbsyList.Add(Label2Absy(scs.callSite.calleeName, label));
+                                string[] labels = si.prover.CalculatePath(si.attachedVC[scs].id);
+                                foreach (string label in labels)
+                                {
+                                    calleeAbsyList.Add(Label2Absy(scs.callSite.calleeName, label));
+                                }
                             }
+                            else
+                            {
+                                calleeAbsyList = GetAbsyTrace(si.attachedVC[scs]);
+                            }
+
                             var calleeCounterexample = NewTrace(si.attachedVC[scs], calleeAbsyList, model);
                             calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                             new CalleeCounterexampleInfo(calleeCounterexample, new List<object>());

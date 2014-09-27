@@ -1022,12 +1022,15 @@ namespace cba
             // program options
             ConfigManager.progVerifyOptions.UseProverEvaluate = false;
             ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = true;
-            if (config.NonUniformUnfolding)
+            if (config.NonUniformUnfolding || config.newStratifiedInlining)
                     ConfigManager.progVerifyOptions.UseProverEvaluate = true;
 
             // path options
             ConfigManager.pathVerifyOptions.UseProverEvaluate = false;
             ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
+            if (config.NonUniformUnfolding || config.newStratifiedInlining)
+                ConfigManager.pathVerifyOptions.UseProverEvaluate = true;
+
             if (config.printData == 1)
             {
                 if (config.useProverEvaluate)
