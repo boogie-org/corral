@@ -323,6 +323,65 @@ namespace CoreLib
 
         }
 
+        // Does not make under-approx queries; doesn't do push/pop
+        public Outcome FwdNoUnder(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
+        {
+            Outcome outcome = Outcome.Inconclusive;
+            reporter.reportTraceIfNothingToExpand = true;
+
+            // candidates that are pinned to false because they hit the recursion bound
+            var boundAsserted = new HashSet<StratifiedCallSite>();
+
+            while (true)
+            {
+                MacroSI.PRINT_DETAIL("  - overapprox");
+
+                // overapproximate query
+                foreach (StratifiedCallSite cs in openCallSites)
+                {
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (RecursionDepth(cs) > CommandLineOptions.Clo.RecursionBound ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        if (!boundAsserted.Contains(cs))
+                        {
+                            prover.Assert(cs.callSiteExpr, false);
+                            boundAsserted.Add(cs);
+                        }
+                    }
+                }
+                MacroSI.PRINT_DETAIL("    - check");
+                reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                outcome = CheckVC(reporter);
+
+                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                if (outcome != Outcome.Errors)
+                {
+                    if (boundAsserted.Count > 0 && outcome == Outcome.Correct)
+                        outcome = Outcome.ReachedBound;
+
+                    break; // done
+                }
+                if (reporter.callSitesToExpand.Count == 0)
+                    return Outcome.Errors;
+
+                foreach (var scs in reporter.callSitesToExpand)
+                {
+                    Debug.Assert(!boundAsserted.Contains(scs));
+                    openCallSites.Remove(scs);
+                    var svc = Expand(scs);
+                    openCallSites.UnionWith(svc.CallSites);
+                    Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                }
+            }
+            reporter.reportTraceIfNothingToExpand = false;
+            return outcome;
+        }
+
+
+
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
             Outcome outcome = Outcome.Inconclusive;
@@ -343,7 +402,7 @@ namespace CoreLib
                 }
 
                 MacroSI.PRINT_DETAIL("    - check");
-                reporter.underapproximationMode = main;
+                reporter.reportTrace = main;
                 outcome = CheckVC(reporter);
                 Pop();
                 MacroSI.PRINT_DETAIL("    - checked: " + outcome);
@@ -365,7 +424,7 @@ namespace CoreLib
                     }
                 }
                 MacroSI.PRINT_DETAIL("    - check");
-                reporter.underapproximationMode = false;
+                reporter.reportTrace = false;
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
                 Pop();
@@ -571,9 +630,6 @@ namespace CoreLib
         /* verification */
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
-            bool oldUseLabels = CommandLineOptions.Clo.UseLabels;
-            CommandLineOptions.Clo.UseLabels = false;
-
             // Sanity checking
             if (cba.Util.BoogieVerify.options.procsToSkip.Count != 0)
             {
@@ -594,13 +650,12 @@ namespace CoreLib
 
                 //var ret = VerifyImplementationFwdBck(impl, callback);
                 var ret = FwdBckVerify(impl, callback);
-                CommandLineOptions.Clo.UseLabels = oldUseLabels;
+                
                 return ret;
             }
 
             MacroSI.PRINT("Starting forward approach...");
 
-            CommandLineOptions.Clo.UseLabels = false;
             Push();
 
             StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name]); ;
@@ -650,29 +705,35 @@ namespace CoreLib
             #endregion
             
             // Stratified Search
-            int currRecursionBound = 1;
-            while (true)
+            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "nounder")
             {
-                outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
-                
-                // timeout?
-                if (outcome == Outcome.Inconclusive || outcome == Outcome.OutOfMemory || outcome == Outcome.TimedOut)
-                    break;
-                
-                // reached bound?
-                if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
+                outcome = FwdNoUnder(openCallSites, reporter);
+            }
+            else
+            {
+                int currRecursionBound = 1;
+                while (true)
                 {
-                    currRecursionBound++;
-                    continue;
-                }
+                    outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
 
-                // outcome is either ReachedBound with currRecBound == Max or
-                // Errors or Correct
-                break;
+                    // timeout?
+                    if (outcome == Outcome.Inconclusive || outcome == Outcome.OutOfMemory || outcome == Outcome.TimedOut)
+                        break;
+
+                    // reached bound?
+                    if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
+                    {
+                        currRecursionBound++;
+                        continue;
+                    }
+
+                    // outcome is either ReachedBound with currRecBound == Max or
+                    // Errors or Correct
+                    break;
+                }
             }
 
             Pop();
-            CommandLineOptions.Clo.UseLabels = oldUseLabels;
             
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
@@ -761,8 +822,6 @@ namespace CoreLib
 
         public override Outcome FindLeastToVerify(Implementation impl, ref HashSet<string> allBoolVars)
         {
-            bool oldUseLabels = CommandLineOptions.Clo.UseLabels;
-            CommandLineOptions.Clo.UseLabels = false;
             Push();
 
             StratifiedVC svc = getSVC(impl.Name);
@@ -807,7 +866,7 @@ namespace CoreLib
             allBoolVars = ret;
 
             Pop();
-            CommandLineOptions.Clo.UseLabels = oldUseLabels;
+            
             return Outcome.Correct;
         }
 
@@ -929,7 +988,11 @@ namespace CoreLib
         /* (dynamic) id of the method the closest to top-level */
         public int basis;
         public static TimeSpan ttime = TimeSpan.Zero;
-        public bool underapproximationMode;
+        IList<string> GlobalLabels;
+
+        public bool reportTrace;
+        public bool reportTraceIfNothingToExpand;
+
         public List<StratifiedCallSite> callSitesToExpand;
         List<Tuple<int, int>> orderedStateIds;
 
@@ -938,8 +1001,10 @@ namespace CoreLib
             this.callback = callback;
             this.si = si;
             this.mainVC = mainVC;
-            this.underapproximationMode = false;
+            this.reportTrace = false;
+            this.reportTraceIfNothingToExpand = false;
             this.basis = 0;
+            this.GlobalLabels = null;
         }
 
         public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, int methodId)
@@ -947,8 +1012,10 @@ namespace CoreLib
             this.callback = callback;
             this.si = si;
             this.mainVC = mainVC;
-            this.underapproximationMode = false;
+            this.reportTrace = false;
+            this.reportTraceIfNothingToExpand = false;
             this.basis = methodId;
+            this.GlobalLabels = null;
         }
 
         public override int StartingProcId()
@@ -969,20 +1036,11 @@ namespace CoreLib
             if (proverOutcome != ProverInterface.Outcome.Invalid)
                 return;
 
-            var start = DateTime.Now;
-            List<Absy> absyList = new List<Absy>();
-            if (!CommandLineOptions.Clo.SIBoolControlVC)
-            {
-                foreach (var label in labels)
-                {
-                    absyList.Add(Label2Absy(mainVC.info.impl.Name, label));
-                }
-            }
-            else
-            {
-                absyList = GetAbsyTrace(mainVC);
-            }
+            if (CommandLineOptions.Clo.UseLabels)
+                GlobalLabels = labels;
 
+            var start = DateTime.Now;
+            List<Absy> absyList = GetAbsyTrace(mainVC, labels);
             orderedStateIds = new List<Tuple<int, int>>();
 
             var cex = NewTrace(mainVC, absyList, model);
@@ -991,7 +1049,8 @@ namespace CoreLib
             if (CommandLineOptions.Clo.StratifiedInliningVerbose > 2)
                 cex.Print(6, Console.Out);
 
-            if (underapproximationMode && cex != null)
+            if (cex != null && (reportTrace ||
+                (reportTraceIfNothingToExpand && callSitesToExpand.Count == 0)))
             {
                 callback.OnCounterexample(cex, null);
                 //this.PrintModel(model);
@@ -1000,7 +1059,65 @@ namespace CoreLib
         }
 
         // returns a list of blocks followed by a fake assert
-        private List<Absy> GetAbsyTrace(StratifiedVC svc)
+        private List<Absy> GetAbsyTrace(StratifiedVC svc, IList<string> labels)
+        {
+            if (CommandLineOptions.Clo.SIBoolControlVC)
+                return GetAbsyTraceBoolControlVC(svc);
+            else if (CommandLineOptions.Clo.UseLabels)
+                return GetAbsyTraceLabels(svc, GlobalLabels);
+            else
+                return GetAbsyTraceControlFlowVariable(svc, labels);
+        }
+
+        private List<Absy> GetAbsyTraceLabels(StratifiedVC svc, IList<string> labels)
+        {
+            var ret = new List<Absy>();
+            var impl = svc.info.impl;
+            var block = impl.Blocks[0];
+
+            while (true)
+            {
+                ret.Add(block);
+                var gc = block.TransferCmd as GotoCmd;
+                if (gc == null) break;
+                Block next = null;
+                foreach (var succ in gc.labelTargets)
+                {
+                    if (!svc.block2label.ContainsKey(succ))
+                        continue;
+
+                    if (labels.Contains(svc.block2label[succ]))
+                    {
+                        next = succ;
+                        break;
+                    }
+                }
+                Debug.Assert(next != null, "Must find a successor");
+                Debug.Assert(!ret.Contains(next), "CFG cannot be cyclic");
+                block = next;
+            }
+
+            // fake assert
+            ret.Add(new AssertCmd(Token.NoToken, Expr.True));
+
+            return ret;
+        }
+
+        private List<Absy> GetAbsyTraceControlFlowVariable(StratifiedVC svc, IList<string> labels)
+        {
+            if (labels == null)
+            {
+                labels = si.prover.CalculatePath(svc.id);
+            }
+            var ret = new List<Absy>();
+            foreach (var label in labels)
+            {
+                ret.Add(Label2Absy(svc.info.impl.Name, label));
+            }
+            return ret;
+        }
+
+        private List<Absy> GetAbsyTraceBoolControlVC(StratifiedVC svc)
         {
             Debug.Assert(CommandLineOptions.Clo.UseProverEvaluate, "Must use prover evaluate option with boolControlVC"); 
             
@@ -1057,20 +1174,7 @@ namespace CoreLib
                         }
                         else
                         {
-                            List<Absy> calleeAbsyList = new List<Absy>();
-                            if (!CommandLineOptions.Clo.SIBoolControlVC)
-                            {
-                                string[] labels = si.prover.CalculatePath(si.attachedVC[scs].id);
-                                foreach (string label in labels)
-                                {
-                                    calleeAbsyList.Add(Label2Absy(scs.callSite.calleeName, label));
-                                }
-                            }
-                            else
-                            {
-                                calleeAbsyList = GetAbsyTrace(si.attachedVC[scs]);
-                            }
-
+                            List<Absy> calleeAbsyList = GetAbsyTrace(si.attachedVC[scs], null);
                             var calleeCounterexample = NewTrace(si.attachedVC[scs], calleeAbsyList, model);
                             calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                             new CalleeCounterexampleInfo(calleeCounterexample, new List<object>());

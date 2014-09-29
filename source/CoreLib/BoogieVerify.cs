@@ -142,10 +142,7 @@ namespace cba.Util
                 Debug.Assert(CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed);
                 Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
                 if (options.newStratifiedInlining) {
-                  bool oldUseLabels = CommandLineOptions.Clo.UseLabels;
-                  CommandLineOptions.Clo.UseLabels = false;
                   vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
-                  CommandLineOptions.Clo.UseLabels = oldUseLabels;
                 }
                 else
                    // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
@@ -492,7 +489,10 @@ namespace cba.Util
             VC.StratifiedVCGenBase vcgen = null;
             try
             {
-                vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                if(options.newStratifiedInlining) 
+                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+                else
+                    vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
             }
             catch (ProverException)
             {
@@ -781,6 +781,7 @@ namespace cba.Util
         private int _stratifiedInlining;
 
         public bool newStratifiedInlining;
+        public string newStratifiedInliningAlgo;
 
         public bool NonUniformUnfolding;
 
@@ -806,6 +807,7 @@ namespace cba.Util
         {
             StratifiedInlining = 1;
             newStratifiedInlining = false;
+            newStratifiedInliningAlgo = null;
             NonUniformUnfolding = false;
             CallTree = null;
             StratifiedInliningWithoutModels = false;
@@ -824,6 +826,7 @@ namespace cba.Util
             var ret = new BoogieVerifyOptions();
             ret.StratifiedInlining = StratifiedInlining;
             ret.newStratifiedInlining = newStratifiedInlining;
+            ret.newStratifiedInliningAlgo = newStratifiedInliningAlgo;
             ret.NonUniformUnfolding = NonUniformUnfolding;
             ret.CallTree = CallTree;
             if (CallTree != null)

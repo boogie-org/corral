@@ -293,6 +293,7 @@ namespace cba
             progVerifyOptions = new BoogieVerifyOptions();
             progVerifyOptions.NonUniformUnfolding = config.NonUniformUnfolding;
             progVerifyOptions.newStratifiedInlining = config.newStratifiedInlining;
+            progVerifyOptions.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
             progVerifyOptions.CallTree = config.noCallTreeReuse ? null : new HashSet<string>();
             progVerifyOptions.UseProverEvaluate = config.useProverEvaluate;
             progVerifyOptions.StratifiedInliningWithoutModels = progVerifyOptions.UseProverEvaluate ? true : false;
@@ -305,6 +306,7 @@ namespace cba
             pathVerifyOptions = new BoogieVerifyOptions();
             pathVerifyOptions.StratifiedInlining = 100;
             pathVerifyOptions.newStratifiedInlining = config.newStratifiedInlining;
+            pathVerifyOptions.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
             pathVerifyOptions.UseProverEvaluate = config.useProverEvaluate;
             pathVerifyOptions.StratifiedInliningWithoutModels = pathVerifyOptions.UseProverEvaluate ? true : false; ;
             pathVerifyOptions.useFwdBck = false;

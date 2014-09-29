@@ -68,6 +68,7 @@ namespace cba
         private List<string> includeFiles;
 
         public bool newStratifiedInlining { get; private set; }
+        public string newStratifiedInliningAlgo { get; private set; }
 
         public bool useArrayTheory { get; private set; }
 
@@ -320,6 +321,9 @@ namespace cba
             deepAssertsNoLoop = false;
             prevCorralState = null;
             dumpCorralState = null;
+
+            newStratifiedInlining = false;
+            newStratifiedInliningAlgo = "";
         }
 
 
@@ -643,6 +647,12 @@ namespace cba
             else if (flag == "/newStratifiedInlining")
             {
                 newStratifiedInlining = true;
+            }
+            else if (flag.StartsWith("/newStratifiedInlining:"))
+            {
+                newStratifiedInlining = true;
+                var split = flag.Split(sep);
+                newStratifiedInliningAlgo = split[1];
             }
             else if (flag == "/fwdBck")
             {
