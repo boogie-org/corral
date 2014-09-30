@@ -578,7 +578,7 @@ namespace CoreLib
 
                 var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name]);
                 backboneRecDepth[caller.Name]++;
-                var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC, callerVC.id);
+                var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC);
                 var callerOpenCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 callerOpenCallSites.UnionWith(callerVC.CallSites);
                 //Console.WriteLine("Adding call-sites: {0}", callerVC.CallSites.Select(s => s.callSiteExpr.ToString()).Concat(" "));
@@ -660,7 +660,7 @@ namespace CoreLib
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
-                var reporter = new StratifiedInliningErrorReporter(callback, this, svc, svc.id);
+                var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
                 MustFail(svc);
 
                 outcome = Bck(svc, openCallSites, reporter, backbonedepth);
@@ -741,18 +741,15 @@ namespace CoreLib
                 Console.WriteLine("Warning: newSI doesn't support non-uniform procedure inlining");
             }
 
+            // assert true to flush all one-time axioms, decls, etc
+            prover.Assert(VCExpressionGenerator.True, true);
+
             /* the forward/backward approach can only be applied for programs with asserts in calls
             * and single-threaded (multi-threaded programs contain a final assert in the main).
             * Otherwise, use forward approach */
             if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
             {
-                // assert true to flush all one-time axioms, decls, etc
-                prover.Assert(VCExpressionGenerator.True, true);
-
-                //var ret = VerifyImplementationFwdBck(impl, callback);
-                var ret = FwdBckVerify(impl, callback);
-                
-                return ret;
+                return FwdBckVerify(impl, callback);
             }
 
             MacroSI.PRINT("Starting forward approach...");
@@ -876,7 +873,7 @@ namespace CoreLib
                     svc.vcexpr, AttachByEquality(scs, svc)));
 
             stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
-            //Console.WriteLine("VC of {0} is {1}", scs.callSite.calleeName, svc.info.vcexpr);
+            //Console.WriteLine("VC of {0} is {1}", scs.callSite.calleeName, toassert);
             prover.Assert(toassert, true);
             attachedVC[scs] = svc;
 
@@ -1097,8 +1094,6 @@ namespace CoreLib
         StratifiedInlining si;
         public VerifierCallback callback;
         StratifiedVC mainVC;
-        /* (dynamic) id of the method the closest to top-level */
-        public int basis;
         public static TimeSpan ttime = TimeSpan.Zero;
         IList<string> GlobalLabels;
 
@@ -1115,24 +1110,12 @@ namespace CoreLib
             this.mainVC = mainVC;
             this.reportTrace = false;
             this.reportTraceIfNothingToExpand = false;
-            this.basis = 0;
-            this.GlobalLabels = null;
-        }
-
-        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, int methodId)
-        {
-            this.callback = callback;
-            this.si = si;
-            this.mainVC = mainVC;
-            this.reportTrace = false;
-            this.reportTraceIfNothingToExpand = false;
-            this.basis = methodId;
             this.GlobalLabels = null;
         }
 
         public override int StartingProcId()
         {
-            return basis;
+            return mainVC.id;
         }
 
         private Absy Label2Absy(string procName, string label)

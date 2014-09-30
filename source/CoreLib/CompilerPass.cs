@@ -105,7 +105,7 @@ namespace cba
         }
 
         // precondition: the only assert is in main
-        public static Dictionary<string, int> Compute(CBAProgram program, int max, List<string> Annotations)
+        public static Dictionary<string, int> Compute(CBAProgram program, int max, List<string> Annotations, BoogieVerifyOptions options)
         {
             var loopBounds = new Dictionary<string, int>();
 
@@ -167,8 +167,6 @@ namespace cba
             var query = PrepareQuery(loopImpls, program);
 
             // Set general options
-            var options = new BoogieVerifyOptions();
-            options.StratifiedInliningWithoutModels = true;
             BoogieVerify.options = options;
 
             // Set rec. bound
