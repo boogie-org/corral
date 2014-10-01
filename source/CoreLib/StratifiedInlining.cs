@@ -172,6 +172,9 @@ namespace CoreLib
         /*  Parent linking -- used only for computing the recursion depth */
         public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
 
+        // Set of implementations
+        HashSet<string> implementations;
+
         /* results of the initial program analyses */
         private List<Procedure> assertMethods;
         private BuildCallGraph.CallGraph callGraph;
@@ -197,7 +200,7 @@ namespace CoreLib
             if (!implName2SVC.ContainsKey(name) || implName2SVC[name] == null || implName2SVC[name].Count <= 0)
             {
                 implName2SVC[name] = new Stack<StratifiedVC>();
-                vc = new StratifiedVC(implName2StratifiedInliningInfo[name]);
+                vc = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
                 implName2SVC[name].Push(vc);
             }
             else
@@ -256,6 +259,7 @@ namespace CoreLib
 
             attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
+            implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
         }
 
         ~StratifiedInlining()
@@ -576,7 +580,7 @@ namespace CoreLib
                 //if (assertMethods.Contains(caller))
                 //    continue;
 
-                var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name]);
+                var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name], implementations);
                 backboneRecDepth[caller.Name]++;
                 var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC);
                 var callerOpenCallSites = new HashSet<StratifiedCallSite>(openCallSites);
@@ -656,7 +660,7 @@ namespace CoreLib
                 attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
                 parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
 
-                StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[assertMethod.Name]); ;
+                StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[assertMethod.Name], implementations); ;
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
@@ -756,7 +760,7 @@ namespace CoreLib
 
             Push();
 
-            StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name]); ;
+            StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations); ;
             HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
             prover.Assert(svc.vcexpr, true);
 
@@ -859,7 +863,7 @@ namespace CoreLib
             MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
             stats.numInlined++;
             stats.stratNumInlined++;
-            var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName]);
+            var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
             foreach (var newCallSite in svc.CallSites)
             {
                 parent[newCallSite] = scs;
@@ -1330,4 +1334,5 @@ namespace CoreLib
             return newCounterexample;
         }
     }
+
 }
