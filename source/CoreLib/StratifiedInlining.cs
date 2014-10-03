@@ -385,26 +385,61 @@ namespace CoreLib
         }
 
         // Duality style depth-first search with backtracking
-        public Outcome DepthFirstStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
-        {
+        public Outcome DepthFirstStyle(Implementation main, VerifierCallback callback)
+        {            
             Outcome outcome = Outcome.Inconclusive;
 
             var boundHit = false;
             var decisions = new Stack<HashSet<StratifiedCallSite>>();
+            var blocked = new HashSet<StratifiedCallSite>();
+            var pushed = new Stack<HashSet<StratifiedVC>>();
 
             var name_counter = 0;
             var GetNewName = new Func<string, string>(v => v + (name_counter++).ToString());
-            var name2VC = new Dictionary<string, StratifiedVC>();
+            var name2vc = new Dictionary<string, StratifiedVC>();
+            var vc2name = new Dictionary<StratifiedVC, string>();
+            var backgroundnames = new HashSet<string>();
 
-            var rootnames = new HashSet<string>();
-            var leaves = new HashSet<string>();
+            Push();
+
+            // Push main
+            StratifiedVC mainVC = new StratifiedVC(implName2StratifiedInliningInfo[main.Name], implementations); ;
+            HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(mainVC.CallSites);
+            var mainName = GetNewName("background");
+            prover.AssertNamed(mainVC.vcexpr, true, mainName);
+            
+            var reporter = new StratifiedInliningErrorReporter(callback, this, mainVC);
+            reporter.reportTraceIfNothingToExpand = true;
 
             while (true)
-            {
-                MacroSI.PRINT_DETAIL("  - underapprox");
+            {    
                 boundHit = false;
-                
+                foreach (var cs in openCallSites)
+                {
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (RecursionDepth(cs) > CommandLineOptions.Clo.RecursionBound ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        blocked.Add(cs);
+                    }
+                }
+
+
+                Push();
+                backgroundnames = new HashSet<string>();
+
+                foreach (var cs in blocked)
+                {
+                    var bn = GetNewName("background");
+                    prover.AssertNamed(cs.callSiteExpr, false, bn);
+                    backgroundnames.Add(bn);
+                }
+
+#if false
                 // underapproximate query
+                MacroSI.PRINT_DETAIL("  - underapprox");
                 Push();
 
                 foreach (var cs in openCallSites)
@@ -417,56 +452,58 @@ namespace CoreLib
                 MacroSI.PRINT_DETAIL("    - checked: " + outcome);
                 if (outcome != Outcome.Correct) break;
 
+#endif
                 MacroSI.PRINT_DETAIL("  - overapprox");
                 // overapproximate query
-                Push();
-                foreach (var cs in openCallSites)
-                {
-                    // Stop if we've reached the recursion bound or
-                    // the stack-depth bound (if there is one)
-                    if (RecursionDepth(cs) > CommandLineOptions.Clo.RecursionBound ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
-                    {
-                        var bn = GetNewName("SIblocked");
-                        prover.AssertNamed(cs.callSiteExpr, false, bn);
-                        rootnames.Add(bn);
-                        boundHit = true;
-                    }
-                }
+                
                 MacroSI.PRINT_DETAIL("    - check");
-                reporter.reportTrace = false;
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
-                Pop();
+                
                 MacroSI.PRINT_DETAIL("    - checked: " + outcome);
 
                 // timeout?
                 if (outcome != Outcome.Errors && outcome != Outcome.Correct)
+                {
+                    Pop(); 
                     break;
+                }
 
                 if (outcome == Outcome.Correct)
                 {                    
                     if(decisions.Count == 0)
                     {
                         if(boundHit) outcome = Outcome.ReachedBound;
+                        Pop(); 
                         break;
                     }
 
                     // compute interpolants
-                    var ls = leaves.ToList();
-                    var summaries = prover.GetTreeInterpolant(rootnames.ToList(), ls);
+                    var leaves = pushed.Peek().Select(svc => vc2name[svc]).ToList();
+                    var root = vc2name.Where(tup => !pushed.Peek().Contains(tup.Key))
+                        .Select(tup => tup.Value).ToList();
+                    root.AddRange(backgroundnames);
+                    root.Add(mainName);
+
+                    var summaries = prover.GetTreeInterpolant(root, leaves);
+                    prover.LogComment(Environment.NewLine);
+
                     for(int i = 0; i < summaries.Count; i++)
                     {
-                        Console.WriteLine("Summary of {0}: {1}", name2VC[ls[i]].info.impl.Name, summaries[i]);
+                        Console.WriteLine("Summary of {0}: {1}", name2vc[leaves[i]].info.impl.Name, summaries[i]);
                     }
 
                     // backtrack
                     openCallSites.UnionWith(decisions.Peek());
+                    blocked.ExceptWith(decisions.Peek());
                     decisions.Pop();
+                    pushed.Pop();
 
+                    Pop(); 
                     continue;
                 }
+
+                Pop(); 
 
                 Debug.Assert(outcome == Outcome.Errors);
                 Debug.Assert(reporter.callSitesToExpand.Count > 0);
@@ -475,17 +512,26 @@ namespace CoreLib
                 block.ExceptWith(reporter.callSitesToExpand);
                 decisions.Push(block);
 
+                var newvcs = new HashSet<StratifiedVC>();
                 foreach (var scs in reporter.callSitesToExpand)
                 {
                     openCallSites.Remove(scs);
-                    var svc = Expand(scs, false);
+                    var name = GetNewName(scs.callSite.calleeName);
+                    var svc = Expand(scs, name, false);
+
+                    name2vc.Add(name, svc);
+                    vc2name.Add(svc, name);
                     openCallSites.UnionWith(svc.CallSites);
+                    newvcs.Add(svc);
                     Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                 }
+                pushed.Push(newvcs);
             }
+
+            Pop();
+
             return outcome;
         }
-
 
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
@@ -755,6 +801,10 @@ namespace CoreLib
             {
                 return FwdBckVerify(impl, callback);
             }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "duality")
+            {
+                return DepthFirstStyle(impl, callback);
+            }
 
             MacroSI.PRINT("Starting forward approach...");
 
@@ -811,10 +861,6 @@ namespace CoreLib
             {
                 outcome = FwdNoUnder(openCallSites, reporter);
             }
-            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "duality")
-            {
-                outcome = DepthFirstStyle(openCallSites, reporter);
-            }
             else
             {
                 int currRecursionBound = 1;
@@ -858,7 +904,12 @@ namespace CoreLib
 
 
         // Inline
-        private StratifiedVC Expand(StratifiedCallSite scs, bool DoSubst = true)
+        private StratifiedVC Expand(StratifiedCallSite scs)
+        {
+            return Expand(scs, null, true);
+        }
+
+        private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst)
         {
             MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
             stats.numInlined++;
@@ -878,7 +929,12 @@ namespace CoreLib
 
             stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
             //Console.WriteLine("VC of {0} is {1}", scs.callSite.calleeName, toassert);
-            prover.Assert(toassert, true);
+
+            if (name != null)
+                prover.AssertNamed(toassert, true, name);
+            else
+                prover.Assert(toassert, true);
+
             attachedVC[scs] = svc;
 
             return svc;
