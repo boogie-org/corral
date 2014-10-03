@@ -806,7 +806,11 @@ namespace cba
                 if (iterCnt == 1)
                 {
                     //abs.writeToFile("abs.bpl");
-                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, ConfigManager.progVerifyOptions);
+                    var LBoptions = ConfigManager.progVerifyOptions.Copy();
+                    LBoptions.useDI = false;
+                    LBoptions.useFwdBck = false;
+                    LBoptions.NonUniformUnfolding = false;
+                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
