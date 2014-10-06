@@ -1368,31 +1368,33 @@ namespace cba.Util
 
     public class CSEVisitor : StandardVisitor
     {
-        Expr origExpr;
+        Dictionary<string, Variable> exprs;
         Expr currExpr;
-        Variable currVar;
 
-        CSEVisitor(Expr expr, Variable v)
+        CSEVisitor(HashSet<Variable> vlist, Dictionary<Variable, Expr> var2expr)
         {
-            origExpr = expr;
             currExpr = null;
-            currVar = v;
+            exprs = new Dictionary<string, Variable>();
+            foreach (Variable v in vlist)
+            {
+                exprs.Add(SSA.expr2key(var2expr[v]), v);
+            }
         }
 
         /*
          * Perform CSE on given_expr w.r.t. non_null_expr, replacing it with variable v
          */
-        public static Expr getExpr(Expr given_expr, Expr non_null_expr, Variable v)
+        public static Expr getExpr(Expr given_expr, HashSet<Variable> vars, Dictionary<Variable, Expr> var2expr)
         {
             if (given_expr == null) return null;
-            var cse = new CSEVisitor(non_null_expr, v);
+            var cse = new CSEVisitor(vars, var2expr);
             cse.currExpr = cse.VisitExpr(given_expr);
             return cse.currExpr;
         }
 
         public override Expr VisitExpr(Expr node)
         {
-            if (SSA.ExprEquals(node, origExpr)) return Expr.Ident(currVar);
+            if (exprs.ContainsKey(SSA.expr2key(node))) return Expr.Ident(exprs[SSA.expr2key(node)]);
             else return base.VisitExpr(node);
         }
     }
@@ -1423,10 +1425,12 @@ namespace cba.Util
                 throw new NotImplementedException();
         }
 
+
         /*
          * We go to every implementation, and look at assert (expr != NULL) and assume (expr != NULL)
          * Now, we introduce a temporary variable and assignment cseTmp{i} := expr;
          * Now, as long as this temporary variable is available, we replace expr by cseTmp{i}
+         * When the same expr is available from multiple vars from different predecessors, we introduce a new cseTmp{i} var := expr
          * We now perform SSA, and then do the alias analysis
          * This improves the precision of alias analysis, since these cseTmp vars are always non null, and hence, NULL cannot flow through these vars
          */
@@ -1451,9 +1455,6 @@ namespace cba.Util
                 
                 // block_name -> set of variables available at the end of the block
                 Dictionary<string, HashSet<Variable>> block2livevars = new Dictionary<string, HashSet<Variable>>();
-                
-                // cseTmp variable -> list of commands to be ignored while performing CSE
-                Dictionary<Variable, List<Cmd>> ignore_cmds = new Dictionary<Variable, List<Cmd>>();
 
                 // Compute predecessors, do a topological sort on the CFG
                 impl.ComputePredecessorsForBlocks();
@@ -1465,127 +1466,254 @@ namespace cba.Util
                 {
                     if (dbg) Console.WriteLine("Analyzing {0}", b.Label);
 
-                    // List of positions where assignment of cseTmp has to be inserted
-                    List<int> add_pos = new List<int>();
+                    // Checking if expr is available in all predecessors
+                    Dictionary<string, int> expr_count = new Dictionary<string, int>();
 
-                    // List of local cseTmp variables in the block
-                    List<LocalVariable> add_lv = new List<LocalVariable>();
+                    // string -> expr
+                    Dictionary<string, Expr> string2expr = new Dictionary<string, Expr>();
 
-                    // List of expressions assigned to these local variables
-                    List<Expr> add_node = new List<Expr>();
+                    // List of variables which contain the same expr from all predecessors
+                    // If list has 1 variable, add it to live_vars
+                    // Else, create a new temporary for expr
+                    Dictionary<string, HashSet<Variable>> expr2varlist = new Dictionary<string, HashSet<Variable>>();
+
+                    // List of variables live after each cmd
                     HashSet<Variable> live_vars = new HashSet<Variable>();
 
-                    // Adding current block to keys of block2livevars dictionary
-                    block2livevars.Add(b.Label, new HashSet<Variable>());
-
-                    // Go to each command, and generate local vars
-                    for (int pos = 0; pos < b.Cmds.Count; pos++)
-                    {
-                        Cmd c = b.Cmds[pos];
-                        if (dbg) Console.WriteLine(c.ToString());
-
-                        // Generate cseTmp for assume cmds
-                        if (c is AssumeCmd)
-                        {
-                            var ac = c as AssumeCmd;
-                            if (CleanAssert.validAssumeCmd(ac))
-                            {
-                                if (dbg) Console.WriteLine("Valid Assume");
-                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssume(ac));
-                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
-                                var2expr.Add(lv, dup.VisitExpr(node));
-                                live_vars.Add(lv);
-                                if (dbg) Console.WriteLine("Added {0} {1} to block2livevars", node.ToString(), lv.Name);
-
-                                impl.LocVars.Add(lv);
-
-                                add_pos.Add(pos + 1);
-                                add_lv.Add(lv);
-                                add_node.Add(node);
-
-                                ignore_cmds.Add(lv, new List<Cmd>());
-                            }
-                        }
-                        
-                        // Generate cseTmp for assert cmds
-                        else if (c is AssertCmd)
-                        {
-                            var ac = c as AssertCmd;
-                            if (CleanAssert.validAssertCmd(ac))
-                            {
-                                if (dbg) Console.WriteLine("Valid Assert");
-                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssert(ac));
-                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
-                                var2expr.Add(lv, dup.VisitExpr(node));
-                                live_vars.Add(lv);
-                                if (dbg) Console.WriteLine("Added {0} {1} to block2livevars", node.ToString(), lv.Name);
-
-                                impl.LocVars.Add(lv);
-
-                                add_pos.Add(pos + 1);
-                                add_lv.Add(lv);
-                                add_node.Add(node);
-
-                                ignore_cmds.Add(lv, new List<Cmd>());
-                            }
-                        }
-                    }
-
-                    // Add assignments to the block at relevant positions
-                    for (int i = 0; i < add_pos.Count; i++) b.Cmds.Insert(add_pos[i] + i, BoogieAstFactory.MkVarEqExpr(add_lv[i], add_node[i]));
-
-                    // Constuct the ignore cmds for each cseTmp generated
-                    for (int i = 0; i < add_lv.Count; i++)
-                    {
-                        int ind = 0;
-                        LocalVariable lv = add_lv[i];
-                        int position = add_pos[i] + i;
-                        while (ind <= position)
-                        {
-                            Cmd c = b.Cmds[ind];
-                            ignore_cmds[lv].Add(c);
-                            ind++;
-                        }
-                    }
-
-                    // Check whether cseTmp var is available at all predecessors
-                    // cseTmp var -> #predecessors where it is available
-                    Dictionary<Variable, int> count = new Dictionary<Variable,int>();
-
-                    // Go to each predecessor, and check if cseTmp var is available
+                    // Go to each predecessor, find expr available in all predecessors
                     foreach (Block blk in b.Predecessors)
                     {
                         foreach (Variable v in block2livevars[blk.Label])
                         {
-                            if (!count.ContainsKey(v)) count.Add(v, 0);
-                            count[v]++;
+                            string expr = expr2key(var2expr[v]);
+                            if (!string2expr.ContainsKey(expr)) string2expr.Add(expr, var2expr[v]);
+                            if (!expr_count.ContainsKey(expr)) expr_count.Add(expr, 0);
+                            expr_count[expr]++;
+                            if (!expr2varlist.ContainsKey(expr)) expr2varlist.Add(expr, new HashSet<Variable>());
+                            expr2varlist[expr].Add(v);
                         }
                     }
 
-                    if (dbg) Console.WriteLine(b.Label + " ->");
-
-                    // Listing all variables, available here, either obtained from all predecessors, or generated in this block
-                    foreach (Variable v in (count.Keys.Where(va => count[va] == b.Predecessors.Count)).Union(live_vars))
+                    // Add cmds for expr available from all predecessors at the start of current block
+                    // cseTmp{i} := expr;
+                    int cmds_added = 0;
+                    foreach (string expr in expr_count.Keys.Where(e => expr_count[e] == b.Predecessors.Count))
                     {
-                        if (dbg) Console.WriteLine(v.Name + " " + var2expr[v].ToString());
-                        bool block_live = true;
-
-                        // Go to each cmd, and perform CSE for the current cseTmp var
-                        foreach (Cmd c in b.Cmds)
+                        if (dbg) Console.WriteLine("{0} is live at all preds", expr);
+                        if (expr2varlist[expr].Count == 1)
                         {
-                            if (ignore_cmds.ContainsKey(v) && ignore_cmds[v].Contains(c)) continue;
-                            if (dbg) Console.WriteLine(c.ToString());
-                            block_live = ProcessCmdForCSE(c, var2expr[v], block_live, v, impl_names);
+                            live_vars.Add(expr2varlist[expr].First());
+                            if (dbg) Console.WriteLine("available at {0}", expr2varlist[expr].First());
+                        }
+                        else
+                        {
+                            Expr node = dup.VisitExpr(string2expr[expr]);
+                            LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                            var2expr.Add(lv, dup.VisitExpr(node));
+                            live_vars.Add(lv);
+
+                            // Adding local variable
+                            impl.LocVars.Add(lv);
+
+                            if (dbg) Console.WriteLine("{0} {1}", lv.Name, expr);
+
+                            // Inserting cmd
+                            b.Cmds.Insert(0, BoogieAstFactory.MkVarEqExpr(lv, node));
+                            cmds_added++;
+                        }
+                    }
+
+                    bool gen_cmd = false;
+
+                    // Doing gen, kill, replace for each cmd for all available expr
+                    for (int pos = cmds_added; pos < b.Cmds.Count; pos++)
+                    {
+                        Cmd c = b.Cmds[pos];
+
+                        if (dbg)
+                        {
+                            Console.Write("Live vars -> ");
+                            foreach (Variable v in live_vars) Console.Write(var2expr[v].ToString() + " ");
+                            Console.WriteLine();
                         }
 
-                        // If cseTmp var is still alive, add it to block2livevars
-                        if (block_live)
+                        if (dbg) Console.WriteLine(c.ToString());
+                        
+                        HashSet<Variable> live_vars_in = new HashSet<Variable>(live_vars);
+                        HashSet<Variable> live_vars_out;
+
+                        // Gen Kill
+                        live_vars_out = ProcessCmdGenKill(c, live_vars_in, impl_names, out gen_cmd, var2expr);
+
+                        if (gen_cmd)
                         {
-                            block2livevars[b.Label].Add(v);
+                            if (c is AssumeCmd)
+                            {
+                                var ac = c as AssumeCmd;
+                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssume(ac));
+                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                                var2expr.Add(lv, dup.VisitExpr(node));
+
+                                impl.LocVars.Add(lv);
+
+                                b.Cmds.Insert(pos + 1, BoogieAstFactory.MkVarEqExpr(lv, node));
+                            }
+                            else if (c is AssertCmd)
+                            {
+                                var ac = c as AssertCmd;
+                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssert(ac));
+                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                                var2expr.Add(lv, dup.VisitExpr(node));
+
+                                impl.LocVars.Add(lv);
+
+                                b.Cmds.Insert(pos + 1, BoogieAstFactory.MkVarEqExpr(lv, node));
+                            }
                         }
+
+                        // Replace RHS
+                        ProcessCmdReplaceRHS(c, live_vars_in, var2expr);
+                        
+                        // Replace LHS
+                        ProcessCmdReplaceLHS(c, live_vars_out, var2expr);
+
+                        live_vars = live_vars_out;
+
+                        if (dbg) Console.WriteLine(c.ToString());
+                    }
+                    block2livevars.Add(b.Label, live_vars);
+                }
+            }
+        }
+
+        // Add/Remove variables generated/killed by cmd
+        private HashSet<Variable> ProcessCmdGenKill(Cmd c, HashSet<Variable> live_vars_in, HashSet<string> impl_names, out bool gen_cmd, Dictionary<Variable, Expr> var2expr)
+        {
+            HashSet<Variable> live_vars_out = new HashSet<Variable>(live_vars_in);
+            gen_cmd = false;
+            
+            if (c is AssumeCmd)
+            {
+                var ac = c as AssumeCmd;
+                if (CleanAssert.validAssumeCmd(ac))
+                {
+                    gen_cmd = true;
+                    foreach (Variable v in live_vars_in)
+                    {
+                        if (dbg) Console.WriteLine("Comparing {0} {1}", var2expr[v].ToString(), CleanAssert.getExprFromAssume(ac).ToString());
+                        if (ExprEquals(var2expr[v], CleanAssert.getExprFromAssume(ac))) gen_cmd = false;
                     }
                 }
             }
+            else if (c is AssertCmd)
+            {
+                var ac = c as AssertCmd;
+                if (CleanAssert.validAssertCmd(ac))
+                {
+                    gen_cmd = true;
+                    foreach (Variable v in live_vars_in)
+                    {
+                        if (dbg) Console.WriteLine("Comparing {0} {1}", var2expr[v].ToString(), CleanAssert.getExprFromAssert(ac).ToString());
+                        if (ExprEquals(var2expr[v], CleanAssert.getExprFromAssert(ac))) gen_cmd = false;
+                    }
+                }
+            }
+            else if (c is AssignCmd)
+            {
+                var ac = c as AssignCmd;
+                if (CleanAssert.validAssignCmd(ac))
+                {
+                    live_vars_out.Add((c as AssignCmd).Lhss.First().DeepAssignedVariable);
+                    if (dbg) Console.WriteLine("{0} added to live_vars", (c as AssignCmd).Lhss.First().DeepAssignedVariable.Name);
+                    return live_vars_out;
+                }
+            }
+
+            // If vars modified by cmd contains any subexpr in live_vars_in, remove it from live_vars_in
+            HashSet<string> vars_modified = BoogieUtil.getVarsModified(c, impl_names);
+
+            foreach (Variable v in live_vars_in)
+            {
+                HashSet<string> sub_exprs = getSubExprs(var2expr[v]);
+                if (vars_modified.Intersection(sub_exprs).Count > 0) live_vars_out.Remove(v); 
+            }
+
+            return live_vars_out;
+        }
+
+        // Perform substitution on LHS of cmd
+        private void ProcessCmdReplaceLHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
+        {
+            if (c is AssignCmd)
+            {
+                var ac = c as AssignCmd;
+
+                for (int i = 0; i < ac.Lhss.Count; i++)
+                {
+                    if (ac.Lhss[i] is SimpleAssignLhs)
+                    {
+                        SimpleAssignLhs lhs = ac.Lhss[i] as SimpleAssignLhs;
+                        ac.Lhss[i] = new SimpleAssignLhs(lhs.tok, CSEVisitor.getExpr(lhs.DeepAssignedIdentifier, live_vars, var2expr) as IdentifierExpr);
+                    }
+                    else if (ac.Lhss[i] is MapAssignLhs)
+                    {
+                        MapAssignLhs lhs = ac.Lhss[i] as MapAssignLhs;
+                        lhs.Indexes = new List<Expr>(lhs.Indexes.Select(e => CSEVisitor.getExpr(e, live_vars, var2expr)));
+                    }
+                }
+            }
+            else if (c is CallCmd)
+            {
+                var cc = c as CallCmd;
+
+                for (int i = 0; i < cc.Outs.Count; i++)
+                {
+                    Expr lhs = cc.Outs[i];
+                    cc.Outs[i] = CSEVisitor.getExpr(lhs, live_vars, var2expr) as IdentifierExpr;
+                }
+            }
+        }
+
+        // Perform substitution on RHS of cmd
+        private void ProcessCmdReplaceRHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
+        {
+            if (c is AssumeCmd)
+            {
+                var ac = c as AssumeCmd;
+                ac.Expr = CSEVisitor.getExpr(ac.Expr, live_vars, var2expr);
+            }
+            else if (c is AssertCmd)
+            {
+                var ac = c as AssertCmd;
+                ac.Expr = CSEVisitor.getExpr(ac.Expr, live_vars, var2expr);
+            }
+            else if (c is CallCmd)
+            {
+                var cc = c as CallCmd;
+
+                for (int i = 0; i < cc.Ins.Count; i++)
+                {
+                    Expr rhs = cc.Ins[i];
+                    cc.Ins[i] = CSEVisitor.getExpr(rhs, live_vars, var2expr);
+                }
+            }
+            else if (c is AssignCmd)
+            {
+                var ac = c as AssignCmd;
+                for (int i = 0; i < ac.Rhss.Count; i++)
+                {
+                    Expr rhs = ac.Rhss[i];
+                    ac.Rhss[i] = CSEVisitor.getExpr(rhs, live_vars, var2expr);
+                }
+                
+                
+            }
+        }
+
+        // TODO: Better key
+        public static string expr2key(Expr expr)
+        {
+            return expr.ToString();
         }
 
         /*
@@ -1594,80 +1722,8 @@ namespace cba.Util
          */
         public static bool ExprEquals(Expr e1, Expr e2)
         {
-            if (e1.ToString().Equals(e2.ToString())) return true;
+            if (expr2key(e1).Equals(expr2key(e2))) return true;
             else return false;
-        }
-
-        /*
-         * Perform CSE on the given cmd c for the variable v, which represents expression expr
-         */
-        private bool ProcessCmdForCSE(Cmd c, Expr expr, bool block_alive, Variable v, HashSet<string> impl_names)
-        {
-            if (dbg) Console.WriteLine("Called with " + c.ToString());
-            if (block_alive)
-            {
-                // If vars modified by cmd contains any var in expr, expr is no longer available
-                HashSet<string> subexprs = getSubExprs(expr);
-                if (BoogieUtil.getVarsModified(c, impl_names).Intersection(subexprs).Count > 0) block_alive = false;
-
-                if (c is AssumeCmd)
-                {
-                    var ac = c as AssumeCmd;
-                    ac.Expr = CSEVisitor.getExpr(ac.Expr, expr, v);
-                }
-                else if (c is AssertCmd)
-                {
-                    var ac = c as AssertCmd;
-                    ac.Expr = CSEVisitor.getExpr(ac.Expr, expr, v);
-                }
-                else if (c is CallCmd)
-                {
-                    var cc = c as CallCmd;
-                    for (int i = 0 ; i < cc.Ins.Count ; i++)
-                    {
-                        Expr rhs = cc.Ins[i];
-                        cc.Ins[i] = CSEVisitor.getExpr(rhs, expr, v);
-                    }
-                    if (block_alive)
-                    {
-                        for (int i = 0 ; i < cc.Outs.Count ; i++)
-                        {
-                            Expr lhs = cc.Outs[i];
-                            cc.Outs[i] = CSEVisitor.getExpr(lhs, expr, v) as IdentifierExpr;
-                        }
-                    }
-                }
-                else if (c is AssignCmd)
-                {
-                    var ac = c as AssignCmd;
-                    for (int i = 0 ; i < ac.Rhss.Count ; i++)
-                    {
-                        Expr rhs = ac.Rhss[i];
-                        ac.Rhss[i] = CSEVisitor.getExpr(rhs, expr, v);
-                    }
-                    if (block_alive)
-                    {
-                        for (int i = 0 ; i < ac.Lhss.Count ; i++)
-                        {
-                            if (ac.Lhss[i] is SimpleAssignLhs)
-                            {
-                                SimpleAssignLhs lhs = ac.Lhss[i] as SimpleAssignLhs;
-                                ac.Lhss[i] = new SimpleAssignLhs(lhs.tok, CSEVisitor.getExpr(lhs.DeepAssignedIdentifier, expr, v) as IdentifierExpr);
-                            }
-                            else if (ac.Lhss[i] is MapAssignLhs)
-                            {
-                                MapAssignLhs lhs = ac.Lhss[i] as MapAssignLhs;
-                                lhs.Indexes = new List<Expr>(lhs.Indexes.Select(e => CSEVisitor.getExpr(e, expr, v)));
-                            }
-                        }
-                    }
-                }
-
-                if (dbg) Console.WriteLine("Returned with " + c.ToString());
-
-                return block_alive;
-            }
-            else return block_alive;
         }
 
         /*
@@ -2219,6 +2275,12 @@ namespace cba.Util
                 (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
                 ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null)
                 return true;
+            else return false;
+        }
+
+        public static bool validAssignCmd(AssignCmd ac)
+        {
+            if (ac.Lhss.Count == 1 && ac.Lhss[0] is SimpleAssignLhs && (ac.Lhss[0] as SimpleAssignLhs).DeepAssignedVariable.Name.StartsWith("cseTmp")) return true;
             else return false;
         }
 
