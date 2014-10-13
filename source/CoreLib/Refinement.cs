@@ -799,14 +799,18 @@ namespace cba
 
         public PersistentProgram doTransformation(out HashSet<string> boolVars)
         {
+            var impls = new HashSet<string>();
+
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
+                impls.Add(impl.Name);
                 localVarsToAdd = new List<Variable>();
                 doTransformation(impl);
                 impl.LocVars.AddRange(localVarsToAdd);
             }
+            
             foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
-                doTransformation(proc);
+                doTransformation(proc, impls.Contains(proc.Name));
 
             program.AddTopLevelDeclarations(tokenVarMap.Values);
 
@@ -961,7 +965,7 @@ namespace cba
         // Process free requires and ensures:
         //    replace "free requires e" with "free requires tracked ==> e"
         //    same for ensures
-        private void doTransformation(Procedure proc)
+        private void doTransformation(Procedure proc, bool hasImpl)
         {
             foreach (Requires req in proc.Requires)
             {
@@ -979,7 +983,7 @@ namespace cba
                 varsUsed.Visit(ens.Condition);
                 if (varsUsed.globalsUsed.Intersection(varsToInstrument).Count == 0)
                     continue;
-                Debug.Assert(ens.Free);
+                Debug.Assert(!hasImpl || ens.Free);
                 var expr = getAllTrackedExpr(varsUsed.globalsUsed, proc.Name);
                 ens.Condition = Expr.Imp(expr, ens.Condition);
             }
