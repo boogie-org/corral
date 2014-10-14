@@ -802,6 +802,7 @@ namespace cba.Util
         // Extended API
         public HashSet<string> procsToSkip;
         public Dictionary<string, int> extraRecBound;
+        public HashSet<string> extraFlags;
 
         // Default options
         public BoogieVerifyOptions()
@@ -820,6 +821,7 @@ namespace cba.Util
             extraRecBound = new Dictionary<string, int>();
             useFwdBck = false;
             useDI = false;
+            extraFlags = new HashSet<string>();
         }
 
         public BoogieVerifyOptions Copy()
@@ -843,6 +845,7 @@ namespace cba.Util
             ret.useDI = useDI;
             ret.procsToSkip = new HashSet<string>(ret.procsToSkip);
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
+            ret.extraFlags.UnionWith(extraFlags);
 
             return ret;
         }

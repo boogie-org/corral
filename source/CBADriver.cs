@@ -299,6 +299,7 @@ namespace cba
             progVerifyOptions.StratifiedInliningWithoutModels = progVerifyOptions.UseProverEvaluate ? true : false;
             progVerifyOptions.useFwdBck = config.FwdBckSearch == 1;
             progVerifyOptions.useDI = config.useDI;
+            progVerifyOptions.extraFlags.UnionWith(config.extraFlags);
             if (config.staticInlining > 0)
                 progVerifyOptions.StratifiedInlining = 100;
 
