@@ -145,6 +145,8 @@ namespace cba
         public string prevCorralState { get; private set; }
         public string dumpCorralState { get; private set; }
 
+        public HashSet<string> extraFlags { get; private set; }
+
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -324,6 +326,8 @@ namespace cba
 
             newStratifiedInlining = false;
             newStratifiedInliningAlgo = "";
+
+            extraFlags = new HashSet<string>();
         }
 
 
@@ -409,6 +413,11 @@ namespace cba
             else if (flag == "/trainSummaries")
             {
                 trainSummaries = true;
+            }
+            else if (flag.StartsWith("/set"))
+            {
+                var split = flag.Split(sep);
+                extraFlags.Add(split[1]);
             }
             else if (flag.StartsWith("/recursionBound:"))
             {
