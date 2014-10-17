@@ -16,9 +16,17 @@ namespace AngelicVerifierNull
     /// <summary>
     /// Various source -> source transformations
     /// </summary>
-    class Instrumentations
+    public class Instrumentations
     {
-        const string CORRAL_EXTRA_INIT_PROC = "corralExtraInit";
+        public static readonly string EnvironmentAssumptionAttr = "Ebasic";
+
+        public static Implementation GetEnvironmentAssumptionsProc(Program program)
+        {
+            return program.TopLevelDeclarations
+                .OfType<Implementation>()
+                .FirstOrDefault(impl => QKeyValue.FindBoolAttribute(impl.Attributes, Instrumentations.EnvironmentAssumptionAttr)
+                    || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, Instrumentations.EnvironmentAssumptionAttr));
+        }
 
         public class HarnessInstrumentation
         {
@@ -89,7 +97,8 @@ namespace AngelicVerifierNull
                     if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         continue;
                     // skip initialization procedure
-                    if (impl.Name == CORRAL_EXTRA_INIT_PROC)
+                    if (QKeyValue.FindBoolAttribute(impl.Attributes, EnvironmentAssumptionAttr) ||
+                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, EnvironmentAssumptionAttr))
                         continue;
 
                     Stats.numProcsAnalyzed++;
@@ -164,9 +173,9 @@ namespace AngelicVerifierNull
                 initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() {"Start"}, null);
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit
-                var inits = prog.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == CORRAL_EXTRA_INIT_PROC);
-                if (inits.Count() > 0 && Options.FieldNonNull)
-                    globalCmds.Add(BoogieAstFactory.MkCall(inits.First(), new List<Expr>(), new List<Variable>()));
+                var init = Instrumentations.GetEnvironmentAssumptionsProc(prog);
+                if (init != null && Options.FieldNonNull)
+                    globalCmds.Add(BoogieAstFactory.MkCall(init.Proc, new List<Expr>(), new List<Variable>()));
 
                 // initialize globals
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
@@ -707,6 +716,9 @@ namespace AngelicVerifierNull
         // or input constraints.
         Program currProg;
 
+        // Name of the harness procedure
+        string origMainName;
+
         // Assertion instrumentation
         public readonly string assertsPassedName = "assertsPassed";
         GlobalVariable assertsPassed;
@@ -726,6 +738,7 @@ namespace AngelicVerifierNull
             tempSuppressedTokens = new HashSet<AssertToken>();
             currProg = null;
             this.harnessInstr = harnessInstr;
+            origMainName = null;
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -747,6 +760,8 @@ namespace AngelicVerifierNull
 
             // Instrument assertions
             int tokenId = 0;
+
+            origMainName = program.mainProcName;
 
             CBAProgram ret = null;
 
@@ -1162,12 +1177,39 @@ namespace AngelicVerifierNull
             block.Cmds = ncmds;
         }
 
+        static int SuppressionCount = 0;
+
         // Suppress an input constraint
-        public void SuppressInput(Expr input)
+        public void SuppressInput(Expr input, string entrypoint)
         {
+            // find main
             var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
-                (output as PersistentProgram).mainProcName);
-            main.Proc.Requires.Add(new Requires(true, input));
+                origMainName);
+
+            // construct the assume
+            var req = new AssumeCmd(Token.NoToken, input);
+            req.Attributes = new QKeyValue(Token.NoToken, Driver.BlockingConstraintAttr, new List<object> { Expr.Literal(SuppressionCount++) }, req.Attributes);
+
+            // find the call to the entrypoint and put the assume there
+            foreach (var block in main.Blocks)
+            {
+                var ncmds = new List<Cmd>();
+                foreach (var cmd in block.Cmds)
+                {
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd == null)
+                    {
+                        ncmds.Add(cmd);
+                        continue;
+                    }
+
+                    if (ccmd.callee == entrypoint)
+                        ncmds.Add(req);
+                    ncmds.Add(cmd);
+                }
+                block.Cmds = ncmds;
+            }
+
         }
 
         // Adds a new main:

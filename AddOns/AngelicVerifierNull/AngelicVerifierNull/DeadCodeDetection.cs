@@ -508,7 +508,7 @@ namespace AngelicVerifierNull
             AssumptionsToRemove.Iter(a => Console.WriteLine("REMOVE: " + a));
 
             var retProg = origProg.getProgram();
-            Implementation extraInit = BoogieUtil.findProcedureImpl(retProg.TopLevelDeclarations, "corralExtraInit");
+            Implementation extraInit = Instrumentations.GetEnvironmentAssumptionsProc(retProg);
             if (extraInit == null)
                 throw new Exception("Input program does not have corralExtraInit!");
 
@@ -543,8 +543,7 @@ namespace AngelicVerifierNull
         /// </summary>
         private void CollectAssumptions()
         {
-            Implementation extraInit = BoogieUtil.findProcedureImpl(InstrumentedProg.getProgram()
-                .TopLevelDeclarations, "corralExtraInit");
+            var extraInit = Instrumentations.GetEnvironmentAssumptionsProc(InstrumentedProg.getProgram());
             if (extraInit == null)
                 throw new Exception("Input program does not have corralExtraInit!");
 

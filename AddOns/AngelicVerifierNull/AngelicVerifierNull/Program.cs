@@ -116,7 +116,8 @@ namespace AngelicVerifierNull
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
         static bool deadCodeDetect = false; // do dead code detection
-        
+
+        public static readonly string BlockingConstraintAttr = "BlockingConstraint";
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -214,6 +215,7 @@ namespace AngelicVerifierNull
                 ResultsFile.Flush();
             }
 
+            
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
 
@@ -392,6 +394,11 @@ namespace AngelicVerifierNull
             //BoogieUtil.PrintProgram(ra.VisitProgram(init), "noassert.bpl");
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
+
+            // Inline procedures supplied with {:inline} annotation
+            cba.Driver.InlineProcedures(init);
+            // Remove {:inline} impls
+            init.RemoveTopLevelDeclarations(decl => (decl is Implementation) && BoogieUtil.checkAttrExists("inline", decl.Attributes));
 
             //Instrument to create the harness
             corralConfig.mainProcName = CORRAL_MAIN_PROC;
@@ -597,7 +604,7 @@ namespace AngelicVerifierNull
                     {
                         output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
                             failingProc, assertLoc.Item1, assertLoc.Item2, failingAssert.Expr.ToString(), failingEntryPoint);
-                        Stats.count("bug.count");
+                        
                         // result file output
                         // format: Description, Src File, Line, Procedure, EntryPoint
                         if (ResultsFile != null)
@@ -605,13 +612,17 @@ namespace AngelicVerifierNull
                             ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
                                 failingAssert.Expr.ToString(), assertLoc.Item1, assertLoc.Item2, failingProc, failingEntryPoint);
                             ResultsFile.Flush();
-                        }
+                        }                        
                     }
                     else
                     {
                         output = string.Format("Assertion failed in proc {0} with expr {1} and entrypoint {2}",
                             failingProc, failingAssert.Expr.ToString(), failingEntryPoint);
                     }
+
+                    Stats.count("bug.count");
+
+                    // TODO: I don't think a timeout/inconclusive result from ExplainError is getting handled very well here
 
                     Console.WriteLine(output);
                     if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
@@ -620,7 +631,7 @@ namespace AngelicVerifierNull
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
                     traceType = "Blocked";
-                    instr.SuppressInput(eeStatus.Item2);
+                    instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
                     Stats.count("blocked.count");
                 }
 
@@ -776,7 +787,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { instr.assertsPassedName })), 
                 false);
 
-            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
@@ -956,7 +967,7 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, "", out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, "/ignoreAllAssumes- /onlySlicAssumes-", out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
