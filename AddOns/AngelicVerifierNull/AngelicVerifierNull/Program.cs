@@ -787,7 +787,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars.Union(new string[] { instr.assertsPassedName })), 
                 false);
 
-            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
