@@ -51,6 +51,7 @@ namespace AngelicVerifierNull
             {
                 FindMalloc();
                 FindNULL();
+                var reach = FindReachableStatesFunc(prog);
                 if (Options.bufferDetect)
                 {
                     //DisableNonNullAsserts();
@@ -58,9 +59,24 @@ namespace AngelicVerifierNull
                 }
                 CreateMainProcedure();
                 ChangeStubsIntoUnkowns();
+                EntryPointsReachable(reach);
                 if (Options.bufferDetect)
                 {
                     BufferInstrumentations();
+                }
+            }
+
+            // The beginning of an entry point must be reachable
+            private void EntryPointsReachable(Function reach)
+            {
+                foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if (!entrypoints.Contains(impl.Name))
+                        continue;
+                    // assume reach(true);
+                    impl.Blocks[0].Cmds.Insert(0,
+                        new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken,
+                            new FunctionCall(reach), new List<Expr> { Expr.True })));
                 }
             }
 
@@ -277,6 +293,22 @@ namespace AngelicVerifierNull
             {
                 return GetPointerVars(vars)
                     .Select(x => AllocatePointerAsUnknown(x)).ToList();
+            }
+            public static Function FindReachableStatesFunc(Program program)
+            {
+                var ret = program.TopLevelDeclarations.OfType<Function>()
+                    .Where(f => QKeyValue.FindBoolAttribute(f.Attributes, "ReachableStates"))
+                    .FirstOrDefault();
+
+                if (ret != null)
+                    return ret;
+
+                ret = new Function(Token.NoToken, "MustReach", new List<Variable>{
+                    BoogieAstFactory.MkFormal("x", btype.Bool, true)},
+                    BoogieAstFactory.MkFormal("y", btype.Bool, false));
+
+                program.AddTopLevelDeclaration(ret);
+                return ret;
             }
             private void FindMalloc()
             {
@@ -1188,7 +1220,8 @@ namespace AngelicVerifierNull
 
             // construct the assume
             var req = new AssumeCmd(Token.NoToken, input);
-            req.Attributes = new QKeyValue(Token.NoToken, Driver.BlockingConstraintAttr, new List<object> { Expr.Literal(SuppressionCount++) }, req.Attributes);
+            req.Attributes = new QKeyValue(Token.NoToken, Driver.BlockingConstraintAttr, 
+                new List<object> { Expr.Literal(SuppressionCount++) }, req.Attributes);
 
             // find the call to the entrypoint and put the assume there
             foreach (var block in main.Blocks)

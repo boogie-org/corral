@@ -527,6 +527,9 @@ namespace AngelicVerifierNull
 
             int iterCount = 0;
             var ret = true;
+            
+            
+
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
             {
@@ -591,6 +594,9 @@ namespace AngelicVerifierNull
                 var assertLoc = instr.PrintErrorTrace(cex, traceType + traceCount);
                 traceCount++;
 
+                // TODO: I don't think a timeout/inconclusive result from ExplainError 
+                // is getting handled very well here. What about "SUPPRESS"?
+
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
@@ -622,7 +628,6 @@ namespace AngelicVerifierNull
 
                     Stats.count("bug.count");
 
-                    // TODO: I don't think a timeout/inconclusive result from ExplainError is getting handled very well here
 
                     Console.WriteLine(output);
                     if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
