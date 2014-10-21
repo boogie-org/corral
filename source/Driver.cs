@@ -591,7 +591,7 @@ namespace cba
             return inputProg;
         }
 
-        private static void InlineProcedures(Program program)
+        public static void InlineProcedures(Program program)
         {
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
