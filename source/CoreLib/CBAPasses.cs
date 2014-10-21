@@ -606,23 +606,6 @@ namespace cba
         }
     }
 
-    public class AddBooleanVarsPass : CompilerPass
-    {
-        AddBooleanVars abv;
-
-        public AddBooleanVarsPass()
-        {
-            abv = new AddBooleanVars();
-        }
-
-        public override CBAProgram runCBAPass(CBAProgram p)
-        {
-            Program program = p as Program;
-            abv.VisitProgram(p as Program);
-            return p;
-        }
-    }
-
     // This is used for pre-processing of the input program. We rewrite asserts
     // so that we know which one of them failed.
     public class RewriteAssertsPass : CompilerPass
