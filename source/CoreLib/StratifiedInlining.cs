@@ -902,7 +902,9 @@ namespace CoreLib
 
             Pop();
 
-            di.Dump("ct" + (dumpCnt++) + ".dot");
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 || 
+                BoogieVerify.options.extraFlags.Contains("DumpDag"))
+                di.Dump("ct" + (dumpCnt++) + ".dot");
             
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
@@ -1299,9 +1301,16 @@ namespace CoreLib
             //}
 
             if (matches.Count == 0) return null;
-            //Console.WriteLine("Merging for proc. {0}", cs.callSite.calleeName);
 
-            return matches[random.Next(0, matches.Count)];
+            var choice = 0;
+            if (cba.Util.BoogieVerify.options.extraFlags.Contains("RandomMerge"))
+                choice = random.Next(0, matches.Count);
+            if (!cs.callSite.calleeName.StartsWith("sdv_"))
+                choice = 0;
+            if(CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                Console.WriteLine("Merging for proc. {0}, {1} of {2}", cs.callSite.calleeName, choice, matches.Count - 1);
+
+            return matches[choice];
         }
 
         private IEnumerable<StratifiedVC> GetNextMatch(StratifiedCallSite cs)

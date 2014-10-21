@@ -659,6 +659,7 @@ namespace cba
 
             var startTime = DateTime.Now;
             var cloopsTime = TimeSpan.Zero;
+            var SItime = TimeSpan.Zero;
 
             #region set up entry point
             if (config.mainProcName != null)
@@ -843,10 +844,14 @@ namespace cba
 
                 Console.WriteLine("Verifying program while tracking: {0}", varsToKeep.Variables.Print());
 
-                Stats.beginTime();
+                //Stats.beginTime();
+                BoogieVerify.verificationTime = TimeSpan.Zero;
+
                 var verificationPass = new VerificationPass(true);
                 verificationPass.run(abs);
-                Stats.endTime(ref Stats.programVerificationTime);
+
+                //Stats.endTime(ref Stats.programVerificationTime);
+                Stats.programVerificationTime += BoogieVerify.verificationTime;
 
                 BoogieVerify.setTimeOut(0);
                 maxInlined = (BoogieVerify.CallTreeSize > maxInlined) ? BoogieVerify.CallTreeSize : maxInlined;
