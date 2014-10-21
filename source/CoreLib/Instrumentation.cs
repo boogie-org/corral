@@ -2236,6 +2236,59 @@ namespace cba
         }
     }
 
+    public class AddBooleanVars : FixedVisitor
+    {
+        Implementation currImpl;
+        AssumeCmd extraCmd;
+        int counter;
+
+        public AddBooleanVars()
+        {
+            currImpl = null;
+            extraCmd = null;
+            counter = 0;
+        }
+
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            currImpl = node;
+            node = base.VisitImplementation(node);
+            currImpl = null;
+            return node;
+        }
+
+        public override Block VisitBlock(Block node)
+        {
+            var newCmds = new List<Cmd>();
+            foreach (var cmd in node.Cmds)
+            {
+                extraCmd = null;
+                base.Visit(cmd);
+                if (extraCmd != null) newCmds.Add(extraCmd);
+                else newCmds.Add(cmd);
+            }
+            node.Cmds = newCmds;
+            return node;
+        }
+
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            if (isEnvironment(node))
+            {
+                FixedDuplicator dup = new FixedDuplicator();
+                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "envTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Bool));
+                node.Expr = (Expr.And(Expr.Ident(lv), dup.VisitExpr(node.Expr)));
+                currImpl.LocVars.Add(lv);
+            }
+            return node;
+        }
+
+        private bool isEnvironment(AssumeCmd ac)
+        {
+            if (BoogieUtil.checkAttrExists("environment", ac.Attributes)) return true;
+            else return false;
+        }
+    }
 
     public class AssertLocation : IEqualityComparer<AssertLocation>
     {

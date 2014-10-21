@@ -34,7 +34,9 @@ namespace AngelicVerifierNull
         // Use field non-null assumption
         public static bool FieldNonNull = true;
         // do buffer overrun detection
-        public static bool bufferDetect = false; 
+        public static bool bufferDetect = false;
+        // relax environment constraints
+        public static bool RelaxEnvironment = false;
     }
 
     class Stats
@@ -194,6 +196,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/noFieldNonNull"))
                 Options.FieldNonNull = false;
 
+            if (args.Any(s => s == "/relax"))
+                Options.RelaxEnvironment = true;
+
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
 
@@ -233,9 +238,17 @@ namespace AngelicVerifierNull
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
 
-                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
 
-                
+                // Relax Environment Constraints
+                if (Options.RelaxEnvironment)
+                {
+                    BoogieUtil.PrintProgram(prog.getProgram(), "env_before.bpl");
+                    int num_deleted_constraints;
+                    prog = RelaxConstraints(prog, out num_deleted_constraints);
+                    BoogieUtil.PrintProgram(prog.getProgram(), "env_after.bpl");
+                }
+
+                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
 
                 // Run alias analysis
                 Stats.resume("alias.analysis");
@@ -1131,6 +1144,204 @@ namespace AngelicVerifierNull
             // witness.writeToFile("corral_witness.bpl");
 
             return witness;
+        }
+
+        // Function takes in a PersistentProgram and returns a PersistentProgram with the environment constraints relaxed
+        // Out variable is the number of deleted constraints
+        private static PersistentProgram RelaxConstraints(PersistentProgram program, out int num_deleted_constraints)
+        {
+            var origProg = program;
+
+            FixedDuplicator dup = new FixedDuplicator();
+            var prog = dup.VisitProgram(program.getProgram());
+            var perprog = new PersistentProgram(prog, program.mainProcName, program.contextBound);
+            
+            bool conclusive = true;
+
+            // Add Boolean Vars for environment constraints
+            var abvp = new cba.AddBooleanVarsPass();
+            perprog = abvp.run(perprog);
+
+            while (true)
+            {
+                if (corralState != null)
+                    corralState.CallTree = new HashSet<string>();
+
+                cba.ErrorTrace cex = null;
+
+                try
+                {
+                    cex = runCorralRelaxConstraints(perprog, corralConfig.mainProcName);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Corral call terminates inconclusively with {0}...", e.Message);
+                    conclusive = false;
+                    break;
+                }
+
+                if (cex == null)
+                {
+                    break;
+                }
+
+                // Suppress the assertion from the error trace
+                perprog = SuppressAssertion(perprog, cex);
+            }
+
+            perprog = removeAssumes(origProg, perprog, corralConfig.trackedVars, out num_deleted_constraints);
+
+            if (conclusive) return perprog;
+            else return origProg;
+        }
+
+        private static cba.AssertLocation findFailingAssert(cba.ErrorTrace trace)
+        {
+            if (trace == null) return null;
+
+            var currLoc = new cba.AssertLocation(trace.procName, "", 0);
+
+            foreach (var blk in trace.Blocks)
+            {
+                currLoc.blockName = blk.blockName;
+
+                for (int i = 0; i < blk.Cmds.Count; i++)
+                {
+                    currLoc.instrNo = i;
+                    if (blk.Cmds[i].info is cba.AssertFailInstrInfo)
+                    {
+                        return new cba.AssertLocation(currLoc.procName, currLoc.blockName, currLoc.instrNo);
+                    }
+                    else if (blk.Cmds[i] is cba.CallInstr) return findFailingAssert(blk.Cmds[i].CalleeTrace);
+                }
+            }
+            return currLoc;
+        }
+
+        private static PersistentProgram SuppressAssertion(PersistentProgram prog, cba.ErrorTrace trace)
+        {
+            // TODO : to be implemented
+            if (trace == null) return prog;
+            var program = prog.getProgram();
+
+            cba.AssertLocation currLoc = findFailingAssert(trace);
+
+            Console.WriteLine("{0} {1} {2}", currLoc.procName, currLoc.blockName, currLoc.instrNo);
+
+            // find procedure
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, currLoc.procName);
+            // find block
+            var block = impl.Blocks.Where(blk => blk.Label == currLoc.blockName).First();
+            // find instruction
+            Debug.Assert(block.Cmds[currLoc.instrNo] is AssertCmd);
+            var ac = block.Cmds[currLoc.instrNo] as AssertCmd;
+            // block assert
+            block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
+
+            return new PersistentProgram(program, prog.mainProcName, prog.contextBound);
+        }
+
+        private static PersistentProgram removeAssumes(PersistentProgram prog, PersistentProgram instr_prog, HashSet<string> trackedVars, out int num_deleted_constraints)
+        {
+            var program = instr_prog.getProgram();
+            var origProg = prog.getProgram();
+            num_deleted_constraints = 0;
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var origImpl = BoogieUtil.findProcedureImpl(origProg.TopLevelDeclarations, impl.Name);
+                var removal_list = new List<AssumeCmd>();
+                foreach (Block b in impl.Blocks)
+                {
+                    var origBlock = origImpl.Blocks.Where(blk => blk.Label == b.Label).First();
+                    int instr_no = 0;
+                    foreach (AssumeCmd ac in b.Cmds.OfType<AssumeCmd>())
+                    {
+                        if (isTracked(ac, trackedVars))
+                        {
+                            Debug.Assert(origBlock.Cmds[instr_no] is AssumeCmd);
+                            removal_list.Add(origBlock.Cmds[instr_no] as AssumeCmd);
+                            num_deleted_constraints++;
+                        }
+                        instr_no++;
+                    }
+                    foreach (AssumeCmd ac in removal_list) origBlock.Cmds.Remove(ac);
+                }
+            }
+
+            return new PersistentProgram(origProg, prog.mainProcName, prog.contextBound);
+        }
+
+        private static bool isTracked(AssumeCmd ac, HashSet<string> trackedVars)
+        {
+            if (isTrackedAssume(ac))
+            {
+                string var_name = getTrackedVar(ac);
+                if (trackedVars.Contains(var_name)) return true;
+                else return false;
+            }
+            else return false;
+        }
+
+        private static bool isTrackedAssume(AssumeCmd ac)
+        {
+            if (ac.Expr is NAryExpr &&
+                (ac.Expr as NAryExpr).Fun != null &&
+                (ac.Expr as NAryExpr).Fun is BinaryOperator &&
+                ((ac.Expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And &&
+                (ac.Expr as NAryExpr).Args != null &&
+                (ac.Expr as NAryExpr).Args.Count == 2 &&
+                (ac.Expr as NAryExpr).Args[0] is IdentifierExpr &&
+                ((ac.Expr as NAryExpr).Args[0] as IdentifierExpr).Decl.Name.StartsWith("envTmp")) return true;
+            else return false;
+        }
+
+        private static string getTrackedVar(AssumeCmd ac)
+        {
+            return ((ac.Expr as NAryExpr).Args[0] as IdentifierExpr).Decl.Name;
+        }
+
+        private static cba.ErrorTrace runCorralRelaxConstraints(PersistentProgram inputProg, string main)
+        {
+            // Reuse previous corral state
+            if (corralState != null && Options.UsePrevCorralState)
+            {
+                corralConfig.trackedVars.UnionWith(corralState.TrackedVariables);
+                cba.ConfigManager.progVerifyOptions.CallTree = corralState.CallTree;
+            }
+
+            ////////////////////////////////////
+            // Verification phase
+            ////////////////////////////////////
+            var refinementState = new cba.RefinementState(inputProg,
+                Driver.trackAllVars ?
+                /*track all variables*/inputProg.allVars.Variables :
+                /*do variable refinement*/ new HashSet<string>(corralConfig.trackedVars),
+                false);
+
+            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+
+            cba.ErrorTrace cexTrace = null;
+            try
+            {
+                cba.Driver.checkAndRefine(inputProg, refinementState, null, out cexTrace);
+            }
+            catch (Exception)
+            {
+                // dump corral state for next iteration
+                corralState = new cba.CorralState();
+                corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
+                corralState.TrackedVariables = refinementState.getVars().Variables;
+
+                throw;
+            }
+
+            // dump corral state for next iteration
+            corralState = new cba.CorralState();
+            corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
+            corralState.TrackedVariables = refinementState.getVars().Variables;
+
+            return cexTrace;
         }
         #endregion
 
