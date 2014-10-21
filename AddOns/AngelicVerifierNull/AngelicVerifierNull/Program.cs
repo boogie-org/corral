@@ -94,14 +94,23 @@ namespace AngelicVerifierNull
                 Console.WriteLine("[TAG: {0}] {1}", tag, msg);
         }
     }
+
+    public static class AvnAnnotations
+    {
+        public static readonly string CORRAL_MAIN_PROC = "CorralMain";
+        public static readonly string BlockingConstraintAttr = "BlockingConstraint";
+        public static readonly string InitialializationProcAttr = "ProgramInitialization";
+        public static readonly string EnvironmentAssumptionAttr = "Ebasic";
+        public static readonly string ReachableStatesAttr = "ReachableStates";
+        public static readonly string RelaxConstraintAttr = "SoftConstraint";
+    }
+
     class Driver
     {
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
         static HashSet<string> IdentifiedEntryPoints = new HashSet<string>();
-        static System.IO.TextWriter ResultsFile = null;
-
-        const string CORRAL_MAIN_PROC = "CorralMain";
+        static System.IO.TextWriter ResultsFile = null;        
 
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
@@ -115,9 +124,7 @@ namespace AngelicVerifierNull
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
-        static bool deadCodeDetect = false; // do dead code detection
-
-        public static readonly string BlockingConstraintAttr = "BlockingConstraint";
+        static bool deadCodeDetect = false; // do dead code detection        
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -401,7 +408,7 @@ namespace AngelicVerifierNull
             init.RemoveTopLevelDeclarations(decl => (decl is Implementation) && BoogieUtil.checkAttrExists("inline", decl.Attributes));
 
             //Instrument to create the harness
-            corralConfig.mainProcName = CORRAL_MAIN_PROC;
+            corralConfig.mainProcName = AvnAnnotations.CORRAL_MAIN_PROC;
             harnessInstrumentation = new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints);
             harnessInstrumentation.DoInstrument();
             IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
@@ -518,6 +525,24 @@ namespace AngelicVerifierNull
             addIds.VisitProgram(init);
         }
 
+        class ErrorTraceInfo
+        {
+            public string TraceName; 
+            public cba.ErrorTrace Trace;
+            public Program TraceProgram;
+            public Tuple<string, int> AssertLoc;
+            public string FailingEntryPoint;
+
+            public ErrorTraceInfo(string TraceName, cba.ErrorTrace Trace, Program TraceProgram, Tuple<string, int> AssertLoc, string FailingEntryPoint)
+            {
+                this.TraceName = TraceName;
+                this.Trace = Trace;
+                this.AssertLoc = AssertLoc;
+                this.TraceProgram = TraceProgram;
+                this.FailingEntryPoint = FailingEntryPoint;
+            }
+        }
+
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
         private static bool RunCorralIterative(AvnInstrumentation instr, string p, int corralTimeout)
@@ -526,9 +551,10 @@ namespace AngelicVerifierNull
             var corralIterativeStartTime = DateTime.Now;
 
             int iterCount = 0;
-            var ret = true;
-            
-            
+            var ret = true;         
+ 
+            // Pending traces; contraint id -> trace
+            var pendingTraces = new Dictionary<int, ErrorTraceInfo>();
 
             //We are not using the guards to turn the asserts, we simply rewrite the assert
             while (true)
@@ -575,8 +601,7 @@ namespace AngelicVerifierNull
 
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
-                var pprog = GetPathProgram(cex, prog, out concretize);
-                //pprog.writeToFile("path" + iterCount + ".bpl");
+                var pprog = GetPathProgram(cex, prog, out concretize);                
 
                 var ppprog = pprog.getProgram();
                 var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);          
@@ -586,13 +611,13 @@ namespace AngelicVerifierNull
                 var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
                 Stats.stop("explain.error");
 
-                var traceType = (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) ? "Suppressed" :
-                    (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS) ? "Angelic" : "Blocked";
-
                 // print the trace to disk
-                Console.WriteLine("Printing trace {0}", traceType + traceCount);
-                var assertLoc = instr.PrintErrorTrace(cex, traceType + traceCount);
+                var traceName = "Trace" + traceCount;
+                Console.WriteLine("Printing trace {0}", traceName);
+                var assertLoc = instr.PrintErrorTrace(cex, traceName);
                 traceCount++;
+
+                var traceInfo = new ErrorTraceInfo(traceName, cex, pprog.getProgram(), assertLoc, failingEntryPoint);
 
                 // TODO: I don't think a timeout/inconclusive result from ExplainError 
                 // is getting handled very well here. What about "SUPPRESS"?
@@ -600,50 +625,220 @@ namespace AngelicVerifierNull
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
                     eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
-                    var tok = instr.SuppressAssert(pprog.getProgram());
-                    var failingAssert = instr.GetFailingAssert(tok);
-                    var failingProc = instr.GetFailingAssertProcName(tok);
-
-                    var output = "";
-                    // screen output
-                    if (assertLoc != null)
-                    {
-                        output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
-                            failingProc, assertLoc.Item1, assertLoc.Item2, failingAssert.Expr.ToString(), failingEntryPoint);
-                        
-                        // result file output
-                        // format: Description, Src File, Line, Procedure, EntryPoint
-                        if (ResultsFile != null)
-                        {
-                            ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
-                                failingAssert.Expr.ToString(), assertLoc.Item1, assertLoc.Item2, failingProc, failingEntryPoint);
-                            ResultsFile.Flush();
-                        }                        
-                    }
-                    else
-                    {
-                        output = string.Format("Assertion failed in proc {0} with expr {1} and entrypoint {2}",
-                            failingProc, failingAssert.Expr.ToString(), failingEntryPoint);
-                    }
-
-                    Stats.count("bug.count");
-
-
-                    Console.WriteLine(output);
-                    if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
-                        Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
+                    PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
-                    traceType = "Blocked";
-                    instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
+                    var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
+                    pendingTraces.Add(constraintId, traceInfo);
                     Stats.count("blocked.count");
+
+                    // Check inconsistency
+                    var inconsistent = CheckInconsistency(instr, failingEntryPoint);
+                    Debug.Assert(inconsistent.Contains(constraintId));
+
+                    if (inconsistent.Count != 0)
+                    {
+                        // drop asserts
+                        PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                        // drop traces
+                        inconsistent.Iter(id => pendingTraces.Remove(id));
+                    }
+                    else
+                    {
+                        // Relax env constraints
+                        RelaxEnvironmentConstraints(instr, failingEntryPoint);
+                    }
+
                 }
 
                 iterCount++;
             }
             Stats.stop("run.corral.iterative");
             return ret;
+        }
+
+        // Relax environment constraints Ebasic
+        private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint)
+        {
+            // only consider the given entrypoint
+            var blocked = false;
+            if (!instr.InBlockingMode())
+            {
+                blocked = true;
+                instr.BlockAllButThis(entrypoint);
+            }
+
+            // Get program
+            var program = instr.GetCurrProgram().getProgram();
+
+            // Name the soft constraints
+            var softcnt = 0;
+            var soft2actual = new Dictionary<int, int>();
+            var AddAttr = new Action<Cmd>(cmd =>
+            {
+                var acmd = cmd as AssumeCmd;
+                if (acmd == null) return;
+                var id = QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.EnvironmentAssumptionAttr, -1);
+                if (id == -1) return;
+                acmd.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.RelaxConstraintAttr, new List<object> { Expr.Literal(softcnt) }, acmd.Attributes);
+                soft2actual.Add(softcnt, id);
+                softcnt++;
+            });
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (!instr.procsWithEnvAssumptions.Contains(impl.Name))
+                    continue;
+                foreach (var block in impl.Blocks)
+                {
+                    block.Cmds.Iter(AddAttr);
+                }
+            }
+
+            var ret = Relax(program);
+
+            ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
+
+            // remove side-effects
+            if (blocked)
+            {
+                instr.RemoveBlockingConstraint();
+            }
+        }
+
+        private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
+        {
+            Stats.count("bug.count");
+
+            var traces = "";
+            traceInfos.Iter(info => traces += info.TraceName + " ");
+            Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: Failing traces {0}", traces), Utils.PRINT_TAG.AV_OUTPUT);
+
+            foreach (var traceInfo in traceInfos)
+            {
+                var tok = instr.SuppressAssert(traceInfo.TraceProgram);
+                var failingAssert = instr.GetFailingAssert(tok);
+                var failingProc = instr.GetFailingAssertProcName(tok);
+
+                var output = "";
+                // screen output
+                if (traceInfo.AssertLoc != null)
+                {
+                    output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
+                        failingProc, traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingAssert.Expr.ToString(), traceInfo.FailingEntryPoint);
+
+                    // result file output
+                    // format: Description, Src File, Line, Procedure, EntryPoint
+                    if (ResultsFile != null)
+                    {
+                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
+                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, traceInfo.FailingEntryPoint);
+                        ResultsFile.Flush();
+                    }
+                }
+                else
+                {
+                    output = string.Format("Assertion failed in proc {0} with expr {1} and entrypoint {2}",
+                        failingProc, failingAssert.Expr.ToString(), traceInfo.FailingEntryPoint);
+                }
+
+                Console.WriteLine(output);
+            }
+
+            //if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
+            //    Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
+        }
+
+        private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint)
+        {
+            // only consider the given entrypoint
+            var blocked = false;
+            if (!instr.InBlockingMode())
+            {
+                blocked = true;
+                instr.BlockAllButThis(entrypoint);
+            }
+
+            // Get program
+            var program = instr.GetCurrProgram().getProgram();
+
+            // Remove Ebasic
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var block in impl.Blocks)
+                {
+                    block.Cmds.RemoveAll(cmd => (cmd is AssumeCmd) && QKeyValue.FindBoolAttribute((cmd as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr));
+                }
+            }
+
+            var reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
+
+            // change assume Reachable(e) to assert e
+            var mutate = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssumeCmd;
+                    if (acmd == null) return cmd;
+                    var nary = acmd.Expr as NAryExpr;
+                    if (nary == null) return cmd;
+                    if (nary.Fun is FunctionCall && (nary.Fun as FunctionCall).FunctionName == reach.Name)
+                    {
+                        return new AssertCmd(Token.NoToken, nary.Args[0]);
+                    }
+                    else
+                        return cmd;
+                });
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var block in impl.Blocks)
+                {
+                    block.Cmds = new List<Cmd>(block.Cmds.Select(c => mutate(c)));
+                }
+            }
+
+            // name the soft constraints
+            var softcnt = 0;
+            var soft2actual = new Dictionary<int, int>();
+            var AddAttr = new Action<Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssumeCmd;
+                    if(acmd == null) return;
+                    var id = QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.BlockingConstraintAttr, -1);
+                    if (id == -1) return;
+                    acmd.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.RelaxConstraintAttr, new List<object> { Expr.Literal(softcnt) }, acmd.Attributes);
+                    soft2actual.Add(softcnt, id);
+                    softcnt++;
+                });
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var block in impl.Blocks)
+                {
+                    block.Cmds.Iter(AddAttr);
+                }
+            }
+
+            // Relax
+            var softret = Relax(program);
+            
+            
+
+            // remove side-effects
+            if (blocked)
+            {
+                instr.RemoveBlockingConstraint();
+            }
+
+            var ret = new HashSet<int>();
+            softret.Iter(n => ret.Add(soft2actual[n]));
+
+            return ret;
+        }
+
+        private static HashSet<int> Relax(Program program)
+        {
+            throw new NotImplementedException();
         }
 
         //Run RunCorralIterative with only one procedure enabled

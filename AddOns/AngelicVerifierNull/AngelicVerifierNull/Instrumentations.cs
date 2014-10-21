@@ -18,14 +18,12 @@ namespace AngelicVerifierNull
     /// </summary>
     public class Instrumentations
     {
-        public static readonly string EnvironmentAssumptionAttr = "Ebasic";
-
         public static Implementation GetEnvironmentAssumptionsProc(Program program)
         {
             return program.TopLevelDeclarations
                 .OfType<Implementation>()
-                .FirstOrDefault(impl => QKeyValue.FindBoolAttribute(impl.Attributes, Instrumentations.EnvironmentAssumptionAttr)
-                    || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, Instrumentations.EnvironmentAssumptionAttr));
+                .FirstOrDefault(impl => QKeyValue.FindBoolAttribute(impl.Attributes, AvnAnnotations.InitialializationProcAttr)
+                    || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr));
         }
 
         public class HarnessInstrumentation
@@ -36,6 +34,7 @@ namespace AngelicVerifierNull
             Procedure mallocProcedureFull = null;
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
+            public Dictionary<string, Constant> impl2BlockingConstant; //inverse of the above map
             public HashSet<string> entrypoints; // set of entrypoints identified
             List<Variable> globalParams = new List<Variable>(); // parameters as global variables
 
@@ -44,6 +43,7 @@ namespace AngelicVerifierNull
                 prog = program;
                 mainName = corralName;
                 this.useProvidedEntryPoints = useProvidedEntryPoints;
+                this.impl2BlockingConstant = new Dictionary<string, Constant>();
                 blockEntryPointConstants = new Dictionary<string,string>();
                 entrypoints = new HashSet<string>();
             }
@@ -113,8 +113,8 @@ namespace AngelicVerifierNull
                     if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         continue;
                     // skip initialization procedure
-                    if (QKeyValue.FindBoolAttribute(impl.Attributes, EnvironmentAssumptionAttr) ||
-                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, EnvironmentAssumptionAttr))
+                    if (QKeyValue.FindBoolAttribute(impl.Attributes, AvnAnnotations.InitialializationProcAttr) ||
+                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr))
                         continue;
 
                     Stats.numProcsAnalyzed++;
@@ -160,6 +160,7 @@ namespace AngelicVerifierNull
                         new TypedIdent(Token.NoToken, "__block_call_" + impl.Name, btype.Bool), false);
                     blockCallConsts.Add(blockCallConst);
                     blockEntryPointConstants[blockCallConst.Name] = impl.Name;
+                    impl2BlockingConstant[impl.Name] = blockCallConst;
                     var blockCallAssumeCmd = new AssumeCmd(Token.NoToken, IdentifierExpr.Ident(blockCallConst));
                     
                     var cmds = new List<Cmd>();
@@ -297,7 +298,7 @@ namespace AngelicVerifierNull
             public static Function FindReachableStatesFunc(Program program)
             {
                 var ret = program.TopLevelDeclarations.OfType<Function>()
-                    .Where(f => QKeyValue.FindBoolAttribute(f.Attributes, "ReachableStates"))
+                    .Where(f => QKeyValue.FindBoolAttribute(f.Attributes, AvnAnnotations.ReachableStatesAttr))
                     .FirstOrDefault();
 
                 if (ret != null)
@@ -755,6 +756,13 @@ namespace AngelicVerifierNull
         public readonly string assertsPassedName = "assertsPassed";
         GlobalVariable assertsPassed;
 
+        // are we in blocking mode
+        bool blockingMode;
+
+        // Ebasic assumptions
+        public HashSet<string> procsWithEnvAssumptions { get; private set; }
+
+
         public AvnInstrumentation(Instrumentations.HarnessInstrumentation harnessInstr)
         {
             passName = "SequentialInstrumentation"; 
@@ -771,6 +779,8 @@ namespace AngelicVerifierNull
             currProg = null;
             this.harnessInstr = harnessInstr;
             origMainName = null;
+            blockingMode = false;
+            procsWithEnvAssumptions = new HashSet<string>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -789,6 +799,9 @@ namespace AngelicVerifierNull
 
             // Compress
             compressBlocks.VisitProgram(program);
+
+            // name Ebasic
+            NameEnvironmentConstraints(program);
 
             // Instrument assertions
             int tokenId = 0;
@@ -940,6 +953,58 @@ namespace AngelicVerifierNull
             return ret;
         }
 
+        // convert {:Ebasic} to {:Ebasic n}
+        void NameEnvironmentConstraints(Program program)
+        {
+            procsWithEnvAssumptions = new HashSet<string>();
+
+            var cnt = 0;
+            var AddAttr = new Action<Implementation, Cmd>((impl,cmd) =>
+            {
+                var acmd = cmd as AssumeCmd;
+                if (acmd == null) return;
+                if (!QKeyValue.FindBoolAttribute(acmd.Attributes, AvnAnnotations.EnvironmentAssumptionAttr))
+                    return;
+
+                acmd.Attributes = BoogieUtil.removeAttr(AvnAnnotations.EnvironmentAssumptionAttr, acmd.Attributes);
+                acmd.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.EnvironmentAssumptionAttr, new List<object> { Expr.Literal(cnt) }, acmd.Attributes);
+                cnt++;
+                procsWithEnvAssumptions.Add(impl.Name);
+            });
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach(var block in impl.Blocks) 
+                    block.Cmds.Iter(c => AddAttr(impl, c));
+            }
+        }
+
+        public void SuppressEnvironmentConstraint(int n)
+        {
+            var suppressed = false;
+
+            var Mutate = new Action<Cmd>(cmd =>
+            {
+                var acmd = cmd as AssumeCmd;
+                if (acmd == null) return;
+                var id = QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.EnvironmentAssumptionAttr, -1);
+                if (id == -1 || id != n) return;
+                suppressed = true;
+                Console.WriteLine("Suppresing environment constraint: {0}", acmd.Expr);
+                acmd.Expr = Expr.True;
+            });
+
+            foreach (var impl in currProg.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (!procsWithEnvAssumptions.Contains(impl.Name))
+                    continue;
+
+                foreach (var block in impl.Blocks)
+                    block.Cmds.Iter(Mutate);
+            }
+            Debug.Assert(suppressed);
+        }
+
         // This is to avoid a corner-case with ModifyTrans where some statements
         // that are deleted by the transformation are picked up at the end of the 
         // trace while mapping back. 
@@ -1019,9 +1084,23 @@ namespace AngelicVerifierNull
             return blockCallConsts;
         }
 
+        // Have we blocked entrypoints?
+        public bool InBlockingMode()
+        {
+            return blockingMode;
+        }
+
+        // Block all entrypoints but one
+        public void BlockAllButThis(string impl)
+        {
+            BlockAllButThis(harnessInstr.impl2BlockingConstant[impl]);
+        }
+
         // Block all entrypoints but one
         public void BlockAllButThis(Constant constant)
         {
+            blockingMode = true;
+
             var blockCallConsts = GetRoundRobinBlockingConstants();
             var tmp = new HashSet<Constant>(blockCallConsts);
             tmp.Remove(constant);
@@ -1035,6 +1114,7 @@ namespace AngelicVerifierNull
         // Unblock entrypoints
         public void RemoveBlockingConstraint()
         {
+            blockingMode = false;
             var mainProc = currProg.TopLevelDeclarations.OfType<Procedure>()
                 .Where(x => x.Name == (output as PersistentProgram).mainProcName).FirstOrDefault();
 
@@ -1212,18 +1292,20 @@ namespace AngelicVerifierNull
         static int SuppressionCount = 0;
 
         // Suppress an input constraint
-        public void SuppressInput(Expr input, string entrypoint)
+        public int SuppressInput(Expr input, string entrypoint)
         {
             // find main
             var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
                 origMainName);
 
             // construct the assume
+            var ret = SuppressionCount++;
             var req = new AssumeCmd(Token.NoToken, input);
-            req.Attributes = new QKeyValue(Token.NoToken, Driver.BlockingConstraintAttr, 
-                new List<object> { Expr.Literal(SuppressionCount++) }, req.Attributes);
+            req.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.BlockingConstraintAttr, 
+                new List<object> { Expr.Literal(ret) }, req.Attributes);
 
             // find the call to the entrypoint and put the assume there
+            var added = false;
             foreach (var block in main.Blocks)
             {
                 var ncmds = new List<Cmd>();
@@ -1237,12 +1319,16 @@ namespace AngelicVerifierNull
                     }
 
                     if (ccmd.callee == entrypoint)
+                    {
+                        added = true;
                         ncmds.Add(req);
+                    }
                     ncmds.Add(cmd);
                 }
                 block.Cmds = ncmds;
             }
-
+            Debug.Assert(added);
+            return ret;
         }
 
         // Adds a new main:
