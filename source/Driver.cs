@@ -111,6 +111,7 @@ namespace cba
             GlobalConfig.addInvariants = 2; // AL
 
             GlobalConfig.cadeTiming = config.cadeTiming;
+            GlobalConfig.staticInlining = config.staticInlining;
 
             BoogieVerify.assertsPassed = config.assertsPassed;
             BoogieVerify.assertsPassedIsInt = config.assertsPassedIsInt;

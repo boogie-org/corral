@@ -36,6 +36,8 @@ namespace cba
             //////
             
             VariableSlicePass cp1 = new VariableSlicePass(trackedVars);
+            StaticInliningAndUnrollingPass cp2 = null;
+            if(GlobalConfig.staticInlining > 0) cp2 = new StaticInliningAndUnrollingPass(new StaticSettings(CommandLineOptions.Clo.RecursionBound, CommandLineOptions.Clo.RecursionBound));
             CompilerPass cp3 = null;
             var recordK = new HashSet<string>();
 
@@ -47,7 +49,8 @@ namespace cba
             ContractInfer ciPass = null;
 
             // Run the source transformations
-            curr = cp1.run(curr); 
+            curr = cp1.run(curr);
+            if (cp2 != null) curr = cp2.run(curr);
             if(cp3 != null) curr = cp3.run(curr);
             
             // infer contracts
@@ -96,13 +99,17 @@ namespace cba
                 if (ciPass != null) trace4 = ciPass.mapBackTrace(trace4);
                 var trace3 = trace4;
                 
+                
                 if (cp3 != null)
                 {
                     trace3 = cp3.mapBackTrace(trace4);
                 }
                 //PrintProgramPath.print(cp3.input as PersistentCBAProgram, trace3, "temp3");
 
-                var trace1 = cp1.mapBackTrace(trace3);
+                var trace2 = trace3;
+                if (cp2 != null) trace2 = cp2.mapBackTrace(trace3);
+
+                var trace1 = cp1.mapBackTrace(trace2);
                 //PrintProgramPath.print(cp1.input as PersistentCBAProgram, trace1, "temp1");
 
                 cex = trace1;
