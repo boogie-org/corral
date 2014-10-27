@@ -1,6 +1,7 @@
 
 -------------------- t1.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t1.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
 
@@ -14,6 +15,7 @@
 
 -------------------- t4.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t4.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> x_2 != NULL)
 
@@ -33,6 +35,7 @@
 -------------------- t8.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t8.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL and entrypoint Foo_ShowBug
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_2(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_5(x_3) ==> arr[x_3] != NULL)
@@ -44,6 +47,7 @@
 
 -------------------- pruned.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing pruned.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL) and entrypoint foo
 
 -------------------- empty_forall.bpl --------------------
@@ -52,7 +56,9 @@
 
 -------------------- null.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing null.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL and entrypoint Foo
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL and entrypoint Foo
 
 -------------------- generalize.bpl --------------------
@@ -65,4 +71,5 @@
 
 -------------------- rec.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing rec.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr false and entrypoint foo
