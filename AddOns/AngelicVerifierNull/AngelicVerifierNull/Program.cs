@@ -627,6 +627,8 @@ namespace AngelicVerifierNull
                 var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);          
       
                 //call ExplainError 
+                BoogieUtil.PrintProgram(ppprog, "ee.bpl");
+
                 Stats.resume("explain.error");
                 var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
                 Stats.stop("explain.error");
@@ -764,7 +766,8 @@ namespace AngelicVerifierNull
                         failingProc, failingAssert.Expr.ToString(), traceInfo.FailingEntryPoint);
                 }
 
-                Console.WriteLine(output);
+                Console.WriteLine("{0}", output);
+                Utils.Print(string.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
             }
 
             //if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
