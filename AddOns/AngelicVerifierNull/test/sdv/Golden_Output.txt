@@ -10,6 +10,9 @@
 [TAG: AV_OUTPUT] ----- Analyzing funcatdispatch.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 
+-------------------- funcatdispatch_correct.bpl --------------------
+Broken!
+
 -------------------- lowerdriverreturn.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> return_state != yes
