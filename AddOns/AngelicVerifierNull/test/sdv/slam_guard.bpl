@@ -64,7 +64,7 @@ implementation unlock(resource: int)
 	}
 }
 
-procedure  SLAM_guard_example();
+procedure SLAM_guard_example();
 
 implementation SLAM_guard_example()
 {

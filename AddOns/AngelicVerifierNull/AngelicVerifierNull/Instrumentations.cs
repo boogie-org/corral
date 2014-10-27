@@ -307,6 +307,7 @@ namespace AngelicVerifierNull
                 ret = new Function(Token.NoToken, "MustReach", new List<Variable>{
                     BoogieAstFactory.MkFormal("x", btype.Bool, true)},
                     BoogieAstFactory.MkFormal("y", btype.Bool, false));
+                ret.AddAttribute(AvnAnnotations.ReachableStatesAttr);
 
                 program.AddTopLevelDeclaration(ret);
                 return ret;

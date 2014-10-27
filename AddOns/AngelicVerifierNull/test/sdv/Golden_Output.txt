@@ -1,0 +1,47 @@
+
+-------------------- exitwithoutrelease.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing exitwithoutrelease.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != notAcquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace3 }
+
+-------------------- funcatdispatch.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing funcatdispatch.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+
+-------------------- lowerdriverreturn.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> return_state != yes
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+
+-------------------- slam_guard.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing slam_guard.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(accessState == acquired && x_2 == SLAM_guard))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_5(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+
+-------------------- slam_guard2.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing slam_guard2.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(accessState == acquired && x_2 == SLAM_guard))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_5(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_0(x_2) ==> !(accessState == acquired && x_2 == NULL))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_0(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_0(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace6 }
+
+-------------------- startdevicewait.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing startdevicewait.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_3(x_2) ==> !(x_2 == STATUS_SUCCESS && irp_event == set_in_completion))
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+
+-------------------- ebasic_example.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing ebasic_example.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+
+-------------------- ebasic_example2.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing ebasic_example2.bpl ------
+
+-------------------- soft_constraint_example.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing soft_constraint_example.bpl ------

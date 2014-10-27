@@ -654,18 +654,18 @@ namespace AngelicVerifierNull
                     Stats.count("blocked.count");
 
                     // Check inconsistency
-                    var inconsistent = CheckInconsistency(instr, failingEntryPoint);
-                    Debug.Assert(inconsistent.Contains(constraintId));
+                    var inconsistent = CheckInconsistency(instr, failingEntryPoint);                    
 
                     if (inconsistent.Count != 0)
                     {
+                        Debug.Assert(inconsistent.Contains(constraintId));
                         // drop asserts
                         PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
                         // drop traces
                         inconsistent.Iter(id => pendingTraces.Remove(id));
                     }
                     else
-                    {
+                    {                        
                         // Relax env constraints
                         RelaxEnvironmentConstraints(instr, failingEntryPoint);
                     }
@@ -733,6 +733,7 @@ namespace AngelicVerifierNull
 
             var traces = "";
             traceInfos.Iter(info => traces += info.TraceName + " ");
+            traces = "{" + traces + "}";
             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: Failing traces {0}", traces), Utils.PRINT_TAG.AV_OUTPUT);
 
             foreach (var traceInfo in traceInfos)
@@ -1149,8 +1150,8 @@ namespace AngelicVerifierNull
             return witness;
         }
 
-        // Function takes in a PersistentProgram and returns a PersistentProgram with the environment constraints relaxed
-        // Out variable is the number of deleted constraints
+        // Function takes in a Program and returns a list of integers corresponding to the assumes which have to be removed
+        // The integers are present as {:SoftConstraint n}
         private static HashSet<int> RelaxConstraints(Program program, string main)
         {
             bool conclusive = true;
@@ -1166,7 +1167,6 @@ namespace AngelicVerifierNull
 
                 cba.ErrorTrace cex = null;
                 var pprog = new PersistentProgram(program, main, 1);
-                //pprog.writeToFile("t1.bpl");
 
                 try
                 {
@@ -1268,25 +1268,6 @@ namespace AngelicVerifierNull
             // block assert
             block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
         }
-
-        private static bool isTrackedAssume(AssumeCmd ac)
-        {
-            if (ac.Expr is NAryExpr &&
-                (ac.Expr as NAryExpr).Fun != null &&
-                (ac.Expr as NAryExpr).Fun is BinaryOperator &&
-                ((ac.Expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And &&
-                (ac.Expr as NAryExpr).Args != null &&
-                (ac.Expr as NAryExpr).Args.Count == 2 &&
-                (ac.Expr as NAryExpr).Args[0] is IdentifierExpr &&
-                ((ac.Expr as NAryExpr).Args[0] as IdentifierExpr).Decl.Name.StartsWith("envTmp")) return true;
-            else return false;
-        }
-
-        private static string getTrackedVar(AssumeCmd ac)
-        {
-            return ((ac.Expr as NAryExpr).Args[0] as IdentifierExpr).Decl.Name;
-        }
-
         #endregion
 
         #region ExplainError related
