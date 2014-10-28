@@ -727,6 +727,7 @@ namespace AngelicVerifierNull
         cba.InsertionTrans assertInstrInfo;
         cba.InsertionTrans blanksInfo;
         cba.DeepAssertRewrite da;
+        List<cba.InsertionTrans> suppressInfo;
 
         // The harness instrumentation (kept here for
         // round-robin mode)
@@ -782,6 +783,7 @@ namespace AngelicVerifierNull
             origMainName = null;
             blockingMode = false;
             procsWithEnvAssumptions = new HashSet<string>();
+            suppressInfo = new List<cba.InsertionTrans>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -1067,7 +1069,11 @@ namespace AngelicVerifierNull
                 ptrace = da.mapBackTrace(trace);
             }
 
-            trace = assertInstrInfo.mapBackTrace(ptrace);
+            trace = ptrace;
+            (suppressInfo as IEnumerable<cba.InsertionTrans>)
+                .Reverse().Iter(tinfo => trace = tinfo.mapBackTrace(trace));
+
+            trace = assertInstrInfo.mapBackTrace(trace);
             trace = compressBlocks.mapBackTrace(trace);
             //trace = printInfo.mapBackTrace(trace);
             trace = sourceInfo.mapBackTrace(trace);
@@ -1305,30 +1311,40 @@ namespace AngelicVerifierNull
             req.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.BlockingConstraintAttr, 
                 new List<object> { Expr.Literal(ret) }, req.Attributes);
 
+            // For mapback
+            var tinfo = new cba.InsertionTrans();
+            
             // find the call to the entrypoint and put the assume there
             var added = false;
             foreach (var block in main.Blocks)
             {
+                tinfo.addTrans(main.Name, block.Label, block.Label);
+
                 var ncmds = new List<Cmd>();
+                var cnt = -1;
                 foreach (var cmd in block.Cmds)
                 {
                     var ccmd = cmd as CallCmd;
-                    if (ccmd == null)
+                    cnt++;
+                    if (ccmd == null || ccmd.callee != entrypoint)
                     {
                         ncmds.Add(cmd);
+                        tinfo.addTrans(main.Name, block.Label, cnt, cmd, 
+                            block.Label, ncmds.Count - 1, new List<Cmd> { cmd });
                         continue;
                     }
 
-                    if (ccmd.callee == entrypoint)
-                    {
-                        added = true;
-                        ncmds.Add(req);
-                    }
+                    added = true;
+                    ncmds.Add(req);
                     ncmds.Add(cmd);
+                    tinfo.addTrans(main.Name, block.Label, cnt, cmd,
+                        block.Label, ncmds.Count - 1, new List<Cmd> { cmd });
+
                 }
                 block.Cmds = ncmds;
             }
             Debug.Assert(added);
+            suppressInfo.Add(tinfo);
             return ret;
         }
 

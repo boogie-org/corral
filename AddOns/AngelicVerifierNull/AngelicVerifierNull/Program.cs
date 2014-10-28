@@ -426,6 +426,12 @@ namespace AngelicVerifierNull
             cba.Driver.InlineProcedures(init);
             // Remove {:inline} impls
             init.RemoveTopLevelDeclarations(decl => (decl is Implementation) && BoogieUtil.checkAttrExists("inline", decl.Attributes));
+            // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
+            foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
+            {
+                impl.Blocks.Iter(blk =>
+                    blk.Cmds.RemoveAll(cmd => cmd is HavocCmd));
+            }
 
             //Instrument to create the harness
             corralConfig.mainProcName = AvnAnnotations.CORRAL_MAIN_PROC;
@@ -580,6 +586,7 @@ namespace AngelicVerifierNull
             while (true)
             {
                 var prog = instr.GetCurrProgram();
+                //prog.writeToFile("corralinp.bpl");
 
                 // Don't reuse the call-tree 
                 if(corralState != null)
