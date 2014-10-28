@@ -260,7 +260,6 @@ namespace AngelicVerifierNull
                 // Run alias analysis
                 Stats.resume("alias.analysis");
                 Console.WriteLine("Running alias analysis");
-                //Dictionary<string, HashSet<string>> pointsTo = new Dictionary<string, HashSet<string>>();
                 prog = RunAliasAnalysis(prog);
                 Stats.stop("alias.analysis");
 
@@ -425,7 +424,10 @@ namespace AngelicVerifierNull
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
             // Remove {:inline} impls
-            init.RemoveTopLevelDeclarations(decl => (decl is Implementation) && BoogieUtil.checkAttrExists("inline", decl.Attributes));
+            init.RemoveTopLevelDeclarations(decl => (decl is Implementation) &&
+                (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
+                 BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
+
             // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
             foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -533,18 +535,20 @@ namespace AngelicVerifierNull
         // Make a pass to ensure the whole program created is well formed
         private static void GlobalCorralSpecificPass(Program init)
         {
-            // Find main
-            List<string> entrypoints = cba.EntrypointScanner.FindEntrypoint(init);
-            if (entrypoints.Count == 0)
-                throw new InvalidInput("Main procedure not specified");
-            corralConfig.mainProcName = entrypoints[0];
+            // Find some entrypoint
+            var ep = init.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint") ||
+                    QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                .Select(impl => impl.Name)
+                .FirstOrDefault();
+            corralConfig.mainProcName = ep;
 
-            if (BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, corralConfig.mainProcName) == null)
-            {
-                throw new InvalidInput("Implementation of main procedure not found");
-            }
+            //if (BoogieUtil.findProcedureImpl(init.TopLevelDeclarations, corralConfig.mainProcName) == null)
+            //{
+            //    throw new InvalidInput("Implementation of main procedure not found");
+            //}
 
-            Debug.Assert(cba.SequentialInstrumentation.isSingleThreadProgram(init, corralConfig.mainProcName));
+            //Debug.Assert(cba.SequentialInstrumentation.isSingleThreadProgram(init, corralConfig.mainProcName));
             cba.GlobalConfig.isSingleThreaded = true;
 
             addIds = new cba.AddUniqueCallIds();

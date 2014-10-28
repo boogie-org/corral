@@ -180,6 +180,10 @@ namespace AngelicVerifierNull
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
+                foreach (Procedure proc in prog.TopLevelDeclarations.OfType<Procedure>())
+                {
+                    proc.Attributes = BoogieUtil.removeAttr("entrypoint", proc.Attributes);
+                }
                 // add global variables to prog
                 // globals.Iter(x => prog.AddTopLevelDeclaration(x)); 
                 //add the constants to the prog
