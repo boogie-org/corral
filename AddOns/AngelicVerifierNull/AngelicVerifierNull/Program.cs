@@ -37,6 +37,8 @@ namespace AngelicVerifierNull
         public static bool bufferDetect = false;
         // relax environment constraints
         public static bool RelaxEnvironment = false;
+        // remove entrypoint from procs with osmodel as entrypoint
+        public static bool noOSmodels = false;
     }
 
     class Stats
@@ -198,6 +200,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/relax"))
                 Options.RelaxEnvironment = true;
+
+            if (args.Any(s => s == "/noOSmodels"))
+                Options.noOSmodels = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -428,6 +433,32 @@ namespace AngelicVerifierNull
                 (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
                  BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
 
+            //if /noOSmodels, remove entrypoint attribute from procs/impls having osmodel as attribute
+            if (Options.noOSmodels)
+            {
+                foreach (Procedure proc in init.TopLevelDeclarations.OfType<Procedure>())
+                {
+                    if (BoogieUtil.checkAttrExists("osmodel", proc.Attributes))
+                    {
+                        if (BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
+                        {
+                            proc.Attributes = BoogieUtil.removeAttr("entrypoint", proc.Attributes);
+                        }
+                    }
+                }
+
+                foreach (Implementation impl in init.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if (BoogieUtil.checkAttrExists("osmodel", impl.Attributes) || BoogieUtil.checkAttrExists("osmodel", impl.Proc.Attributes))
+                    {
+                        if (BoogieUtil.checkAttrExists("entrypoint", impl.Attributes))
+                        {
+                            impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
+                        }
+                    }
+                }
+            }
+
             // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
             foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -590,7 +621,6 @@ namespace AngelicVerifierNull
             while (true)
             {
                 var prog = instr.GetCurrProgram();
-                //prog.writeToFile("corralinp.bpl");
 
                 // Don't reuse the call-tree 
                 if(corralState != null)
@@ -641,7 +671,7 @@ namespace AngelicVerifierNull
                 BoogieUtil.PrintProgram(ppprog, "ee.bpl");
 
                 Stats.resume("explain.error");
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize);
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint);
                 Stats.stop("explain.error");
 
                 // print the trace to disk
@@ -1289,9 +1319,9 @@ namespace AngelicVerifierNull
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
         private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
-        private static Dictionary<string, int> blockExprCount = new Dictionary<string, int>(); // count repeated block expr
+        private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
@@ -1330,13 +1360,13 @@ namespace AngelicVerifierNull
                         blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
 
                         /*HACK: supress the assertion when it cannot be blocked*/
-                        if (blockExprCount.ContainsKey(blockExpr.ToString()))
+                        if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
                         {
-                            if (blockExprCount[blockExpr.ToString()]++ > MAX_REPEATED_BLOCK_EXPR)
+                            if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
                                 throw new Exception("Repeating block expression detected. Not able to block!");
                         }
                         else
-                            blockExprCount[blockExpr.ToString()] = 1;
+                            blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)] = 1;
                         
                         Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
                         status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
