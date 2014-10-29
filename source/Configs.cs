@@ -419,6 +419,18 @@ namespace cba
                 var split = flag.Split(sep);
                 extraFlags.Add(split[1]);
             }
+            else if (flag.StartsWith("/killAfter:"))
+            {
+                var split = flag.Split(sep);
+                var timeout = Int32.Parse(split[1]);
+                var timeouttask = new System.Threading.Tasks.Task(() =>
+                    {
+                        System.Threading.Thread.Sleep(timeout * 1000);
+                        Console.WriteLine("Corral timed out");
+                        Process.GetCurrentProcess().Kill();
+                    });
+                timeouttask.Start();
+            }
             else if (flag.StartsWith("/recursionBound:"))
             {
                 var split = flag.Split(sep);
