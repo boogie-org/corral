@@ -461,9 +461,12 @@ namespace cba
                             {
                                 var cmd = pblk.Cmds[pcnt] as CallCmd;
                                 Debug.Assert(cmd.Ins.Count == 1);
+                                var prefix = QKeyValue.FindStringAttribute(cmd.Attributes, "cexpr");
+                                if (prefix == null) prefix = "v";
+                                prefix += " = ";
                                 if (cc.info.hasVar("si_arg"))
                                 {
-                                    callstr += "v = " + cc.info.getVal("si_arg").ToString();
+                                    callstr += prefix + cc.info.getVal("si_arg").ToString();
                                 }
                             }
                         }
