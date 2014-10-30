@@ -622,6 +622,8 @@ namespace AngelicVerifierNull
             {
                 var prog = instr.GetCurrProgram();
 
+                //prog.writeToFile("c" + iterCount + ".bpl");
+
                 // Don't reuse the call-tree 
                 if(corralState != null)
                     corralState.CallTree = new HashSet<string>();
