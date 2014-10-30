@@ -87,13 +87,13 @@ namespace ExplainError
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,             
             out STATUS status, out Dictionary<string, string> complexCExprsRet)
         {
-            HashSet<List<Expr>> preDisjuncts;
-            return Go(impl, pr, tmout, explainErrorFilters, "", out status, out complexCExprsRet, out preDisjuncts);
+            HashSet<List<Expr>> preInDnfForm;
+            return Go(impl, pr, tmout, explainErrorFilters, "", out status, out complexCExprsRet, out preInDnfForm);
         }
 
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
             string extraArgs, out STATUS status, out Dictionary<string,string> complexCExprsRet,
-            out HashSet<List<Expr>> preDisjuncts)
+            out HashSet<List<Expr>> preInDnfForm)
         {
             suggestions = new List<Expr>();
             ExplainError.Toplevel.ParseCommandLine("");
@@ -109,7 +109,8 @@ namespace ExplainError
             {
                 ignoreAllAssumes = true;  
                 //onlyDisplayAliasingInPre = false;
-                onlyDisplayMapExpressions = false;dontDisplayComparisonsWithConsts = false;
+                onlyDisplayMapExpressions = false;
+                dontDisplayComparisonsWithConsts = false;
             }
 
             showBoogieExprs = false;
@@ -125,7 +126,7 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl, out preDisjuncts);
+            var tmp = Go(impl, out preInDnfForm);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
@@ -136,11 +137,11 @@ namespace ExplainError
             Dictionary<string, string> tmp;
             return Go(impl, pr, tmout, 0, out status, out tmp);
         }
-        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preDisjuncts)
+        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm)
         {
             sw = new Stopwatch();
             sw.Start();
-            preDisjuncts = null; //HashSet<List<Expr>> preDisjuncts = null;
+            preInDnfForm = null; //HashSet<List<Expr>> preInDnfForm = null;
             allCubesCovered = true;
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
@@ -149,12 +150,13 @@ namespace ExplainError
             try
             {
                 //SimplifyAssumesUsingForwardPass();
-                ComputePre(impl.Blocks[0].Cmds, out preDisjuncts);
+                ComputePre(impl.Blocks[0].Cmds, out preInDnfForm);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
-                if (CheckNecessaryDisjuncts(ref preDisjuncts))
+                //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true
+                if (true /*CheckNecessaryDisjuncts(ref preInDnfForm)*/)
                 {
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
-                    Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preDisjuncts)); //print boogie exprs
+                    Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
                     returnStatus = STATUS.SUCCESS;
                 }
                 else
@@ -164,8 +166,8 @@ namespace ExplainError
                 }
                 currImpl = null;
                 sw.Stop();
-                var preStrings = DisplayDisjunctsOnConsole(preDisjuncts);
-                PersistSuggestionsInFile(preDisjuncts, preStrings);
+                var preStrings = DisplayDisjunctsOnConsole(preInDnfForm);
+                PersistSuggestionsInFile(preInDnfForm, preStrings);
                 return preStrings;
             }
             catch (Exception e)
@@ -173,14 +175,14 @@ namespace ExplainError
                 Console.WriteLine("ExplainError failed with {0}", e.Message);
                 if (e is TimeoutException) returnStatus = STATUS.TIMEOUT;
                 else returnStatus = STATUS.INCONCLUSIVE;
-                preDisjuncts = new HashSet<List<Expr>>();
+                preInDnfForm = new HashSet<List<Expr>>();
                 return new List<string>();
             }
         }
 
-        private static void PersistSuggestionsInFile(HashSet<List<Expr>> preDisjuncts, List<string> preStrings)
+        private static void PersistSuggestionsInFile(HashSet<List<Expr>> preInDnfForm, List<string> preStrings)
         {
-            var cnfClauses = ExprListSetToNegatedCNFExprList(preDisjuncts);
+            var cnfClauses = ExprListSetToNegatedCNFExprList(preInDnfForm);
             cnfClauses.Iter(x =>
                 suggestions.Add(x));
         }
@@ -193,9 +195,9 @@ namespace ExplainError
 
         # region Top-level routines for computing and massaging Pre
  
-        private static void ComputePre(List<Cmd> cmdseq, out HashSet<List<Expr>> preDisjuncts)
+        private static void ComputePre(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm)
         {
-            preDisjuncts = new HashSet<List<Expr>>();
+            preInDnfForm = new HashSet<List<Expr>>();
             List<Cmd> cmds = cmdseq.Cast<Cmd>().ToList();
             cmds.Reverse();
             //Expr pre = Expr.True; //pre(cmd, true) //changing it to a list as subsExpr uses visitExpr
@@ -215,9 +217,9 @@ namespace ExplainError
                     string captureStateLoc;
                     if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc))
                     {
-                        //foreach (var d in DisplayPre(pre, captureStateLoc))
-                        foreach (var d in DisplayPre(preL, captureStateLoc))
-                                preDisjuncts.Add(d);
+                        //foreach (var d in ComputePreOverVocab(pre, captureStateLoc))
+                        foreach (var d in ComputePreOverVocab(preL, captureStateLoc))
+                                preInDnfForm.Add(d);
                         continue;
                     }
                     if (!ContainsSlicAttribute((AssumeCmd)cmd)) continue;
@@ -242,10 +244,10 @@ namespace ExplainError
                 //else //just skip for now
                 //    throw new NotImplementedException();
             }
-            //preDisjuncts.AddRange(DisplayPre(pre, null));
-            //foreach (var d in DisplayPre(pre, null))
-            foreach (var d in DisplayPre(preL, null))
-                preDisjuncts.Add(d);
+            //preInDnfForm.AddRange(ComputePreOverVocab(pre, null));
+            //foreach (var d in ComputePreOverVocab(pre, null))
+            foreach (var d in ComputePreOverVocab(preL, null))
+                preInDnfForm.Add(d);
         }
 
         private static void SimplifyAssumesUsingForwardPass()
@@ -277,20 +279,20 @@ namespace ExplainError
             }
             throw new Exception("This is just for experimentation");
         }
-        private static HashSet<List<Expr>> DisplayPre(List<Expr> pre, string captureStateLoc)
+        private static HashSet<List<Expr>> ComputePreOverVocab(List<Expr> pre, string captureStateLoc)
         {
             if (captureStateLoc != "Start") return new HashSet<List<Expr>>();
-            if (verbose) Console.WriteLine("DisplayPre...");
+            if (verbose) Console.WriteLine("ComputePreOverVocab...");
             pre.Reverse(); // to keep up the list structure as before (when pre was conjoined)
 
             currPre = ExprUtil.ConjoinExprsBalanced(pre);
             HashSet<List<Expr>> displayStrs = new HashSet<List<Expr>>();
-            List<Expr> conjuncts; // = new List<Expr>();
-            conjuncts = pre; 
-            CheckTimeout("Inside DisplayPre");
+            List<Expr> cubeLiterals; // = new List<Expr>();
+            cubeLiterals = pre; 
+            CheckTimeout("Inside ComputePreOverVocab");
             Expr t = Expr.True;
             var nc = new List<Expr>();
-            foreach (var c in conjuncts)
+            foreach (var c in cubeLiterals)
                 nc.Add(FlattenITE(RewriteITEFixPoint(CreateITE(c))));
             t = ExprUtil.ConjoinExprsBalanced(nc); //TODO: perform NNF should just take nc
             if (!VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Iff(currPre, t))))
@@ -312,39 +314,60 @@ namespace ExplainError
                 displayStrs.Add(new List<Expr>() { Expr.True });
                 return displayStrs;
             }
-            var l = new List<Expr>();
-            if (CheckConjunctiveCover(currImpl, currPre, e, filteredAtoms, out l))
+            var preDnf = new List<Expr>();
+            //we first check if there is a cover using a non-empty conjunction of atoms
+            if (MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf))
             {
-                Console.WriteLine("\n Found a conjunctive cover {0}\n", l[0]);
+                Console.WriteLine("\n Found a conjunctive cube cover {0}\n", preDnf[0]);
             } 
             else 
             {
-                Console.WriteLine("\n No conjunctive cover found...going for expensive DNF based simplification\n");
-                l = ExprUtil.PerformDNF(e);
+                Console.WriteLine("\n No conjunctive cube cover found...going for precise but expensive DNF based simplification\n");
+                preDnf = ExprUtil.PerformDNF(e);
             }
             Console.WriteLine("\n\n-------------------- Pre at {0} in DNF [Size = {1}] ---------------------",
-                        captureStateLoc == null ? "Start" : "CaptureState at " + captureStateLoc, l.Count);
+                        captureStateLoc == null ? "Start" : "CaptureState at " + captureStateLoc, preDnf.Count);
             var feasCnt = 0;
-            var displayedConjuncts = new HashSet<List<Expr>>(); //string form of exprs
-            foreach (var d in l)
+            var prunedCubesFromDnf = new HashSet<List<Expr>>(); //string form of exprs
+            foreach (var cube in preDnf)
             {
-                conjuncts.Clear();
+                cubeLiterals.Clear();
                 CheckTimeout("Before pruning");
-                if (VCVerifier.CheckIfExprFalse(currImpl, d))
+                //Prune any cube that is unsat
+                if (VCVerifier.CheckIfExprFalse(currImpl, cube))
                 {
                     CheckTimeout("After pruning");
                     if (verbose) Console.WriteLine("Cube pruned"); continue;
                 } //infeasible cube
                 feasCnt++;
-                CollectConjuncts(d, ref conjuncts);
-                DisplayConjuncts(conjuncts, ref displayedConjuncts, ref displayStrs);
+                SplitConjunction(cube, ref cubeLiterals);
+                if (!FilterCubesOverVocabulary(cubeLiterals, ref prunedCubesFromDnf, ref displayStrs))
+                {
+                    //the DNF is essentially True
+                    Console.WriteLine("\n ---- Pre in DNF is Expr.True as all atoms in a cube filtered away ---\n");
+                    prunedCubesFromDnf.Clear(); displayStrs.Clear();
+                    prunedCubesFromDnf.Add(new List<Expr>() { Expr.True });
+                    displayStrs.Add(new List<Expr>() { Expr.True });
+                    break;
+                }
             }
             Console.WriteLine("--------------------- Feasible Count = {0} ----------------------------", feasCnt);
             currPre = null;
             return displayStrs;
         }
-        //Checks if the currPre implies a subset of {f1,f2,..fn}
-        private static bool CheckConjunctiveCover(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
+        
+        /// <summary>
+        /// Monomial abstraction of currPre using fe; less precise than full cover
+        /// Overapproximates currPre with And_p{p in fe | currPre implies p}
+        /// Returns false if the set only contains true
+        /// </summary>
+        /// <param name="currImpl"></param>
+        /// <param name="currPre"></param>
+        /// <param name="e"></param>
+        /// <param name="fe"></param>
+        /// <param name="l"></param>
+        /// <returns></returns>
+        private static bool MonomialCubeCover(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
         {
             var t = fe.ToList().FindAll(a => VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Imp(currPre, a))));
             l = new List<Expr>();
@@ -371,13 +394,13 @@ namespace ExplainError
                 return base.VisitAssumeCmd(cmd);
             }
         }
-        private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preDisjuncts)
+        private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preInDnfForm)
         {
             if (!checkIfExprFalseCalled)
                 throw new Exception("We need to call CheckIfEXprFalseCalled before calling CheckNecessaryDisjuncts");
             var proc = currImpl.Proc;
             Debug.Assert(proc != null, "The proc of currImpl is null");
-            Expr disjunct = ExprListSetToDNFExpr(preDisjuncts);
+            Expr disjunct = ExprListSetToDNFExpr(preInDnfForm);
             var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
             var t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
             t.VisitImplementation(currImpl); //changes currImpl as well
@@ -388,9 +411,9 @@ namespace ExplainError
             //now try to greedily minimize
             var retain = new HashSet<List<Expr>>();
 
-            foreach (var d in preDisjuncts)
+            foreach (var d in preInDnfForm)
             {
-                var tmp = new HashSet<List<Expr>>(preDisjuncts);
+                var tmp = new HashSet<List<Expr>>(preInDnfForm);
                 tmp.Remove(d); //remove 1 element and check the rest
                 disjunct = ExprListSetToDNFExpr(tmp);
                 t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
@@ -400,9 +423,9 @@ namespace ExplainError
                 if (!result) retain.Add(d); //necessary
                 currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds to have the captureState
             }
-            if (retain.Count > 0) //else keep preDisjuncts possibly non-minimal
-                preDisjuncts = retain;
-            CheckIfTrueDisjunct(ref preDisjuncts);
+            if (retain.Count > 0) //else keep preInDnfForm possibly non-minimal
+                preInDnfForm = retain;
+            CheckIfTrueDisjunct(ref preInDnfForm);
             return true;
         }
 
@@ -410,24 +433,24 @@ namespace ExplainError
         /// check if the disjunct is semantically true
         /// if so, replace it by true
         /// </summary>
-        /// <param name="preDisjuncts"></param>
-        private static void CheckIfTrueDisjunct(ref HashSet<List<Expr>> preDisjuncts)
+        /// <param name="preInDnfForm"></param>
+        private static void CheckIfTrueDisjunct(ref HashSet<List<Expr>> preInDnfForm)
         {
-            var pre = ExprUtil.Not(ExprListSetToDNFExpr(preDisjuncts ));
+            var pre = ExprUtil.Not(ExprListSetToDNFExpr(preInDnfForm ));
             if (VCVerifier.CheckIfExprFalse(currImpl, pre))
             {
                 Console.WriteLine("Replacing semantically true expr ({0}) with true", pre);
-                preDisjuncts = new HashSet<List<Expr>>();
-                preDisjuncts.Add(new List<Expr>() { Expr.True });
+                preInDnfForm = new HashSet<List<Expr>>();
+                preInDnfForm.Add(new List<Expr>() { Expr.True });
             }
         }
 
-        private static List<string> DisplayDisjunctsOnConsole(HashSet<List<Expr>> preDisjuncts)
+        private static List<string> DisplayDisjunctsOnConsole(HashSet<List<Expr>> preInDnfForm)
         {
             var preStrings = new List<string>();
             complexCExprs = new Dictionary<string, string>(); //a set of complex expressions that we abstract
             Console.WriteLine("\n\nThe list disjuncts\n---------------------\n");
-            foreach (var g in preDisjuncts)
+            foreach (var g in preInDnfForm)
             {
                 string displayStr = "";
                 foreach (var c in g)
@@ -448,25 +471,34 @@ namespace ExplainError
                 Console.WriteLine("\t{0} ==> {1}", kv.Value, kv.Key);
             return preStrings;
         }
-        private static void DisplayConjuncts(List<Expr> conjuncts, ref HashSet<List<Expr>> displayedConjuncts, ref HashSet<List<Expr>> displayStrs)
+        /// <summary>
+        /// Returns the subset of literals in cubeLiterals that matches Vocabulary (IsLiteralInVocabulary)
+        /// Returns false if the set of literals is empty, indicating the expression True
+        /// </summary>
+        /// <param name="cubeLiterals"></param>
+        /// <param name="displayedConjuncts"></param>
+        /// <param name="displayStrs"></param>
+        /// <returns></returns>
+        private static bool FilterCubesOverVocabulary(List<Expr> cubeLiterals, ref HashSet<List<Expr>> displayedConjuncts, ref HashSet<List<Expr>> displayStrs)
         {
             CheckTimeout("Inside DisplayConjuncts");
             List<Expr> toDisplay = new List<Expr>();
-            foreach (var c in conjuncts)
+            foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
-                if (FilterConjunct(c)) continue;
+                if (IsLiteralInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
-            if (toDisplay.Count == 0) { allCubesCovered = false; return; }
+            if (toDisplay.Count == 0) {return false; }
             //var str = String.Join(",", toDisplay);
             //if (displayedConjuncts.Contains(str)) return;
-            if (SubsumedCubes(toDisplay, displayedConjuncts)) return;
+            if (SubsumedCubes(toDisplay, displayedConjuncts)) return true;
             //Console.WriteLine("------------");
             //displayedConjuncts.Add(str);
             displayedConjuncts.Add(toDisplay);
             displayStrs.Add(toDisplay); //this may be redundant, as the C expressions are generated much later
             CheckTimeout("End DisplayConjuncts");
+            return true;
         }
         // finds if there is a cube in displayedConjuncts that is subsumed by toDisplay
         private static bool SubsumedCubes(List<Expr> toDisplay, HashSet<List<Expr>> displayedConjuncts)
@@ -1027,7 +1059,12 @@ namespace ExplainError
         /// </summary>
         public static class VCVerifier
         {
-            //Checks if an expr implies false (modulo the axioms)
+            /// <summary>
+            /// Checks if an expr implies false (modulo the axioms)
+            /// </summary>
+            /// <param name="impl"></param>
+            /// <param name="e"></param>
+            /// <returns></returns>
             public static bool CheckIfExprFalse(Implementation impl, Expr e)
             {//checks if e <=> false semantically
                 var blks = new List<Block>();
@@ -1178,18 +1215,23 @@ namespace ExplainError
                 if (arg is LiteralExpr) return true;
             return false;
         }
-        private static void CollectConjuncts(Expr pre, ref List<Expr> conjuncts)
+        /// <summary>
+        /// Splits a conjunction into its components
+        /// </summary>
+        /// <param name="pre"></param>
+        /// <param name="cubeLiterals"></param>
+        private static void SplitConjunction(Expr pre, ref List<Expr> cubeLiterals)
         {
-            if (conjuncts.Contains(pre)) return; //eliminate duplicates
+            if (cubeLiterals.Contains(pre)) return; //eliminate duplicates
             var expr = pre as NAryExpr;
-            if (expr == null) { conjuncts.Add(pre); return; }
+            if (expr == null) { cubeLiterals.Add(pre); return; }
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || binOp.Op != BinaryOperator.Opcode.And)
             {
-                conjuncts.Add(pre); return;
+                cubeLiterals.Add(pre); return;
             }
-            CollectConjuncts(expr.Args[0], ref conjuncts);
-            CollectConjuncts(expr.Args[1], ref conjuncts);
+            SplitConjunction(expr.Args[0], ref cubeLiterals);
+            SplitConjunction(expr.Args[1], ref cubeLiterals);
         }
         private static bool IsTrueAssert(AssertCmd assertCmd)
         {
@@ -1213,40 +1255,40 @@ namespace ExplainError
             var expr = e as NAryExpr;
             if (expr == null)
             {
-                if (FilterConjunct(e)) return Expr.True;
+                if (IsLiteralInVocabulary(e)) return Expr.True;
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
             {
-                if (FilterConjunct(e)) return Expr.True;
+                if (IsLiteralInVocabulary(e)) return Expr.True;
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             return ExprUtil.NAryExpr(binOp,
                 new List<Expr> { GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps) });
         }
-        private static bool FilterConjunct(Expr c)
+        private static bool IsLiteralInVocabulary(Expr c)
         {
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
             return false;
         }
-        public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preDisjuncts)
+        public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preInDnfForm)
         {
             Expr ret = Expr.False;
-            foreach (var el in preDisjuncts)
+            foreach (var el in preInDnfForm)
                 ret = ExprUtil.Or(ret, el.Aggregate((Expr)Expr.True, (x, y) => Expr.And(x, y)));
             return ret;
         }
-        public static List<Expr> ExprListSetToNegatedCNFExprList(HashSet<List<Expr>> preDisjuncts)
+        public static List<Expr> ExprListSetToNegatedCNFExprList(HashSet<List<Expr>> preInDnfForm)
         {
             //negate a set represnting DNF expression --> list of CNF clauses
             var ret = new List<Expr>();
             ret.AddRange(
-                preDisjuncts.Select(el =>
+                preInDnfForm.Select(el =>
                     el.Aggregate((Expr)Expr.False, (x, y) => ExprUtil.Or(x, ExprUtil.Not(y)))));
             return ret;
         }
@@ -1369,7 +1411,11 @@ namespace ExplainError
                 return Substituter.Apply(s, p);
             }
 
-            //Converts e to a negation normal form by pushing !
+            /// <summary>
+            /// Converts e to a negation normal form by pushing negation
+            /// </summary>
+            /// <param name="e"></param>
+            /// <returns></returns>
             public static Expr PerformNNF(Expr e)
             {
                 return PerformNNFAux(e, false); 
@@ -1401,8 +1447,13 @@ namespace ExplainError
                 return NAryExpr(m, new List<Expr>{t0,t1});
             }
 
-            //Converts to a Disjunctive Normal Form (DNF)
-            //Blows up when Expr is large
+            
+            /// <summary>
+            ///Converts to a Disjunctive Normal Form (DNF) 
+            ///Blows up when Expr is large
+            /// </summary>
+            /// <param name="e"></param>
+            /// <returns></returns>
             public static List<Expr> PerformDNF(Expr e)
             {
                 CheckTimeout("PerformDNF start");
@@ -1455,10 +1506,7 @@ namespace ExplainError
                     return ret;
                 }
             }
-            //internal static Expr ConjoinExprs(List<Expr> preL)
-            //{
-            //    return preL.Aggregate((Expr)Expr.True, (x, y) => ExprUtil.And(x, y));
-            //}
+
             /// <summary>
             /// Conjoins a list of expressions, but tries to maintain a balanced tree
             /// </summary>
