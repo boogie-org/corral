@@ -682,11 +682,10 @@ namespace AngelicVerifierNull
 
                 var traceInfo = new ErrorTraceInfo(traceName, cex, pprog.getProgram(), assertLoc, failingEntryPoint);
 
-                // TODO: I don't think a timeout/inconclusive result from ExplainError 
-                // is getting handled very well here. What about "SUPPRESS"?
-
-                if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS ||
-                    eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
+                if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) {
+                    SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                }
+                else if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
                     PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
                 }
@@ -767,6 +766,19 @@ namespace AngelicVerifierNull
             if (blocked)
             {
                 instr.RemoveBlockingConstraint();
+            }
+        }
+
+        private static void SuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
+        {
+
+            var traces = "";
+            traceInfos.Iter(info => traces += info.TraceName + " ");
+            traces = "{" + traces + "}";
+
+            foreach (var traceInfo in traceInfos)
+            {
+                var tok = instr.SuppressAssert(traceInfo.TraceProgram);
             }
         }
 
