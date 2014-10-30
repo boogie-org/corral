@@ -204,11 +204,17 @@ namespace ExplainError
             var preL = new List<Expr>(); 
             preL.Add(Expr.True);
             int conjunctCount = 0; //keep track of how many conjuncts to avoid StackOverflow in substituteExpr/perform DNF
+            int numAssertsInTrace = 0;
             foreach (var cmd in cmds)
             {
                 CheckTimeout("Inside ComputePre");
                 if (cmd is AssertCmd && !IsTrueAssert((AssertCmd)cmd))
                 {
+                    //EE requires that there is at most one assert in the trace 
+                    //We will ignore any assertion with True syntactically, but otherwise crash if there are multiple asserts
+                    Debug.Assert(numAssertsInTrace == 0,
+                        string.Format("EE requires at most one non-syntactic-true assertion in the trace, found an extra {0}", cmd.ToString()));
+                    numAssertsInTrace++;
                     //pre = Expr.And(Expr.Not(((AssertCmd)cmd).Expr), pre); //TODO: Boolean simplifications
                     preL.Add(Expr.Not(((AssertCmd)cmd).Expr));
                 }
@@ -238,6 +244,7 @@ namespace ExplainError
                 }
                 else if (cmd is HavocCmd)
                 {
+                    //Debug.Assert(false, string.Format("Unexpected havoc stmt {0}", cmd.ToString()));
                     //just ignore the havocs for now.
                     //TODO: replace havoc x --> x := x@c
                 }
@@ -295,6 +302,8 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
                 nc.Add(FlattenITE(RewriteITEFixPoint(CreateITE(c))));
             t = ExprUtil.ConjoinExprsBalanced(nc); //TODO: perform NNF should just take nc
+            if (VCVerifier.CheckIfExprFalse(currImpl, t))
+                throw new Exception("Something wrong in ExplainError as EE thinks the trace looks infeasible");
             if (!VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Iff(currPre, t))))
             {
                 //Console.WriteLine("currPre = {0}, t = {0}", currPre.ToString(), t.ToString());
