@@ -253,7 +253,12 @@ namespace AngelicVerifierNull
                 foreach (var op in p.OutParams)
                 {
                     if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op));
-                    else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
+                    else
+                    {
+                        // Avoid using Havoc -- we'll let this fall on the floor as an
+                        // uninitialized variable. AVN will take care of concretizing it
+                        //cmds.Add(BoogieAstFactory.MkHavocVar(op)); 
+                    }
                 }
                 foreach (var ip in p.InParams)
                 {
