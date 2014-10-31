@@ -17,9 +17,14 @@ namespace ExplainError
 
     /// <summary>
     /// Status returned by ExplainError
-    /// ANGELIC_DATAFLOW_BUG: Env cannot control the non-control statements to avoid the error
     /// </summary>
-    public enum STATUS { SUCCESS, PARTIALCOVER, TIMEOUT, INCONCLUSIVE, ILLEGAL, ANGELIC_DATAFLOW_BUG};
+    public enum STATUS { 
+        SUCCESS,         /* the returned constraint suppresses error */
+        PARTIALCOVER,    /* will be deprecated */
+        TIMEOUT,         /* analysis timed out */
+        INCONCLUSIVE,    /* analysis was imprecise */
+        ILLEGAL          /* some unexpected condition encountered */   
+    };
     
     public class Toplevel
     {
@@ -75,7 +80,7 @@ namespace ExplainError
         /// explainErrorFilters is used to control any options to filter
         ///    0 : reserved for default SDV options 
         ///    1 : {ignoreAllAssumes, !onlyDisplayAliasingInPre, !onlyDisplayMapExpressions, !dontDisplayComparisonWithConsts}
-        ///    10: (returns true/false) check for ANGELIC_DATAFLOW_BUG by verifying assert false after making assert -> assume
+        ///    10: (returns true/false)
         /// </summary>
         /// <param name="impl"></param>
         /// <param name="pr"></param>
