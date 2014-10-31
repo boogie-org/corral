@@ -152,9 +152,11 @@ namespace ExplainError
                 //SimplifyAssumesUsingForwardPass();
                 ComputePre(impl.Blocks[0].Cmds, out preInDnfForm);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
-                //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true
+                //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
+                //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
                 if (true /*CheckNecessaryDisjuncts(ref preInDnfForm)*/)
                 {
+                    CheckIfTrueDisjunct(ref preInDnfForm); 
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
                     Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
                     returnStatus = STATUS.SUCCESS;
@@ -434,7 +436,6 @@ namespace ExplainError
             }
             if (retain.Count > 0) //else keep preInDnfForm possibly non-minimal
                 preInDnfForm = retain;
-            CheckIfTrueDisjunct(ref preInDnfForm);
             return true;
         }
 
