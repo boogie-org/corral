@@ -14,7 +14,8 @@
 
 -------------------- funcatdispatch_correct.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing funcatdispatch_correct.bpl ------
-Broken!
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> !(sdv_irql_current != APC_LEVEL && sdv_irql_current != PASSIVE_LEVEL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_2(x_3) ==> !(x_3 == NULL && sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL))
 
 -------------------- lowerdriverreturn.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
@@ -56,3 +57,8 @@ Broken!
 
 -------------------- soft_constraint_example.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing soft_constraint_example.bpl ------
+
+-------------------- eedoesntblock.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eedoesntblock.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> sdv_irql_current == PASSIVE_LEVEL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> sdv_irql_current == PASSIVE_LEVEL
