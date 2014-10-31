@@ -256,6 +256,8 @@ namespace AngelicVerifierNull
             PersistentProgram prog = null;
             try
             {
+                Stats.resume("Cpu");
+
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
                 prog = GetProgram(args[0]);
@@ -307,6 +309,8 @@ namespace AngelicVerifierNull
                 if (prePassOnly) return;
                 //Analyze
                 RunCorralForAnalysis(prog);
+
+                Stats.stop("Cpu");
             }
             catch (Exception e)
             {
@@ -1553,24 +1557,28 @@ namespace AngelicVerifierNull
         {
             var program = inp.getProgram();
 
-            // Do SSA
-            program =
-                SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
-
-            // Make sure that aliasing queries are on identifiers only
-            var af =
-                AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
-
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
             AliasAnalysis.AliasAnalysisResults res = null;
             if (Options.UseAliasAnalysis)
             {
+                // Do SSA
+                program =
+                    SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+
+                // Make sure that aliasing queries are on identifiers only
+                var af =
+                    AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
+
                 res =
                   AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);   
             }
             else
             {
+                // Make sure that aliasing queries are on identifiers only
+                var af =
+                    AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
+
                 res = new AliasAnalysis.AliasAnalysisResults();
                 af.Iter(s => res.aliases.Add(s, true));
             }
