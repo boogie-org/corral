@@ -36,16 +36,17 @@ namespace ExplainError
         private static bool verbose = false;
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
+        //Set of syntactic filters
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
-        private static bool showPreAtAllCapturedStates = false; //should remain false, as some optimizations relies on it
+        private static bool displayTypeStateVariables = false; //display any atom where some variable is annotated with a {:typestate}
+        //Display options
         private static bool showBoogieExprs = false;
         private static int timeout = MAX_TIMEOUT; // seconds
         //private static bool removeUnaryFuncsInPre = false;
         public static bool useFieldMapAttribute = true; //shoudl always use it, not exposing
         public static bool dontUsePruningWhileEliminatingUpdates = false ; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
-        public static bool applyFiltersBeforeDNF = true; // if true, it causes overapproximation by first reducing any filtered expr to Expr.True
         public static bool checkIfExprFalseCalled = false; //HACK!
         //private static bool performDNF = false; //will blow up
 
@@ -1289,6 +1290,21 @@ namespace ExplainError
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
+            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return true; 
+            return false;
+        }
+
+        private static bool ContainsTypeStateVar(Expr c)
+        {
+            var expr = c as NAryExpr;
+            if (expr == null) return false;
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Eq  && binOp.Op != BinaryOperator.Opcode.Neq) return false;
+            var x = expr.Args[0] as IdentifierExpr;
+            if (x == null) return false;
+            //TODO: lookup the {:typestate} attribute on teh variable
+            if (QKeyValue.FindBoolAttribute(x.Decl.Attributes, "typestatevar")) return true; 
             return false;
         }
         public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preInDnfForm)
