@@ -1152,8 +1152,8 @@ namespace AngelicVerifierNull
             {
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", "stack.txt");
-                //if (cba.PrintSdvPath.lastDriverLocation == null) // TODO: error trace for buffer asserts
-                //    return Tuple.Create(".//models.c", 1);
+                if (cba.PrintSdvPath.lastDriverLocation == null)
+                    return null;
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
             }
         }
