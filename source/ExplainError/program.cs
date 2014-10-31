@@ -40,7 +40,7 @@ namespace ExplainError
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
-        private static bool displayTypeStateVariables = false; //display any atom where some variable is annotated with a {:typestate}
+        private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestate}
         //Display options
         private static bool showBoogieExprs = false;
         private static int timeout = MAX_TIMEOUT; // seconds
@@ -502,7 +502,7 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
-                if (IsLiteralInVocabulary(c)) continue;
+                if (LiteralNotInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
             if (toDisplay.Count == 0) {return false; }
@@ -1271,26 +1271,33 @@ namespace ExplainError
             var expr = e as NAryExpr;
             if (expr == null)
             {
-                if (IsLiteralInVocabulary(e)) return Expr.True;
+                if (LiteralNotInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
             {
-                if (IsLiteralInVocabulary(e)) return Expr.True;
+                if (LiteralNotInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             return ExprUtil.NAryExpr(binOp,
                 new List<Expr> { GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps) });
         }
-        private static bool IsLiteralInVocabulary(Expr c)
+        /// <summary>
+        /// Returns false if c matches all the enabled filters that apply to it
+        /// </summary>
+        /// <param name="c"></param>
+        /// <returns></returns>
+        private static bool LiteralNotInVocabulary(Expr c)
         {
-            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;
-            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
+            //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
+            //TODO: separate positive and negative filters
+            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //matches
+            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
+            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true; 
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
-            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return true; 
             return false;
         }
 

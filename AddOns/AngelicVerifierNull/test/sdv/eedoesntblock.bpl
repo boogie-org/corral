@@ -18,7 +18,7 @@ const {:allocated} DISPATCH_LEVEL: int;
 
 axiom DISPATCH_LEVEL == 2;
 
-var {:scalar} sdv_irql_current: int;
+var {:scalar} {:typestatevar} sdv_irql_current: int;
 
 var alloc: int;
 
