@@ -39,6 +39,8 @@ namespace AngelicVerifierNull
         public static bool RelaxEnvironment = false;
         // remove entrypoint from procs with osmodel as entrypoint
         public static bool noOSmodels = false;
+        // EE option to perform control flow slicing
+        public static bool EEPerformControlSlicing = false; 
     }
 
     class Stats
@@ -222,6 +224,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
                 Options.AddMapSelectNonNullAssumptions = true;
 
+            if (args.Any(s => s == "/EEPerformControlSlicing"))
+                Options.EEPerformControlSlicing = true;
+
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
@@ -303,6 +308,10 @@ namespace AngelicVerifierNull
                     prog = RunHoudiniPass(prog, out inferred_asserts);
 
                 prog = removeAsserts(inferred_asserts, prog);
+
+                // hook to run the control flow slicing static analysis pre pass
+                if (Options.EEPerformControlSlicing)
+                    (new ExplainError.ControlFlowDependency(prog.getProgram())).Run();
 
                 PrintAssertStats(prog);
 

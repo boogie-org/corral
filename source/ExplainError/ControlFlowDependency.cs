@@ -16,7 +16,7 @@ namespace ExplainError
     /// <summary>
     /// Calculates the set of variables modified inside the two branches of a conditional block
     /// </summary>
-    class ControlFlowDependency
+    public class ControlFlowDependency
     {
         Program prog;
         //a null block indicates returnBlock
@@ -29,20 +29,20 @@ namespace ExplainError
         {
             //perform interprocedural modset analysis
             (new ModSetCollector()).DoModSetAnalysis(prog);
-            prog.Implementations.Iter(impl => (new IntraProcModSetComputer(this, impl)).Run());
+            prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
         }
 
         /// <summary>
         /// The class that actually does the hard work of computing pairwiseBlockModSet
         /// </summary>
-        private class IntraProcModSetComputer
+        private class IntraProcModSetComputerPerImpl
         {
             ControlFlowDependency parent;
             Implementation impl;
             HashSet<Tuple<Block, Block>> workList;
             Dictionary<Tuple<Block, Block>, HashSet<Variable>> intraProcPairBlockModSet;
             Dictionary<Block, HashSet<Block>> successorBlocks; 
-            public IntraProcModSetComputer(ControlFlowDependency cfd, Implementation impl) 
+            public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
                 this.impl = impl;
@@ -63,12 +63,33 @@ namespace ExplainError
                         }
                     );
                 //initialize the WL
-                InitializeWL();
+                InitializeModSets();
                 //run the fixed point
                 ComputeTransitiveModSets();
+                Print();
             }
-            private void InitializeWL()
+            private void InitializeModSets()
             {
+                var ModSetOfABlock = new Func<Block, HashSet<Variable>>(b =>
+                {
+                    var modVars = new HashSet<Variable>();
+                    foreach (var cmd in b.Cmds)
+                    {
+                        if (cmd is AssignCmd)
+                        {
+                            var ac = cmd as AssignCmd;
+                            ac.Lhss.ForEach(x => modVars.Add(x.DeepAssignedVariable));
+                        }
+                        if (cmd is CallCmd)
+                        {
+                            var cc = cmd as CallCmd;
+                            cc.Outs.ForEach(x => modVars.Add(x.Decl));
+                            cc.Proc.Modifies.ForEach(x => modVars.Add(x.Decl));
+                        }
+                    }
+                    return modVars;
+                });
+
                 impl.Blocks.Iter
                     (b =>
                     {
@@ -82,29 +103,22 @@ namespace ExplainError
                     }
                     );
             }
-            private HashSet<Variable> ModSetOfABlock(Block b)
-            {
-                var modVars = new HashSet<Variable>();
-                foreach(var cmd in b.Cmds)
-                {
-                    if (cmd is AssignCmd)
-                    {
-                        var ac = cmd as AssignCmd;
-                        ac.Lhss.ForEach(x => modVars.Add(x.DeepAssignedVariable));
-                    }
-                    if (cmd is CallCmd)
-                    {
-                        var cc = cmd as CallCmd;
-                        cc.Outs.ForEach(x => modVars.Add(x.Decl));
-                        cc.Proc.Modifies.ForEach(x => modVars.Add(x.Decl));
-                    }
-                }
-                return modVars;
-            }
             private void ComputeTransitiveModSets()
             {
-                var UpdateModSetPair = new Action<Block, Block>((b1, b2) =>
-                    { 
+                var UpdateTransitiveEdge = new Action<Block, Block, Block>((b1, b2, b3) =>
+                    {
+                        var vs1 = intraProcPairBlockModSet[Tuple.Create(b1, b2)];
+                        var vs2 = intraProcPairBlockModSet[Tuple.Create(b2, b3)];
+                        HashSet<Variable> vs3;
+                        var present = intraProcPairBlockModSet.TryGetValue(Tuple.Create(b1, b3), out vs3);
+                        if (!present) vs3 = new HashSet<Variable>();
+                        var newvs = new HashSet<Variable>();
+                        vs1.Union(vs2.Union(vs3)).Iter(x => newvs.Add(x));
+                        if (newvs.Count > vs3.Count)
+                        {
+                            intraProcPairBlockModSet[Tuple.Create(b1, b3)] = newvs;
+                            if (!workList.Contains(Tuple.Create(b1, b3))) workList.Add(Tuple.Create(b1, b3));
+                        }
                     }
                     );
 
@@ -117,12 +131,25 @@ namespace ExplainError
                     foreach (var succ in successorBlocks)
                     {
                         if (succ.Value.Contains(start))
-                            UpdateModSetPair(succ.Key, start);
+                            UpdateTransitiveEdge(succ.Key, start, end);
                         if (succ.Key == end)
-                            succ.Value.Iter(d => UpdateModSetPair(start, d));
+                            succ.Value.Iter(d => UpdateTransitiveEdge(start, end, d));
                     }
 
                 }
+            }
+            private void Print()
+            {
+                Console.WriteLine("---- Implementation  {0} ------", impl.Name);
+                intraProcPairBlockModSet
+                    .Keys
+                    .Iter(x =>
+                    {
+                        Console.WriteLine("ModBtwn({0}, {1}) ==> {2}",
+                            x.Item1.Label, x.Item2 != null? x.Item2.Label: "return",
+                            string.Join(",", intraProcPairBlockModSet[x])
+                            );
+                    });
             }
         }
 
