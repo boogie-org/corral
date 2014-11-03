@@ -702,7 +702,7 @@ namespace AliasAnalysis
                     foreach (string aS in PointsTo[s]) Console.Write(aS + " ");
                     Console.WriteLine();
                 });
-            null_alloc_site = PointsTo["NULL"].First();
+            null_alloc_site = PointsTo.ContainsKey("NULL") ? PointsTo["NULL"].First() : null;
         }
 
         /*
