@@ -26,29 +26,41 @@ namespace ExplainError
         ILLEGAL          /* some unexpected condition encountered */   
     };
     
+    public enum COVERMODE {
+        MONOMIAL,       /* only consider a monomial overcover (clausal under cover for resulting block) */  
+        FULL,           /* only consider full DNF overcover   (CNF under cover for the resulting block) */
+        FULL_IF_NO_MONOMIAL  /* only consider full if no monomial overcover other than true */
+    };
+
     public class Toplevel
     {
         # region Analysis flags
         public const string CAPTURESTATE_ATTRIBUTE_NAME = "captureState";
         private const int MAX_TIMEOUT = 100;
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
+
         //Options: Add them to ParseAndRemoveNonBoogieOptions
-        private static bool verbose = false;
+        
+        //flags to control which assumes to consider in the trace
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
-        //Set of syntactic filters
+        
+        //flags to define syntactic filters on atoms
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
         private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestate}
+
+        //flags to define Boolean structure on the cover
+        private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL; 
+
         //Display options
         private static bool showBoogieExprs = false;
-        private static int timeout = MAX_TIMEOUT; // seconds
-        //private static bool removeUnaryFuncsInPre = false;
         public static bool useFieldMapAttribute = true; //shoudl always use it, not exposing
         public static bool dontUsePruningWhileEliminatingUpdates = false ; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
         public static bool checkIfExprFalseCalled = false; //HACK!
-        //private static bool performDNF = false; //will blow up
+        private static int timeout = MAX_TIMEOUT; // seconds
+        private static bool verbose = false;
 
         #endregion
 
@@ -333,14 +345,26 @@ namespace ExplainError
             }
             var preDnf = new List<Expr>();
             //we first check if there is a cover using a non-empty conjunction of atoms
-            if (MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf))
+            if (eeCoverOpt == COVERMODE.FULL)
             {
-                Console.WriteLine("\n Found a conjunctive cube cover {0}\n", preDnf[0]);
-            } 
-            else 
-            {
-                Console.WriteLine("\n No conjunctive cube cover found...going for precise but expensive DNF based simplification\n");
+                Console.WriteLine("\n Going directly for precise but expensive DNF based cover\n");
                 preDnf = ExprUtil.PerformDNF(e);
+            }
+            else
+            {
+                var mc = MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf);
+                if (mc)
+                    Console.WriteLine("\n Found a conjunctive cube cover {0}\n", preDnf[0]);
+                else
+                {
+                    if (eeCoverOpt == COVERMODE.MONOMIAL)
+                        preDnf.Add(Expr.True); //return True as the cover, or false as the block
+                    else //FULL_IF_NO_MONOMIAL
+                    {
+                        Console.WriteLine("\n No conjunctive cube cover found...going for precise but expensive DNF based cover\n");
+                        preDnf = ExprUtil.PerformDNF(e);
+                    }
+                }
             }
             Console.WriteLine("\n\n-------------------- Pre at {0} in DNF [Size = {1}] ---------------------",
                         captureStateLoc == null ? "Start" : "CaptureState at " + captureStateLoc, preDnf.Count);
@@ -924,7 +948,6 @@ namespace ExplainError
         public static bool ParseCommandLine(string clo)
         {
             //without the next line, it fails to find the right prover!!
-            //var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /printModel:1 /printModelToFile:model.dmp  /errorLimit:1 /printInstrumented " + clo;
             var boogieOptions = "/typeEncoding:m /doModSetAnalysis -timeLimit:100  -removeEmptyBlocks:0 /errorLimit:1 /printInstrumented " + clo;
             var oldArgs = boogieOptions.Split(' ');
             string[] args;
@@ -950,7 +973,18 @@ namespace ExplainError
                 || CheckBooleanFlag(s, flagName + "+", ref flag, true)
                 || CheckBooleanFlag(s, flagName + "-", ref flag, false);
         }
-
+        public static bool CheckIntegerFlag(string s, string flagName, ref int flag)
+        {
+            if (s.StartsWith("/" + flagName + ":") || s.StartsWith("-" + flagName + ":"))
+            {
+                int size = ("/" + flagName + ":").Length;
+                if (Int32.TryParse(s.Substring(size), out flag))
+                    return true;
+                else
+                    throw new Exception(string.Format("Illegal integer argument to {0}", s));
+            }
+            return false;
+        }
         public static bool ParseArgs(string[] args, out string[] newargs)
         {
             var retArgs = new List<string>();
@@ -966,8 +1000,13 @@ namespace ExplainError
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
                 if (CheckBooleanFlag(a, "dontUsePruningWhileEliminatingUpdates", ref dontUsePruningWhileEliminatingUpdates)) continue;
-                //if (CheckBooleanFlag(a, "performDNF", ref performDNF)) continue;
-                //if (CheckBooleanFlag(a, "removeUnaryFuncsInPre", ref removeUnaryFuncsInPre)) continue;
+                int eeCoverOptAsInt = 0; 
+                if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt)) {
+                    eeCoverOpt =
+                        eeCoverOptAsInt == 0 ? COVERMODE.MONOMIAL :
+                        eeCoverOptAsInt == 1 ? COVERMODE.FULL :
+                        COVERMODE.FULL_IF_NO_MONOMIAL; 
+                    continue;}
                 retArgs.Add(a);
                 if (a == "-?" || a == "/?") { retArgs.Remove(a);  help = true; continue; } //Hide help from Boogie
             }
@@ -985,8 +1024,7 @@ namespace ExplainError
                 Console.WriteLine("  /dontDisplayComparisonsWithConsts: Dont display expressions of the form e <> c, where c is const");
                 Console.WriteLine("  /showBoogieExprs:              Displays Boogie exprs along with C exrpr (Cexpr //BoogieExpr)");
                 Console.WriteLine("  /dontUsePruningWhileEliminatingUpdates:  Don't use pruning while eliminating updates (default off)");
-                //Console.WriteLine("  /performDNF:                   Perform Disjunctive Normal Form and remove infeasible disjuncts");
-                //Console.WriteLine("  /removeUnaryFuncsInPre:        (HACK) Skips f(x) --> x to simplify eliminating updates");
+                Console.WriteLine("  /eeCoverOpt:k :                Cover mode k = 0 (monomial only), = 1 (full dnf only), = _ (full-if-no-monomial)");
                 Console.WriteLine("\n  ----------------------------------------------------------------\n");
                 return true;
             }
