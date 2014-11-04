@@ -33,6 +33,40 @@ namespace ExplainError
             //perform interprocedural modset analysis
             (new ModSetCollector()).DoModSetAnalysis(prog);
             prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
+            // Add place holders
+            prog.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(InstrumentImplementation);
+        }
+
+        // Instrument:
+        //    assume {:basicblock "proc", "label"} true;
+        //    assume {:beginproc "proc"} true;
+        //    assume {:endproc "proc"} true;
+        //    var {:originallocal "proc", "l"} l;
+        void InstrumentImplementation(Implementation impl)
+        {
+            var beg = new AssumeCmd(Token.NoToken, Expr.True,
+                new QKeyValue(Token.NoToken, "beginproc", new List<object> { impl.Name }, null));
+            var end = new AssumeCmd(Token.NoToken, Expr.True,
+                new QKeyValue(Token.NoToken, "endproc", new List<object> { impl.Name }, null));
+            var blockstart = new Func<Block, AssumeCmd>(blk =>
+                {
+                    return new AssumeCmd(Token.NoToken, Expr.True,
+                        new QKeyValue(Token.NoToken, "basicblock", new List<object> { impl.Name, blk.Label }, null));
+                });
+
+            foreach (var blk in impl.Blocks)
+            {
+                blk.Cmds.Insert(0, blockstart(blk));
+                if (blk.TransferCmd is ReturnCmd)
+                    blk.Cmds.Add(end);
+            }
+            impl.Blocks[0].Cmds.Insert(0, beg);
+
+            foreach (var loc in impl.LocVars)
+            {
+                loc.AddAttribute("originallocal",  impl.Name, loc.Name);
+            }
         }
 
         /// <summary>

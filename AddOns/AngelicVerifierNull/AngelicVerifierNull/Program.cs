@@ -43,6 +43,8 @@ namespace AngelicVerifierNull
         public static bool EEPerformControlSlicing = false; 
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
+        // property: nonnull, typestate
+        public static string propertyChecked = "";
     }
 
     class Stats
@@ -228,6 +230,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/EEPerformControlSlicing"))
                 Options.EEPerformControlSlicing = true;
+
+            args.Where(s => s.StartsWith("/property:"))
+                .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
 
             args.Where(s => s.StartsWith("/EE:"))
                 .Iter(s => Options.EEflags.Add(s.Substring("/EE:".Length)));
@@ -443,6 +448,35 @@ namespace AngelicVerifierNull
             //BoogieUtil.PrintProgram(ra.VisitProgram(init), "noassert.bpl");
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
+
+            // Do some instrumentation for the input program
+            if (Options.propertyChecked == "typestate")
+            {
+                // Mark all assumes as "slic" except non-null ones
+                var AddAnnotation = new Action<AssumeCmd>(ac =>
+                    {
+                        if (QKeyValue.FindBoolAttribute(ac.Attributes, "nonnull"))
+                            return;
+                        ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
+                    });
+                init.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
+                            .Iter(AddAnnotation)));
+            }
+
+            if (Options.propertyChecked == "nonnull")
+            {
+                // Mark all assumes as "slic"
+                var AddAnnotation = new Action<AssumeCmd>(ac =>
+                {
+                    ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
+                });
+                init.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
+                            .Iter(AddAnnotation)));
+            }
 
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
@@ -1372,6 +1406,10 @@ namespace AngelicVerifierNull
                 return false;
             });
             nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
+
+            // Add these flags by default
+            eeflags = new HashSet<string>(eeflags);
+            eeflags.Add("/onlySlicAssumes+ /ignoreAllAssumes-");
 
             Dictionary<string, string> eeComplexExprs;
             // Save commandlineoptions
