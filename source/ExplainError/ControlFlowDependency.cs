@@ -128,6 +128,11 @@ namespace ExplainError
                             var ac = cmd as AssignCmd;
                             ac.Lhss.ForEach(x => modVars.Add(x.DeepAssignedVariable));
                         }
+                        if (cmd is HavocCmd)
+                        {
+                            var hc = cmd as HavocCmd;
+                            hc.Vars.ForEach(x => modVars.Add(x.Decl));
+                        }
                         if (cmd is CallCmd)
                         {
                             var cc = cmd as CallCmd;
