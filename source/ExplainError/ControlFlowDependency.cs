@@ -10,6 +10,7 @@ using Microsoft.Boogie.VCExprAST;
 using VC;
 using Microsoft.Basetypes;
 using BType = Microsoft.Boogie.Type;
+using Microsoft.Boogie.GraphUtil;
 
 namespace ExplainError
 {
@@ -20,10 +21,12 @@ namespace ExplainError
     {
         Program prog;
         //a null block indicates returnBlock
-        Dictionary<Tuple<Implementation, Block, Block>, HashSet<Variable>> pairBlockModSet; //modset between a pair of reachable blocks in a procedure
+        //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
+        Dictionary<Implementation, HashSet<Tuple<Block,Block,HashSet<Variable>>>> branchJoinPairModSet; 
         public ControlFlowDependency(Program prog)
         {
             this.prog = prog;
+            branchJoinPairModSet = new Dictionary<Implementation,HashSet<Tuple<Block,Block,HashSet<Variable>>>>();
         }
         public void Run()
         {
@@ -41,7 +44,8 @@ namespace ExplainError
             Implementation impl;
             HashSet<Tuple<Block, Block>> workList;
             Dictionary<Tuple<Block, Block>, HashSet<Variable>> intraProcPairBlockModSet;
-            Dictionary<Block, HashSet<Block>> successorBlocks; 
+            Dictionary<Block, HashSet<Block>> successorBlocks;
+            HashSet<Tuple<Block, Block>> branchJoinPairs;
             public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
@@ -49,6 +53,7 @@ namespace ExplainError
                 workList = new HashSet<Tuple<Block, Block>>();
                 intraProcPairBlockModSet = new Dictionary<Tuple<Block, Block>, HashSet<Variable>>();
                 successorBlocks = new Dictionary<Block, HashSet<Block>>();
+                branchJoinPairs = new HashSet<Tuple<Block, Block>>();
             }
             public void Run()
             {
@@ -66,7 +71,50 @@ namespace ExplainError
                 InitializeModSets();
                 //run the fixed point
                 ComputeTransitiveModSets();
+                //find the (branch,join) pairs
+                FindBranchJoinPairs();
+                //populate the modsets for every branch/join pair
+                parent.branchJoinPairModSet[impl] = new HashSet<Tuple<Block,Block,HashSet<Variable>>>();
+                branchJoinPairs.Iter(x => parent.branchJoinPairModSet[impl].Add(Tuple.Create(x.Item1, x.Item2, intraProcPairBlockModSet[x])));
                 Print();
+            }
+            /// <summary>
+            /// For each branch node, finds the corresponding join node
+            /// </summary>
+            private void FindBranchJoinPairs()
+            {
+                impl.ComputePredecessorsForBlocks();
+                var blockGraph = parent.prog.ProcessLoops(impl);
+                //(branch node) n -> all nodes for which n is the immediate dominator (then, else, join-if-not-return)
+                var immDomMap = blockGraph.ImmediateDominatorMap;
+                #region Other dominator datastructures, not used
+                //(branch node) n -> ??
+                //var ctrlDep = blockGraph.ControlDependence();
+                //(all node)    n -> all nodes (including itself) that (pre) dominates it from entry
+                //var domMap = blockGraph.DominatorMap;
+                #endregion
+
+
+                //immPostDominates: (branch node) n -> earliest join node or return
+                // - x = (immDom(n) \ {n.b1, n.b2, ..n.bn}) in 
+                //   if (x == {}) then null //return 
+                //   if (x == {m}) then m
+                //   else DONT KNOW //goto A, B; B: s; goto A;  A: join; --> not allowed for deterministic branches                
+                foreach(var map in immDomMap)
+                {
+                    var branchNode = map.Key;
+                    Debug.Assert(branchNode.TransferCmd is GotoCmd,
+                        "(Internal error) Expecting a branch node in the domain of ImmdiateDominatorMap from Boogie");
+                    if (((GotoCmd)branchNode.TransferCmd).labelTargets.Count <= 1) continue; //not really a branch
+                    Block joinNode = null; //by default return/null is the join node
+                    foreach (var node in map.Value)
+                    {
+                        if (successorBlocks[branchNode].Contains(node)) continue;
+                        Debug.Assert(joinNode == null, "Expecting at most one node in ImmediateDominatorMap that is not a branch target");
+                        joinNode = node;
+                    }
+                    branchJoinPairs.Add(Tuple.Create(branchNode, joinNode));
+                }
             }
             private void InitializeModSets()
             {
@@ -114,7 +162,7 @@ namespace ExplainError
                         if (!present) vs3 = new HashSet<Variable>();
                         var newvs = new HashSet<Variable>();
                         vs1.Union(vs2.Union(vs3)).Iter(x => newvs.Add(x));
-                        if (newvs.Count > vs3.Count)
+                        if (!present || newvs.Count > vs3.Count) //add if previously not present or weight has changed
                         {
                             intraProcPairBlockModSet[Tuple.Create(b1, b3)] = newvs;
                             if (!workList.Contains(Tuple.Create(b1, b3))) workList.Add(Tuple.Create(b1, b3));
@@ -135,30 +183,25 @@ namespace ExplainError
                         if (succ.Key == end)
                             succ.Value.Iter(d => UpdateTransitiveEdge(start, end, d));
                     }
-
                 }
             }
             private void Print()
             {
+                var printReturnNode = new Func<Block, string>(x => x != null ? x.ToString() : "returnNode");
+                var printModSetBtwn = new Func<Tuple<Block,Block>, string> (x =>
+                    string.Format("Modified Variables ({0}, {1}) ==> {2}",
+                            x.Item1.ToString(), printReturnNode(x.Item2),
+                            string.Join(",", intraProcPairBlockModSet[x])
+                            ));
+
+                Console.WriteLine("\n#### CONTROL FLOW DEPENDENCY STATIC ANALYSIS#####\n");
                 Console.WriteLine("---- Implementation  {0} ------", impl.Name);
                 intraProcPairBlockModSet
                     .Keys
-                    .Iter(x =>
-                    {
-                        Console.WriteLine("ModBtwn({0}, {1}) ==> {2}",
-                            x.Item1.Label, x.Item2 != null? x.Item2.Label: "return",
-                            string.Join(",", intraProcPairBlockModSet[x])
-                            );
-                    });
+                    .Iter(x => Console.WriteLine(printModSetBtwn(x)));
+                Console.WriteLine("--- Branch/Join pairs and their modsets ---\n\n{0}\n\n",
+                    string.Join("\n", branchJoinPairs.Select(x => printModSetBtwn(x))));
             }
-        }
-
-        /// <summary>
-        /// Computes the set of (branch,join) blocks for a program
-        /// </summary>
-        private class BranchJoinComputer
-        {
-
         }
     }
 }

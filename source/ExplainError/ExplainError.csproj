@@ -48,6 +48,10 @@
     <Reference Include="Core">
       <HintPath>..\..\references\Core.dll</HintPath>
     </Reference>
+    <Reference Include="Graph, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>E:\symdiff_codeplex\symdiff\references\Graph.dll</HintPath>
+    </Reference>
     <Reference Include="Model">
       <HintPath>..\..\references\Model.dll</HintPath>
     </Reference>
