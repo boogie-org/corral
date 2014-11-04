@@ -295,9 +295,12 @@ namespace AngelicVerifierNull
             }
             private Cmd AllocatePointerAsUnknown(Variable x)
             {
-                return BoogieAstFactory.MkCall(mallocProcedureFull, 
-                    new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, 
-                    new List<Variable>() {x});
+                var cc = BoogieAstFactory.MkCall(mallocProcedureFull,
+                    new List<Expr>() { new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE) },
+                    new List<Variable>() { x }) as CallCmd;
+                cc.Attributes = new QKeyValue(Token.NoToken, "AllocatorConstantName", new List<object> { x.Name }, cc.Attributes);
+                return cc;
+                
             }
             private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {

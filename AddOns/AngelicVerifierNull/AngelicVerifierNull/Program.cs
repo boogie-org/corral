@@ -41,6 +41,8 @@ namespace AngelicVerifierNull
         public static bool noOSmodels = false;
         // EE option to perform control flow slicing
         public static bool EEPerformControlSlicing = false; 
+        // Flags for EE
+        public static HashSet<string> EEflags = new HashSet<string>();
     }
 
     class Stats
@@ -226,6 +228,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/EEPerformControlSlicing"))
                 Options.EEPerformControlSlicing = true;
+
+            args.Where(s => s.StartsWith("/EE:"))
+                .Iter(s => Options.EEflags.Add(s.Substring("/EE:".Length)));
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -686,7 +691,7 @@ namespace AngelicVerifierNull
                 BoogieUtil.PrintProgram(ppprog, "ee.bpl");
 
                 Stats.resume("explain.error");
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint);
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags);
                 Stats.stop("explain.error");
 
                 // print the trace to disk
@@ -1348,7 +1353,7 @@ namespace AngelicVerifierNull
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> eeflags)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
@@ -1374,7 +1379,7 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, "/ignoreAllAssumes- /onlySlicAssumes-", out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, eeflags.Concat(" "), out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)

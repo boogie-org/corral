@@ -218,9 +218,14 @@ namespace cba
                             {
                                 // create a constant that is equal to this literal, then use the constant
                                 // for concretization
+
+                                // do we use a specific name for the constant?
+                                var constantName = QKeyValue.FindStringAttribute(cc.Attributes, "AllocatorConstantName");
+                                if (constantName == null) constantName = "alloc";
+
                                 var val = call_instr.info.getIntVal("si_arg");
                                 var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                                    string.Format("alloc_{0}", const_counter), Microsoft.Boogie.Type.Int), false);
+                                    string.Format("{0}_{1}", constantName, const_counter), Microsoft.Boogie.Type.Int), false);
                                 const_counter++;
 
                                 traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqVar(cc.Outs[0].Decl, constant));
