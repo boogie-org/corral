@@ -45,6 +45,8 @@ namespace AngelicVerifierNull
         public static HashSet<string> EEflags = new HashSet<string>();
         // property: nonnull, typestate
         public static string propertyChecked = "";
+        // ExplainError timeout (in seconds)
+        public static int eeTimeout = 1000;
     }
 
     class Stats
@@ -219,6 +221,10 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/timeoutAssertRoundRobin:"))
                 .Iter(s => timeoutAssertRoundRobin = int.Parse(s.Substring("/timeoutAssertRoundRobin:".Length)));
+
+            args.Where(s => s.StartsWith("/timeoutEE:"))
+                .Iter(s => Options.eeTimeout = int.Parse(s.Substring("/timeoutEE:".Length)));
+
 
             if (timeoutAssertRoundRobin == 0)
                 disableAssertRoundRobinPrePass = true;
@@ -473,8 +479,7 @@ namespace AngelicVerifierNull
                         .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
                             .Iter(AddAnnotation)));
             }
-
-            if (Options.propertyChecked == "nonnull")
+            else if (Options.propertyChecked == "nonnull")
             {
                 // Mark all assumes as "slic"
                 var AddAnnotation = new Action<AssumeCmd>(ac =>
@@ -488,6 +493,18 @@ namespace AngelicVerifierNull
 
                 // Tag branches as reachable
                 init = InstrumentBranches.Run(init, null, false, false);
+            }
+            else
+            {
+                // Mark all assumes as "slic"
+                var AddAnnotation = new Action<AssumeCmd>(ac =>
+                {
+                    ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
+                });
+                init.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
+                            .Iter(AddAnnotation)));
             }
 
             // Inline procedures supplied with {:inline} annotation
@@ -1429,7 +1446,7 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, 1000, 1, eeflags.Concat(" "), out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
