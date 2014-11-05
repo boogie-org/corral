@@ -1416,7 +1416,7 @@ namespace AngelicVerifierNull
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> eeflags)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
@@ -1437,8 +1437,8 @@ namespace AngelicVerifierNull
             nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
             // Add these flags by default
-            eeflags = new HashSet<string>(eeflags);
-            eeflags.Add("/onlySlicAssumes+ /ignoreAllAssumes-");
+            var eeflags = new List<string>{"/onlySlicAssumes+", "/ignoreAllAssumes-"};
+            eeflags.AddRange(extraEEflags);
 
             Dictionary<string, string> eeComplexExprs;
             // Save commandlineoptions
