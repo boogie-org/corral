@@ -22,11 +22,11 @@ namespace ExplainError
         Program prog;
         //a null block indicates returnBlock
         //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
-        Dictionary<Implementation, HashSet<Tuple<Block,Block,HashSet<Variable>>>> branchJoinPairModSet; 
+        Dictionary<string, HashSet<Tuple<Block,Block,HashSet<Variable>>>> branchJoinPairModSet; 
         public ControlFlowDependency(Program prog)
         {
             this.prog = prog;
-            branchJoinPairModSet = new Dictionary<Implementation,HashSet<Tuple<Block,Block,HashSet<Variable>>>>();
+            branchJoinPairModSet = new Dictionary<string,HashSet<Tuple<Block,Block,HashSet<Variable>>>>();
         }
         public void Run()
         {
@@ -113,8 +113,8 @@ namespace ExplainError
                 //find the (branch,join) pairs
                 FindBranchJoinPairs();
                 //populate the modsets for every branch/join pair
-                parent.branchJoinPairModSet[impl] = new HashSet<Tuple<Block,Block,HashSet<Variable>>>();
-                branchJoinPairs.Iter(x => parent.branchJoinPairModSet[impl].Add(Tuple.Create(x.Item1, x.Item2, intraProcPairBlockModSet[x])));
+                parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<Block,Block,HashSet<Variable>>>();
+                branchJoinPairs.Iter(x => parent.branchJoinPairModSet[impl.Name].Add(Tuple.Create(x.Item1, x.Item2, intraProcPairBlockModSet[x])));
                 Print();
             }
             /// <summary>
@@ -246,6 +246,29 @@ namespace ExplainError
                 Console.WriteLine("--- Branch/Join pairs and their modsets ---\n\n{0}\n\n",
                     string.Join("\n", branchJoinPairs.Select(x => printModSetBtwn(x))));
             }
+        }
+
+        internal bool IsJoinBlock(Tuple<string, string> blockInfo, out string branchBlockName, out HashSet<string> modSet)
+        {
+            branchBlockName = null;
+            modSet = null;
+            var matches = 
+                branchJoinPairModSet[blockInfo.Item1]
+                .Where(x => (x.Item2 == null && blockInfo.Item2 == null) || (x.Item2.ToString() == blockInfo.Item2));
+            if (matches.Count() > 0)
+            {
+                branchBlockName = matches.First().Item1.ToString();
+                var tmpSet = new HashSet<string>();
+                matches.First().Item3.Select(x => x.ToString()).Iter(y => tmpSet.Add(y));
+                modSet = tmpSet;
+                return true;
+            }
+            return false; 
+        }
+
+        internal bool IsBranchBlock(Tuple<string, string> blockInfo)
+        {
+            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() == 1;
         }
     }
 }

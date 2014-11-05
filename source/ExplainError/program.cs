@@ -83,7 +83,8 @@ namespace ExplainError
         static public STATUS returnStatus; //what is the status of the return
         static public Dictionary<string, string> complexCExprs; //list of let exprs for displaying concisely
 
-        static const private ControlFlowDependency cflowDependencyInfo; //information of static analysis of the entire program
+        static private ControlFlowDependency cflowDependencyInfo; //information of static analysis of the entire program
+
         // side-effect
         static public List<Expr> suggestions = new List<Expr>(); // input constraint suggestions
 
@@ -126,6 +127,7 @@ namespace ExplainError
             onlyDisplayAliasingInPre = true;
             onlyDisplayMapExpressions = true;
             dontDisplayComparisonsWithConsts = true;
+            cflowDependencyInfo = cntrlFlowDependencyInfo;
             if (explainErrorFilters == 1) //using it for memory safety rootcause
             {
                 ignoreAllAssumes = true;  
@@ -171,7 +173,7 @@ namespace ExplainError
             try
             {
                 //SimplifyAssumesUsingForwardPass();
-                ComputePre(impl.Blocks[0].Cmds, out preInDnfForm);
+                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
                 //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
@@ -217,9 +219,22 @@ namespace ExplainError
         }
 
         # region Top-level routines for computing and massaging Pre
- 
-        private static void ComputePre(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm)
+
+        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm)
         {
+            HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
+            Stack<Tuple<string, string>> branchJoinStack = new Stack<Tuple<string, string>>();
+
+            var GetSupportVars = new Func<Expr, HashSet<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+            );
+
+           
+
             preInDnfForm = new HashSet<List<Expr>>();
             List<Cmd> cmds = cmdseq.Cast<Cmd>().ToList();
             cmds.Reverse();
@@ -237,47 +252,96 @@ namespace ExplainError
                     //We will ignore any assertion with True syntactically, but otherwise crash if there are multiple asserts
                     Debug.Assert(numAssertsInTrace == 0,
                         string.Format("EE requires at most one non-syntactic-true assertion in the trace, found an extra {0}", cmd.ToString()));
+                    Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at an assertion");
                     numAssertsInTrace++;
                     //pre = Expr.And(Expr.Not(((AssertCmd)cmd).Expr), pre); //TODO: Boolean simplifications
                     preL.Add(Expr.Not(((AssertCmd)cmd).Expr));
+                    GetSupportVars(((AssertCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
                 }
                 else if (cmd is AssumeCmd)
                 {
+                    if (ContainsBlockInfo((AssumeCmd)cmd))
+                    {
+                        UpdateBranchJoinStack((AssumeCmd)cmd, supportVarsInPre, branchJoinStack);
+                        continue;
+                    }
                     string captureStateLoc;
                     if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc))
                     {
+                        Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at a captureStateLoc ");
                         //foreach (var d in ComputePreOverVocab(pre, captureStateLoc))
                         foreach (var d in ComputePreOverVocab(preL, captureStateLoc))
                                 preInDnfForm.Add(d);
                         continue;
                     }
                     if (!ContainsSlicAttribute((AssumeCmd)cmd)) continue;
-                    if (conjunctCount++ > MAX_CONJUNCTS)
-                        throw new Exception("Aborting as there is a chance of StackOverflow");
-                    if (conjunctCount % 100 == 0)
-                        Console.Write("{0},", conjunctCount);
+                    if (branchJoinStack.Count > 0) continue;
+                    if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
+                    if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
                     //pre = Expr.And(((AssumeCmd)cmd).Expr, pre); //TODO: Boolean simplifications
                     preL.Add(((AssumeCmd)cmd).Expr);
+                    GetSupportVars(((AssumeCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
                 }
                 else if (cmd is AssignCmd)
                 {
+                    if (branchJoinStack.Count > 0) continue; 
                     var a = (cmd as AssignCmd).AsSimpleAssignCmd;
                     //pre = ExprUtil.MySubstituteInExpr(pre, a.Lhss, a.Rhss);
                     preL = preL.ConvertAll((x => ExprUtil.MySubstituteInExpr(x, a.Lhss, a.Rhss)));
+                    supportVarsInPre.Clear(); //we will compute it fresh from preL
+                    preL.Iter(e => GetSupportVars(e).Iter(y => supportVarsInPre.Add(y)));
                 }
                 else if (cmd is HavocCmd)
                 {
-                    //Debug.Assert(false, string.Format("Unexpected havoc stmt {0}", cmd.ToString()));
-                    //just ignore the havocs for now.
-                    //TODO: replace havoc x --> x := x@c
+                    //throw new Exception(string.Format("Unexpected stmt in EE trace {0}", cmd));
                 }
                 //else //just skip for now
                 //    throw new NotImplementedException();
             }
-            //preInDnfForm.AddRange(ComputePreOverVocab(pre, null));
-            //foreach (var d in ComputePreOverVocab(pre, null))
             foreach (var d in ComputePreOverVocab(preL, null))
                 preInDnfForm.Add(d);
+        }
+
+        private static void UpdateBranchJoinStack(AssumeCmd assumeCmd, HashSet<Variable> supportVars, Stack<Tuple<string,string>> branchJoinStack)
+        {
+            //block is b
+            var GetImplAndBlockFromAttr = new Func<QKeyValue, Tuple<string, string>> (x =>
+                x.Key == "basicblock" ? Tuple.Create((string)x.Params[0], (string)x.Params[1]) :
+                    x.Key == "beginproc" ? Tuple.Create((string)x.Params[0], "") :
+                      x.Key == "endproc"  ?  Tuple.Create((string)x.Params[0], (string) null) : 
+                      Tuple.Create((string)null, (string)null)
+            );
+
+            //for var {:origianllocal "f", "x"} y, return "x", otherwise "y"
+            var GetOrigVar = new Func<Variable, string>(v =>
+            {
+                if (QKeyValue.FindStringAttribute(v.Attributes, "originallocal") != null)
+                    return (string) v.Attributes.Params[1];
+                return v.ToString();
+            });
+
+            var blockInfo = GetImplAndBlockFromAttr(assumeCmd.Attributes);
+            Debug.Assert(blockInfo.Item1 != null, "Implementation cannot be null in basicblock/beginproc/endproc annotations");
+            string branchBlockName; 
+            HashSet<string> modSet; 
+            if (cflowDependencyInfo.IsJoinBlock(blockInfo, out branchBlockName, out modSet))
+            {
+                if (branchJoinStack.Count > 0 || supportVars.Any(x => modSet.Contains(GetOrigVar(x))))
+                    branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
+            } else if (cflowDependencyInfo.IsBranchBlock(blockInfo))
+            {
+                if (branchJoinStack.Count > 0 &&
+                    branchJoinStack.Peek().Item1 == blockInfo.Item1 &&
+                    branchJoinStack.Peek().Item2 == blockInfo.Item2)
+                    branchJoinStack.Pop();
+            }
+        }
+
+        private static bool ContainsBlockInfo(AssumeCmd assumeCmd)
+        {
+            return QKeyValue.FindStringAttribute(assumeCmd.Attributes, "basicblock") != null ||
+                QKeyValue.FindStringAttribute(assumeCmd.Attributes, "beginproc") != null ||
+                QKeyValue.FindStringAttribute(assumeCmd.Attributes, "endproc") != null;
         }
 
         private static void SimplifyAssumesUsingForwardPass()
