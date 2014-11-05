@@ -1508,7 +1508,9 @@ namespace AngelicVerifierNull
         }
     }
 
-    // Replace "assume x == NULL" with "assume x == NULL; assert false;"
+    // Replace "assume x == NULL" with 
+    //     "assume x == NULL; assert false;" OR
+    //     "assume x == NULL; assume Reach(true);"
     // provided x can indeed alias NULL
     public class InstrumentBranches
     {
@@ -1516,23 +1518,35 @@ namespace AngelicVerifierNull
         Dictionary<int, Function> id2Func;
         List<Function> queries;
         Function nullQuery;
+        public Function reach;
         int id;
+        bool useAA;
+        bool injectAssert;
 
-        InstrumentBranches(Program program)
+        InstrumentBranches(Program program, bool useAA, bool injectAssert)
         {
             this.program = program;
             queries = new List<Function>();
             id2Func = new Dictionary<int, Function>();
             nullQuery = null;
+            this.useAA = useAA;
+            this.injectAssert = injectAssert;
+            reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
         }
 
         // Replace "assume x == NULL" with "assume x == NULL; assert false;"
         // provided x can indeed alias NULL
-        public static PersistentProgram Run(PersistentProgram inp)
+        public static Program Run(Program program, string ep, bool useAA, bool injectAssert)
         {
-            var program = inp.getProgram();
-            var ib = new InstrumentBranches(program);
-            ib.instrument(inp.mainProcName);
+            var ib = new InstrumentBranches(program, useAA, injectAssert);
+            ib.instrument(ep);
+
+            if (!useAA)
+            {
+                return program;
+            }
+
+            var inp = new PersistentProgram(program, ep, 1);
 
             // Make sure that aliasing queries are on identifiers only
             var af =
@@ -1552,9 +1566,12 @@ namespace AngelicVerifierNull
             var nil = res.allocationSites[ib.nullQuery.Name].FirstOrDefault();
             Debug.Assert(nil != null);
 
-            // add the assert false
-            var assertFlase = BoogieAstFactory.MkAssert(Expr.False);
-            (assertFlase as AssertCmd).Attributes = new QKeyValue(Token.NoToken,
+            // add the assert false OR assume reach(true)
+            var assertFlase = injectAssert ? BoogieAstFactory.MkAssert(Expr.False) :
+                new AssumeCmd(Token.NoToken,
+                                new NAryExpr(Token.NoToken, new FunctionCall(ib.reach), new List<Expr> { Expr.True }));
+
+            (assertFlase as PredicateCmd).Attributes = new QKeyValue(Token.NoToken,
                 "deadcode", new List<object>() { }, null);
             program = inp.getProgram();
             var id = 0;
@@ -1580,11 +1597,20 @@ namespace AngelicVerifierNull
                 }
             }
 
-            return new PersistentProgram(program, inp.mainProcName, 0);
+            return program;
         }
 
         void instrument(string main)
         {
+            if (!useAA)
+            {
+                // Instrument branches
+                id = 0;
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => instrument(impl));
+                return;
+            }
+
             // find the entrypoint
             var ep = program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => impl.Name == main)
@@ -1632,9 +1658,26 @@ namespace AngelicVerifierNull
                         x = expr.Args[0];
                     if (x == null) continue;
 
-                    var func = GetQueryFunc();
-                    id2Func.Add(id, func);
-                    ncmds.Add(GetQuery(func, x));
+                    if (useAA)
+                    {
+                        var func = GetQueryFunc();
+                        id2Func.Add(id, func);
+                        ncmds.Add(GetQuery(func, x));
+                    }
+                    else
+                    {
+                        if (injectAssert)
+                        {
+                            // assert false
+                            ncmds.Add(new AssertCmd(Token.NoToken, Expr.False));
+                        }
+                        else
+                        {
+                            // assume reach(true);
+                            ncmds.Add(new AssumeCmd(Token.NoToken,
+                                new NAryExpr(Token.NoToken, new FunctionCall(reach), new List<Expr> { Expr.True })));
+                        }
+                    }
                 }
                 blk.Cmds = ncmds;
             }

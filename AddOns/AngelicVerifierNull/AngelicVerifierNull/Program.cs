@@ -476,6 +476,9 @@ namespace AngelicVerifierNull
                     .Iter(impl => impl.Blocks
                         .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
                             .Iter(AddAnnotation)));
+
+                // Tag branches as reachable
+                init = InstrumentBranches.Run(init, null, false, false);
             }
 
             // Inline procedures supplied with {:inline} annotation
