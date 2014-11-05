@@ -329,6 +329,7 @@ namespace AngelicVerifierNull
 
                     // package up the program
                     prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
+                    //prog.writeToFile("inst.bpl");
                 }
 
                 PrintAssertStats(prog);

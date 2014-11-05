@@ -67,6 +67,11 @@ namespace ExplainError
             {
                 loc.AddAttribute("originallocal",  impl.Name, loc.Name);
             }
+            // for out params, the attributes need to go on the procedure decl
+            foreach (var loc in impl.Proc.OutParams)
+            {
+                loc.AddAttribute("originallocal", impl.Name, loc.Name);
+            }
         }
 
         /// <summary>
