@@ -1446,7 +1446,9 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
+                    controlFlowDependencyInformation,
+                    out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)

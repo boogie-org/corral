@@ -83,6 +83,7 @@ namespace ExplainError
         static public STATUS returnStatus; //what is the status of the return
         static public Dictionary<string, string> complexCExprs; //list of let exprs for displaying concisely
 
+        static const private ControlFlowDependency cflowDependencyInfo; //information of static analysis of the entire program
         // side-effect
         static public List<Expr> suggestions = new List<Expr>(); // input constraint suggestions
 
@@ -106,11 +107,13 @@ namespace ExplainError
             out STATUS status, out Dictionary<string, string> complexCExprsRet)
         {
             HashSet<List<Expr>> preInDnfForm;
-            return Go(impl, pr, tmout, explainErrorFilters, "", out status, out complexCExprsRet, out preInDnfForm);
+            return Go(impl, pr, tmout, explainErrorFilters, "", null, out status, out complexCExprsRet, out preInDnfForm);
         }
 
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
-            string extraArgs, out STATUS status, out Dictionary<string,string> complexCExprsRet,
+            string extraArgs, 
+            ControlFlowDependency cntrlFlowDependencyInfo, 
+            out STATUS status, out Dictionary<string,string> complexCExprsRet,
             out HashSet<List<Expr>> preInDnfForm)
         {
             suggestions = new List<Expr>();
