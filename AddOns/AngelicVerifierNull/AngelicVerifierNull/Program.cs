@@ -120,7 +120,8 @@ namespace AngelicVerifierNull
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
         static HashSet<string> IdentifiedEntryPoints = new HashSet<string>();
-        static System.IO.TextWriter ResultsFile = null;        
+        static System.IO.TextWriter ResultsFile = null;
+        public static ExplainError.ControlFlowDependency controlFlowDependencyInformation = null;
 
         static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
@@ -321,7 +322,14 @@ namespace AngelicVerifierNull
 
                 // hook to run the control flow slicing static analysis pre pass
                 if (Options.EEPerformControlSlicing)
-                    (new ExplainError.ControlFlowDependency(prog.getProgram())).Run();
+                {
+                    var p1 = prog.getProgram();
+                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(p1);
+                    controlFlowDependencyInformation.Run();
+
+                    // package up the program
+                    prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
+                }
 
                 PrintAssertStats(prog);
 
