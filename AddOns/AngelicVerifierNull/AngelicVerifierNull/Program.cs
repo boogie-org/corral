@@ -242,7 +242,7 @@ namespace AngelicVerifierNull
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
 
             args.Where(s => s.StartsWith("/EE:"))
-                .Iter(s => Options.EEflags.Add(s.Substring("/EE:".Length)));
+                .Iter(s => Options.EEflags.Add("/" + s.Substring("/EE:".Length)));
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
