@@ -4,7 +4,7 @@ var g1:int;
 var g2:int;
 
 
-procedure A(x:int) returns (r:int)
+procedure A(x:int,y:int,z:int) returns (r:int)
 {
   var a:int, b:int, c:int, d:int;
  
@@ -14,7 +14,7 @@ procedure A(x:int) returns (r:int)
      b := 1;
   } else { 
      b := 0; //relevant stmt
-     if (a == 2) { //irrelevant branch
+     if (y == 2) { //irrelevant branch
        c := 1; 
        call d := B(b); 
      } else {
@@ -22,7 +22,7 @@ procedure A(x:int) returns (r:int)
      } 
      g2 := 2; //allows a unique join point for a == 2
   }
- if (a == 3) { //irrelevant
+ if (z == 3) { //irrelevant
     d := 1;
  }
  assert b == 1;

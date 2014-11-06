@@ -251,6 +251,7 @@ namespace ExplainError
             int numStmtsSkipped = 0;
             foreach (var cmd in cmds)
             {
+                if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
                 if (cmd is AssertCmd && !IsTrueAssert((AssertCmd)cmd))
                 {
@@ -282,12 +283,13 @@ namespace ExplainError
                     }
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
+                        if (verbose) Console.WriteLine("--- Block {0}", cmd);
                         UpdateBranchJoinStack((AssumeCmd)cmd, supportVarsInPre, branchJoinStack);
                         continue;
                     }
                     if (!ContainsSlicAttribute((AssumeCmd)cmd)) continue;
                     if (branchJoinStack.Count > 0) {
-                        Console.WriteLine("Skipping stmt {0}", cmd);
+                        if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
                         numStmtsSkipped++; continue; 
                     }
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
@@ -315,6 +317,7 @@ namespace ExplainError
                 }
                 //else //just skip for now
                 //    throw new NotImplementedException();
+                if (verbose) Console.WriteLine("Considering {0}", cmd);
             }
             //Now compute the pre over the sequence of commands
             foreach (var d in ComputePreOverVocab(preL, null))
@@ -342,18 +345,22 @@ namespace ExplainError
             var blockInfo = GetImplAndBlockFromAttr(assumeCmd.Attributes);
             Debug.Assert(blockInfo.Item1 != null, "Implementation cannot be null in basicblock/beginproc/endproc annotations");
             string branchBlockName; 
-            HashSet<string> modSet; 
-            if (cflowDependencyInfo.IsJoinBlock(blockInfo, out branchBlockName, out modSet))
-            {
-                if (branchJoinStack.Count > 0 || supportVars.Any(x => modSet.Contains(GetOrigVar(x))))
-                    branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
-            } else if (cflowDependencyInfo.IsBranchBlock(blockInfo))
+            HashSet<string> modSet;
+            //First pop since blockInfo.Item2 can be both a branch and a join point
+            if (cflowDependencyInfo.IsBranchBlock(blockInfo))
             {
                 if (branchJoinStack.Count > 0 &&
                     branchJoinStack.Peek().Item1 == blockInfo.Item1 &&
                     branchJoinStack.Peek().Item2 == blockInfo.Item2)
                     branchJoinStack.Pop();
-            }
+            } 
+            if (cflowDependencyInfo.IsJoinBlock(blockInfo, out branchBlockName, out modSet))
+            {
+                var origVars = supportVars.Select(x => GetOrigVar(x));
+                if (branchJoinStack.Count > 0 || !origVars.Any(x => modSet.Contains(x)))
+                    branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
+            } 
+            
         }
 
         private static bool ContainsBlockInfo(AssumeCmd assumeCmd)
