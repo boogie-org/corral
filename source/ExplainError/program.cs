@@ -248,7 +248,8 @@ namespace ExplainError
             preL.Add(Expr.True);
             int conjunctCount = 0; //keep track of how many conjuncts to avoid StackOverflow in substituteExpr/perform DNF
             int numAssertsInTrace = 0;
-            int numStmtsSkipped = 0;
+            int numAssumeSkipped = 0;
+            int numAssumes = 0;
             foreach (var cmd in cmds)
             {
                 if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
@@ -288,9 +289,10 @@ namespace ExplainError
                         continue;
                     }
                     if (!ContainsSlicAttribute((AssumeCmd)cmd)) continue;
+                    numAssumes++;
                     if (branchJoinStack.Count > 0) {
                         if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
-                        numStmtsSkipped++; continue; 
+                        numAssumeSkipped++; continue; 
                     }
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
@@ -302,8 +304,8 @@ namespace ExplainError
                 {
                     if (branchJoinStack.Count > 0)
                     {
-                        Console.WriteLine("Skipping stmt {0}", cmd);
-                        numStmtsSkipped++; continue;
+                        if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
+                        continue;
                     }
                     var a = (cmd as AssignCmd).AsSimpleAssignCmd;
                     //pre = ExprUtil.MySubstituteInExpr(pre, a.Lhss, a.Rhss);
@@ -319,6 +321,7 @@ namespace ExplainError
                 //    throw new NotImplementedException();
                 if (verbose) Console.WriteLine("Considering {0}", cmd);
             }
+            Console.WriteLine("ExplainError: Num of assumes considered/Num assumes skipped by mod analysis = {0}/{1}", numAssumes, numAssumeSkipped);
             //Now compute the pre over the sequence of commands
             foreach (var d in ComputePreOverVocab(preL, null))
                 preInDnfForm.Add(d);
@@ -327,11 +330,20 @@ namespace ExplainError
         private static void UpdateBranchJoinStack(AssumeCmd assumeCmd, HashSet<Variable> supportVars, Stack<Tuple<string,string>> branchJoinStack)
         {
             //block is b
-            var GetImplAndBlockFromAttr = new Func<QKeyValue, Tuple<string, string>> (x =>
-                x.Key == "basicblock" ? Tuple.Create((string)x.Params[0], (string)x.Params[1]) :
-                    x.Key == "beginproc" ? Tuple.Create((string)x.Params[0], "") :
-                      x.Key == "endproc"  ?  Tuple.Create((string)x.Params[0], (string) null) : 
-                      Tuple.Create((string)null, (string)null)
+            //can have other attributes
+            var GetImplAndBlockFromAttr = new Func<QKeyValue, Tuple<string, string>> (y =>
+                {
+                    for (var x = y; x != null; x = x.Next)
+                    {
+                        if (x.Key == "basicblock")
+                            return Tuple.Create((string)x.Params[0], (string)x.Params[1]);
+                        else if (x.Key == "beginproc")
+                            return Tuple.Create((string)x.Params[0], "beginproc");
+                        else if (x.Key == "endproc")
+                            return Tuple.Create((string)x.Params[0], "endproc");
+                    }
+                    return Tuple.Create((string)null, (string)null); 
+                }
             );
 
             //for var {:origianllocal "f", "x"} y, return "x", otherwise "y"

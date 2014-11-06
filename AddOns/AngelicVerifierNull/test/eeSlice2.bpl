@@ -10,7 +10,7 @@ procedure A(x:int,y:int,z:int) returns (r:int)
  
   a := x; //some node after start node   
 
-  if (a == 1) { //relevant
+  if (a != 1) { //relevant
      b := 1;
   } else { 
      b := 0; //relevant stmt
