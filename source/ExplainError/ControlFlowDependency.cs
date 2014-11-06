@@ -240,9 +240,9 @@ namespace ExplainError
 
                 Console.WriteLine("\n#### CONTROL FLOW DEPENDENCY STATIC ANALYSIS#####\n");
                 Console.WriteLine("---- Implementation  {0} ------", impl.Name);
-                intraProcPairBlockModSet
-                    .Keys
-                    .Iter(x => Console.WriteLine(printModSetBtwn(x)));
+                //intraProcPairBlockModSet
+                //    .Keys
+                //    .Iter(x => Console.WriteLine(printModSetBtwn(x)));
                 Console.WriteLine("--- Branch/Join pairs and their modsets ---\n\n{0}\n\n",
                     string.Join("\n", branchJoinPairs.Select(x => printModSetBtwn(x))));
             }
@@ -254,7 +254,7 @@ namespace ExplainError
             modSet = null;
             var matches = 
                 branchJoinPairModSet[blockInfo.Item1]
-                .Where(x => (x.Item2 == null && blockInfo.Item2 == null) || (x.Item2.ToString() == blockInfo.Item2));
+                .Where(x => (x.Item2 == null && blockInfo.Item2 == null) || (x.Item2 != null && x.Item2.ToString() == blockInfo.Item2));
             if (matches.Count() > 0)
             {
                 branchBlockName = matches.First().Item1.ToString();

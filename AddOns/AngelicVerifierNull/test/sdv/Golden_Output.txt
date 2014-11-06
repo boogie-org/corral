@@ -15,7 +15,7 @@
 -------------------- funcatdispatch_correct.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing funcatdispatch_correct.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> !(sdv_irql_current != APC_LEVEL && sdv_irql_current != PASSIVE_LEVEL)
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_2(x_3) ==> !(x_3 == NULL && sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: mallocTrigger_2(x_3) ==> !(sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL && x_3 == NULL))
 
 -------------------- lowerdriverreturn.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
@@ -25,14 +25,14 @@
 
 -------------------- slam_guard.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing slam_guard.bpl ------
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(accessState == acquired && x_2 == SLAM_guard))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(x_2 == SLAM_guard && accessState == acquired))
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_5(x_2) ==> x_2 != SLAM_guard)
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc lock with expr accessState != acquired and entrypoint SLAM_guard_example
 
 -------------------- slam_guard2.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing slam_guard2.bpl ------
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(accessState == acquired && x_2 == SLAM_guard))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_4(x_2) ==> !(x_2 == SLAM_guard && accessState == acquired))
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_5(x_2) ==> x_2 != SLAM_guard)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: mallocTrigger_0(x_2) ==> !(accessState == acquired && x_2 == NULL))
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
