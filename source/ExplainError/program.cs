@@ -303,11 +303,7 @@ namespace ExplainError
                 }
                 else if (cmd is AssignCmd)
                 {
-                    if (branchJoinStack.Count > 0)
-                    {
-                        if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
-                        continue;
-                    }
+                    //The assignments cannot be skipped, as we need to do substituion. 
                     var a = (cmd as AssignCmd).AsSimpleAssignCmd;
                     //pre = ExprUtil.MySubstituteInExpr(pre, a.Lhss, a.Rhss);
                     preL = preL.ConvertAll((x => ExprUtil.MySubstituteInExpr(x, a.Lhss, a.Rhss)));
@@ -1452,7 +1448,10 @@ namespace ExplainError
             if (expr == null) return false;
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null) return false;
-            if (binOp.Op != BinaryOperator.Opcode.Eq  && binOp.Op != BinaryOperator.Opcode.Neq) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Eq  && binOp.Op != BinaryOperator.Opcode.Neq &&
+                binOp.Op != BinaryOperator.Opcode.Lt && binOp.Op != BinaryOperator.Opcode.Gt &&
+                binOp.Op != BinaryOperator.Opcode.Le && binOp.Op != BinaryOperator.Opcode.Ge
+                ) return false;
             var x = expr.Args[0] as IdentifierExpr;
             if (x == null) return false;
             //TODO: lookup the {:typestate} attribute on teh variable
