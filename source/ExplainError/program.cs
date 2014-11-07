@@ -1372,6 +1372,33 @@ namespace ExplainError
                 if (arg is LiteralExpr) return true;
             return false;
         }
+        private static bool ContainsTypeStateVar(Expr c)
+        {
+            var expr = c as NAryExpr;
+            if (expr == null) return false;
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Eq && binOp.Op != BinaryOperator.Opcode.Neq &&
+                binOp.Op != BinaryOperator.Opcode.Lt && binOp.Op != BinaryOperator.Opcode.Gt &&
+                binOp.Op != BinaryOperator.Opcode.Le && binOp.Op != BinaryOperator.Opcode.Ge
+                ) return false;
+            var x = expr.Args[0] as IdentifierExpr;
+            if (x == null) return false;
+            //TODO: lookup the {:typestate} attribute on teh variable
+            if (QKeyValue.FindBoolAttribute(x.Decl.Attributes, "typestatevar")) return true;
+            return false;
+        }
+        private static bool LiteralNotInVocabulary(Expr c)
+        {
+            //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
+            //TODO: separate positive and negative filters
+            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //definitely matches
+            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
+            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
+            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
+            return false;
+        }
+        
         /// <summary>
         /// Splits a conjunction into its components
         /// </summary>
@@ -1431,33 +1458,7 @@ namespace ExplainError
         /// </summary>
         /// <param name="c"></param>
         /// <returns></returns>
-        private static bool LiteralNotInVocabulary(Expr c)
-        {
-            //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
-            //TODO: separate positive and negative filters
-            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //matches
-            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
-            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true; 
-            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
-            return false;
-        }
 
-        private static bool ContainsTypeStateVar(Expr c)
-        {
-            var expr = c as NAryExpr;
-            if (expr == null) return false;
-            var binOp = expr.Fun as BinaryOperator;
-            if (binOp == null) return false;
-            if (binOp.Op != BinaryOperator.Opcode.Eq  && binOp.Op != BinaryOperator.Opcode.Neq &&
-                binOp.Op != BinaryOperator.Opcode.Lt && binOp.Op != BinaryOperator.Opcode.Gt &&
-                binOp.Op != BinaryOperator.Opcode.Le && binOp.Op != BinaryOperator.Opcode.Ge
-                ) return false;
-            var x = expr.Args[0] as IdentifierExpr;
-            if (x == null) return false;
-            //TODO: lookup the {:typestate} attribute on teh variable
-            if (QKeyValue.FindBoolAttribute(x.Decl.Attributes, "typestatevar")) return true; 
-            return false;
-        }
         public static Expr ExprListSetToDNFExpr(HashSet<List<Expr>> preInDnfForm)
         {
             Expr ret = Expr.False;
