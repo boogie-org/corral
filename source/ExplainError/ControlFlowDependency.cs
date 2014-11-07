@@ -102,34 +102,37 @@ namespace ExplainError
                 parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
                 if (!parent.coarseProcedureLevelOnly)
                 {
-                    //Perform fine grained block level analysis
-                    impl.Blocks.Iter
-                        (b =>
-                            {
-                                successorBlocks[b] = new HashSet<Block>();
-                                if (b.TransferCmd is GotoCmd)
-                                    ((GotoCmd)b.TransferCmd).labelTargets.ForEach(c => successorBlocks[b].Add(c));
-                                if (b.TransferCmd is ReturnCmd)
-                                    successorBlocks[b].Add(null);
-                            }
-                        );
-                    //initialize the WL
-                    InitializeModSets();
-                    //run the fixed point
-                    ComputeTransitiveModSets();
-                    //find the (branch,join) pairs
-                    FindBranchJoinPairs();
-                    branchJoinPairs
-                        .Iter(x => parent.branchJoinPairModSet[impl.Name]
-                            .Add(Tuple.Create(x.Item1.ToString(), ReturnNodeString(x.Item2),
-                            intraProcPairBlockModSet[x])));
+                    PerformFineGrainedControlDependency();
                 }
                 //only add the procedure level modset (currently undoing all the work of block/join)
-                parent.branchJoinPairModSet[impl.Name].Clear();
                 var modsetImpl = new HashSet<Variable> (impl.Proc.Modifies.Select(x => x.Decl).Union(impl.Proc.OutParams));
                 parent.branchJoinPairModSet[impl.Name]
                     .Add(Tuple.Create("beginproc", "endproc", modsetImpl));
                 //Print();
+            }
+            private void PerformFineGrainedControlDependency()
+            {
+                //Perform fine grained block level analysis
+                impl.Blocks.Iter
+                    (b =>
+                    {
+                        successorBlocks[b] = new HashSet<Block>();
+                        if (b.TransferCmd is GotoCmd)
+                            ((GotoCmd)b.TransferCmd).labelTargets.ForEach(c => successorBlocks[b].Add(c));
+                        if (b.TransferCmd is ReturnCmd)
+                            successorBlocks[b].Add(null);
+                    }
+                    );
+                //initialize the WL
+                InitializeModSets();
+                //run the fixed point
+                ComputeTransitiveModSets();
+                //find the (branch,join) pairs
+                FindBranchJoinPairs();
+                branchJoinPairs
+                    .Iter(x => parent.branchJoinPairModSet[impl.Name]
+                        .Add(Tuple.Create(x.Item1.ToString(), ReturnNodeString(x.Item2),
+                        intraProcPairBlockModSet[x])));
             }
             /// <summary>
             /// For each branch node, finds the corresponding join node

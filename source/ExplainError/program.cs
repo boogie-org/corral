@@ -288,7 +288,8 @@ namespace ExplainError
                         UpdateBranchJoinStack((AssumeCmd)cmd, supportVarsInPre, branchJoinStack);
                         continue;
                     }
-                    if (!ContainsSlicAttribute((AssumeCmd)cmd)) continue;
+                    if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) continue;
+                    if (((AssumeCmd)cmd).Expr == Expr.True) continue; 
                     numAssumes++;
                     if (branchJoinStack.Count > 0) {
                         if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
@@ -390,7 +391,7 @@ namespace ExplainError
                 var assumeCmd = c as AssumeCmd;
                 if (assumeCmd == null) continue;
                 if (assumeCmd.Expr.ToString() == Expr.True.ToString()) continue;
-                if (!ContainsSlicAttribute(assumeCmd)) continue; //thousands of assumes on uninitialized variables
+                if (!MatchesSyntacticAssumeFilters(assumeCmd)) continue; //thousands of assumes on uninitialized variables
                 //HACK: still hundreds of assumes, just look for the equalities
                 var oldExpr = assumeCmd.Expr;
                 if (!(
@@ -1397,7 +1398,7 @@ namespace ExplainError
         {
             return (assertCmd.Expr.ToString() == "true"); //TODO: any better way to check?
         }
-        private static bool ContainsSlicAttribute(AssumeCmd assumeCmd)
+        private static bool MatchesSyntacticAssumeFilters(AssumeCmd assumeCmd)
         {
             if (ignoreAllAssumes) return false;
             return (!onlySlicAssumes || QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic"));
