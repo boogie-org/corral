@@ -1462,7 +1462,7 @@ namespace AngelicVerifierNull
         static string getNewLabel()
         {
             labelCnt++;
-            return "SeqInstr_" + labelCnt.ToString();
+            return "AvnSeqInstr_" + labelCnt.ToString();
         }
 
         // Record the fact that we added instruction corresponding to "in" as the last instruction
