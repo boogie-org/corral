@@ -1143,7 +1143,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/trackedVars, 
                 false);
 
-            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try

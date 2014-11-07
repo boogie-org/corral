@@ -2717,8 +2717,20 @@ namespace cba
         {
             passName = "SequentialInstrumentation";
             tinfo = new InsertionTrans();
+            assertsPassed = null;
+        }
+
+        private void CreateAssertsPassedVar(Program program)
+        {
+            var name = "assertsPassed";
+            var cnt = 0;
+            while (program.TopLevelDeclarations.OfType<GlobalVariable>().Any(g => g.Name == name))
+            {
+                name = "assertsPassed" + (++cnt);
+            }
+
             assertsPassed = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
-                "assertsPassed", Microsoft.Boogie.Type.Bool));
+                name, Microsoft.Boogie.Type.Bool));
         }
 
         // If the program has no reachable "async" calls then it is single threaded, i.e., sequential.
@@ -2841,6 +2853,7 @@ namespace cba
 
         public override CBAProgram runCBAPass(CBAProgram program)
         {
+            CreateAssertsPassedVar(program);
             var impls = BoogieUtil.nameImplMapping(program);
             var pwa = procsWithAsserts(program);
 
