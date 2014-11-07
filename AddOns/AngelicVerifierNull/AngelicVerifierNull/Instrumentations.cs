@@ -1126,7 +1126,7 @@ namespace AngelicVerifierNull
             var blockExpr = tmp.Aggregate((Expr)Expr.True, (x, y) => (Expr.And(x, Expr.Not(IdentifierExpr.Ident(y)))));
             var mainProc = currProg.TopLevelDeclarations.OfType<Procedure>()
                 .Where(x => x.Name == (output as PersistentProgram).mainProcName).FirstOrDefault();
-            mainProc.Requires.Add(new Requires(Token.NoToken, false, blockExpr, null, 
+            mainProc.Requires.Add(new Requires(Token.NoToken, true, blockExpr, null, 
                 new QKeyValue(Token.NoToken, "RRBlocking", new List<object>(), null))); 
         }
 

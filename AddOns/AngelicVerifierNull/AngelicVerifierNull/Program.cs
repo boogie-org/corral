@@ -133,6 +133,7 @@ namespace AngelicVerifierNull
         static int timeout = 0;
         static int timeoutRoundRobin = 0;
         static int timeoutAssertRoundRobin = 0;
+        static int timeoutRelax = 100;
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
@@ -609,9 +610,6 @@ namespace AngelicVerifierNull
         // Set timeout for Corral
         static void SetCorralTimeout(int corralTimeout)
         {
-            if (corralTimeout == 0)
-                return;
-
             Console.WriteLine("Setting Corral timeout to {0} seconds", corralTimeout);
             cba.GlobalConfig.timeOut = corralTimeout;
             cba.GlobalConfig.corralStartTime = DateTime.Now;
@@ -817,6 +815,17 @@ namespace AngelicVerifierNull
             // Get program
             var program = instr.GetCurrProgram().getProgram();
 
+            // disable assertions in the program
+            var assertToAssume = new Func<Cmd, Cmd>(cmd =>
+            {
+                var acmd = cmd as AssertCmd;
+                if (acmd == null || BoogieUtil.isAssertTrue(cmd)) return cmd;
+                return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+            });
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                foreach (var block in impl.Blocks)
+                    block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
             // Name the soft constraints
             var softcnt = 0;
             var soft2actual = new Dictionary<int, int>();
@@ -841,9 +850,37 @@ namespace AngelicVerifierNull
                 }
             }
 
+            var reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
+
+            // change assume Reachable(e) to assert !e
+            var mutate = new Func<Cmd, Cmd>(cmd =>
+            {
+                var acmd = cmd as AssumeCmd;
+                if (acmd == null) return cmd;
+                var nary = acmd.Expr as NAryExpr;
+                if (nary == null) return cmd;
+                if (nary.Fun is FunctionCall && (nary.Fun as FunctionCall).FunctionName == reach.Name)
+                {
+                    return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
+                }
+                else
+                    return cmd;
+            });
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                foreach (var block in impl.Blocks)
+                    block.Cmds = new List<Cmd>(block.Cmds.Select(c => mutate(c)));
+
+            // Now, move assertions to the end of main
+            var main = program.TopLevelDeclarations.OfType<Implementation>().Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+            var sI = new cba.SequentialInstrumentation();
+            program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
+
             var ret = RelaxConstraints(program, corralConfig.mainProcName);
 
-            ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
+            if(ret != null)
+                ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
 
             // remove side-effects
             if (blocked)
@@ -923,6 +960,17 @@ namespace AngelicVerifierNull
             // Get program
             var program = instr.GetCurrProgram().getProgram();
 
+            // disable assertions in the program
+            var assertToAssume = new Func<Cmd, Cmd>(cmd =>
+            {
+                var acmd = cmd as AssertCmd;
+                if (acmd == null || BoogieUtil.isAssertTrue(cmd)) return cmd;
+                return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+            });
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                foreach (var block in impl.Blocks)
+                    block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
             // Remove Ebasic
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -950,12 +998,9 @@ namespace AngelicVerifierNull
                 });
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
-            {
                 foreach (var block in impl.Blocks)
-                {
                     block.Cmds = new List<Cmd>(block.Cmds.Select(c => mutate(c)));
-                }
-            }
+
 
             // name the soft constraints
             var softcnt = 0;
@@ -979,6 +1024,13 @@ namespace AngelicVerifierNull
                 }
             }
 
+            // Now, move assertions to the end of main
+            var main = program.TopLevelDeclarations.OfType<Implementation>().Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+            var sI = new cba.SequentialInstrumentation();
+            program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
+            //BoogieUtil.PrintProgram(program, "relax.bpl");
+
             // Relax
             var softret = RelaxConstraints(program, corralConfig.mainProcName);
             
@@ -989,7 +1041,9 @@ namespace AngelicVerifierNull
             }
 
             var ret = new HashSet<int>();
-            softret.Iter(n => ret.Add(soft2actual[n]));
+            
+            if(softret != null)
+                softret.Iter(n => ret.Add(soft2actual[n]));
 
             return ret;
         }
@@ -1309,7 +1363,7 @@ namespace AngelicVerifierNull
 
                 try
                 {
-                    cex = RunCorral(pprog, main, null, 0);
+                    cex = RunCorral(pprog, main, null, timeoutRelax);
                 }
                 catch (Exception e)
                 {

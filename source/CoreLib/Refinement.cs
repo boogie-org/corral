@@ -144,7 +144,7 @@ namespace cba
 
                 doRefinementInZ3Helper(out faProgProg, out boolVars, out fabs);
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
-                
+
                 boolVars = BoogieVerify.FindLeastToVerify(faProgProg, boolVars);
                 // Debug.Assert(boolVars.Count > 0);
                 if (boolVars.Count == 0)
