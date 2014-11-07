@@ -48,6 +48,9 @@
     <Reference Include="Core">
       <HintPath>..\..\references\Core.dll</HintPath>
     </Reference>
+    <Reference Include="CorralUtil">
+      <HintPath>..\..\AddOns\AngelicVerifierNull\AngelicVerifierNull\bin\Debug\CorralUtil.dll</HintPath>
+    </Reference>
     <Reference Include="Graph">
       <HintPath>..\..\references\Graph.dll</HintPath>
     </Reference>

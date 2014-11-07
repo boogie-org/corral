@@ -22,11 +22,13 @@ namespace ExplainError
         Program prog;
         //a null block indicates returnBlock
         //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
-        Dictionary<Implementation, HashSet<Tuple<Block,Block,HashSet<Variable>>>> branchJoinPairModSet; 
-        public ControlFlowDependency(Program prog)
+        Dictionary<string, HashSet<Tuple<string,string,HashSet<Variable>>>> branchJoinPairModSet;
+        bool coarseProcedureLevelOnly; //if this flag is on, only consider branch/join as beginproc/endproc for a procedure with entire modset
+        public ControlFlowDependency(Program prog, bool coarseProcedureLevelOnly=true)
         {
             this.prog = prog;
-            branchJoinPairModSet = new Dictionary<Implementation,HashSet<Tuple<Block,Block,HashSet<Variable>>>>();
+            branchJoinPairModSet = new Dictionary<string,HashSet<Tuple<string,string,HashSet<Variable>>>>();
+            this.coarseProcedureLevelOnly = coarseProcedureLevelOnly;
         }
         public void Run()
         {
@@ -96,15 +98,30 @@ namespace ExplainError
             }
             public void Run()
             {
+                //populate the modsets for every branch/join pair
+                parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
+                if (!parent.coarseProcedureLevelOnly)
+                {
+                    PerformFineGrainedControlDependency();
+                }
+                //only add the procedure level modset (currently undoing all the work of block/join)
+                var modsetImpl = new HashSet<Variable> (impl.Proc.Modifies.Select(x => x.Decl).Union(impl.Proc.OutParams));
+                parent.branchJoinPairModSet[impl.Name]
+                    .Add(Tuple.Create("beginproc", "endproc", modsetImpl));
+                //Print();
+            }
+            private void PerformFineGrainedControlDependency()
+            {
+                //Perform fine grained block level analysis
                 impl.Blocks.Iter
                     (b =>
-                        {
-                            successorBlocks[b] = new HashSet<Block>();
-                            if (b.TransferCmd is GotoCmd)
-                                ((GotoCmd)b.TransferCmd).labelTargets.ForEach(c => successorBlocks[b].Add(c));
-                            if (b.TransferCmd is ReturnCmd)
-                                successorBlocks[b].Add(null);
-                        }
+                    {
+                        successorBlocks[b] = new HashSet<Block>();
+                        if (b.TransferCmd is GotoCmd)
+                            ((GotoCmd)b.TransferCmd).labelTargets.ForEach(c => successorBlocks[b].Add(c));
+                        if (b.TransferCmd is ReturnCmd)
+                            successorBlocks[b].Add(null);
+                    }
                     );
                 //initialize the WL
                 InitializeModSets();
@@ -112,10 +129,10 @@ namespace ExplainError
                 ComputeTransitiveModSets();
                 //find the (branch,join) pairs
                 FindBranchJoinPairs();
-                //populate the modsets for every branch/join pair
-                parent.branchJoinPairModSet[impl] = new HashSet<Tuple<Block,Block,HashSet<Variable>>>();
-                branchJoinPairs.Iter(x => parent.branchJoinPairModSet[impl].Add(Tuple.Create(x.Item1, x.Item2, intraProcPairBlockModSet[x])));
-                Print();
+                branchJoinPairs
+                    .Iter(x => parent.branchJoinPairModSet[impl.Name]
+                        .Add(Tuple.Create(x.Item1.ToString(), ReturnNodeString(x.Item2),
+                        intraProcPairBlockModSet[x])));
             }
             /// <summary>
             /// For each branch node, finds the corresponding join node
@@ -229,23 +246,67 @@ namespace ExplainError
                     }
                 }
             }
+            private string ReturnNodeString(Block x)
+            {
+                return x != null ? x.ToString() : "returnNode"; 
+            }
+
             private void Print()
             {
-                var printReturnNode = new Func<Block, string>(x => x != null ? x.ToString() : "returnNode");
                 var printModSetBtwn = new Func<Tuple<Block,Block>, string> (x =>
                     string.Format("Modified Variables ({0}, {1}) ==> {2}",
-                            x.Item1.ToString(), printReturnNode(x.Item2),
+                            x.Item1.ToString(), ReturnNodeString(x.Item2),
                             string.Join(",", intraProcPairBlockModSet[x])
                             ));
 
                 Console.WriteLine("\n#### CONTROL FLOW DEPENDENCY STATIC ANALYSIS#####\n");
                 Console.WriteLine("---- Implementation  {0} ------", impl.Name);
-                intraProcPairBlockModSet
-                    .Keys
-                    .Iter(x => Console.WriteLine(printModSetBtwn(x)));
-                Console.WriteLine("--- Branch/Join pairs and their modsets ---\n\n{0}\n\n",
-                    string.Join("\n", branchJoinPairs.Select(x => printModSetBtwn(x))));
+                //intraProcPairBlockModSet
+                //    .Keys
+                //    .Iter(x => Console.WriteLine(printModSetBtwn(x)));
+                //Console.WriteLine("--- Branch/Join pairs and their modsets ---\n\n{0}\n\n",
+                //    string.Join("\n", branchJoinPairs.Select(x => printModSetBtwn(x))));
+                Console.WriteLine("---Branch/Join pairs and modsets ---\n\n{0}\n\n",
+                    string.Join("\n", 
+                    parent.branchJoinPairModSet[impl.Name].Select(x => 
+                    string.Format("{0} {1} => {2}", x.Item1, x.Item2, string.Join(",", x.Item3)))));
             }
+        }
+
+        internal bool IsJoinBlock(Tuple<string, string> blockInfo, out string branchBlockName, out HashSet<string> modSet)
+        {
+            if (branchJoinPairModSet.ContainsKey(blockInfo.Item1) && blockInfo.Item2 == "endproc")
+            {
+                branchBlockName = "beginproc";
+                modSet = new HashSet<string>(
+                    branchJoinPairModSet[blockInfo.Item1]
+                    .Where(x => x.Item1 == "beginproc" && x.Item2 == "endproc")
+                    .First()
+                    .Item3.Select(y => y.ToString()));
+                return true;
+            }
+
+            branchBlockName = null;
+            modSet = null;
+            var matches = 
+                branchJoinPairModSet[blockInfo.Item1]
+                .Where(x => (x.Item2 == null && blockInfo.Item2 == null) || (x.Item2 != null && x.Item2.ToString() == blockInfo.Item2));
+            if (matches.Count() > 0)
+            {
+                branchBlockName = matches.First().Item1.ToString();
+                var tmpSet = new HashSet<string>();
+                matches.First().Item3.Select(x => x.ToString()).Iter(y => tmpSet.Add(y));
+                modSet = tmpSet;
+                return true;
+            }
+            return false; 
+        }
+
+        internal bool IsBranchBlock(Tuple<string, string> blockInfo)
+        {
+            //a beginproc is always a branch node when we want to consider procedure level mods only
+            if (branchJoinPairModSet.ContainsKey(blockInfo.Item1) && blockInfo.Item2 == "beginproc") return true; 
+            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() == 1;
         }
     }
 }

@@ -39,8 +39,8 @@ namespace AngelicVerifierNull
         public static bool RelaxEnvironment = false;
         // remove entrypoint from procs with osmodel as entrypoint
         public static bool noOSmodels = false;
-        // EE option to perform control flow slicing
-        public static bool EEPerformControlSlicing = false; 
+        // EE option to perform control flow slicing 
+        public static bool EEPerformControlSlicing = true;  
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
         // property: nonnull, typestate
@@ -235,8 +235,8 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
                 Options.AddMapSelectNonNullAssumptions = true;
 
-            if (args.Any(s => s == "/EEPerformControlSlicing"))
-                Options.EEPerformControlSlicing = true;
+            if (args.Any(s => s == "/EEDisableControlSlicing"))
+                Options.EEPerformControlSlicing = false;
 
             args.Where(s => s.StartsWith("/property:"))
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
@@ -1446,7 +1446,9 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), out eeStatus, out eeComplexExprs, out preDisjuncts);
+                var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
+                    controlFlowDependencyInformation,
+                    out eeStatus, out eeComplexExprs, out preDisjuncts);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)

@@ -73,3 +73,14 @@
 [TAG: AV_OUTPUT] ----- Analyzing rec.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr false and entrypoint foo
+
+-------------------- eeSlice3.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice3.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_4: int :: mallocTrigger_3(x_4) ==> x_4 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1 and entrypoint A
+
+-------------------- eeSlice4.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice4.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr z == 1 and entrypoint A
