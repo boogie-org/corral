@@ -268,7 +268,8 @@ namespace AngelicVerifierNull
                 if (entrypoints.Count == 0)
                     throw new InvalidInput("Main procedure not specified");
 
-                var outp = RelaxConstraints(program, entrypoints[0]);
+                // deprecated
+                var outp = RelaxConstraints(program, entrypoints[0], null);
 
                 Console.Write("Output: ");
                 outp.Iter(n => Console.Write("{0} ", n));
@@ -879,7 +880,7 @@ namespace AngelicVerifierNull
             var sI = new cba.SequentialInstrumentation();
             program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
 
-            var ret = RelaxConstraints(program, corralConfig.mainProcName);
+            var ret = RelaxConstraints(program, corralConfig.mainProcName, sI.assertsPassedName);
 
             if(ret != null)
                 ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
@@ -1040,7 +1041,7 @@ namespace AngelicVerifierNull
             //BoogieUtil.PrintProgram(program, "relax.bpl");
 
             // Relax
-            var softret = RelaxConstraints(program, corralConfig.mainProcName);
+            var softret = RelaxConstraints(program, corralConfig.mainProcName, sI.assertsPassedName);
             
             // remove side-effects
             if (blocked)
@@ -1356,7 +1357,7 @@ namespace AngelicVerifierNull
 
         // Function takes in a Program and returns a list of integers corresponding to the assumes which have to be removed
         // The integers are present as {:SoftConstraint n}
-        private static HashSet<int> RelaxConstraints(Program program, string main)
+        private static HashSet<int> RelaxConstraints(Program program, string main, string ap)
         {
             bool conclusive = true;
             var ret = new HashSet<int>();
@@ -1389,7 +1390,7 @@ namespace AngelicVerifierNull
                 }
 
                 // Suppress the assertion from the error trace
-                SuppressAssertion(program, cex);
+                SuppressAssertion(program, cex, ap);
             }
 
             if (!conclusive) return null;
@@ -1443,21 +1444,39 @@ namespace AngelicVerifierNull
             return map;
         }
 
-        private static cba.AssertLocation findFailingAssert(cba.ErrorTrace trace)
+        // Find failing assignment to err bit
+        private static cba.AssertLocation findFailingAssert(Program program, cba.ErrorTrace trace, string ap)
         {
-            var currLoc = new cba.AssertLocation(trace.procName, trace.Blocks.Last().blockName, trace.Blocks.Last().Cmds.Count - 1);
+            if (trace == null) return null;
 
-            var instr = trace.Blocks.Last().Cmds[currLoc.instrNo];
-            if (instr is cba.CallInstr && (instr as cba.CallInstr).CalleeTrace != null)
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, trace.procName);
+            var l2b = BoogieUtil.labelBlockMapping(impl);
+
+            foreach (var tblk in trace.Blocks)
             {
-                return findFailingAssert((instr as cba.CallInstr).CalleeTrace);
+                var pblk = l2b[tblk.blockName];
+                for (int i = 0; i < tblk.Cmds.Count; i++)
+                {
+                    var ccmd = pblk.Cmds[i] as CallCmd;
+                    if (ccmd != null)
+                    {
+                        var ret = findFailingAssert(program, tblk.Cmds[i].CalleeTrace, ap);
+                        if (ret != null) return ret;
+                    }
+                    var cmd = pblk.Cmds[i] as AssignCmd;
+                    if (cmd == null) continue;
+                    if (cmd.Lhss[0].DeepAssignedVariable.Name != ap) continue;
+                    var le = cmd.Rhss[0] as LiteralExpr;
+                    if (le != null && le.IsTrue) continue;
+                    return new cba.AssertLocation(impl.Name, tblk.blockName, i);
+                }
             }
-            return currLoc;
+            return null;
         }
 
-        private static void SuppressAssertion(Program program, cba.ErrorTrace trace)
+        private static void SuppressAssertion(Program program, cba.ErrorTrace trace, string ap)
         {
-            cba.AssertLocation currLoc = findFailingAssert(trace);
+            cba.AssertLocation currLoc = findFailingAssert(program, trace, ap);
             Debug.Assert(currLoc != null);
 
             Console.WriteLine("{0} {1} {2}", currLoc.procName, currLoc.blockName, currLoc.instrNo);
@@ -1467,10 +1486,11 @@ namespace AngelicVerifierNull
             // find block
             var block = impl.Blocks.Where(blk => blk.Label == currLoc.blockName).First();
             // find instruction
-            Debug.Assert(block.Cmds[currLoc.instrNo] is AssertCmd);
-            var ac = block.Cmds[currLoc.instrNo] as AssertCmd;
+            Debug.Assert(block.Cmds[currLoc.instrNo] is AssignCmd);
+            var ac = block.Cmds[currLoc.instrNo] as AssignCmd;
             // block assert
-            block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
+            ac.Rhss[0] = Expr.True;
+            //block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
         }
         #endregion
 
