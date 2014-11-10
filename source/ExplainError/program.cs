@@ -50,7 +50,8 @@ namespace ExplainError
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
-        private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestate}
+        private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestatevar}
+        private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
 
         //flags to define Boolean structure on the cover
         private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL; 
@@ -1097,6 +1098,7 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "onlySlicAssumes", ref onlySlicAssumes)) continue;
                 if (CheckBooleanFlag(a, "ignoreAllAssumes", ref ignoreAllAssumes)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayAliasingInPre", ref onlyDisplayAliasingInPre)) continue;
+                if (CheckBooleanFlag(a, "displayGuardVars", ref displayGuardVariables)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayMapExpressions", ref onlyDisplayMapExpressions)) continue;
                 if (CheckBooleanFlag(a, "dontDisplayComparisonsWithConsts", ref dontDisplayComparisonsWithConsts)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
@@ -1372,6 +1374,12 @@ namespace ExplainError
                 if (arg is LiteralExpr) return true;
             return false;
         }
+        private static bool ContainsGuardVar(Expr c)
+        {
+            var vu = new VarsUsed();
+            vu.Visit(c);
+            return vu.Vars.Any(v => QKeyValue.FindBoolAttribute(v.Attributes, "guardvar"));
+        }
         private static bool ContainsTypeStateVar(Expr c)
         {
             var expr = c as NAryExpr;
@@ -1393,6 +1401,7 @@ namespace ExplainError
             //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
             //TODO: separate positive and negative filters
             if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //definitely matches
+            if (!displayGuardVariables && ContainsGuardVar(c)) return true;  //definitely not matches
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
