@@ -304,6 +304,7 @@ namespace AngelicVerifierNull
                     Stats.stop("dead.code");
                 }
 
+                
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -782,6 +783,7 @@ namespace AngelicVerifierNull
                     if (inconsistent.Count != 0)
                     {
                         Debug.Assert(inconsistent.Contains(constraintId));
+                        Console.WriteLine("Hard constraint inconsistenct detected: ", inconsistent.Print());
                         // drop asserts
                         PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
                         // drop traces
@@ -806,7 +808,7 @@ namespace AngelicVerifierNull
         {
             // only consider the given entrypoint
             var blocked = false;
-            if (!instr.InBlockingMode())
+            if (!instr.InBlockingMode() && entrypoint != null)
             {
                 blocked = true;
                 instr.BlockAllButThis(entrypoint);
@@ -1133,6 +1135,9 @@ namespace AngelicVerifierNull
 
             var instr = new AvnInstrumentation(harnessInstrumentation);
             prog = instr.run(prog);
+
+            // dead code
+            RelaxEnvironmentConstraints(instr, null);
 
             Stats.resume("round.robin");
             //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
