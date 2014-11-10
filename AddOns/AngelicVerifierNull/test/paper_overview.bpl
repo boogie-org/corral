@@ -9,10 +9,10 @@ var m,n:[int]int;       //field m
 
 //inconsistency
 procedure Bar(x:int) {
-    assert x != NULL;
     m[x] := 5;  //BUG due to RELAX
     if (x != NULL) { gs := 1; } 
     else { gs := 2; }
+    assert x != NULL;
 }
 //internal bug
 procedure Baz(x:int) {

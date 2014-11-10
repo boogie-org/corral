@@ -784,7 +784,7 @@ namespace AngelicVerifierNull
                     if (inconsistent.Count != 0)
                     {
                         Debug.Assert(inconsistent.Contains(constraintId));
-                        Console.WriteLine("Hard constraint inconsistenct detected: ", inconsistent.Print());
+                        Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
                         // drop asserts
                         PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
                         // drop traces
@@ -807,6 +807,8 @@ namespace AngelicVerifierNull
         // Relax environment constraints Ebasic
         private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint)
         {
+            Console.WriteLine("Relaxing environment constraints");
+
             // only consider the given entrypoint
             var blocked = false;
             if (!instr.InBlockingMode() && entrypoint != null)
@@ -952,6 +954,8 @@ namespace AngelicVerifierNull
 
         private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint)
         {
+            Console.WriteLine("Checking inconsistency");
+
             // only consider the given entrypoint
             var blocked = false;
             if (!instr.InBlockingMode())
@@ -1038,6 +1042,7 @@ namespace AngelicVerifierNull
             //perst.writeToFile("relax.bpl");
 
             program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
+            
             //BoogieUtil.PrintProgram(program, "relax.bpl");
 
             // Relax

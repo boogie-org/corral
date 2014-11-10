@@ -1112,7 +1112,11 @@ namespace AngelicVerifierNull
         // Block all entrypoints but one
         public void BlockAllButThis(string impl)
         {
-            BlockAllButThis(harnessInstr.impl2BlockingConstant[impl]);
+            var constant = GetRoundRobinBlockingConstants()
+                .Where(c => harnessInstr.impl2BlockingConstant[impl].Name == c.Name)
+                .FirstOrDefault();
+
+            BlockAllButThis(constant);
         }
 
         // Block all entrypoints but one
