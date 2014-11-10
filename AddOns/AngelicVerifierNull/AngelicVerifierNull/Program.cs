@@ -296,8 +296,8 @@ namespace AngelicVerifierNull
 
                 prog.writeToFile("alias.bpl");
 
-                // Do dead code detection
-                if (deadCodeDetect)
+                // Do dead code detection -- deprecated!
+                if (false && deadCodeDetect)
                 {
                     Stats.resume("dead.code");
                     Console.WriteLine("Running dead code detection");
@@ -510,6 +510,12 @@ namespace AngelicVerifierNull
                             .Iter(AddAnnotation)));
             }
 
+            if (deadCodeDetect && Options.propertyChecked != "nonnull")
+            {
+                // Tag branches as reachable
+                init = InstrumentBranches.Run(init, null, false, false);
+            }
+        
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
             // Remove {:inline} impls
