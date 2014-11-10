@@ -1364,6 +1364,28 @@ namespace AngelicVerifierNull
             return ret;
         }
 
+        // Suppress an input constraint
+        public void RemoveInputSuppression(int id, string entrypoint)
+        {
+            // find main
+            var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
+                origMainName);
+
+            // Assume has the right id?
+            var Mutate = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssumeCmd;
+                    if (acmd == null) return cmd;
+                    if (QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.BlockingConstraintAttr, -1) == id)
+                        return new AssumeCmd(acmd.tok, Expr.True);
+                    return cmd;
+                });
+
+            // find the call to the entrypoint and put the assume there
+            foreach (var block in main.Blocks)
+                block.Cmds = new List<Cmd>(block.Cmds.Map(c => Mutate(c)));
+        }
+
         // Adds a new main:
         //   assertsPassed := true;
         //   call main();

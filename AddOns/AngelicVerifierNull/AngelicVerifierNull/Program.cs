@@ -793,6 +793,8 @@ namespace AngelicVerifierNull
                         Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
                         // drop asserts
                         PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                        // drop constraints
+                        inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
                         // drop traces
                         inconsistent.Iter(id => pendingTraces.Remove(id));
                     }
