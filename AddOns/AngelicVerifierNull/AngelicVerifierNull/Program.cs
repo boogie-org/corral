@@ -1027,9 +1027,15 @@ namespace AngelicVerifierNull
             }
 
             // Now, move assertions to the end of main
-            var main = program.TopLevelDeclarations.OfType<Implementation>().Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+            var main = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
                 .FirstOrDefault();
+
             var sI = new cba.SequentialInstrumentation();
+
+            //var perst = new PersistentProgram(program, main.Name, 1);
+            //perst.writeToFile("relax.bpl");
+
             program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
             //BoogieUtil.PrintProgram(program, "relax.bpl");
 
