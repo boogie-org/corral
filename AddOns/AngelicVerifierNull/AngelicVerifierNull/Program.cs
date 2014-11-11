@@ -37,8 +37,8 @@ namespace AngelicVerifierNull
         public static bool bufferDetect = false;
         // relax environment constraints
         public static bool RelaxEnvironment = false;
-        // remove entrypoint from procs with osmodel as entrypoint
-        public static bool noOSmodels = false;
+        // use procs tagged as {:harness} as potential entrypoints as well
+        public static bool useHarnessTag = false;
         // EE option to perform control flow slicing 
         public static bool EEPerformControlSlicing = true;  
         // Flags for EE
@@ -211,8 +211,8 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/relax"))
                 Options.RelaxEnvironment = true;
 
-            if (args.Any(s => s == "/noOSmodels"))
-                Options.noOSmodels = true;
+            if (args.Any(s => s == "/useHarness"))
+                Options.useHarnessTag = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -523,30 +523,12 @@ namespace AngelicVerifierNull
                 (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
                  BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
 
-            //if /noOSmodels, remove entrypoint attribute from procs/impls having osmodel as attribute
-            if (Options.noOSmodels)
+            // Add {:entrypoint} to procs with {:harness}
+            if (Options.useHarnessTag)
             {
-                foreach (Procedure proc in init.TopLevelDeclarations.OfType<Procedure>())
-                {
-                    if (BoogieUtil.checkAttrExists("osmodel", proc.Attributes))
-                    {
-                        if (BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
-                        {
-                            proc.Attributes = BoogieUtil.removeAttr("entrypoint", proc.Attributes);
-                        }
-                    }
-                }
-
-                foreach (Implementation impl in init.TopLevelDeclarations.OfType<Implementation>())
-                {
-                    if (BoogieUtil.checkAttrExists("osmodel", impl.Attributes) || BoogieUtil.checkAttrExists("osmodel", impl.Proc.Attributes))
-                    {
-                        if (BoogieUtil.checkAttrExists("entrypoint", impl.Attributes))
-                        {
-                            impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
-                        }
-                    }
-                }
+                foreach (var decl in init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Where(d => QKeyValue.FindBoolAttribute(d.Attributes, "harness")))
+                    decl.AddAttribute("entrypoint");
             }
 
             // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
@@ -793,6 +775,8 @@ namespace AngelicVerifierNull
                         Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
                         // drop asserts
                         PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                        // drop constraints
+                        inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
                         // drop traces
                         inconsistent.Iter(id => pendingTraces.Remove(id));
                     }
