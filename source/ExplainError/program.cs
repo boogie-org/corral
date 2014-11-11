@@ -519,6 +519,22 @@ namespace ExplainError
             return t.Count > 0;
         }
 
+        /// <summary>
+        /// Clause abstraction of currPre using fe; less precise than full cover (possibly stronger than the monomial cover, if it exists)
+        /// Overapproximates currPre with Vee_p{p \in fe} that overapproximates currPre
+        /// Ensure that the cover is not the same as True (e.g. x == null || x != null)
+        /// </summary>
+        /// <param name="currImpl"></param>
+        /// <param name="currPre"></param>
+        /// <param name="e"></param>
+        /// <param name="fe"></param>
+        /// <param name="l"></param>
+        /// <returns></returns>
+        private static bool ClauseCover(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
+        {
+            throw new NotImplementedException();
+        }
+
         class InjectNecessaryDisjuncts : StandardVisitor
         {
             Expr exprToAssume;
