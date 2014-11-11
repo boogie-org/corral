@@ -305,6 +305,7 @@ namespace AngelicVerifierNull
             private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {
                 return GetPointerVars(vars)
+                    .Where(v => !QKeyValue.FindBoolAttribute(v.Attributes, "guardvar")) // HACK!!
                     .Select(x => AllocatePointerAsUnknown(x)).ToList();
             }
             public static Function FindReachableStatesFunc(Program program)
