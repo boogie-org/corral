@@ -2993,6 +2993,7 @@ namespace cba
 
             var blk = new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken));
             newMain.Blocks = new List<Block>();
+            newMain.LocVars = new List<Variable>();
             newMain.Blocks.Add(blk);
 
             program.AddTopLevelDeclaration(newProc);

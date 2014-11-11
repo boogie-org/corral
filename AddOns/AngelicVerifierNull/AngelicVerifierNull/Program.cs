@@ -872,7 +872,15 @@ namespace AngelicVerifierNull
             var sI = new cba.SequentialInstrumentation();
             program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
 
+            // shallow checking only
+            var sd = CommandLineOptions.Clo.StackDepthBound;
+            CommandLineOptions.Clo.StackDepthBound = 2;
+
+            BoogieUtil.PrintProgram(program, "env.bpl");
+
             var ret = RelaxConstraints(program, corralConfig.mainProcName, sI.assertsPassedName);
+
+            CommandLineOptions.Clo.StackDepthBound = sd;
 
             if(ret != null)
                 ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
@@ -1173,7 +1181,7 @@ namespace AngelicVerifierNull
 
             return ret;
         }
-        static cba.CorralState corralState = null;
+        static cba.CorralState corralState = new cba.CorralState();
         static int corralIterationCount = 0;
         static int traceCount = 0;
 
@@ -1185,15 +1193,15 @@ namespace AngelicVerifierNull
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
 
+            var trackedVars = new HashSet<string>(corralConfig.trackedVars);
+            if (assertsPassedName != null) trackedVars.Add(assertsPassedName);
+
             // Reuse previous corral state
             if (corralState != null && Options.UsePrevCorralState)
             {
-                corralConfig.trackedVars.UnionWith(corralState.TrackedVariables);
+                trackedVars.UnionWith(corralState.TrackedVariables);
                 cba.ConfigManager.progVerifyOptions.CallTree = corralState.CallTree;
             }
-
-            var trackedVars = new HashSet<string>(corralConfig.trackedVars);
-            if(assertsPassedName != null) trackedVars.Add(assertsPassedName);
 
             ////////////////////////////////////
             // Verification phase
@@ -1204,7 +1212,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/trackedVars, 
                 false);
 
-            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             try
@@ -1220,6 +1228,7 @@ namespace AngelicVerifierNull
                 corralState = new cba.CorralState();
                 corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
                 corralState.TrackedVariables = refinementState.getVars().Variables;
+                cba.ConfigManager.progVerifyOptions.CallTree = null;
 
                 if(dumpTimedoutCorralQueries)
                     DumpProgWithAsserts(inputProg.getProgram(), inputProg.mainProcName, 
@@ -1231,6 +1240,7 @@ namespace AngelicVerifierNull
             corralState = new cba.CorralState();
             corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
             corralState.TrackedVariables = refinementState.getVars().Variables;
+            cba.ConfigManager.progVerifyOptions.CallTree = null;
 
             return cexTrace;
         }
@@ -1360,13 +1370,13 @@ namespace AngelicVerifierNull
             // Add Boolean Vars for environment constraints
             var boolVarMap = AddBooleanVariables(program);
 
+            var prevTracked = corralState;
+
             while (true)
             {
-                if (corralState != null)
-                    corralState.CallTree = new HashSet<string>();
-
                 cba.ErrorTrace cex = null;
                 var pprog = new PersistentProgram(program, main, 1);
+                corralState = new cba.CorralState();
 
                 try
                 {
@@ -1388,11 +1398,16 @@ namespace AngelicVerifierNull
                 SuppressAssertion(program, cex, ap);
             }
 
-            if (!conclusive) return null;
+            if (!conclusive)
+            {
+                corralState = prevTracked;
+                return null;
+            }
 
             corralState.TrackedVariables
                 .Where(tv => boolVarMap.ContainsKey(tv))
                 .Iter(tv => ret.Add(boolVarMap[tv]));
+            corralState = prevTracked;
 
             return ret;
         }

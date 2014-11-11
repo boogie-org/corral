@@ -437,6 +437,12 @@ namespace cba
         public HashSet<string> CallTree;
         public HashSet<string> TrackedVariables;
 
+        public CorralState()
+        {
+            CallTree = new HashSet<string>();
+            TrackedVariables = new HashSet<string>();
+        }
+
         public static CorralState GetCorralState(string file)
         {
             if (file == null || !System.IO.File.Exists(file))
