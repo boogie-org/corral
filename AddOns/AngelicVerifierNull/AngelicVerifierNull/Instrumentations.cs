@@ -1601,7 +1601,7 @@ namespace AngelicVerifierNull
             (assertFlase as PredicateCmd).Attributes = new QKeyValue(Token.NoToken,
                 "deadcode", new List<object>() { }, null);
             program = inp.getProgram();
-            var id = 0;
+            var id = 0; var added = 0;
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 foreach (var blk in impl.Blocks)
@@ -1616,14 +1616,17 @@ namespace AngelicVerifierNull
                         if (!ib.id2Func.ContainsKey(id))
                             continue;
                         var asites = res.allocationSites[ib.id2Func[id].Name];
-                        if (!asites.Contains(nil) && asites.Count  != 0)
+                        if (!asites.Contains(nil) && asites.Count != 0)
+                        {
                             ncmds.Add(assertFlase);
+                            added++;
+                        }
                     }
                     blk.Cmds = ncmds;
 
                 }
             }
-
+            Console.WriteLine("For deadcode detection, we added {0} assumes", added);
             return program;
         }
 
