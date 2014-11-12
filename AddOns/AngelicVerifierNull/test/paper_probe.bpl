@@ -1,9 +1,13 @@
+// ..\angelicverifierNull\bin\debug\angelicVerifierNull.exe paper_probe.bpl /noAA /deadCodeDetection /noAllocation /EE:noFilters+ 
+
 const {:allocated} NULL: int;
 axiom NULL == 0;
+procedure {:allocator "full"} malloc_full(s:int) returns (a:int);
+procedure {:allocator}  malloc(s:int) returns (a:int);
+
 
 //typestate
-var isValid:[int]bool;
-
+var isUser:[int]bool;
 //mem
 var mem:[int]int;
 
@@ -11,18 +15,33 @@ var mem:[int]int;
 //Probe function
 procedure Probe(a:int, size:int)
 {
-  var t:int;
-  //assert !isValid[a]; 
-  if (isValid[a]) {
-     t := t + 1; //throw error
+  var t:int; //tmp
+  //assert !isUser[a]; 
+  if (!isUser[a]) {
+     t := t + 1;//deadcode in else
   }
-  isValid[a] := true; //easier to write than a modifies with quantifiers or map updates  
+  isUser[a] := false; 
 }
 
 //Access functions
 procedure Access(a:int){
-   assert isValid[a];
+   assert !isUser[a];
 }
+ 
+procedure {:entrypoint} Entry4({:pointer} a: int, b:int)
+{
+  call Access(a); //OK to flag after relax
+  call Probe(a, b);
+  call Access(a);
+}
+
+/*
+
+//stub
+procedure Kernel1(a:int) returns (b:int);
+//stub: can be a source of user land
+procedure User1(a:int) returns (b:int);
+
 
 //an entry point
 procedure {:entrypoint} Entry1({:pointer} a: int, b:int)
@@ -53,21 +72,6 @@ procedure {:entrypoint} Entry3({:pointer} a: int, b:int)
   call Access(y); //OK to flag if spec vocab does not contain disjunction
 }
 
+*/
 
-procedure {:entrypoint} Entry4({:pointer} a: int, b:int)
-{
-  call Access(a); //OK to flag 
-  call Probe(a, b);
-  call Access(a);
-}
-
-
-//stub
-procedure Kernel1(a:int) returns (b:int);
-//stub: can be a source of user land
-procedure User1(a:int) returns (b:int);
-
-
-procedure {:allocator "full"} malloc_full(s:int) returns (a:int);
-procedure {:allocator}  malloc(s:int) returns (a:int);
 

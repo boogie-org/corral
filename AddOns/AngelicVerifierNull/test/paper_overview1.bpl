@@ -1,5 +1,5 @@
-procedure {:allocator} malloc(a:int) returns (b:int);
-procedure {:allocator "full"} malloc_full(a:int) returns (b:int);
+procedure {:allocator} unknown_half(a:int) returns (b:int);
+procedure {:allocator "full"} unknown(a:int) returns (b:int);
 const NULL: int;
 axiom NULL == 0; 
 

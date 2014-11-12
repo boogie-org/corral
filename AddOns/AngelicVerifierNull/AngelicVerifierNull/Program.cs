@@ -39,6 +39,8 @@ namespace AngelicVerifierNull
         public static bool RelaxEnvironment = false;
         // use procs tagged as {:harness} as potential entrypoints as well
         public static bool useHarnessTag = false;
+        // Don't use EE to block paths
+        public static bool useEE = true;
         // EE option to perform control flow slicing 
         public static bool EEPerformControlSlicing = true;  
         // Flags for EE
@@ -213,6 +215,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/useHarness"))
                 Options.useHarnessTag = true;
+
+            if (args.Any(s => s == "/noEE"))
+                Options.useEE = false;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -1524,6 +1529,7 @@ namespace AngelicVerifierNull
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
+            if (!Options.useEE) return status;
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
             // Remove axioms on alloc constants

@@ -52,6 +52,7 @@ namespace ExplainError
         private static bool dontDisplayComparisonsWithConsts = false;
         private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestatevar}
         private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
+        private static bool noFilters = false; //if true, then matches any atom
 
         //flags to define Boolean structure on the cover
         private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL; 
@@ -1117,6 +1118,7 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "displayGuardVars", ref displayGuardVariables)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayMapExpressions", ref onlyDisplayMapExpressions)) continue;
                 if (CheckBooleanFlag(a, "dontDisplayComparisonsWithConsts", ref dontDisplayComparisonsWithConsts)) continue;
+                if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
                 if (CheckBooleanFlag(a, "dontUsePruningWhileEliminatingUpdates", ref dontUsePruningWhileEliminatingUpdates)) continue;
@@ -1414,8 +1416,10 @@ namespace ExplainError
         }
         private static bool LiteralNotInVocabulary(Expr c)
         {
+            Console.Write("Atom:{0}\t", c);
             //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
             //TODO: separate positive and negative filters
+            if (noFilters) return false; //anything matches
             if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //definitely matches
             if (!displayGuardVariables && ContainsGuardVar(c)) return true;  //definitely not matches
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches

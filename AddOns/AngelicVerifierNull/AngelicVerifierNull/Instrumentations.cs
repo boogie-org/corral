@@ -426,7 +426,7 @@ namespace AngelicVerifierNull
         {
             Program prog;
 
-            public const string mallocTriggerFuncName = "mallocTrigger_";
+            public const string mallocTriggerFuncName = "unknownTrigger_";
             // allocator_call -> trigger function
             public Dictionary<int, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
 
