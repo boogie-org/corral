@@ -1529,7 +1529,7 @@ namespace AngelicVerifierNull
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
-            if (!Options.useEE) return status;
+            if (!Options.useEE) return Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True); ;
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
 
             // Remove axioms on alloc constants
