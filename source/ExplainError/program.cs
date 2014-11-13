@@ -1116,6 +1116,7 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "ignoreAllAssumes", ref ignoreAllAssumes)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayAliasingInPre", ref onlyDisplayAliasingInPre)) continue;
                 if (CheckBooleanFlag(a, "displayGuardVars", ref displayGuardVariables)) continue;
+                if (CheckBooleanFlag(a, "displayTypeStateVars", ref displayTypeStateVariables)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayMapExpressions", ref onlyDisplayMapExpressions)) continue;
                 if (CheckBooleanFlag(a, "dontDisplayComparisonsWithConsts", ref dontDisplayComparisonsWithConsts)) continue;
                 if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
