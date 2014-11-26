@@ -1426,6 +1426,7 @@ namespace ExplainError
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
+            if (!onlyDisplayAliasingInPre) return true;
             return false;
         }
         
