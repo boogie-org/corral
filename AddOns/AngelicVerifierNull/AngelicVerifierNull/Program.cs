@@ -39,6 +39,8 @@ namespace AngelicVerifierNull
         public static bool RelaxEnvironment = false;
         // use procs tagged as {:harness} as potential entrypoints as well
         public static bool useHarnessTag = false;
+        // use EBasic?
+        public static bool useEbasic = true;
         // Don't use EE to block paths
         public static bool useEE = true;
         // EE option to perform control flow slicing 
@@ -197,6 +199,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/prePassOnly"))
                 prePassOnly = true;
+
+            if (args.Any(s => s == "/noEbasic"))
+                Options.useEbasic = false;
 
             if (args.Any(s => s == "/deadCodeDetection"))
                 deadCodeDetect = true;
@@ -487,15 +492,7 @@ namespace AngelicVerifierNull
             }
             else if (Options.propertyChecked == "nonnull")
             {
-                // Mark all assumes as "slic"
-                var AddAnnotation = new Action<AssumeCmd>(ac =>
-                {
-                    ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
-                });
-                init.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
-                            .Iter(AddAnnotation)));
+                // Don't mark anything as slic -- noAssumes for EE!
             }
             else
             {
@@ -509,6 +506,17 @@ namespace AngelicVerifierNull
                         .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
                             .Iter(AddAnnotation)));
             }
+
+            if (!Options.useEbasic)
+            {
+                // strip out {:Ebasic}
+                init.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk =>
+                            blk.Cmds.RemoveAll(c => (c is AssumeCmd && 
+                                QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
+            }
+
 
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
@@ -675,7 +683,7 @@ namespace AngelicVerifierNull
 
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
-        private static bool RunCorralIterative(AvnInstrumentation instr, string p, int corralTimeout)
+        private static bool RunCorralIterative(AvnInstrumentation instr, int corralTimeout)
         {
             Stats.resume("run.corral.iterative");
             var corralIterativeStartTime = DateTime.Now;
@@ -705,7 +713,7 @@ namespace AngelicVerifierNull
                 try
                 {
                     Stats.resume("run.corral");
-                    cex = RunCorral(prog, corralConfig.mainProcName, instr.assertsPassedName, corralTimeout);
+                    cex = RunCorral(prog, instr.assertsPassedName, corralTimeout);
                     Stats.stop("run.corral");
 
                     cba.Stats.printStats();
@@ -797,6 +805,9 @@ namespace AngelicVerifierNull
         // Relax environment constraints Ebasic
         private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint, bool onlydeadcode = false)
         {
+            if (!Options.useEbasic)
+                return;
+
             Console.WriteLine("Relaxing environment constraints");
 
             // only consider the given entrypoint
@@ -871,18 +882,28 @@ namespace AngelicVerifierNull
 
             Console.WriteLine("RelaxEnvironment: {0} env constraints and {1} assertions", softcnt, assertcnt);
 
+            if (softcnt == 0 || assertcnt == 0)
+            {
+                // remove side-effects
+                if (blocked)
+                {
+                    instr.RemoveBlockingConstraint();
+                }
+                return;
+            }
+
             // Now, move assertions to the end of main
             var main = program.TopLevelDeclarations.OfType<Implementation>().Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
                 .FirstOrDefault();
             var sI = new cba.SequentialInstrumentation();
-            program = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
+            var cprogram = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
 
             // shallow checking only
             var sd = CommandLineOptions.Clo.StackDepthBound;
             CommandLineOptions.Clo.StackDepthBound = 4;
             //BoogieUtil.PrintProgram(program, "env.bpl");
 
-            var ret = RelaxConstraints(program, corralConfig.mainProcName, sI.assertsPassedName);
+            var ret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
 
             CommandLineOptions.Clo.StackDepthBound = sd;
 
@@ -992,6 +1013,7 @@ namespace AngelicVerifierNull
             var reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
 
             // change assume Reachable(e) to assert !e
+            var assertcnt = 0;
             var mutate = new Func<Cmd, Cmd>(cmd =>
                 {
                     var acmd = cmd as AssumeCmd;
@@ -1000,6 +1022,7 @@ namespace AngelicVerifierNull
                     if (nary == null) return cmd;
                     if (nary.Fun is FunctionCall && (nary.Fun as FunctionCall).FunctionName == reach.Name)
                     {
+                        assertcnt++;
                         return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
                     }
                     else
@@ -1043,12 +1066,13 @@ namespace AngelicVerifierNull
             cprogram = (new cba.CompileRequiresAndEnsures()).runCBAPass(cprogram);
 
             //BoogieUtil.PrintProgram(cprogram, "relax.bpl");
+            Console.WriteLine("CheckInconsistency: {0} soft constraints and {1} assertions", softcnt, assertcnt);
 
             var sd = CommandLineOptions.Clo.StackDepthBound;
             CommandLineOptions.Clo.StackDepthBound = 4;
 
             // Relax
-            var softret = RelaxConstraints(cprogram, corralConfig.mainProcName, sI.assertsPassedName);
+            var softret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
 
             CommandLineOptions.Clo.StackDepthBound = sd;
 
@@ -1083,7 +1107,7 @@ namespace AngelicVerifierNull
 
                 //we give less timeout for the individual procedure
                 var startTime = DateTime.Now; // Start time of round robin mode
-                var completed = RunCorralIterative(instr, corralConfig.mainProcName, timeoutAssertRoundRobin);
+                var completed = RunCorralIterative(instr, timeoutAssertRoundRobin);
                 var endTime = DateTime.Now; // End time of round robin mode
 
                 Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
@@ -1125,7 +1149,7 @@ namespace AngelicVerifierNull
 
                 //we give less timeout for the individual procedure
                 var startTime = DateTime.Now; // Start time of round robin mode
-                RunCorralIterative(instr, corralConfig.mainProcName, timeoutRoundRobin);
+                RunCorralIterative(instr, timeoutRoundRobin);
                 var endTime = DateTime.Now; // End time of round robin mode
 
                 Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
@@ -1169,7 +1193,7 @@ namespace AngelicVerifierNull
 
 
             // Run Corral outer loop
-            RunCorralIterative(instr, corralConfig.mainProcName, timeout);
+            RunCorralIterative(instr, timeout);
         }
 
         // Returns the failing assertion, and supresses it in the input program
@@ -1193,7 +1217,7 @@ namespace AngelicVerifierNull
 
         // Run Corral on a sequential Boogie Program
         // Returns the error trace and the failing assert location
-        static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string main, string assertsPassedName, int corralTimeout)
+        static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string assertsPassedName, int corralTimeout)
         {
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
@@ -1382,13 +1406,13 @@ namespace AngelicVerifierNull
             {
                 iter++;
                 cba.ErrorTrace cex = null;
-                var pprog = new PersistentProgram(program, main, 1);
+                var pprog = new PersistentProgram(program, main, 1); pprog.writeToFile("rl.bpl");
                 corralState = new cba.CorralState();
                 if(ap != null) corralState.TrackedVariables.Add(ap);
 
                 try
                 {
-                    cex = RunCorral(pprog, main, null, timeoutRelax);
+                    cex = RunCorral(pprog, null, timeoutRelax);
                 }
                 catch (Exception e)
                 {
