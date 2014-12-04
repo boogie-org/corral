@@ -1776,6 +1776,8 @@ namespace cba.Util
             // Do Common Subexpression Elimination to track expressions in asserts and assumes in the program
             DoCSE();
 
+            program = GVN.Do(program);
+
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => !irreducible.Contains(impl.Name))
                 .Iter(SSARename);
@@ -2226,6 +2228,277 @@ namespace cba.Util
         }
     }
 
+    public class GVN
+    {
+        Program program;
+        public static Dictionary<string, HashSet<Term>> non_null_exprs;
+        public static Dictionary<Terms, Term> hash_function;
+        public static Dictionary<Term, Variable> default_var;
+        public static Dictionary<string, Dictionary<string, Term>> hash_value;
+        public static string currBlock;
+        bool dbg = true;
+
+        public class Term
+        {
+            int u_id;
+            static int VALUE = 0;
+
+            public Term(int u = 0)
+            {
+                u_id = u;
+            }
+
+            public Term()
+            {
+                u_id = VALUE++;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if ((obj is Term) && (u_id == (obj as Term).u_id)) return true;
+                else return false;
+            }
+
+            public override int GetHashCode()
+            {
+                return u_id;
+            }
+        }
+
+        public class Terms
+        {
+            List<Term> args;
+
+            public Terms(List<Term> ts)
+            {
+                args = ts;
+            }
+
+            public Terms()
+            {
+                args = new List<Term>();
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (obj is Terms)
+                {
+                    var ts = obj as Terms;
+                    if (args.Count == ts.args.Count)
+                    {
+                        for (int i = 0 ; i < args.Count ; i++)
+                        {
+                            if (!args[i].Equals(ts.args[i])) return false;
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+                return false;
+            }
+
+            public void Add(Term t)
+            {
+                args.Add(t);
+            }
+        }
+
+        private class GVNVisitor : StandardVisitor
+        {
+            /*
+            GVNVisitor(HashSet<Variable> vlist, Dictionary<Variable, Expr> var2expr)
+            {
+                currExpr = null;
+                exprs = new Dictionary<string, Variable>();
+                foreach (Variable v in vlist)
+                {
+                    exprs.Add(SSA.expr2key(var2expr[v]), v);
+                }
+            }
+            public static Expr getExpr(Expr given_expr, HashSet<Variable> vars, Dictionary<Variable, Expr> var2expr)
+            {
+                if (given_expr == null) return null;
+                var cse = new CSEVisitor(vars, var2expr);
+                cse.currExpr = cse.VisitExpr(given_expr);
+                return cse.currExpr;
+            }
+
+            public override Expr VisitExpr(Expr node)
+            {
+                if (exprs.ContainsKey(SSA.expr2key(node))) return Expr.Ident(exprs[SSA.expr2key(node)]);
+                else return base.VisitExpr(node);
+            }
+            */
+            Expr currExpr;
+
+            GVNVisitor()
+            {
+
+            }
+
+            public static Expr getExpr(Expr given_expr)
+            {
+                if (given_expr == null) return null;
+                var gvn = new GVNVisitor();
+                gvn.currExpr = gvn.VisitExpr(given_expr);
+                return gvn.currExpr;
+            }
+
+            public override Expr VisitExpr(Expr node)
+            {
+                Term t = ComputeHash(node);
+                if (non_null_exprs[currBlock].Contains(t)) return Expr.Ident(default_var[t]);
+                else return base.VisitExpr(node);
+            }
+
+            public static Term ComputeHash(Expr expr)
+            {
+                if (expr is IdentifierExpr)
+                {
+                    IdentifierExpr id = expr as IdentifierExpr;
+                    if (!hash_value[currBlock].ContainsKey(id.Decl.Name)) hash_value[currBlock].Add(id.Decl.Name, new Term());
+                    return hash_value[currBlock][id.Decl.Name];
+                }
+                else if (expr is NAryExpr)
+                {
+                    NAryExpr nexpr = expr as NAryExpr;
+                    string op = nexpr.Fun.FunctionName;
+                    Terms t_args = new Terms();
+                    foreach (Expr arg in nexpr.Args)
+                    {
+                        Term t = ComputeHash(arg);
+                        t_args.Add(t);
+                    }
+                    if (!hash_function.ContainsKey(t_args)) hash_function.Add(t_args, new Term());
+                    return hash_function[t_args];
+                }
+                else if (expr is LiteralExpr)
+                {
+                    LiteralExpr le = expr as LiteralExpr;
+                    if (!hash_value[currBlock].ContainsKey(le.Val.ToString())) hash_value[currBlock].Add(le.Val.ToString(), new Term());
+                    return hash_value[currBlock][le.Val.ToString()];
+                }
+                else
+                {
+                    Debug.Assert(false);
+                    return new Term();
+                }
+            }
+        }
+
+        private GVN(Program program)
+        {
+            this.program = program;
+            non_null_exprs = new Dictionary<string, HashSet<Term>>();
+            hash_function = new Dictionary<Terms, Term>();
+            default_var = new Dictionary<Term, Variable>();
+            hash_value = new Dictionary<string, Dictionary<string, Term>>();
+        }
+
+        private void DoGVN()
+        {
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                IEnumerable<Block> sortedBlocks;
+
+                // Computing predecessors, constructing CFG and topological sorting of blocks
+                impl.ComputePredecessorsForBlocks();
+                Graph<Block> dag = Microsoft.Boogie.Program.GraphFromImpl(impl);
+                sortedBlocks = dag.TopologicalSort();
+
+                non_null_exprs.Clear();
+                hash_function.Clear();
+                default_var.Clear();
+                hash_value.Clear();
+
+                foreach (Block blk in sortedBlocks)
+                {
+                    Dictionary<Term, int> pred_count = new Dictionary<Term, int>();
+                    foreach (Block b in blk.Predecessors)
+                    {
+                        foreach (Term t in non_null_exprs[b.Label])
+                        {
+                            if (!pred_count.ContainsKey(t)) pred_count.Add(t, 0);
+                            pred_count[t]++;
+                        }
+
+                        foreach (string var in hash_value[b.Label].Keys)
+                        {
+                            if (hash_value[blk.Label].ContainsKey(var))
+                            {
+                                hash_value[blk.Label].Add(var, new Term());
+                            }
+                            else hash_value[blk.Label].Add(var, hash_value[b.Label][var]);
+                        }
+                    }
+                    currBlock = blk.Label;
+
+                    foreach (Term t in pred_count.Keys)
+                    {
+                        if (pred_count[t] == blk.Predecessors.Count) non_null_exprs[blk.Label].Add(t);
+                    }
+
+                    List<Cmd> newCmds = new List<Cmd>();
+                    foreach (Cmd cmd in blk.Cmds)
+                    {
+                        Cmd cmd_out = ProcessCmd(cmd);
+                        newCmds.Add(cmd_out);
+
+                        if (cmd is AssignCmd)
+                        {
+                            var acmd = cmd as AssignCmd;
+                            if (CleanAssert.validAssignCmd(acmd))
+                            {
+                                non_null_exprs[blk.Label].Add(GVNVisitor.ComputeHash(acmd.Rhss[0]));
+                            }
+                        }
+                    }
+                    blk.Cmds = newCmds;
+                }
+            }
+        }
+
+        private Cmd ProcessCmd(Cmd c)
+        {
+            FixedDuplicator dup = new FixedDuplicator();
+            if (c is AssumeCmd)
+            {
+                var ac = c as AssumeCmd;
+                if (CleanAssert.validAssumeCmd(ac))
+                {
+                    Expr expr = CleanAssert.getExprFromAssume(ac);
+                    Expr new_expr = GVNVisitor.getExpr(expr);
+                }
+                return c;
+            }
+            else if (c is AssertCmd)
+            {
+                return c;
+            }
+            else if (c is AssignCmd)
+            {
+                return c;
+            }
+            else if (c is CallCmd)
+            {
+                return c;
+            }
+            else
+            {
+                Debug.Assert(false);
+                return c;
+            }
+        }
+
+        public static Program Do(Program program)
+        {
+            GVN gvn = new GVN(program);
+            gvn.DoGVN();
+            return gvn.program;
+        }
+
+    }
+
     public class CleanAssert
     {
         Program program;
@@ -2369,7 +2642,6 @@ namespace cba.Util
         {
             return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
         }
-
 
         // Get variable name from argument index of an implementation
         private string getArgFromCaller(int index, KeyValuePair<Implementation, Block> ibp, string impl_name)
