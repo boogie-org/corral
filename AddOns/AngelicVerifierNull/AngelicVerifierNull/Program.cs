@@ -580,6 +580,7 @@ namespace AngelicVerifierNull
         
             //Print the instrumented program
             BoogieUtil.PrintProgram(init, "corralMain.bpl");
+            //Console.WriteLine("corralMain written");
 
             //Do corral specific passes
             GlobalCorralSpecificPass(init);

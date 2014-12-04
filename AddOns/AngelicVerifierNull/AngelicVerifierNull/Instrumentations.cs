@@ -1574,6 +1574,7 @@ namespace AngelicVerifierNull
             }
 
             var inp = new PersistentProgram(program, ep, 1);
+            //inp.writeToFile("progbefore.bpl");
 
             // Make sure that aliasing queries are on identifiers only
             var af =
@@ -1607,25 +1608,31 @@ namespace AngelicVerifierNull
                 foreach (var blk in impl.Blocks)
                 {
                     var ncmds = new List<Cmd>();
-                    foreach (var cmd in blk.Cmds)
+                    for(int i = 0; i < blk.Cmds.Count; i++)
                     {
-                        ncmds.Add(cmd);
-                        var acmd = cmd as AssumeCmd;
-                        if (acmd == null) continue;
+                        ncmds.Add(blk.Cmds[i]);
+                        var acmd = blk.Cmds[i] as AssumeCmd;
+                        if (acmd == null)
+                            continue;
+
                         id++;
                         if (!ib.id2Func.ContainsKey(id))
                             continue;
+
                         var asites = res.allocationSites[ib.id2Func[id].Name];
                         if (!asites.Contains(nil) && asites.Count != 0)
                         {
                             ncmds.Add(assertFlase);
                             added++;
                         }
+                        i++;
                     }
                     blk.Cmds = ncmds;
-
+                    blk.Cmds.RemoveAll(c => (c is AssumeCmd) && QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, "ForDeadCodeDetection"));
                 }
             }
+            //BoogieUtil.PrintProgram(program, "progafter.bpl");
+
             Console.WriteLine("For deadcode detection, we added {0} assumes", added);
             return program;
         }
@@ -1725,7 +1732,9 @@ namespace AngelicVerifierNull
 
         AssumeCmd GetQuery(Function func, Expr arg)
         {
-            return new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr> { arg }));
+            var ret = new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr> { arg }));
+            ret.Attributes = new QKeyValue(Token.NoToken, "ForDeadCodeDetection", new List<object>(), ret.Attributes);
+            return ret;
         }
     }
 }
