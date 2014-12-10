@@ -45,6 +45,8 @@ namespace AngelicVerifierNull
         public static bool useEE = true;
         // EE option to perform control flow slicing 
         public static bool EEPerformControlSlicing = true;  
+        // Output trace slicing
+        public static bool TraceSlicing = false;
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
         // property: nonnull, typestate
@@ -248,6 +250,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/EEDisableControlSlicing"))
                 Options.EEPerformControlSlicing = false;
+
+            if (args.Any(s => s == "/traceSlicing"))
+                Options.TraceSlicing = true;
 
             args.Where(s => s.StartsWith("/property:"))
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
@@ -758,6 +763,8 @@ namespace AngelicVerifierNull
                 var traceName = "Trace" + traceCount;
                 Console.WriteLine("Printing trace {0}", traceName);
                 var assertLoc = instr.PrintErrorTrace(cex, traceName);
+                var stubs = instr.GetStubs(cex);
+                Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
 
                 var traceInfo = new ErrorTraceInfo(traceName, cex, pprog.getProgram(), assertLoc, failingEntryPoint);
@@ -931,6 +938,8 @@ namespace AngelicVerifierNull
             }
         }
 
+        static int AngelicCount = 0;
+
         private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
         {
             Stats.count("bug.count");
@@ -939,6 +948,20 @@ namespace AngelicVerifierNull
             traceInfos.Iter(info => traces += info.TraceName + " ");
             traces = "{" + traces + "}";
             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: Failing traces {0}", traces), Utils.PRINT_TAG.AV_OUTPUT);
+
+            if (Driver.printTraceMode == PRINT_TRACE_MODE.Sdv)
+            {
+                if (traceInfos.Count() == 1)
+                    System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + ".tt");
+                else
+                {
+                    int c = 0;
+                    foreach(var t in traceInfos)
+                        System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + "." + (c++) + ".tt");
+                }
+            }
+
+            AngelicCount++;
 
             foreach (var traceInfo in traceInfos)
             {

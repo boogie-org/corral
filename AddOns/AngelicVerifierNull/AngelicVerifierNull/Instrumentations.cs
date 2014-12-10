@@ -36,6 +36,7 @@ namespace AngelicVerifierNull
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public Dictionary<string, Constant> impl2BlockingConstant; //inverse of the above map
             public HashSet<string> entrypoints; // set of entrypoints identified
+            public HashSet<string> stubs; // set of stubs identified
             List<Variable> globalParams = new List<Variable>(); // parameters as global variables
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
@@ -46,6 +47,7 @@ namespace AngelicVerifierNull
                 this.impl2BlockingConstant = new Dictionary<string, Constant>();
                 blockEntryPointConstants = new Dictionary<string,string>();
                 entrypoints = new HashSet<string>();
+                stubs = new HashSet<string>();
             }
             public void DoInstrument()
             {
@@ -250,6 +252,7 @@ namespace AngelicVerifierNull
             {
                 List<Cmd> cmds = new List<Cmd>();
                 List<Variable> localVars = new List<Variable>();
+                stubs.Add(p.Name);
                 foreach (var op in p.OutParams)
                 {
                     if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op));
@@ -807,8 +810,15 @@ namespace AngelicVerifierNull
             // Remove unreachable procedures
             BoogieUtil.pruneProcs(program, program.mainProcName);
 
-            // Remove source line annotations
-            sourceInfo = cba.PrintSdvPath.DeleteSourceInfo(program);
+            if (!Options.TraceSlicing)
+            {
+                // Remove source line annotations
+                sourceInfo = cba.PrintSdvPath.DeleteSourceInfo(program);
+            }
+            else
+            {
+                sourceInfo = null;
+            }
 
             // Remove print info
             //printInfo = cba.PrintSdvPath.DeletePrintCmds(program);
@@ -1089,7 +1099,7 @@ namespace AngelicVerifierNull
             trace = assertInstrInfo.mapBackTrace(trace);
             trace = compressBlocks.mapBackTrace(trace);
             //trace = printInfo.mapBackTrace(trace);
-            trace = sourceInfo.mapBackTrace(trace);
+            if(sourceInfo != null) trace = sourceInfo.mapBackTrace(trace);
             trace = blanksInfo.mapBackTrace(trace);
             return trace;
         }
@@ -1145,6 +1155,24 @@ namespace AngelicVerifierNull
             mainProc.Requires.RemoveAll(x => QKeyValue.FindBoolAttribute(x.Attributes, "RRBlocking"));
         }
 
+        // Return the set of stubs used along the trace
+        public HashSet<string> GetStubs(cba.ErrorTrace trace)
+        {
+            var ret = new HashSet<string>();
+            GetStubs(trace, ret);
+            return ret;
+        }
+
+        void GetStubs(cba.ErrorTrace trace, HashSet<string> ret)
+        {
+            if (harnessInstr.stubs.Contains(trace.procName))
+                ret.Add(trace.procName);
+
+            trace.Blocks
+                .Iter(blk => blk.Cmds.OfType<cba.CallInstr>()
+                    .Iter(cc => GetStubs(cc.calleeTrace, ret)));                   
+        }
+
         // Returns file and line of the failing assert. Dumps
         // error trace to disk.
         public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename)
@@ -1153,7 +1181,7 @@ namespace AngelicVerifierNull
             
             if (Driver.printTraceMode == Driver.PRINT_TRACE_MODE.Boogie)
             {
-                cba.PrintProgramPath.print(input, trace, filename + ".txt");
+                cba.PrintProgramPath.print(input, trace, filename);
                 return null;
             }
             else
