@@ -107,7 +107,7 @@ namespace AngelicVerifierNull
                 List<Block> mainBlocks = new List<Block>();
                 List<Variable> locals = new List<Variable>();
                 Stats.numProcs = prog.TopLevelDeclarations.Where(x => x is Implementation).Count();
-                Stats.numProcsAnalyzed = 0;
+                
                 HashSet<Constant> blockCallConsts = new HashSet<Constant>(); 
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
@@ -119,7 +119,7 @@ namespace AngelicVerifierNull
                         QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr))
                         continue;
 
-                    Stats.numProcsAnalyzed++;
+                    
                     impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                     entrypoints.Add(impl.Name);
@@ -217,7 +217,44 @@ namespace AngelicVerifierNull
                 mainProcImpl[0].AddAttribute("entrypoint");
                 prog.AddTopLevelDeclarations(mainProcImpl);
             }
-            
+
+            // Remove the dispatch to certain entrypoints
+            public void RemoveEntryPoints(Program program, HashSet<string> procs)
+            {
+                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, "CorralMain");
+                foreach (var block in mainImpl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in block.Cmds)
+                    {
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null)
+                        {
+                            ncmds.Add(cmd);
+                            continue;
+                        }
+                        if (procs.Contains(ccmd.callee))
+                        {
+                            ncmds.Add(new AssumeCmd(Token.NoToken, Expr.False, new QKeyValue(Token.NoToken, "PrunedEntryPoint", new List<object>(), null)));
+                        }
+                        else
+                        {
+                            ncmds.Add(cmd);
+                        }
+                    }
+                    block.Cmds = ncmds;
+                }
+
+                // Get other information in sync
+                entrypoints.ExceptWith(procs);
+                var bc = new HashSet<string>(impl2BlockingConstant.Where(tup => procs.Contains(tup.Key)).Select(tup => tup.Value.Name));
+                bc.Iter(b => blockEntryPointConstants.Remove(b));
+                procs.Iter(p => impl2BlockingConstant.Remove(p));
+
+                BoogieUtil.pruneProcs(program, mainImpl.Name);
+            }
+
+
             // create a copy ofthe variables without annotations
             private List<Variable> DropAnnotations(List<Variable> vars)
             {
@@ -1165,6 +1202,9 @@ namespace AngelicVerifierNull
 
         void GetStubs(cba.ErrorTrace trace, HashSet<string> ret)
         {
+            if(trace == null)
+                return;
+            
             if (harnessInstr.stubs.Contains(trace.procName))
                 ret.Add(trace.procName);
 

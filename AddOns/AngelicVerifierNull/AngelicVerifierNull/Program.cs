@@ -58,7 +58,7 @@ namespace AngelicVerifierNull
     class Stats
     {
         public static int numProcs = -1;
-        public static int numProcsAnalyzed = -1;
+        
         public static int numAssertsBeforeAliasAnalysis = -1;
         public static int numAssertsAfterAliasAnalysis = -1;
         public static int numAssertsAfterHoudiniPass = -1;
@@ -330,7 +330,7 @@ namespace AngelicVerifierNull
                 }
 
                 Utils.Print(string.Format("#Procs : {0}",Stats.numProcs),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#EntryPoints : {0}",Stats.numProcsAnalyzed),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#EntryPoints : {0}",IdentifiedEntryPoints.Count),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsBeforeAA : {0}",Stats.numAssertsBeforeAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
@@ -1830,9 +1830,21 @@ namespace AngelicVerifierNull
             }
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
+            PruneRedundantEntryPoints(origProgram);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
+
+        // Prune away EntryPoints that cannot reach an assertion
+        static void PruneRedundantEntryPoints(Program program)
+        {
+            var procs = BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+            procs = IdentifiedEntryPoints.Difference(procs);
+            Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", procs.Count);
+            harnessInstrumentation.RemoveEntryPoints(program, procs);
+            IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
+        }
+
         #endregion
     }
 }
