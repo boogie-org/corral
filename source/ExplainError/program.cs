@@ -19,16 +19,18 @@ namespace ExplainError
     /// <summary>
     /// Status returned by ExplainError
     /// </summary>
-    public enum STATUS { 
+    public enum STATUS
+    {
         SUCCESS,         /* the returned constraint suppresses error */
         PARTIALCOVER,    /* will be deprecated */
         TIMEOUT,         /* analysis timed out */
         INCONCLUSIVE,    /* analysis was imprecise */
-        ILLEGAL          /* some unexpected condition encountered */   
+        ILLEGAL          /* some unexpected condition encountered */
     };
-    
-    public enum COVERMODE {
-        MONOMIAL,       /* only consider a monomial overcover (clausal under cover for resulting block) */  
+
+    public enum COVERMODE
+    {
+        MONOMIAL,       /* only consider a monomial overcover (clausal under cover for resulting block) */
         FULL,           /* only consider full DNF overcover   (CNF under cover for the resulting block) */
         FULL_IF_NO_MONOMIAL  /* only consider full if no monomial overcover other than true */
     };
@@ -41,11 +43,11 @@ namespace ExplainError
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
 
         //Options: Add them to ParseAndRemoveNonBoogieOptions
-        
+
         //flags to control which assumes to consider in the trace
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
-        
+
         //flags to define syntactic filters on atoms
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
@@ -55,12 +57,12 @@ namespace ExplainError
         private static bool noFilters = false; //if true, then matches any atom
 
         //flags to define Boolean structure on the cover
-        private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL; 
+        private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL;
 
         //Display options
         private static bool showBoogieExprs = false;
         public static bool useFieldMapAttribute = true; //shoudl always use it, not exposing
-        public static bool dontUsePruningWhileEliminatingUpdates = false ; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
+        public static bool dontUsePruningWhileEliminatingUpdates = false; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
         public static bool checkIfExprFalseCalled = false; //HACK!
         private static int timeout = MAX_TIMEOUT; // seconds
         private static bool verbose = false;
@@ -107,19 +109,22 @@ namespace ExplainError
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,             
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
             out STATUS status, out Dictionary<string, string> complexCExprsRet)
         {
             HashSet<List<Expr>> preInDnfForm;
-            return Go(impl, pr, tmout, explainErrorFilters, "", null, out status, out complexCExprsRet, out preInDnfForm);
+            List<Tuple<string, int, string>> distinctSourceLines;
+            return Go(impl, pr, tmout, explainErrorFilters, "", null, out status, out complexCExprsRet, out preInDnfForm,out distinctSourceLines);
         }
 
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters, 
-            string extraArgs, 
-            ControlFlowDependency cntrlFlowDependencyInfo, 
-            out STATUS status, out Dictionary<string,string> complexCExprsRet,
-            out HashSet<List<Expr>> preInDnfForm)
+        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
+            string extraArgs,
+            ControlFlowDependency cntrlFlowDependencyInfo,
+            out STATUS status, out Dictionary<string, string> complexCExprsRet,
+            out HashSet<List<Expr>> preInDnfForm,
+            out List<Tuple<string,int,string>> distinctSourceLines)
         {
+            Console.WriteLine("List of non-cmd-line arguments to EE = {0}", extraArgs);
             suggestions = new List<Expr>();
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
@@ -133,7 +138,7 @@ namespace ExplainError
             cflowDependencyInfo = cntrlFlowDependencyInfo;
             if (explainErrorFilters == 1) //using it for memory safety rootcause
             {
-                ignoreAllAssumes = true;  
+                ignoreAllAssumes = true;
                 //onlyDisplayAliasingInPre = false;
                 onlyDisplayMapExpressions = false;
                 dontDisplayComparisonsWithConsts = false;
@@ -152,7 +157,7 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl, out preInDnfForm);
+            var tmp = Go(impl, out preInDnfForm, out distinctSourceLines);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
@@ -163,11 +168,12 @@ namespace ExplainError
             Dictionary<string, string> tmp;
             return Go(impl, pr, tmout, 0, out status, out tmp);
         }
-        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm)
+        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> distinctSourceLines)
         {
             sw = new Stopwatch();
             sw.Start();
             preInDnfForm = null; //HashSet<List<Expr>> preInDnfForm = null;
+            distinctSourceLines = null;
             allCubesCovered = true;
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
@@ -176,13 +182,13 @@ namespace ExplainError
             try
             {
                 //SimplifyAssumesUsingForwardPass();
-                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm);
+                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out distinctSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
                 //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
                 if (true /*CheckNecessaryDisjuncts(ref preInDnfForm)*/)
                 {
-                    CheckIfTrueDisjunct(ref preInDnfForm); 
+                    CheckIfTrueDisjunct(ref preInDnfForm);
                     Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
                     Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
                     returnStatus = STATUS.SUCCESS;
@@ -226,10 +232,11 @@ namespace ExplainError
         /// <summary>
         /// Will compute a DNF form of precondition for statements upto the last assume {:captureState "Start"} true
         /// or all the statements, if no such assume exists
+        /// Performs a static slicing of the trace
         /// </summary>
         /// <param name="cmdseq"></param>
         /// <param name="preInDnfForm"></param>
-        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm)
+        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> distinctSourceLines)
         {
             HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
             Stack<Tuple<string, string>> branchJoinStack = new Stack<Tuple<string, string>>();
@@ -240,35 +247,61 @@ namespace ExplainError
                 vc.Visit(x);
                 return vc.usedVars;
             }
-            );           
+            );
+
+            distinctSourceLines = new List<Tuple<string, int, string>>();
+
+            var FindSourceLineInfo = new Func<QKeyValue, Tuple<string,int>> (kv => 
+                {
+                    var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
+                    var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
+                    if (sourceFile != null && /*!sourceFile.Equals("?") &&*/ sourceLine != -1)
+                        return Tuple.Create(sourceFile, sourceLine);
+                    return null;
+                });
 
             preInDnfForm = new HashSet<List<Expr>>();
             List<Cmd> cmds = cmdseq.Cast<Cmd>().ToList();
             cmds.Reverse();
             //Expr pre = Expr.True; //pre(cmd, true) //changing it to a list as subsExpr uses visitExpr
-            var preL = new List<Expr>(); 
+            var preL = new List<Expr>();
             preL.Add(Expr.True);
             int conjunctCount = 0; //keep track of how many conjuncts to avoid StackOverflow in substituteExpr/perform DNF
             int numAssertsInTrace = 0;
             int numAssumeSkipped = 0;
             int numAssumes = 0;
+            int numAssigns = 0, numAssignsSkipped = 0;
+            List<string> lastStmtsAdded = new List<string>(); //remember if a stmt was added since last sourceline found
             foreach (var cmd in cmds)
             {
-                if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
+                //if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
-                if (cmd is AssertCmd && !IsTrueAssert((AssertCmd)cmd))
+                if (cmd is AssertCmd)
                 {
-                    #region ensure single non-trivial assert
-                    //EE requires that there is at most one assert in the trace 
-                    //We will ignore any assertion with True syntactically, but otherwise crash if there are multiple asserts
-                    #endregion 
-                    Debug.Assert(numAssertsInTrace == 0,
-                        string.Format("EE requires at most one non-syntactic-true assertion in the trace, found an extra {0}", cmd.ToString()));
-                    Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at an assertion");
-                    numAssertsInTrace++;
-                    //pre = Expr.And(Expr.Not(((AssertCmd)cmd).Expr), pre); //TODO: Boolean simplifications
-                    preL.Add(Expr.Not(((AssertCmd)cmd).Expr));
-                    GetSupportVars(((AssertCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
+                    if (IsTrueAssert((AssertCmd)cmd))
+                    {
+                        var si = FindSourceLineInfo(((AssertCmd)cmd).Attributes);
+                        if (si != null && lastStmtsAdded.Count > 0)
+                        {
+                            distinctSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
+                            lastStmtsAdded.Clear();  //reset it after adding sourceline
+                        }
+                        continue; 
+                    } else
+                    {
+                        #region ensure single non-trivial assert
+                        //EE requires that there is at most one assert in the trace 
+                        //We will ignore any assertion with True syntactically, but otherwise crash if there are multiple asserts
+                        #endregion
+                        Debug.Assert(numAssertsInTrace == 0,
+                            string.Format("EE requires at most one non-syntactic-true assertion in the trace, found an extra {0}", cmd.ToString()));
+                        Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at an assertion");
+                        numAssertsInTrace++;
+                        //pre = Expr.And(Expr.Not(((AssertCmd)cmd).Expr), pre); //TODO: Boolean simplifications
+                        preL.Add(Expr.Not(((AssertCmd)cmd).Expr));
+                        GetSupportVars(((AssertCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
+                        Console.WriteLine("Considering assert statement {0}", cmd);
+                    }
                 }
                 else if (cmd is AssumeCmd)
                 {
@@ -286,17 +319,18 @@ namespace ExplainError
                     }
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
-                        if (verbose) Console.WriteLine("--- Block {0}", cmd);
+                        //if (verbose) Console.WriteLine("--- Block {0}", cmd);
                         UpdateBranchJoinStack((AssumeCmd)cmd, supportVarsInPre, branchJoinStack);
                         continue;
                     }
                     if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) continue;
-                    if (((AssumeCmd)cmd).Expr == Expr.True) continue; 
+                    if (((AssumeCmd)cmd).Expr == Expr.True) continue;
                     numAssumes++;
-                    if (branchJoinStack.Count > 0) {
-                        if (verbose) Console.WriteLine("Skipping stmt {0}", cmd);
-                        numAssumeSkipped++; continue; 
+                    if (branchJoinStack.Count > 0)
+                    {
+                        numAssumeSkipped++; continue;
                     }
+                    Console.WriteLine("Considering assume stmt {0}", cmd);
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
                     //pre = Expr.And(((AssumeCmd)cmd).Expr, pre); //TODO: Boolean simplifications
@@ -308,29 +342,40 @@ namespace ExplainError
                     //The assignments cannot be skipped, as we need to do substituion. 
                     var a = (cmd as AssignCmd).AsSimpleAssignCmd;
                     //pre = ExprUtil.MySubstituteInExpr(pre, a.Lhss, a.Rhss);
+                    //compare the old and substituted expr to see if we can skip this assignment
+                    var oldPreL = new List<Expr>(preL);
                     preL = preL.ConvertAll((x => ExprUtil.MySubstituteInExpr(x, a.Lhss, a.Rhss)));
+                    numAssigns++;
                     supportVarsInPre.Clear(); //we will compute it fresh from preL
                     preL.Iter(e => GetSupportVars(e).Iter(y => supportVarsInPre.Add(y)));
+                    if (!oldPreL.Zip(preL).Any(x => x.Item1.ToString() != x.Item2.ToString()))
+                    {
+                        numAssignsSkipped++;
+                        continue; //don't display considered stmt
+                    }
+                    Console.WriteLine("Considering assign stmt {0}", cmd);
                 }
-                else if (cmd is HavocCmd)
+                else
                 {
-                    //throw new Exception(string.Format("Unexpected stmt in EE trace {0}", cmd));
+                    continue; 
                 }
-                //else //just skip for now
-                //    throw new NotImplementedException();
-                if (verbose) Console.WriteLine("Considering {0}", cmd);
+                lastStmtsAdded.Add(cmd.ToString()); //if we reach here some statement was added
             }
             Console.WriteLine("ExplainError: Num of assumes considered/Num assumes skipped by mod analysis = {0}/{1}", numAssumes, numAssumeSkipped);
+            Console.WriteLine("ExplainError: Num of assigns considered/Num assigns skipped by mod analysis = {0}/{1}", numAssigns, numAssignsSkipped);
+            Console.WriteLine("ExplainError: Sliced Trace => \n\t{0}",
+                string.Join("\n\t", distinctSourceLines.Select(x => string.Format(("#### sourceFile = {0}, sourceLine = {1}, \n\t\t {2}"), x.Item1, x.Item2, x.Item3))));
+
             //Now compute the pre over the sequence of commands
             foreach (var d in ComputePreOverVocab(preL, null))
                 preInDnfForm.Add(d);
         }
 
-        private static void UpdateBranchJoinStack(AssumeCmd assumeCmd, HashSet<Variable> supportVars, Stack<Tuple<string,string>> branchJoinStack)
+        private static void UpdateBranchJoinStack(AssumeCmd assumeCmd, HashSet<Variable> supportVars, Stack<Tuple<string, string>> branchJoinStack)
         {
             //block is b
             //can have other attributes
-            var GetImplAndBlockFromAttr = new Func<QKeyValue, Tuple<string, string>> (y =>
+            var GetImplAndBlockFromAttr = new Func<QKeyValue, Tuple<string, string>>(y =>
                 {
                     for (var x = y; x != null; x = x.Next)
                     {
@@ -341,7 +386,7 @@ namespace ExplainError
                         else if (x.Key == "endproc")
                             return Tuple.Create((string)x.Params[0], "endproc");
                     }
-                    return Tuple.Create((string)null, (string)null); 
+                    return Tuple.Create((string)null, (string)null);
                 }
             );
 
@@ -349,13 +394,13 @@ namespace ExplainError
             var GetOrigVar = new Func<Variable, string>(v =>
             {
                 if (BoogieUtil.checkAttrExists("originallocal", v.Attributes))
-                    return (string) v.Attributes.Params[1];
+                    return (string)v.Attributes.Params[1];
                 return v.ToString();
             });
 
             var blockInfo = GetImplAndBlockFromAttr(assumeCmd.Attributes);
             Debug.Assert(blockInfo.Item1 != null, "Implementation cannot be null in basicblock/beginproc/endproc annotations");
-            string branchBlockName; 
+            string branchBlockName;
             HashSet<string> modSet;
             //First pop since blockInfo.Item2 can be both a branch and a join point
             if (cflowDependencyInfo.IsBranchBlock(blockInfo))
@@ -364,14 +409,14 @@ namespace ExplainError
                     branchJoinStack.Peek().Item1 == blockInfo.Item1 &&
                     branchJoinStack.Peek().Item2 == blockInfo.Item2)
                     branchJoinStack.Pop();
-            } 
+            }
             if (cflowDependencyInfo.IsJoinBlock(blockInfo, out branchBlockName, out modSet))
             {
                 var origVars = supportVars.Select(x => GetOrigVar(x));
                 if (branchJoinStack.Count > 0 || !origVars.Any(x => modSet.Contains(x)))
                     branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
-            } 
-            
+            }
+
         }
 
         private static bool ContainsBlockInfo(AssumeCmd assumeCmd)
@@ -379,7 +424,7 @@ namespace ExplainError
             if (cflowDependencyInfo == null) return false;
             return BoogieUtil.checkAttrExists("basicblock", assumeCmd.Attributes) ||
                  BoogieUtil.checkAttrExists("beginproc", assumeCmd.Attributes) ||
-                 BoogieUtil.checkAttrExists("endproc", assumeCmd.Attributes) ;
+                 BoogieUtil.checkAttrExists("endproc", assumeCmd.Attributes);
         }
 
         private static void SimplifyAssumesUsingForwardPass()
@@ -419,7 +464,7 @@ namespace ExplainError
             currPre = ExprUtil.ConjoinExprsBalanced(pre);
             HashSet<List<Expr>> displayStrs = new HashSet<List<Expr>>();
             List<Expr> cubeLiterals; // = new List<Expr>();
-            cubeLiterals = pre; 
+            cubeLiterals = pre;
             CheckTimeout("Inside ComputePreOverVocab");
             Expr t = Expr.True;
             var nc = new List<Expr>();
@@ -500,7 +545,7 @@ namespace ExplainError
             currPre = null;
             return displayStrs;
         }
-        
+
         /// <summary>
         /// Monomial abstraction of currPre using fe; less precise than full cover
         /// Overapproximates currPre with And_p{p in fe | currPre implies p}
@@ -516,7 +561,7 @@ namespace ExplainError
         {
             var t = fe.ToList().FindAll(a => VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Imp(currPre, a))));
             l = new List<Expr>();
-            if (t.Count > 0) 
+            if (t.Count > 0)
                 l.Add(t.Aggregate((Expr)Expr.True, (x, y) => ExprUtil.And(x, y)));
             return t.Count > 0;
         }
@@ -596,7 +641,7 @@ namespace ExplainError
         /// <param name="preInDnfForm"></param>
         private static void CheckIfTrueDisjunct(ref HashSet<List<Expr>> preInDnfForm)
         {
-            var pre = ExprUtil.Not(ExprListSetToDNFExpr(preInDnfForm ));
+            var pre = ExprUtil.Not(ExprListSetToDNFExpr(preInDnfForm));
             if (VCVerifier.CheckIfExprFalse(currImpl, pre))
             {
                 Console.WriteLine("Replacing semantically true expr ({0}) with true", pre);
@@ -649,7 +694,7 @@ namespace ExplainError
                 if (LiteralNotInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
-            if (toDisplay.Count == 0) {return false; }
+            if (toDisplay.Count == 0) { return false; }
             //var str = String.Join(",", toDisplay);
             //if (displayedConjuncts.Contains(str)) return;
             if (SubsumedCubes(toDisplay, displayedConjuncts)) return true;
@@ -749,7 +794,7 @@ namespace ExplainError
             var s = i.ToString();
             if (!s.Contains('.')) return expr;
             var l = s.LastIndexOf('.');
-            var t = s.Substring(0, l) + "->" + s.Substring(l+1);
+            var t = s.Substring(0, l) + "->" + s.Substring(l + 1);
             return Expr.Ident(t, expr.Type);
         }
         private static bool IsFieldDeref(List<Expr> args)
@@ -772,7 +817,7 @@ namespace ExplainError
         }
         private static Expr MakeCFieldDeref(Expr expr, string fldname, BType t)
         {
-            var es = StripAddrOf(expr).ToString() + "." + fldname ; //when composing fields, get the & out
+            var es = StripAddrOf(expr).ToString() + "." + fldname; //when composing fields, get the & out
             var e = new IdentifierExpr(Token.NoToken, new Constant(Token.NoToken, new TypedIdent(Token.NoToken, es, t)));
             return MakeAddrOf(e, t);
         }
@@ -787,7 +832,7 @@ namespace ExplainError
             if (IsCFieldAttribute(appliable, out fldname))
                 return true;
             var f = appliable.FunctionName;
-            string fieldSep = "_"; 
+            string fieldSep = "_";
             if (f.Contains(fieldSep)) //HACK!!
             {
                 fldname = f.Substring(0, f.IndexOf(fieldSep));
@@ -828,7 +873,7 @@ namespace ExplainError
                 var b = CreateITE(a);
                 args.Add(b);
             }
-            return ExprUtil.NAryExpr(pn.Fun, args); 
+            return ExprUtil.NAryExpr(pn.Fun, args);
         }
         private static Expr EliminateUpdates(Expr map, Expr index)
         {
@@ -865,7 +910,7 @@ namespace ExplainError
         private static bool IsInconsistentWithContext(Expr e)
         {
             //turning it on may be unsound M[x:=1][y] != 1 ==> x != y, but simplifying it to M[y] != 1 is not equivalent            
-            if (dontUsePruningWhileEliminatingUpdates) return false; 
+            if (dontUsePruningWhileEliminatingUpdates) return false;
             if (currPre == null) return false;
             var res = VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(currPre, e));
             Console.Write(".");
@@ -878,7 +923,7 @@ namespace ExplainError
             var a = e as NAryExpr;
             if (a.Fun.FunctionName == "if-then-else")
             {
-                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr>{TryRewriteITE(a.Args[0]), TryRewriteITE(a.Args[1]), TryRewriteITE(a.Args[2])});
+                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr> { TryRewriteITE(a.Args[0]), TryRewriteITE(a.Args[1]), TryRewriteITE(a.Args[2]) });
             }
             List<Expr> args = new List<Expr>();
             int indx = 0;
@@ -896,7 +941,7 @@ namespace ExplainError
                 var args2 = new List<Expr>(a.Args);
                 args2[indx] = k;
                 var t2 = ExprUtil.NAryExpr(a.Fun, args2);
-                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr>{i, t1, t2});
+                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr> { i, t1, t2 });
             }
             return ExprUtil.NAryExpr(a.Fun, args);
         }
@@ -915,7 +960,7 @@ namespace ExplainError
             var e = expr as NAryExpr;
             if (e == null) return expr;
             var args = new List<Expr>();
-            foreach(Expr arg in e.Args)
+            foreach (Expr arg in e.Args)
                 args.Add(FlattenITE(arg));
             var f = ExprUtil.NAryExpr(e.Fun, args);
             if (!IsIteExpr(f, out a, out b, out c)) return f; //
@@ -939,9 +984,9 @@ namespace ExplainError
             var e = p as NAryExpr;
             if (e == null) return p;
             if (ExprUtil.IsRelationalOp(e.Fun))
-                return EliminateITERelationalExpr(e);                
+                return EliminateITERelationalExpr(e);
             var args = new List<Expr>();
-            foreach(Expr a in e.Args)
+            foreach (Expr a in e.Args)
                 args.Add(EliminateITE(a));
             return ExprUtil.NAryExpr(e.Fun, args);
         }
@@ -960,8 +1005,8 @@ namespace ExplainError
         }
         private static Expr ExpandITE(IAppliable fun, Expr a, Expr b, Expr c, Expr f, bool flip)
         {
-            var bf = flip ? new List<Expr>{f, b} : new List<Expr>{b, f};
-            var cf = flip ? new List<Expr>{f, c} : new List<Expr>{c, f};
+            var bf = flip ? new List<Expr> { f, b } : new List<Expr> { b, f };
+            var cf = flip ? new List<Expr> { f, c } : new List<Expr> { c, f };
             return ExprUtil.Or(
                 ExprUtil.And(a, ExprUtil.NAryExpr(fun, bf)),
                 ExprUtil.And(ExprUtil.Not(a), ExprUtil.NAryExpr(fun, cf)));
@@ -983,7 +1028,7 @@ namespace ExplainError
         //    return true;
         //}
 
-        
+
         //deprecated methods
         //private static Expr EliminateArrayUpdates(Expr e)
         //{
@@ -1059,12 +1104,12 @@ namespace ExplainError
         //    var a3 = EliminateArrayUpdatesFromRelationalExpr(ExprUtil.NAryExpr(fun, sf)); //[[sf]]
         //    return ExprUtil.Or(ExprUtil.And(bd, a2), ExprUtil.And(ExprUtil.Not(bd), a3));
         //}
-        #endregion 
+        #endregion
 
         #region Parsing related methods
         /*
          * A whole bunch of parsing functions 
-         */ 
+         */
         public static bool ParseCommandLine(string clo)
         {
             //without the next line, it fails to find the right prover!!
@@ -1123,20 +1168,22 @@ namespace ExplainError
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
                 if (CheckBooleanFlag(a, "dontUsePruningWhileEliminatingUpdates", ref dontUsePruningWhileEliminatingUpdates)) continue;
-                int eeCoverOptAsInt = 0; 
-                if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt)) {
+                int eeCoverOptAsInt = 0;
+                if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt))
+                {
                     eeCoverOpt =
                         eeCoverOptAsInt == 0 ? COVERMODE.MONOMIAL :
                         eeCoverOptAsInt == 1 ? COVERMODE.FULL :
-                        COVERMODE.FULL_IF_NO_MONOMIAL; 
-                    continue;}
+                        COVERMODE.FULL_IF_NO_MONOMIAL;
+                    continue;
+                }
                 retArgs.Add(a);
-                if (a == "-?" || a == "/?") { retArgs.Remove(a);  help = true; continue; } //Hide help from Boogie
+                if (a == "-?" || a == "/?") { retArgs.Remove(a); help = true; continue; } //Hide help from Boogie
             }
             newargs = retArgs.ToArray();
             if (help)
             {
-                Console.WriteLine("\n  **** To see all the Boogie flags (only few like /proc supported), use /help \n");      
+                Console.WriteLine("\n  **** To see all the Boogie flags (only few like /proc supported), use /help \n");
                 Console.WriteLine("\n  ---- ExplainError options ----------------------------------------\n");
                 Console.WriteLine("  Boolean options: use /option or /option+ to set, use /option- to unset");
                 Console.WriteLine("  /verbose:                      Makes output verbose");
@@ -1285,7 +1332,7 @@ namespace ExplainError
                         newcmds.Add(c);
                     tmpBlocks.Add(new Block(Token.NoToken, b.Label, newcmds, b.TransferCmd));
                 }
-                var tmpLocVars = new List<Variable>(i.LocVars); 
+                var tmpLocVars = new List<Variable>(i.LocVars);
                 if (i.OriginalBlocks != null)
                 {
                     i.Blocks = i.OriginalBlocks;
@@ -1337,7 +1384,7 @@ namespace ExplainError
 
             }
         }
-        #endregion 
+        #endregion
 
         #region Syntactic queries on expression sets and massaging to DNF/CNF/list form
         #region deprecated
@@ -1429,7 +1476,7 @@ namespace ExplainError
             if (!onlyDisplayAliasingInPre) return true;
             return false;
         }
-        
+
         /// <summary>
         /// Splits a conjunction into its components
         /// </summary>
@@ -1512,7 +1559,7 @@ namespace ExplainError
         /// <summary>
         /// performs syntactic simplifications of expressions
         /// </summary>
-        public static class ExprUtil 
+        public static class ExprUtil
         {
             public static bool ExprEq(Expr a, Expr b)
             {
@@ -1599,7 +1646,7 @@ namespace ExplainError
             {
                 if (ExprEq(a, Expr.True)) return b;
                 if (ExprEq(a, Expr.False)) return c;
-                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr>{a, b, c});
+                return new NAryExpr(Token.NoToken, new IfThenElse(Token.NoToken), new List<Expr> { a, b, c });
             }
 
             public static bool IsRelationalOp(IAppliable o)
@@ -1616,7 +1663,7 @@ namespace ExplainError
             }
             public static Expr MySubstituteInExpr(Expr p, List<AssignLhs> lhss, List<Expr> rhss)
             {
-                var h = new Dictionary<Variable,Expr>();
+                var h = new Dictionary<Variable, Expr>();
                 for (int i = 0; i < lhss.Count; ++i)
                 {
                     h.Add(lhss[i].DeepAssignedVariable, rhss[i]);
@@ -1632,7 +1679,7 @@ namespace ExplainError
             /// <returns></returns>
             public static Expr PerformNNF(Expr e)
             {
-                return PerformNNFAux(e, false); 
+                return PerformNNFAux(e, false);
             }
             private static Expr PerformNNFAux(Expr e, bool not)
             {
@@ -1655,13 +1702,13 @@ namespace ExplainError
                 var t0 = PerformNNFAux(a.Args[0], not);
                 var t1 = PerformNNFAux(a.Args[1], not);
                 if (m.Op == BinaryOperator.Opcode.And && not)
-                        return ExprUtil.Or(t0, t1);
+                    return ExprUtil.Or(t0, t1);
                 if (m.Op == BinaryOperator.Opcode.Or && not)
                     return ExprUtil.And(t0, t1);
-                return NAryExpr(m, new List<Expr>{t0,t1});
+                return NAryExpr(m, new List<Expr> { t0, t1 });
             }
 
-            
+
             /// <summary>
             ///Converts to a Disjunctive Normal Form (DNF) 
             ///Blows up when Expr is large
@@ -1698,14 +1745,14 @@ namespace ExplainError
                         CheckTimeout("PerformDNFPruning check1");
                         //Console.Write(".");
                         //if (!VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(b, a.Args[1])))
-                            m0.Add(b);
+                        m0.Add(b);
                     }
                     foreach (var b in l1)
                     {
                         CheckTimeout("PerformDNFPruning check2");
                         //Console.Write(".");
                         //if (!VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(b, a.Args[0])))
-                            m1.Add(b);
+                        m1.Add(b);
                     }
                     foreach (Expr b in m0) // Cross product
                     {
@@ -1714,7 +1761,7 @@ namespace ExplainError
                         {
                             //Console.Write("-");
                             if (!VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(b, c)))
-                            ret.Add(ExprUtil.And(b, c));
+                                ret.Add(ExprUtil.And(b, c));
                         }
                     }
                     return ret;
@@ -1729,19 +1776,19 @@ namespace ExplainError
             internal static Expr ConjoinExprsBalanced(List<Expr> preL)
             {
                 List<Expr> workList = new List<Expr>(preL);
-                var x = (Expr) Expr.True;
+                var x = (Expr)Expr.True;
                 while (workList.Count != 0)
                 {
                     x = workList[0]; workList.RemoveAt(0);
                     if (workList.Count == 0) break;
-                    var y = workList[0];  workList.RemoveAt(0);
+                    var y = workList[0]; workList.RemoveAt(0);
                     var z = ExprUtil.And(x, y);
                     workList.Add(z);
                 }
                 return x;
             }
         }
-        #endregion 
-    
+        #endregion
+
     }
 }

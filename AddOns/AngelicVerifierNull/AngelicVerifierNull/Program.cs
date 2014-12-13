@@ -1601,9 +1601,10 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
+                List<Tuple<string, int, string>> distinctSourceLines;
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
-                    out eeStatus, out eeComplexExprs, out preDisjuncts);
+                    out eeStatus, out eeComplexExprs, out preDisjuncts, out distinctSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
@@ -1650,10 +1651,10 @@ namespace AngelicVerifierNull
             //  forallPost = expr[newUsedVars/usedVars][allocToBV/newAllocConsts]
             //- forall forallBV :: forallPre => forallPost
 
-            Utils.Print(String.Format("The list of allocConsts along trace = {0}", String.Join(", ",
-                        allocConsts
-                        .Select(x => "(" + x.Key + " -> " + x.Value + ")"))
-            ));
+            //Utils.Print(String.Format("The list of allocConsts along trace = {0}", String.Join(", ",
+            //            allocConsts
+            //            .Select(x => "(" + x.Key + " -> " + x.Value + ")"))
+            //));
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
             int allocConstCount = 0;
             allocConsts.ToList()
