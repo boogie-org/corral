@@ -1215,7 +1215,7 @@ namespace AngelicVerifierNull
 
         // Returns file and line of the failing assert. Dumps
         // error trace to disk.
-        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename)
+        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> distinctSourceLines)
         {
             trace = mapBackTrace(trace);
             
@@ -1226,8 +1226,19 @@ namespace AngelicVerifierNull
             }
             else
             {
+                // relevant lines
+                cba.PrintSdvPath.relevantLines = null;
+                if (distinctSourceLines != null)
+                {
+                    cba.PrintSdvPath.relevantLines = new HashSet<Tuple<string, int>>();
+                    distinctSourceLines.Iter(tup => cba.PrintSdvPath.relevantLines.Add(Tuple.Create(tup.Item1, tup.Item2)));
+                }
+
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", "stack.txt");
+
+                cba.PrintSdvPath.relevantLines = null;
+
                 if (cba.PrintSdvPath.lastDriverLocation == null)
                     return null;
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);

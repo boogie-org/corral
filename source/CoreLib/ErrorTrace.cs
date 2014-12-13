@@ -1270,6 +1270,9 @@ namespace cba
         public static Dictionary<int, HashSet<int>> memWritesCS;
         public static Dictionary<int, HashSet<string>> scalarWrites; // CS -> "scalar value written"
 
+        // relevant lines (trace slicing)
+        public static HashSet<Tuple<string, int>> relevantLines = null;
+
         // Address -> the type with which it is accessed
         public static Dictionary<int, HashSet<string>> memType;
 
@@ -1766,6 +1769,14 @@ namespace cba
             var extraMsg = extra.Replace("\\\"", "\"");
             if (extraMsg.StartsWith("Call \"main\" "))
                 permVars += aliasingPre;
+
+            if (relevantLines != null)
+            {
+                if (relevantLines.Contains(Tuple.Create(file, line)))
+                    dataValuesCurrent += "_relevant_";
+                else
+                    dataValuesCurrent += "_irrelevant_";
+            }
 
             pathFile.WriteLine("{0} \"{1}\" {2} true {3}^====Auto====={4} {5}", gcnt, file, line, dataValuesCurrent, permVars, extraMsg);
             gcnt++;

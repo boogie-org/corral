@@ -756,13 +756,15 @@ namespace AngelicVerifierNull
                 BoogieUtil.PrintProgram(ppprog, "ee.bpl");
 
                 Stats.resume("explain.error");
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags);
+                List<Tuple<string, int, string>> distinctSourceLines = null;
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags, out distinctSourceLines);
+                if (!Options.TraceSlicing) distinctSourceLines = null;
                 Stats.stop("explain.error");
 
                 // print the trace to disk
                 var traceName = "Trace" + traceCount;
                 Console.WriteLine("Printing trace {0}", traceName);
-                var assertLoc = instr.PrintErrorTrace(cex, traceName);
+                var assertLoc = instr.PrintErrorTrace(cex, traceName, distinctSourceLines);
                 var stubs = instr.GetStubs(cex);
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
@@ -1570,15 +1572,18 @@ namespace AngelicVerifierNull
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> distinctSourceLines)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
+
+            distinctSourceLines = null;
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
             if (!Options.useEE) return Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True); ;
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
+            
 
             // Remove axioms on alloc constants
             var HasAllocConstant = new Func<Expr, bool>(e =>
@@ -1601,7 +1606,7 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                List<Tuple<string, int, string>> distinctSourceLines;
+                
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
                     out eeStatus, out eeComplexExprs, out preDisjuncts, out distinctSourceLines);

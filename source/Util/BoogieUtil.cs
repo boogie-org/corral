@@ -2246,7 +2246,7 @@ namespace cba.Util
         
         // current block
         public static string currBlock;
-        public static bool dbg = true;
+        public static bool dbg = false;
         public static HashSet<string> impl_names = new HashSet<string>();
 
         // Abstract representation of Expr
