@@ -954,12 +954,12 @@ namespace AngelicVerifierNull
             if (Driver.printTraceMode == PRINT_TRACE_MODE.Sdv)
             {
                 if (traceInfos.Count() == 1)
-                    System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + ".tt");
+                    System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + ".tt", true);
                 else
                 {
                     int c = 0;
                     foreach(var t in traceInfos)
-                        System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + "." + (c++) + ".tt");
+                        System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + "." + (c++) + ".tt", true);
                 }
             }
 

@@ -1456,10 +1456,14 @@ namespace ExplainError
                 binOp.Op != BinaryOperator.Opcode.Lt && binOp.Op != BinaryOperator.Opcode.Gt &&
                 binOp.Op != BinaryOperator.Opcode.Le && binOp.Op != BinaryOperator.Opcode.Ge
                 ) return false;
-            var x = expr.Args[0] as IdentifierExpr;
-            if (x == null) return false;
-            //TODO: lookup the {:typestate} attribute on teh variable
-            if (QKeyValue.FindBoolAttribute(x.Decl.Attributes, "typestatevar")) return true;
+            var x0 = expr.Args[0] as IdentifierExpr;
+            var x1 = expr.Args[1] as IdentifierExpr;
+            if (x0 == null && x1 == null) return false;
+            
+            if (x0 != null && QKeyValue.FindBoolAttribute(x0.Decl.Attributes, "typestatevar")) return true;
+            if (x1 != null && QKeyValue.FindBoolAttribute(x1.Decl.Attributes, "typestatevar")) return true;
+
+
             return false;
         }
         private static bool LiteralNotInVocabulary(Expr c)
