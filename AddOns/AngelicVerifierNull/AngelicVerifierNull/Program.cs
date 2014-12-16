@@ -756,15 +756,15 @@ namespace AngelicVerifierNull
                 BoogieUtil.PrintProgram(ppprog, "ee.bpl");
 
                 Stats.resume("explain.error");
-                List<Tuple<string, int, string>> distinctSourceLines = null;
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags, out distinctSourceLines);
-                if (!Options.TraceSlicing) distinctSourceLines = null;
+                List<Tuple<string, int, string>> eeSlicedSourceLines = null;
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags, out eeSlicedSourceLines);
+                if (!Options.TraceSlicing) eeSlicedSourceLines = null;
                 Stats.stop("explain.error");
 
                 // print the trace to disk
                 var traceName = "Trace" + traceCount;
                 Console.WriteLine("Printing trace {0}", traceName);
-                var assertLoc = instr.PrintErrorTrace(cex, traceName, distinctSourceLines);
+                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines);
                 var stubs = instr.GetStubs(cex);
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
@@ -1572,14 +1572,14 @@ namespace AngelicVerifierNull
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> distinctSourceLines)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
 
-            distinctSourceLines = null;
+            eeSlicedSourceLines = null;
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
             if (!Options.useEE) return Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True); ;
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
@@ -1609,9 +1609,12 @@ namespace AngelicVerifierNull
                 
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
-                    out eeStatus, out eeComplexExprs, out preDisjuncts, out distinctSourceLines);
+                    out eeStatus, out eeComplexExprs, out preDisjuncts, out eeSlicedSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
+                //Override the sliced lines with the true slice
+                if (Options.TraceSlicing)
+                    ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
                     if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())

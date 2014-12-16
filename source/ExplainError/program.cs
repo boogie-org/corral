@@ -45,6 +45,7 @@ namespace ExplainError
         //Options: Add them to ParseAndRemoveNonBoogieOptions
 
         //flags to control which assumes to consider in the trace
+        //Important: Keep default as the sound option, as it influences the the "true" trace slicing
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
 
@@ -110,19 +111,11 @@ namespace ExplainError
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
-            out STATUS status, out Dictionary<string, string> complexCExprsRet)
-        {
-            HashSet<List<Expr>> preInDnfForm;
-            List<Tuple<string, int, string>> distinctSourceLines;
-            return Go(impl, pr, tmout, explainErrorFilters, "", null, out status, out complexCExprsRet, out preInDnfForm,out distinctSourceLines);
-        }
-
-        public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
             string extraArgs,
             ControlFlowDependency cntrlFlowDependencyInfo,
             out STATUS status, out Dictionary<string, string> complexCExprsRet,
             out HashSet<List<Expr>> preInDnfForm,
-            out List<Tuple<string,int,string>> distinctSourceLines)
+            out List<Tuple<string,int,string>> eeSlicedSourceLines)
         {
             Console.WriteLine("List of non-cmd-line arguments to EE = {0}", extraArgs);
             suggestions = new List<Expr>();
@@ -157,23 +150,17 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl, out preInDnfForm, out distinctSourceLines);
+            var tmp = Go(impl, out preInDnfForm, out eeSlicedSourceLines);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
         }
-        public static List<string> Go(Implementation impl, Program pr, int tmout)
-        {
-            STATUS status;
-            Dictionary<string, string> tmp;
-            return Go(impl, pr, tmout, 0, out status, out tmp);
-        }
-        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> distinctSourceLines)
+        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeSlicedSourceLines)
         {
             sw = new Stopwatch();
             sw.Start();
             preInDnfForm = null; //HashSet<List<Expr>> preInDnfForm = null;
-            distinctSourceLines = null;
+            eeSlicedSourceLines = null;
             allCubesCovered = true;
             returnStatus = STATUS.INCONCLUSIVE;
             currImpl = impl; //avoid passing it around
@@ -182,7 +169,7 @@ namespace ExplainError
             try
             {
                 //SimplifyAssumesUsingForwardPass();
-                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out distinctSourceLines);
+                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out eeSlicedSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
                 //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
@@ -214,6 +201,39 @@ namespace ExplainError
             }
         }
 
+        /// <summary>
+        /// Top-level method for performing a true trace slicing independent of EE heuristics
+        /// </summary>
+        /// <param name="impl"></param>
+        /// <param name="pr"></param>
+        /// <param name="tmout"></param>
+        /// <param name="cntrlFlowDependencyInfo"></param>
+        /// <param name="eeSlicedSourceLines"></param>
+        /// <returns></returns>
+        public static bool TrueTraceSlicing(Implementation impl, Program pr, int tmout, 
+            ControlFlowDependency cntrlFlowDependencyInfo,
+            out List<Tuple<string,int,string>> eeSlicedSourceLines)
+        {
+            Console.WriteLine("EE: ** Reexecuting the trace ** inside TrueTraceSlicing");
+            ExplainError.Toplevel.ParseCommandLine("");
+            prog = pr;
+            /////////////////////////////////////
+            //override teh default options
+            verbose = false;
+            cflowDependencyInfo = cntrlFlowDependencyInfo;
+            timeout = tmout > 0 ? tmout : MAX_TIMEOUT;
+            //we will ignore any options to EE, for sound slicing
+            onlySlicAssumes = false;
+            ignoreAllAssumes = false; //default = false
+
+            ////////////////////////////////////
+            ExplainError.Toplevel.fieldMapFuncs = new HashSet<string>();
+            //Don't care variables
+            HashSet<List<Expr>> preInDnfForm;
+            ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out eeSlicedSourceLines,true);
+            return true;
+        }
+
         private static void PersistSuggestionsInFile(HashSet<List<Expr>> preInDnfForm, List<string> preStrings)
         {
             var cnfClauses = ExprListSetToNegatedCNFExprList(preInDnfForm);
@@ -236,7 +256,8 @@ namespace ExplainError
         /// </summary>
         /// <param name="cmdseq"></param>
         /// <param name="preInDnfForm"></param>
-        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> distinctSourceLines)
+        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeSlicedSourceLines,
+            bool traceSlicingOnly=false)
         {
             HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
             Stack<Tuple<string, string>> branchJoinStack = new Stack<Tuple<string, string>>();
@@ -249,7 +270,7 @@ namespace ExplainError
             }
             );
 
-            distinctSourceLines = new List<Tuple<string, int, string>>();
+            eeSlicedSourceLines = new List<Tuple<string, int, string>>();
 
             var FindSourceLineInfo = new Func<QKeyValue, Tuple<string,int>> (kv => 
                 {
@@ -283,7 +304,7 @@ namespace ExplainError
                         var si = FindSourceLineInfo(((AssertCmd)cmd).Attributes);
                         if (si != null && lastStmtsAdded.Count > 0)
                         {
-                            distinctSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
+                            eeSlicedSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
                             lastStmtsAdded.Clear();  //reset it after adding sourceline
                         }
                         continue; 
@@ -324,7 +345,6 @@ namespace ExplainError
                         continue;
                     }
                     if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) continue;
-                    if (((AssumeCmd)cmd).Expr == Expr.True) continue;
                     numAssumes++;
                     if (branchJoinStack.Count > 0)
                     {
@@ -361,12 +381,15 @@ namespace ExplainError
                 }
                 lastStmtsAdded.Add(cmd.ToString()); //if we reach here some statement was added
             }
-            Console.WriteLine("ExplainError: Num of assumes considered/Num assumes skipped by mod analysis = {0}/{1}", numAssumes, numAssumeSkipped);
-            Console.WriteLine("ExplainError: Num of assigns considered/Num assigns skipped by mod analysis = {0}/{1}", numAssigns, numAssignsSkipped);
-            Console.WriteLine("ExplainError: Sliced Trace => \n\t{0}",
-                string.Join("\n\t", distinctSourceLines.Select(x => string.Format(("#### sourceFile = {0}, sourceLine = {1}, \n\t\t {2}"), x.Item1, x.Item2, x.Item3))));
+            var slicingStr = traceSlicingOnly ? "TraceSlicing" : "Precond";
+            Console.WriteLine("ExplainError[{2}]: Num of assumes considered by slice/Total Num assumes = {0}/{1}", numAssumes-numAssumeSkipped, numAssumes, slicingStr);
+            Console.WriteLine("ExplainError[{2}]: Num of assigns considered by slice/Total Num assigns = {0}/{1}", numAssigns - numAssignsSkipped, numAssigns,slicingStr);
+            Console.WriteLine("ExplainError[{0}]: Sliced Trace => \n\t{1}", slicingStr,
+                string.Join("\n\t", eeSlicedSourceLines.Select(x => string.Format(("#### sourceFile = {0}, sourceLine = {1}, \n\t\t {2}"), x.Item1, x.Item2, x.Item3))));
 
             //Now compute the pre over the sequence of commands
+            //THIS IS THE HEAVYWEIGHT SIMPLIFICATION, SO IGNORE WHEN NOT NEEDED
+            if (traceSlicingOnly) return;
             foreach (var d in ComputePreOverVocab(preL, null))
                 preInDnfForm.Add(d);
         }
@@ -1505,8 +1528,12 @@ namespace ExplainError
         }
         private static bool MatchesSyntacticAssumeFilters(AssumeCmd assumeCmd)
         {
+            if (((AssumeCmd) assumeCmd).Expr.ToString() == Expr.True.ToString()) return false;
+            //only consider assume wiht {:partition} tags
+            if (!QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "partition")) return false;
             if (ignoreAllAssumes) return false;
-            return (!onlySlicAssumes || QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic"));
+            if(onlySlicAssumes) return QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic");
+            return true;
         }
         private static HashSet<Expr> FilteredAtoms(Implementation currImpl, Expr t, out Expr e)
         {

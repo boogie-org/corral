@@ -1215,7 +1215,7 @@ namespace AngelicVerifierNull
 
         // Returns file and line of the failing assert. Dumps
         // error trace to disk.
-        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> distinctSourceLines)
+        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> eeSlicedSourceLines)
         {
             trace = mapBackTrace(trace);
             
@@ -1228,10 +1228,10 @@ namespace AngelicVerifierNull
             {
                 // relevant lines
                 cba.PrintSdvPath.relevantLines = null;
-                if (distinctSourceLines != null)
+                if (eeSlicedSourceLines != null)
                 {
                     cba.PrintSdvPath.relevantLines = new HashSet<Tuple<string, int>>();
-                    distinctSourceLines.Iter(tup => cba.PrintSdvPath.relevantLines.Add(Tuple.Create(tup.Item1, tup.Item2)));
+                    eeSlicedSourceLines.Iter(tup => cba.PrintSdvPath.relevantLines.Add(Tuple.Create(tup.Item1, tup.Item2)));
                 }
 
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
