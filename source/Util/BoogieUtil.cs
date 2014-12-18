@@ -1776,7 +1776,6 @@ namespace cba.Util
 
             // Global Value Numbering
             program = GVN.Do(program);
-            BoogieUtil.PrintProgram(program, "gvn_after.bpl");
 
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => !irreducible.Contains(impl.Name))

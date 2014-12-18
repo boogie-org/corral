@@ -79,13 +79,16 @@ namespace FastAVN
         static string avnPath = null; // path to AVN binary
         static bool dumpSlices = true; // dump sliced program for each entrypoint
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
-        static string avnArgs = "/sdv /useEntryPoints /dumpResults:" + bugReportFileName
-            + " /timeout:" + avnTimeout; // default AVN arguments
+        static string avnArgs = ""; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
         static int numThreads = 4; // default number of parallel AVN instances
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
         static bool fieldNonNull = true; // include angelic field non-null harness
         static bool outputToFile = false; // dump AVN output to disk
+        static string angelic = "Angelic";
+        static string trace_extension = ".tt";
+        static string bug_folder = "Bugs";
+        static string bug_filename = "Bug";
 
 
         static void Main(string[] args)
@@ -281,10 +284,8 @@ namespace FastAVN
                                     bugReportFileName));
                             bugs.Iter(b =>
                             {
-                                if (!mergedBugs.ContainsKey(b))
-                                    mergedBugs[b] = 1;
-                                else
-                                    mergedBugs[b] += 1;
+                                if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
+                                mergedBugs[b] += 1;
                             });
                             Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
                         }
@@ -299,8 +300,91 @@ namespace FastAVN
             });
 
             printBugs(ref mergedBugs, entryPoints.Count);
+            mergeBugs(entryPoints);
             Utils.Print(string.Format("#EntryPoints : {0}", entryPoints.Count), Utils.PRINT_TAG.AV_STATS);
             Utils.Print(string.Format("#Bugs : {0}", mergedBugs.Count), Utils.PRINT_TAG.AV_STATS);
+        }
+
+        private static void mergeBugs(ConcurrentBag<string> entryPoints)
+        {
+            bool dbg = false;
+            Dictionary<string, Tuple<int, string>> shortest_trace = new Dictionary<string, Tuple<int, string>>();
+
+            foreach (string impl in entryPoints)
+            {
+                string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
+                if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
+                int traceNum = 0;
+
+                try
+                {
+                    foreach (string line in File.ReadLines(result_file))
+                    {
+                        if (line.StartsWith("Description"))
+                            continue;
+                        // extract line from bug report but ignore the entrypoint info
+                        string bug_info = line.Substring(0, line.LastIndexOf(","));
+                        string file_name = angelic + traceNum.ToString() + trace_extension;
+                        string trace_file = Path.Combine(Directory.GetCurrentDirectory(), impl, file_name);
+                        int metric = getMetric(traceNum, trace_file);
+
+                        if (dbg) Utils.Print(string.Format("Bug File -> {0} {1}", bug_info, trace_file), Utils.PRINT_TAG.AV_DEBUG);
+                        if (dbg) Utils.Print(string.Format("Metric -> {0}", metric), Utils.PRINT_TAG.AV_DEBUG);
+
+                        if (shortest_trace.ContainsKey(bug_info))
+                        {
+                            if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file);
+                        }
+                        else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file));
+                        traceNum++;
+                    }
+
+                }
+                catch (FileNotFoundException)
+                {
+                    Utils.Print(string.Format("Bug report file not found: {0}", result_file));
+                }
+                catch (Exception e)
+                {
+                    Utils.Print(string.Format("Error when processing bug report: {0}", result_file));
+                    Console.WriteLine(e.Message);
+                    Console.WriteLine(e.StackTrace);
+                }
+            }
+
+            string trace_path = Path.Combine(Directory.GetCurrentDirectory(), bug_folder);
+            int index = 0;
+            foreach (string bug in shortest_trace.Keys)
+            {
+                Directory.CreateDirectory(bug_folder);
+                string file_name = bug_filename + index.ToString() + trace_extension;
+                if (File.Exists(Path.Combine(trace_path, file_name))) File.Delete(Path.Combine(trace_path, file_name));
+                File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
+                index++;
+            }
+        }
+
+        private static int getMetric(int traceno, string trace_file)
+        {
+            int num_lines = 0;
+
+            try
+            {
+                foreach (string line in File.ReadLines(trace_file)) num_lines++;
+            }
+
+            catch (FileNotFoundException)
+            {
+                Utils.Print(string.Format("Trace file not found: {0}", trace_file));
+            }
+            catch (Exception e)
+            {
+                Utils.Print(string.Format("Error while processing trace file: {0}", trace_file));
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+
+            return num_lines;
         }
 
         private static Dictionary<string, HashSet<string>> buildCallGraph(Program prog)
