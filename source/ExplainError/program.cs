@@ -256,7 +256,7 @@ namespace ExplainError
         /// </summary>
         /// <param name="cmdseq"></param>
         /// <param name="preInDnfForm"></param>
-        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeSlicedSourceLines,
+        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeRelevantSourceLines,
             bool traceSlicingOnly=false)
         {
             HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
@@ -270,13 +270,14 @@ namespace ExplainError
             }
             );
 
-            eeSlicedSourceLines = new List<Tuple<string, int, string>>();
+            eeRelevantSourceLines = new List<Tuple<string, int, string>>();
+            var allSourceLines = new List<Tuple<string, int>>();
 
             var FindSourceLineInfo = new Func<QKeyValue, Tuple<string,int>> (kv => 
                 {
                     var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
                     var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
-                    if (sourceFile != null && /*!sourceFile.Equals("?") &&*/ sourceLine != -1)
+                    if (sourceFile != null && sourceLine != -1)
                         return Tuple.Create(sourceFile, sourceLine);
                     return null;
                 });
@@ -302,10 +303,16 @@ namespace ExplainError
                     if (IsTrueAssert((AssertCmd)cmd))
                     {
                         var si = FindSourceLineInfo(((AssertCmd)cmd).Attributes);
-                        if (si != null && lastStmtsAdded.Count > 0)
+                        if (si != null) //a line with sourcefile/sourceline info
                         {
-                            eeSlicedSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
-                            lastStmtsAdded.Clear();  //reset it after adding sourceline
+                            //only count valid sourcefiles
+                            if (si.Item1 != "?")
+                            {
+                                allSourceLines.Add(Tuple.Create(si.Item1, si.Item2));
+                                if (lastStmtsAdded.Count > 0)
+                                    eeRelevantSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
+                            }
+                            lastStmtsAdded.Clear();  //reset it after considering sourceline
                         }
                         continue; 
                     } else
@@ -331,12 +338,6 @@ namespace ExplainError
                     {
                         Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at a captureStateLoc ");
                         break; //compute pre now
-                        #region deprecated
-                        //foreach (var d in ComputePreOverVocab(pre, captureStateLoc))
-                        //foreach (var d in ComputePreOverVocab(preL, captureStateLoc))
-                        //        preInDnfForm.Add(d);
-                        //continue;
-                        #endregion
                     }
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
@@ -384,8 +385,10 @@ namespace ExplainError
             var slicingStr = traceSlicingOnly ? "TraceSlicing" : "Precond";
             Console.WriteLine("ExplainError[{2}]: Num of assumes considered by slice/Total Num assumes = {0}/{1}", numAssumes-numAssumeSkipped, numAssumes, slicingStr);
             Console.WriteLine("ExplainError[{2}]: Num of assigns considered by slice/Total Num assigns = {0}/{1}", numAssigns - numAssignsSkipped, numAssigns,slicingStr);
+            Console.WriteLine("ExplainError[{2}]: Num of relevant source lines considered by slice/Total source lines = {0}/{1}", 
+                eeRelevantSourceLines.Count, allSourceLines.Count, slicingStr);
             Console.WriteLine("ExplainError[{0}]: Sliced Trace => \n\t{1}", slicingStr,
-                string.Join("\n\t", eeSlicedSourceLines.Select(x => string.Format(("#### sourceFile = {0}, sourceLine = {1}, \n\t\t {2}"), x.Item1, x.Item2, x.Item3))));
+                string.Join("\n\t", eeRelevantSourceLines.Select(x => string.Format(("#### sourceFile = {0}, sourceLine = {1}, \n\t\t {2}"), x.Item1, x.Item2, x.Item3))));
 
             //Now compute the pre over the sequence of commands
             //THIS IS THE HEAVYWEIGHT SIMPLIFICATION, SO IGNORE WHEN NOT NEEDED
@@ -431,13 +434,19 @@ namespace ExplainError
                 if (branchJoinStack.Count > 0 &&
                     branchJoinStack.Peek().Item1 == blockInfo.Item1 &&
                     branchJoinStack.Peek().Item2 == blockInfo.Item2)
+                {
+                    Console.WriteLine("BranchJoinStack: Pop {0} {1}", blockInfo.Item1, blockInfo.Item2);
                     branchJoinStack.Pop();
+                }
             }
             if (cflowDependencyInfo.IsJoinBlock(blockInfo, out branchBlockName, out modSet))
             {
                 var origVars = supportVars.Select(x => GetOrigVar(x));
                 if (branchJoinStack.Count > 0 || !origVars.Any(x => modSet.Contains(x)))
+                {
+                    Console.WriteLine("BranchJoinStack: Push {0} {1}", blockInfo.Item1, branchBlockName);
                     branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
+                }
             }
 
         }
