@@ -346,7 +346,7 @@ namespace AngelicVerifierNull
                 if (Options.EEPerformControlSlicing)
                 {
                     var p1 = prog.getProgram();
-                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(p1, true);
+                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(p1);
                     controlFlowDependencyInformation.Run();
 
                     // package up the program

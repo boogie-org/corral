@@ -328,7 +328,6 @@ namespace ExplainError
                         //pre = Expr.And(Expr.Not(((AssertCmd)cmd).Expr), pre); //TODO: Boolean simplifications
                         preL.Add(Expr.Not(((AssertCmd)cmd).Expr));
                         GetSupportVars(((AssertCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
-                        Console.WriteLine("Considering assert statement {0}", cmd);
                     }
                 }
                 else if (cmd is AssumeCmd)
@@ -351,7 +350,6 @@ namespace ExplainError
                     {
                         numAssumeSkipped++; continue;
                     }
-                    Console.WriteLine("Considering assume stmt {0}", cmd);
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
                     //pre = Expr.And(((AssumeCmd)cmd).Expr, pre); //TODO: Boolean simplifications
@@ -374,7 +372,6 @@ namespace ExplainError
                         numAssignsSkipped++;
                         continue; //don't display considered stmt
                     }
-                    Console.WriteLine("Considering assign stmt {0}", cmd);
                 }
                 else
                 {
@@ -383,8 +380,8 @@ namespace ExplainError
                 lastStmtsAdded.Add(cmd.ToString()); //if we reach here some statement was added
             }
             var slicingStr = traceSlicingOnly ? "TraceSlicing" : "Precond";
-            Console.WriteLine("ExplainError[{2}]: Num of assumes considered by slice/Total Num assumes = {0}/{1}", numAssumes-numAssumeSkipped, numAssumes, slicingStr);
-            Console.WriteLine("ExplainError[{2}]: Num of assigns considered by slice/Total Num assigns = {0}/{1}", numAssigns - numAssignsSkipped, numAssigns,slicingStr);
+            Console.WriteLine("ExplainError[{2}]: Num of conditionals considered by slice/Total Num conditionals = {0}/{1}", numAssumes-numAssumeSkipped, numAssumes, slicingStr);
+            //Console.WriteLine("ExplainError[{2}]: Num of assigns considered by slice/Total Num assigns = {0}/{1}", numAssigns - numAssignsSkipped, numAssigns,slicingStr);
             Console.WriteLine("ExplainError[{2}]: Num of relevant source lines considered by slice/Total source lines = {0}/{1}", 
                 eeRelevantSourceLines.Count, allSourceLines.Count, slicingStr);
             Console.WriteLine("ExplainError[{0}]: Sliced Trace => \n\t{1}", slicingStr,
@@ -444,8 +441,12 @@ namespace ExplainError
                 var origVars = supportVars.Select(x => GetOrigVar(x));
                 if (branchJoinStack.Count > 0 || !origVars.Any(x => modSet.Contains(x)))
                 {
-                    Console.WriteLine("BranchJoinStack: Push {0} {1}", blockInfo.Item1, branchBlockName);
-                    branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
+                    Console.WriteLine("BranchJoinStack: Push {0} {1} from {2}", blockInfo.Item1, branchBlockName, blockInfo.Item2);
+                    //for (b1,j1) and (b1,j2), b1 is only encountered once, so we need to merge the two pushes
+                    if (branchJoinStack.Count == 0  ||
+                        branchJoinStack.Peek().Item1 != blockInfo.Item1 ||
+                        branchJoinStack.Peek().Item2 != branchBlockName)
+                        branchJoinStack.Push(Tuple.Create(blockInfo.Item1, branchBlockName));
                 }
             }
 

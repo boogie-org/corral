@@ -84,3 +84,13 @@
 [TAG: AV_OUTPUT] ----- Analyzing eeSlice4.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr z == 1 and entrypoint A
+
+-------------------- eeSlice5.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice5.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1 and entrypoint A
+
+-------------------- eeSlice6.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice6.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1 and entrypoint A

@@ -24,7 +24,7 @@ namespace ExplainError
         //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
         Dictionary<string, HashSet<Tuple<string,string,HashSet<Variable>>>> branchJoinPairModSet;
         bool coarseProcedureLevelOnly; //if this flag is on, only consider branch/join as beginproc/endproc for a procedure with entire modset
-        public ControlFlowDependency(Program prog, bool coarseProcedureLevelOnly=true)
+        public ControlFlowDependency(Program prog, bool coarseProcedureLevelOnly=false)
         {
             this.prog = prog;
             branchJoinPairModSet = new Dictionary<string,HashSet<Tuple<string,string,HashSet<Variable>>>>();
@@ -34,10 +34,35 @@ namespace ExplainError
         {
             //perform interprocedural modset analysis
             (new ModSetCollector()).DoModSetAnalysis(prog);
+            prog.Implementations.Iter(impl => (new SplitBranchBlocks(impl)).Run());
             prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
             // Add place holders
             prog.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(InstrumentImplementation);
+        }
+
+        /// <summary>
+        /// We need to split a block {B: ... goto B1, B2;} into {B: ...; goto B';} and {B': goto B1, B2;}
+        /// </summary>
+        private class SplitBranchBlocks
+        {
+            Implementation impl;
+            public SplitBranchBlocks(Implementation impl) { this.impl = impl; }
+            public void Run()
+            {
+                var newBlks = new HashSet<Block>();
+                foreach(var blk in impl.Blocks)
+                {
+                    var gotoCmd = blk.TransferCmd as GotoCmd;
+                    if (gotoCmd == null) continue;
+                    if (gotoCmd.labelTargets.Count < 2) continue; //not a branch node
+                    if (blk.Cmds.Count == 0) continue; //no command
+                    var b = new Block(Token.NoToken, "__split__xxx_" + blk.Label, new List<Cmd>(), blk.TransferCmd);
+                    blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block>() { b });
+                    newBlks.Add(b);
+                }
+                impl.Blocks.AddRange(newBlks);
+            }
         }
 
         // Instrument:
@@ -87,6 +112,8 @@ namespace ExplainError
             Dictionary<Tuple<Block, Block>, HashSet<Variable>> intraProcPairBlockModSet;
             Dictionary<Block, HashSet<Block>> successorBlocks;
             HashSet<Tuple<Block, Block>> branchJoinPairs;
+            Stopwatch sw;
+            int TIME_PER_IMPL = 5; //max per implementation
             public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
@@ -95,14 +122,23 @@ namespace ExplainError
                 intraProcPairBlockModSet = new Dictionary<Tuple<Block, Block>, HashSet<Variable>>();
                 successorBlocks = new Dictionary<Block, HashSet<Block>>();
                 branchJoinPairs = new HashSet<Tuple<Block, Block>>();
+                sw = new Stopwatch();
             }
             public void Run()
             {
+                sw.Restart();
                 //populate the modsets for every branch/join pair
                 parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
                 if (!parent.coarseProcedureLevelOnly)
                 {
-                    PerformFineGrainedControlDependency();
+                    try
+                    {
+                        PerformFineGrainedControlDependency();
+                    } catch(TimeoutException e)
+                    {
+                        Console.WriteLine(e.Message);
+                        parent.branchJoinPairModSet[impl.Name].Clear(); //remove any partial computation
+                    }
                 }
                 //only add the procedure level modset (currently undoing all the work of block/join)
                 var modsetImpl = new HashSet<Variable> (impl.Proc.Modifies.Select(x => x.Decl).Union(impl.Proc.OutParams));
@@ -229,6 +265,7 @@ namespace ExplainError
             {
                 var UpdateTransitiveEdge = new Action<Block, Block, Block>((b1, b2, b3) =>
                     {
+                        CheckTimeout();
                         Debug.Assert(b1 != null && b2 != null && b3 != null);
                         var vs1 = intraProcPairBlockModSet[Tuple.Create(b1, b2)];
                         var vs2 = intraProcPairBlockModSet[Tuple.Create(b2, b3)];
@@ -282,8 +319,6 @@ namespace ExplainError
                     }
                     predStart[start].Iter(x => UpdateTransitiveEdge(x, start, end));
                     succEnd[end].Iter(x => UpdateTransitiveEdge(start, end, x));
-                    //if (i == 1)
-                    //    Console.Write("|succBlocks| = {0}  ", successorBlocks.Count);
                     i++;
                     if ((i % 10000) == 0)
                         Console.Write("i = {0}, |intraProcModSet| = {1}",i, intraProcPairBlockModSet.Count);
@@ -293,6 +328,11 @@ namespace ExplainError
             private string ReturnNodeString(Block x)
             {
                 return x != null ? x.ToString() : "returnNode"; 
+            }
+            private void CheckTimeout()
+            {
+                if (sw.ElapsedMilliseconds > TIME_PER_IMPL * 1000)
+                    throw new TimeoutException("PerformFineGrainedControlDependency timed out in [" + impl.Name + "]" + sw.ElapsedMilliseconds/1000 + "sec");
             }
 
             private void Print()
@@ -337,6 +377,9 @@ namespace ExplainError
                 .Where(x => /*(x.Item2 == null && blockInfo.Item2 == null) ||*/ (x.Item2 != null && x.Item2.ToString() == blockInfo.Item2));
             if (matches.Count() > 0)
             {
+                Debug.Assert(matches.Count() == 1, 
+                    string.Format("Expecting exactly 1 branch for a join node {0}, found {1}", blockInfo.Item1,
+                    string.Join(",", matches.Select(x => x.Item1))));
                 branchBlockName = matches.First().Item1.ToString();
                 var tmpSet = new HashSet<string>();
                 matches.First().Item3.Select(x => x.ToString()).Iter(y => tmpSet.Add(y));
@@ -350,7 +393,8 @@ namespace ExplainError
         {
             //a beginproc is always a branch node when we want to consider procedure level mods only
             if (branchJoinPairModSet.ContainsKey(blockInfo.Item1) && blockInfo.Item2 == "beginproc") return true; 
-            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() == 1;
+            //we can have same branch for different joins (b1,j1) and (b1,j2)
+            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() >= 1;
         }
     }
 }
