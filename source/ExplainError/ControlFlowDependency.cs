@@ -32,6 +32,7 @@ namespace ExplainError
         }
         public void Run()
         {
+            Console.WriteLine("###ControlFlowDependencyPrePass####\n");
             //perform interprocedural modset analysis
             (new ModSetCollector()).DoModSetAnalysis(prog);
             prog.Implementations.Iter(impl => (new SplitBranchBlocks(impl)).Run());
@@ -113,7 +114,7 @@ namespace ExplainError
             Dictionary<Block, HashSet<Block>> successorBlocks;
             HashSet<Tuple<Block, Block>> branchJoinPairs;
             Stopwatch sw;
-            int TIME_PER_IMPL = 5; //max per implementation
+            int TIME_PER_IMPL = 5; //500000; //max per implementation
             public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
@@ -126,6 +127,7 @@ namespace ExplainError
             }
             public void Run()
             {
+                Console.Write("{0},", impl.Name);
                 sw.Restart();
                 //populate the modsets for every branch/join pair
                 parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
@@ -134,9 +136,9 @@ namespace ExplainError
                     try
                     {
                         PerformFineGrainedControlDependency();
-                    } catch(TimeoutException e)
+                    } catch(Exception e)
                     {
-                        Console.WriteLine(e.Message);
+                        Console.WriteLine(string.Format("WARNING!!: {0}", e.Message));
                         parent.branchJoinPairModSet[impl.Name].Clear(); //remove any partial computation
                     }
                 }
@@ -148,7 +150,6 @@ namespace ExplainError
             }
             private void PerformFineGrainedControlDependency()
             {
-                Console.WriteLine("Entered PerformFineGrained for {0}", impl.Name);
                 //Perform fine grained block level analysis
                 impl.Blocks.Iter
                     (b =>
@@ -163,17 +164,13 @@ namespace ExplainError
                 //initialize the WL
                 InitializeModSets();
                 //run the fixed point
-                Console.WriteLine("Before Transitivemodsets");
                 ComputeTransitiveModSets();
-                Console.WriteLine("After Transitivemodsets");
                 //find the (branch,join) pairs
                 FindBranchJoinPairs();
-                Console.WriteLine("After FindBranchJoinPairs");
                 branchJoinPairs
                     .Iter(x => parent.branchJoinPairModSet[impl.Name]
                         .Add(Tuple.Create(x.Item1.ToString(), ReturnNodeString(x.Item2),
                         intraProcPairBlockModSet[x])));
-                Console.WriteLine("Exit from PerformFineGrained");
             }
             /// <summary>
             /// For each branch node, finds the corresponding join node
@@ -213,10 +210,10 @@ namespace ExplainError
                         Debug.Assert(!allJoinNodes.Contains(node), string.Format("ERROR!! Multiple branch nodes for the same join node {0} in {1}", node, impl.Name));
                         allJoinNodes.Add(node);
                     }
-                    if (joinNodes.Count > 1)
-                        Console.WriteLine("WARNING!! Unstructured control flow: Multiple joins from a branch in proc {0} branch {1} joins {2}",
-                            impl.Name, branchNode,
-                            string.Join(",", joinNodes));
+                    //if (joinNodes.Count > 1 )
+                    //    Console.WriteLine("WARNING!! Unstructured control flow: Multiple joins from a branch in proc {0} branch {1} joins {2}",
+                    //        impl.Name, branchNode,
+                    //        string.Join(",", joinNodes));
                     joinNodes.Iter(j => branchJoinPairs.Add(Tuple.Create(branchNode, j)));
                 }
                 //TODO: remove all entries (b1,n), (b2,n), (b3, n) .. with the same join node
@@ -320,10 +317,8 @@ namespace ExplainError
                     predStart[start].Iter(x => UpdateTransitiveEdge(x, start, end));
                     succEnd[end].Iter(x => UpdateTransitiveEdge(start, end, x));
                     i++;
-                    if ((i % 10000) == 0)
-                        Console.Write("i = {0}, |intraProcModSet| = {1}",i, intraProcPairBlockModSet.Count);
                 }
-                Console.WriteLine("|WL| = {0}, |succBlocks| = {1}, SkippedCount = {2}", i, successorBlocks.Count, skippedCount);
+                //Console.WriteLine("|WL| = {0}, |succBlocks| = {1}, SkippedCount = {2}", i, successorBlocks.Count, skippedCount);
             }
             private string ReturnNodeString(Block x)
             {
