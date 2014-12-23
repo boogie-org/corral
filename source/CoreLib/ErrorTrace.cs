@@ -1773,9 +1773,9 @@ namespace cba
             if (relevantLines != null)
             {
                 if (relevantLines.Contains(Tuple.Create(file, line)))
-                    dataValuesCurrent += "_relevant_";
+                    dataValuesCurrent += "_sdvRelevantTraceLine_";
                 else
-                    dataValuesCurrent += "_irrelevant_";
+                    dataValuesCurrent += "_sdvIrrelevantTraceLine_";
             }
 
             pathFile.WriteLine("{0} \"{1}\" {2} true {3}^====Auto====={4} {5}", gcnt, file, line, dataValuesCurrent, permVars, extraMsg);
