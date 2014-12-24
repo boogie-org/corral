@@ -24,7 +24,7 @@ namespace ExplainError
         //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
         Dictionary<string, HashSet<Tuple<string,string,HashSet<Variable>>>> branchJoinPairModSet;
         bool coarseProcedureLevelOnly; //if this flag is on, only consider branch/join as beginproc/endproc for a procedure with entire modset
-        public ControlFlowDependency(Program prog, bool coarseProcedureLevelOnly=true)
+        public ControlFlowDependency(Program prog, bool coarseProcedureLevelOnly=false)
         {
             this.prog = prog;
             branchJoinPairModSet = new Dictionary<string,HashSet<Tuple<string,string,HashSet<Variable>>>>();
@@ -32,12 +32,38 @@ namespace ExplainError
         }
         public void Run()
         {
+            Console.WriteLine("###ControlFlowDependencyPrePass####\n");
             //perform interprocedural modset analysis
             (new ModSetCollector()).DoModSetAnalysis(prog);
+            prog.Implementations.Iter(impl => (new SplitBranchBlocks(impl)).Run());
             prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
             // Add place holders
             prog.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(InstrumentImplementation);
+        }
+
+        /// <summary>
+        /// We need to split a block {B: ... goto B1, B2;} into {B: ...; goto B';} and {B': goto B1, B2;}
+        /// </summary>
+        private class SplitBranchBlocks
+        {
+            Implementation impl;
+            public SplitBranchBlocks(Implementation impl) { this.impl = impl; }
+            public void Run()
+            {
+                var newBlks = new HashSet<Block>();
+                foreach(var blk in impl.Blocks)
+                {
+                    var gotoCmd = blk.TransferCmd as GotoCmd;
+                    if (gotoCmd == null) continue;
+                    if (gotoCmd.labelTargets.Count < 2) continue; //not a branch node
+                    if (blk.Cmds.Count == 0) continue; //no command
+                    var b = new Block(Token.NoToken, "__split__xxx_" + blk.Label, new List<Cmd>(), blk.TransferCmd);
+                    blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block>() { b });
+                    newBlks.Add(b);
+                }
+                impl.Blocks.AddRange(newBlks);
+            }
         }
 
         // Instrument:
@@ -87,6 +113,8 @@ namespace ExplainError
             Dictionary<Tuple<Block, Block>, HashSet<Variable>> intraProcPairBlockModSet;
             Dictionary<Block, HashSet<Block>> successorBlocks;
             HashSet<Tuple<Block, Block>> branchJoinPairs;
+            Stopwatch sw;
+            int TIME_PER_IMPL = 5; //500000; //max per implementation
             public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
@@ -95,14 +123,24 @@ namespace ExplainError
                 intraProcPairBlockModSet = new Dictionary<Tuple<Block, Block>, HashSet<Variable>>();
                 successorBlocks = new Dictionary<Block, HashSet<Block>>();
                 branchJoinPairs = new HashSet<Tuple<Block, Block>>();
+                sw = new Stopwatch();
             }
             public void Run()
             {
+                Console.Write("{0},", impl.Name);
+                sw.Restart();
                 //populate the modsets for every branch/join pair
                 parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
                 if (!parent.coarseProcedureLevelOnly)
                 {
-                    PerformFineGrainedControlDependency();
+                    try
+                    {
+                        PerformFineGrainedControlDependency();
+                    } catch(Exception e)
+                    {
+                        Console.WriteLine(string.Format("WARNING!!: {0}", e.Message));
+                        parent.branchJoinPairModSet[impl.Name].Clear(); //remove any partial computation
+                    }
                 }
                 //only add the procedure level modset (currently undoing all the work of block/join)
                 var modsetImpl = new HashSet<Variable> (impl.Proc.Modifies.Select(x => x.Decl).Union(impl.Proc.OutParams));
@@ -119,8 +157,8 @@ namespace ExplainError
                         successorBlocks[b] = new HashSet<Block>();
                         if (b.TransferCmd is GotoCmd)
                             ((GotoCmd)b.TransferCmd).labelTargets.ForEach(c => successorBlocks[b].Add(c));
-                        if (b.TransferCmd is ReturnCmd)
-                            successorBlocks[b].Add(null);
+                        //if (b.TransferCmd is ReturnCmd)
+                        //    successorBlocks[b].Add(null);
                     }
                     );
                 //initialize the WL
@@ -156,21 +194,29 @@ namespace ExplainError
                 //   if (x == {}) then null //return 
                 //   if (x == {m}) then m
                 //   else DONT KNOW //goto A, B; B: s; goto A;  A: join; --> not allowed for deterministic branches                
+                HashSet<Block> allJoinNodes = new HashSet<Block>();
                 foreach(var map in immDomMap)
                 {
                     var branchNode = map.Key;
                     Debug.Assert(branchNode.TransferCmd is GotoCmd,
                         "(Internal error) Expecting a branch node in the domain of ImmdiateDominatorMap from Boogie");
                     if (((GotoCmd)branchNode.TransferCmd).labelTargets.Count <= 1) continue; //not really a branch
-                    Block joinNode = null; //by default return/null is the join node
+                    HashSet<Block> joinNodes = new HashSet<Block>(); //by default return/null is the join node
                     foreach (var node in map.Value)
                     {
-                        if (successorBlocks[branchNode].Contains(node)) continue;
-                        Debug.Assert(joinNode == null, "Expecting at most one node in ImmediateDominatorMap that is not a branch target");
-                        joinNode = node;
+                        if (node == null) continue; 
+                        if (successorBlocks[branchNode].Contains(node)) continue; //remove the successor nodes
+                        joinNodes.Add(node);
+                        Debug.Assert(!allJoinNodes.Contains(node), string.Format("ERROR!! Multiple branch nodes for the same join node {0} in {1}", node, impl.Name));
+                        allJoinNodes.Add(node);
                     }
-                    branchJoinPairs.Add(Tuple.Create(branchNode, joinNode));
+                    //if (joinNodes.Count > 1 )
+                    //    Console.WriteLine("WARNING!! Unstructured control flow: Multiple joins from a branch in proc {0} branch {1} joins {2}",
+                    //        impl.Name, branchNode,
+                    //        string.Join(",", joinNodes));
+                    joinNodes.Iter(j => branchJoinPairs.Add(Tuple.Create(branchNode, j)));
                 }
+                //TODO: remove all entries (b1,n), (b2,n), (b3, n) .. with the same join node
             }
             private void InitializeModSets()
             {
@@ -216,39 +262,72 @@ namespace ExplainError
             {
                 var UpdateTransitiveEdge = new Action<Block, Block, Block>((b1, b2, b3) =>
                     {
+                        CheckTimeout();
+                        Debug.Assert(b1 != null && b2 != null && b3 != null);
                         var vs1 = intraProcPairBlockModSet[Tuple.Create(b1, b2)];
                         var vs2 = intraProcPairBlockModSet[Tuple.Create(b2, b3)];
-                        HashSet<Variable> vs3;
-                        var present = intraProcPairBlockModSet.TryGetValue(Tuple.Create(b1, b3), out vs3);
-                        if (!present) vs3 = new HashSet<Variable>();
+                        int prevCount = 0; 
+                        var b1b3 = Tuple.Create(b1,b3);
+                        if (intraProcPairBlockModSet.ContainsKey(b1b3))
+                            prevCount = intraProcPairBlockModSet[b1b3].Count;
+                        else
+                            intraProcPairBlockModSet[b1b3] = new HashSet<Variable>();
                         var newvs = new HashSet<Variable>();
-                        vs1.Union(vs2.Union(vs3)).Iter(x => newvs.Add(x));
-                        if (!present || newvs.Count > vs3.Count) //add if previously not present or weight has changed
+                        vs1.Union(vs2.Union(intraProcPairBlockModSet[b1b3])).Iter(x => newvs.Add(x));
+                        if (newvs.Count > prevCount) //add if previously not present or weight has changed
                         {
-                            intraProcPairBlockModSet[Tuple.Create(b1, b3)] = newvs;
-                            if (!workList.Contains(Tuple.Create(b1, b3))) workList.Add(Tuple.Create(b1, b3));
+                            newvs.Iter(x => intraProcPairBlockModSet[b1b3].Add(x));
+                            if (!workList.Contains(b1b3)) workList.Add(b1b3);
                         }
                     }
                     );
 
+                int i = 1;
+                //hash the lookups
+                Dictionary<Block, HashSet<Block>> predStart = new Dictionary<Block, HashSet<Block>>();
+                Dictionary<Block, HashSet<Block>> succEnd = new Dictionary<Block, HashSet<Block>>();
+                int skippedCount = 0;
                 while(workList.Count() > 0)
                 {
                     var blkPair = workList.ElementAt(0);
                     workList.Remove(blkPair);
                     var start = blkPair.Item1;
                     var end = blkPair.Item2;
-                    foreach (var succ in successorBlocks)
+                    bool addPredStart = false, addSuccEnd = false;
+                    //check if we have already seen this pair or not
+                    if (!predStart.ContainsKey(start)) { addPredStart = true; predStart[start] = new HashSet<Block>(); }
+                    if (!succEnd.ContainsKey(end)) { addSuccEnd = true; succEnd[end] = new HashSet<Block>(); }
+                    if (addPredStart || addSuccEnd)
                     {
-                        if (succ.Value.Contains(start))
-                            UpdateTransitiveEdge(succ.Key, start, end);
-                        if (succ.Key == end)
-                            succ.Value.Iter(d => UpdateTransitiveEdge(start, end, d));
+                        foreach (var succ in successorBlocks)
+                        {
+                            //succ->start + start->end --> succ->end
+                            if (succ.Value.Contains(start) && addPredStart)
+                                predStart[start].Add(succ.Key);
+                                //UpdateTransitiveEdge(succ.Key, start, end); //update them later now
+                            //start->end + end->d      --> start->d
+                            if (succ.Key == end && addSuccEnd)
+                                succ.Value.Iter(d => succEnd[end].Add(d));
+                                //succ.Value.Iter(d => UpdateTransitiveEdge(start, end, d)); //update them later
+                        }
+                    } else
+                    {
+                        skippedCount++;
                     }
+                    predStart[start].Iter(x => UpdateTransitiveEdge(x, start, end));
+                    succEnd[end].Iter(x => UpdateTransitiveEdge(start, end, x));
+                    i++;
                 }
+                //Console.WriteLine("|WL| = {0}, |succBlocks| = {1}, SkippedCount = {2}", i, successorBlocks.Count, skippedCount);
             }
             private string ReturnNodeString(Block x)
             {
                 return x != null ? x.ToString() : "returnNode"; 
+            }
+            private void CheckTimeout()
+            {
+                if (sw.ElapsedMilliseconds > TIME_PER_IMPL * 1000)
+                    throw new TimeoutException("PerformFineGrainedControlDependency timed out in [" + impl.Name + "]" + sw.ElapsedMilliseconds/1000 + "sec");
             }
 
             private void Print()
@@ -290,9 +369,12 @@ namespace ExplainError
             modSet = null;
             var matches = 
                 branchJoinPairModSet[blockInfo.Item1]
-                .Where(x => (x.Item2 == null && blockInfo.Item2 == null) || (x.Item2 != null && x.Item2.ToString() == blockInfo.Item2));
+                .Where(x => /*(x.Item2 == null && blockInfo.Item2 == null) ||*/ (x.Item2 != null && x.Item2.ToString() == blockInfo.Item2));
             if (matches.Count() > 0)
             {
+                Debug.Assert(matches.Count() == 1, 
+                    string.Format("Expecting exactly 1 branch for a join node {0}, found {1}", blockInfo.Item1,
+                    string.Join(",", matches.Select(x => x.Item1))));
                 branchBlockName = matches.First().Item1.ToString();
                 var tmpSet = new HashSet<string>();
                 matches.First().Item3.Select(x => x.ToString()).Iter(y => tmpSet.Add(y));
@@ -306,7 +388,8 @@ namespace ExplainError
         {
             //a beginproc is always a branch node when we want to consider procedure level mods only
             if (branchJoinPairModSet.ContainsKey(blockInfo.Item1) && blockInfo.Item2 == "beginproc") return true; 
-            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() == 1;
+            //we can have same branch for different joins (b1,j1) and (b1,j2)
+            return branchJoinPairModSet[blockInfo.Item1].Where(x => x.Item1.ToString() == blockInfo.Item2).Count() >= 1;
         }
     }
 }
