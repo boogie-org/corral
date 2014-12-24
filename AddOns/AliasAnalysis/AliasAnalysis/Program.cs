@@ -1639,6 +1639,7 @@ namespace AliasAnalysis
         bool solved;
         const int environmentPointersUnroll = 0;
         public static bool dbg = false;
+        public static bool NoEmptyLoads = true;
         string null_allocSite;
 
         public AliasConstraintSolver()
@@ -1705,6 +1706,64 @@ namespace AliasAnalysis
             }
             foreach (var a in constraints.OfType<AssignConstraint>())
                 G.InitAndAdd(a.source, a.target);
+
+            ProcessWorklist(G, variables, varToStore, varToLoad);
+
+            if (NoEmptyLoads)
+            {
+                do
+                {
+                    // Gather all empty loads
+                    var emptyloads = constraints.OfType<LoadConstraint>().Select(GetEmptyLoads).Aggregate(
+                        (a, b) => a.Union(b));
+
+                    if (!emptyloads.Any()) break;
+
+                    Console.WriteLine("There were {0} empty loads, trying again", emptyloads.Count());
+
+                    // Add {o} to the points-to set of o.f
+                    foreach (var tup in emptyloads)
+                    {
+                        var of = GetODotf(tup.Item1, tup.Item2);
+                        DiffProp(new HashSet<string> { tup.Item1 }, of);
+                        PointsTo[of].UnionWith(PointsToDelta[of]);
+                    }
+
+                    ProcessWorklist(G, variables, varToStore, varToLoad);
+                } while (true);
+
+            }
+
+            #region stats
+            if (dbg)
+            {
+                Console.WriteLine("Num constraints: {0}", constraints.Count);
+                Console.WriteLine("Num variables, maps, alloc-sites: {0}, {1},  {2}", variables.Count, maps.Count, allocSites.Count);
+                Console.WriteLine("Time: {0}", sw.Elapsed.TotalSeconds);
+            }
+            #endregion
+            solved = true;
+        }
+
+        // Return (o,f) such that PointsTo(o.f) is empty
+        private HashSet<Tuple<string, string>> GetEmptyLoads(LoadConstraint lc)
+        {
+            var ret = new HashSet<Tuple<string, string>>();
+            if(!PointsTo.ContainsKey(lc.source)) return ret;
+
+            var pts = PointsTo[lc.source];
+            foreach (var o in pts)
+            {
+                var of = GetODotf(o, lc.map);
+                if (!PointsTo.ContainsKey(of) || PointsTo[of].Count == 0)
+                    ret.Add(Tuple.Create(o, lc.map));
+            }
+            return ret;
+        }
+
+        private void ProcessWorklist(Dictionary<string, HashSet<string>> G, HashSet<string> variables,
+            Dictionary<string, List<StoreConstraint>> varToStore, Dictionary<string, List<LoadConstraint>> varToLoad)
+        {
             while (worklist.Count != 0)
             {
                 var n = worklist.First();
@@ -1760,15 +1819,7 @@ namespace AliasAnalysis
                 PointsTo[n].UnionWith(PointsToDelta[n]);
                 PointsToDelta[n] = new HashSet<string>();
             }
-            #region stats
-            if (dbg)
-            {
-                Console.WriteLine("Num constraints: {0}", constraints.Count);
-                Console.WriteLine("Num variables, maps, alloc-sites: {0}, {1},  {2}", variables.Count, maps.Count, allocSites.Count);
-                Console.WriteLine("Time: {0}", sw.Elapsed.TotalSeconds);
-            }
-            #endregion
-            solved = true;
+
         }
 
         public Dictionary<string, HashSet<string>> GetPointsToSet()
