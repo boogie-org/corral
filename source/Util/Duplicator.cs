@@ -256,6 +256,14 @@ namespace cba.Util
         {
             return base.VisitRequires((Requires)node.Clone());
         }
+        public override BvConcatExpr VisitBvConcatExpr(BvConcatExpr node)
+        {
+            return base.VisitBvConcatExpr((BvConcatExpr)node.Clone());
+        }
+        public override BvExtractExpr VisitBvExtractExpr(BvExtractExpr node)
+        {
+            return base.VisitBvExtractExpr((BvExtractExpr)node.Clone());
+        }
         public override Expr VisitCodeExpr(CodeExpr node)
         {
             var clone = (CodeExpr)node.Clone();
@@ -271,7 +279,7 @@ namespace cba.Util
             {
                 subst.Add(node.Blocks[i], clone.Blocks[i]);
             }
-            foreach (Block/*!*/ b in clone.Blocks)
+            foreach (Block b in clone.Blocks)
             {
                 GotoCmd g = b.TransferCmd as GotoCmd;
                 if (g != null)
