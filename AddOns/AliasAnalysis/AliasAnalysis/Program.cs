@@ -1639,7 +1639,7 @@ namespace AliasAnalysis
         bool solved;
         const int environmentPointersUnroll = 0;
         public static bool dbg = false;
-        public static bool NoEmptyLoads = true;
+        public static bool NoEmptyLoads = false;
         string null_allocSite;
 
         public AliasConstraintSolver()
