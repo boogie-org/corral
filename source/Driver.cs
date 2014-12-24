@@ -544,7 +544,22 @@ namespace cba
             #endregion
 
             // inline procedures that have that annotation
-            InlineProcedures(init);
+            if (config.noTrace || config.genCTrace)
+            {
+                // TODO: We can only do the inlining if we don't have to
+                // proceduce a trace in the Boogie file. This can be fixed, but
+                // requires some refactoring
+                InlineProcedures(init);
+            }
+            else
+            {
+                // remove the inline attributes from procedures and their impls
+                foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    impl.Attributes = BoogieUtil.removeAttr("inline", impl.Attributes);
+                    impl.Proc.Attributes = BoogieUtil.removeAttr("inline", impl.Proc.Attributes);
+                }
+            }
 
             // Add unique ids on calls -- necessary for reusing call trees
             // across stratified inlining queries. The unique ids are used
