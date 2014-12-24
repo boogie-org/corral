@@ -74,6 +74,14 @@ namespace cba
         public static bool isFlag(string str)
         {
             Debug.Assert(str != null && str != "");
+
+            if (Path.DirectorySeparatorChar == '/' && File.Exists(str))
+            {
+                // On systems using UNIX absolute paths we should consider a string that
+                // is a path to an existing file to not be a flag
+                return false;
+            }
+
             return str[0] == '/';
         }
 
