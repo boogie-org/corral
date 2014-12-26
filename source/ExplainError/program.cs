@@ -214,7 +214,7 @@ namespace ExplainError
             ControlFlowDependency cntrlFlowDependencyInfo,
             out List<Tuple<string,int,string>> eeSlicedSourceLines)
         {
-            Console.WriteLine("EE: ** Reexecuting the trace ** inside TrueTraceSlicing");
+            Console.WriteLine("\n\nEE: ** Reexecuting the trace ** inside TrueTraceSlicing");
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
             /////////////////////////////////////

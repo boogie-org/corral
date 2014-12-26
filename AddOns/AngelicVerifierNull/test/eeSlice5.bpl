@@ -16,7 +16,7 @@ procedure A(x:int,y:int,z:int) returns (r:int)
   }
 
   a := b;
-  assert a == 1; 
+  assert a == 1; //we don't block this as default filter does not contain x == c
 }
 
 

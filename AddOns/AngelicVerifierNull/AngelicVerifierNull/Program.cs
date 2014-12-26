@@ -43,9 +43,7 @@ namespace AngelicVerifierNull
         public static bool useEbasic = true;
         // Don't use EE to block paths
         public static bool useEE = true;
-        // EE option to perform control flow slicing 
-        public static bool EEPerformControlSlicing = true;  
-        // Output trace slicing
+        // Perform trace slicing
         public static bool TraceSlicing = false;
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
@@ -248,9 +246,6 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
                 Options.AddMapSelectNonNullAssumptions = true;
 
-            if (args.Any(s => s == "/EEDisableControlSlicing"))
-                Options.EEPerformControlSlicing = false;
-
             if (args.Any(s => s == "/traceSlicing"))
                 Options.TraceSlicing = true;
 
@@ -343,7 +338,7 @@ namespace AngelicVerifierNull
                 prog = removeAsserts(inferred_asserts, prog);
 
                 // hook to run the control flow slicing static analysis pre pass
-                if (Options.EEPerformControlSlicing)
+                if (Options.TraceSlicing)
                 {
                     var p1 = prog.getProgram();
                     controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(p1);
