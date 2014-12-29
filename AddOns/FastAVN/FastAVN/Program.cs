@@ -89,7 +89,7 @@ namespace FastAVN
         static string trace_extension = ".tt";
         static string bug_folder = "Bugs";
         static string bug_filename = "Bug";
-
+        static bool prune = false;
 
         static void Main(string[] args)
         {
@@ -101,6 +101,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
+
+            if (args.Any(s => s == "/prune"))
+                prune = true;
 
             if (args.Any(s => s == "/noDumpSlices"))
                 dumpSlices = false;
@@ -133,6 +136,9 @@ namespace FastAVN
             if (args.Any(s => s == "/dumpAVNOutput"))
                 outputToFile = true;
 
+            // default args
+            avnArgs += " /dumpResults:" + bugReportFileName + " ";
+
             // Find AVN executable
             findAvn();
             Debug.Assert(avnPath != null);
@@ -144,7 +150,31 @@ namespace FastAVN
                 // Get input program
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
+
+                // Setup Boogie and corral
+                AngelicVerifierNull.Driver.InitializeCorral();
+
                 prog = GetProgram(args[0]); // get the input program
+
+                if (prune)
+                {
+                    try
+                    {
+                        prog = PruneProgram(prog);
+                    }    
+                    catch (OutOfMemoryException e)
+                    {
+                        Console.WriteLine("Exception: {0}", e.Message);
+                        // recover the program
+                        prog = GetProgram(args[0]);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Exception: {0}", e.Message);
+                        // recover the program
+                        prog = GetProgram(args[0]);
+                    }
+                }
 
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
@@ -158,8 +188,87 @@ namespace FastAVN
                 //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
                 Utils.Print(String.Format("FastAVN failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
                 Utils.Print(String.Format("FastAVN failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
-
             }
+        }
+
+        // Prune assertions (using AA) and entrypoints
+        private static Program PruneProgram(Program prog)
+        {
+            // Stats
+            var start = DateTime.Now;
+            Console.WriteLine("FastAVN: Asserts before AA: {0}", AngelicVerifierNull.Instrumentations.AssertCountVisitor.Count(prog));
+            Console.WriteLine("FastAVN: EntryPoints before AA: {0}", prog.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                .Count());
+
+            BoogieUtil.DoModSetAnalysis(prog);
+
+            // Take snapshot in a persistent program
+            var inputProg = new PersistentProgram(prog, "", 1);
+
+            // Lets add the harness (and stub implementations). These will be used by AA.
+            var harnessName = AngelicVerifierNull.AvnAnnotations.CORRAL_MAIN_PROC;
+            var harnessInstrumentation =
+                new AngelicVerifierNull.Instrumentations.HarnessInstrumentation(prog, harnessName, true);
+            harnessInstrumentation.DoInstrument();
+
+            // Re-resolve
+            prog = (new PersistentProgram(prog, "", 1)).getProgram();
+
+            // Run AA
+            AliasAnalysis.AliasAnalysisResults res = null;
+
+            // Do SSA
+            prog =
+                SSA.Compute(prog, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+
+            // Make sure that aliasing queries are on identifiers only
+            var af =
+                AliasAnalysis.SimplifyAliasingQueries.Simplify(prog);
+
+            // Do AA
+            res =
+              AliasAnalysis.AliasAnalysis.DoAliasAnalysis(prog);
+
+            // Get back the input program, resolve aliasing queries
+            var origProgram = inputProg.getProgram();
+            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res, false);
+
+            // remove unreachable procedures (because of indirect call resolution)
+            BoogieUtil.pruneProcs(origProgram, harnessInstrumentation.entrypoints);
+
+            // Put inside a persistent program
+            inputProg = new PersistentProgram(origProgram, "", 1);
+
+            // Run Houdini
+            var progAfter = AngelicVerifierNull.Driver.RunHoudiniPass(inputProg).getProgram();
+
+            // prune entrypoints
+            var canReachAssert = BoogieUtil.procsThatMaySatisfyPredicate(progAfter, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+            var epCannotReachAssert = harnessInstrumentation.entrypoints.Difference(canReachAssert);
+            Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", epCannotReachAssert.Count);
+            progAfter.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => epCannotReachAssert.Contains(impl.Name))
+                .Iter(impl =>
+                    {
+                        impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
+                        impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
+                    });
+            BoogieUtil.pruneProcs(progAfter, harnessInstrumentation.entrypoints.Intersection(canReachAssert));
+
+            // Set flag to stop AA
+            avnArgs += " /noAA ";
+
+            // Stats
+            Console.WriteLine("FastAvn: AA took {0} seconds", (DateTime.Now - start).TotalSeconds.ToString("F2"));
+            Console.WriteLine("FastAVN: Asserts after AA: {0}", AngelicVerifierNull.Instrumentations.AssertCountVisitor.Count(progAfter));
+            Console.WriteLine("FastAVN: EntryPoints after AA: {0}", progAfter.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                .Count());
+
+            return progAfter;
         }
 
         // locate AVN binary in the system
@@ -204,13 +313,11 @@ namespace FastAVN
 
             var edges = buildCallGraph(prog);
 
-            Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation),
+            Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation && 
+                QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint")),
                 new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
             {
                 var impl = (Implementation)i;
-                // skip this impl if it is not marked as an entrypoint
-                if (!QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
-                    return;
 
                 entryPoints.Add(impl.Name);
                 // slice the program by entrypoints
@@ -618,7 +725,6 @@ namespace FastAVN
         // read program from the disk
         private static Program GetProgram(string filename)
         {
-            CommandLineOptions.Install(new CommandLineOptions());
             //Program init = BoogieUtil.ReadAndOnlyResolve(filename);
             Program init = BoogieUtil.ParseProgram(filename);
             init.Resolve();

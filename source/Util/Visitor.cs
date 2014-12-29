@@ -82,9 +82,6 @@ namespace cba.Util
         }
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
-            if (node.Name != node.Decl.Name || node.Name != node.Decl.TypedIdent.Name)
-                throw new InternalError("Inconsistent variable/ident naming on " + node.Name + " " + node.Decl.Name + " " + node.Decl.TypedIdent.Name);
-
             if (node.Decl != null)
             {
                 varsUsed.Add(node.Decl.Name);

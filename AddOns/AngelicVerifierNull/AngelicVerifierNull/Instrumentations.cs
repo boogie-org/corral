@@ -213,15 +213,15 @@ namespace AngelicVerifierNull
                 var blocks = new List<Block>();
                 blocks.Add(blkStart);
                 blocks.AddRange(mainBlocks);
-                var mainProcImpl = BoogieAstFactory.MkImpl("CorralMain", new List<Variable>(), new List<Variable>(), locals, blocks);
+                var mainProcImpl = BoogieAstFactory.MkImpl(AvnAnnotations.CORRAL_MAIN_PROC, new List<Variable>(), new List<Variable>(), locals, blocks);
                 mainProcImpl[0].AddAttribute("entrypoint");
                 prog.AddTopLevelDeclarations(mainProcImpl);
             }
 
             // Remove the dispatch to certain entrypoints
-            public void RemoveEntryPoints(Program program, HashSet<string> procs)
+            public static void RemoveEntryPoints(Program program, HashSet<string> procs)
             {
-                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, "CorralMain");
+                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, AvnAnnotations.CORRAL_MAIN_PROC);
                 foreach (var block in mainImpl.Blocks)
                 {
                     var ncmds = new List<Cmd>();
@@ -244,16 +244,20 @@ namespace AngelicVerifierNull
                     }
                     block.Cmds = ncmds;
                 }
+                BoogieUtil.pruneProcs(program, mainImpl.Name);
+            }
+
+            // Remove the dispatch to certain entrypoints
+            public void PruneEntryPoints(Program program, HashSet<string> procs)
+            {
+                RemoveEntryPoints(program, procs);
 
                 // Get other information in sync
                 entrypoints.ExceptWith(procs);
                 var bc = new HashSet<string>(impl2BlockingConstant.Where(tup => procs.Contains(tup.Key)).Select(tup => tup.Value.Name));
                 bc.Iter(b => blockEntryPointConstants.Remove(b));
                 procs.Iter(p => impl2BlockingConstant.Remove(p));
-
-                BoogieUtil.pruneProcs(program, mainImpl.Name);
             }
-
 
             // create a copy ofthe variables without annotations
             private List<Variable> DropAnnotations(List<Variable> vars)
@@ -578,6 +582,13 @@ namespace AngelicVerifierNull
             public AssertCountVisitor()
             {
                 notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            }
+
+            public static int Count(Program program)
+            {
+                var v = new AssertCountVisitor();
+                v.VisitProgram(program);
+                return v.assertCount;
             }
 
             public override Cmd VisitAssertCmd(AssertCmd node)

@@ -121,7 +121,7 @@ namespace AngelicVerifierNull
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
     }
 
-    class Driver
+    public class Driver
     {
         static cba.Configs corralConfig = null;
         static cba.AddUniqueCallIds addIds = null;
@@ -330,12 +330,9 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
 
-                HashSet<KeyValuePair<string, string>> inferred_asserts = new HashSet<KeyValuePair<string, string>>();
                 // run Houdini pass
                 if (Options.HoudiniPass)
-                    prog = RunHoudiniPass(prog, out inferred_asserts);
-
-                prog = removeAsserts(inferred_asserts, prog);
+                    prog = RunHoudiniPass(prog);
 
                 // hook to run the control flow slicing static analysis pre pass
                 if (Options.TraceSlicing)
@@ -392,38 +389,7 @@ namespace AngelicVerifierNull
                 Utils.PRINT_TAG.AV_STATS);
         }
 
-        // Removes asserts inferred by Houdini pass from the program
-        private static PersistentProgram removeAsserts(HashSet<KeyValuePair<string, string>> inferred_asserts, PersistentProgram inp)
-        {
-            int count = 0;
-            string notfalse = null;
-            var prog = inp.getProgram();
-            foreach (Implementation impl in prog.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (Block b in impl.Blocks)
-                {
-                    var removal_list = new HashSet<AssertCmd>();
-                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
-                    {
-                        if (ac.Expr.ToString() == Expr.True.ToString() ||
-                            ac.Expr.ToString() == notfalse)
-                            continue;
-                        else
-                        {
-                            if (inferred_asserts.Contains(new KeyValuePair<string, string>(ac.Expr.ToString(), b.Label)))
-                            {
-                                removal_list.Add(ac);
-                            }
-                            count++;
-                        }
-                    }
-                    foreach (AssertCmd ac in removal_list) b.Cmds.Remove(ac);
-                }
-            }
-            return new PersistentProgram(prog, inp.mainProcName, inp.contextBound);
-        }
-
-        private static PersistentProgram RunHoudiniPass(PersistentProgram prog, out HashSet<KeyValuePair<string, string>> inferred_asserts)
+        public static PersistentProgram RunHoudiniPass(PersistentProgram prog)
         {
             Stats.resume("houdini");
             Utils.Print("Start Houdini Pass ...");
@@ -434,20 +400,22 @@ namespace AngelicVerifierNull
             SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
             houdini.ExtractLoops = true;
             SimpleHoudini.fastRequiresInference = false;
-            SimpleHoudini.checkAsserts = true;
-            houdini.printHoudiniQuery = "candidates.bpl";
+            //SimpleHoudini.checkAsserts = true;
+            houdini.printHoudiniQuery = null; // "candidates.bpl";
             // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
             houdini.InImpOutNonNull = false;
             houdini.InImpOutNull = false;
             houdini.InNonNull = false;
             houdini.OutNonNull = false;
-            houdini.addContracts = true;
-            
+            houdini.addContracts = false;
+
+            prog.writeToFile("beforeHoudini.bpl");
             PersistentProgram newP = houdini.run(prog);
-            BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
+            newP.writeToFile("afterHoudini.bpl");
+
+            //BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
             Utils.Print("End Houdini Pass ...");
             Stats.stop("houdini");
-            inferred_asserts = houdini.inferred_asserts;
 
             return newP;
         }
@@ -616,7 +584,7 @@ namespace AngelicVerifierNull
         }
 
         // Initialization
-        static cba.Configs InitializeCorral()
+        public static cba.Configs InitializeCorral()
         {
             // 
             CommandLineOptions.Install(new CommandLineOptions());
@@ -1795,7 +1763,7 @@ namespace AngelicVerifierNull
 
         // Run Alias Analysis on a sequential Boogie program
         // and returned the pruned program
-        static PersistentProgram RunAliasAnalysis(PersistentProgram inp)
+        public static PersistentProgram RunAliasAnalysis(PersistentProgram inp, bool pruneEP = true)
         {
             var program = inp.getProgram();
 
@@ -1834,7 +1802,7 @@ namespace AngelicVerifierNull
             }
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
-            PruneRedundantEntryPoints(origProgram);
+            if(pruneEP) PruneRedundantEntryPoints(origProgram);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }
@@ -1845,7 +1813,7 @@ namespace AngelicVerifierNull
             var procs = BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
             procs = IdentifiedEntryPoints.Difference(procs);
             Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", procs.Count);
-            harnessInstrumentation.RemoveEntryPoints(program, procs);
+            harnessInstrumentation.PruneEntryPoints(program, procs);
             IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
         }
 

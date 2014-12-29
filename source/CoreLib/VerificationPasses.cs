@@ -1764,22 +1764,56 @@ namespace cba
         // simplified version of runCBAPass
         public override CBAProgram runCBAPass(CBAProgram program)
         {
+            // inject candidates
+            Instantiate(program);
+
             if (ExtractLoops)
             {
+                var rb = CommandLineOptions.Clo.RecursionBound;
+                CommandLineOptions.Clo.RecursionBound = 2;
+                
                 // Unroll loops
-                var inputPrime = elPass.run(input);
-                program = (inputPrime as PersistentCBAProgram).getCBAProgram();
+                program.ExtractLoops();
+
+                CommandLineOptions.Clo.RecursionBound = rb;
             }
-            var info = Instantiate(program);
+
+            program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
 
             (new RewriteCallDontCares()).VisitProgram(program);
-            RunHoudini(program, info);
+            RunHoudini(program);
 
             program = (input as PersistentCBAProgram).getCBAProgram();
             // add inferred contracts
             if (addContracts)
+            {
+                Debug.Assert(false, "Unsupported right now; should be easy to add");
                 program = addInferredContracts(program, summaries);
+            }
 
+            // prune assertions
+            var notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block b in impl.Blocks)
+                {
+                    var removal_list = new HashSet<AssertCmd>();
+                    foreach (AssertCmd ac in b.Cmds.OfType<AssertCmd>())
+                    {
+                        if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == notfalse)
+                            continue;
+                        else
+                        {
+                            if (inferred_asserts.Contains(new KeyValuePair<string, string>(ac.Expr.ToString(), b.Label)))
+                            {
+                                removal_list.Add(ac);
+                            }
+                        }
+                    }
+                    foreach (AssertCmd ac in removal_list) b.Cmds.Remove(ac);
+                }
+            }
             return program;
         }
 
@@ -1803,7 +1837,7 @@ namespace cba
 
 
         // simplified version of RunHoudini
-        private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
+        private void RunHoudini(CBAProgram program)
         {
             inferred_asserts = new HashSet<KeyValuePair<string, string>>();
             Console.WriteLine("Running {0}Houdini", runAbsHoudini ? "Abstract " : "");
@@ -1973,44 +2007,6 @@ namespace cba
                     cia++;
                 });
             Console.WriteLine(string.Format("Total Asserts: {0} out of {1}", cia, candAsserts.Count));
-
-            int cic = 0;
-            var attr = new QKeyValue(Token.NoToken, "inferred", new List<object>(), null);
-            foreach (var proc in programProcs)
-            {
-                if (!info.ContainsKey(proc.Name)) continue;
-                cic += info[proc.Name].Count;
-
-                // Gather true constants
-                var tconsts = new HashSet<string>
-                    (info[proc.Name].Keys.Where(s => trueConstants.Contains(s)));
-
-                foreach (var kvp in info[proc.Name])
-                {
-                    if (!trueConstants.Contains(kvp.Key)) continue;
-
-                    // print inferred contracts
-                    //Console.WriteLine(string.Format("Inferred: {0}", kvp.Value.expr));
-
-
-                    // check dependencies: if any of them hold then discard this one
-                    //var addSummary = true;
-                    //if (dependenciesBetConstants.ContainsKey(kvp.Key))
-                    //{
-                    //    var dep = dependenciesBetConstants[kvp.Key];
-                    //    var depKey = Tuple.Create(proc.Name, dep);
-                    //    if (namedConstants.ContainsKey(depKey))
-                    //    {
-                    //        if (namedConstants[depKey].Intersection(tconsts).Any())
-                    //            addSummary = false;
-                    //    }
-                    //}
-
-                    if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
-                    summaries[proc.Name].Add(kvp.Value);
-                }
-            }
-            Console.WriteLine(string.Format("Total Candidates: {0} out of {1}", trueConstants.Count-cia, cic));
         }
 
         

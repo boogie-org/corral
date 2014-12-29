@@ -118,6 +118,11 @@ namespace cba.Util
             if (mainProcName == null)
                 return;
 
+            pruneProcs(program, new HashSet<string> { mainProcName });
+        }
+
+        public static void pruneProcs(Program program, HashSet<string> mains)
+        {
             var edges = new Dictionary<string, HashSet<string>>();
             foreach (var decl in program.TopLevelDeclarations)
             {
@@ -134,7 +139,7 @@ namespace cba.Util
                 }
             }
             var reachable = new HashSet<string>();
-            reachable.Add(mainProcName);
+            reachable.UnionWith(mains);
 
             var delta = new HashSet<string>(reachable);
             while (delta.Count != 0)

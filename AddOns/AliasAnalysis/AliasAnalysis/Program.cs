@@ -86,7 +86,7 @@ namespace AliasAnalysis
             this.asToAS = asToAS;
         }
 
-        public static void Prune(Program program, AliasAnalysisResults result)
+        public static void Prune(Program program, AliasAnalysisResults result, bool removeUnreachableProcs = true)
         {
             Function AllocationSites = null;
             Dictionary<string, Constant> asToAS = new Dictionary<string, Constant>();
@@ -123,7 +123,7 @@ namespace AliasAnalysis
             var main = program.TopLevelDeclarations.OfType<Procedure>()
                 .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "entrypoint"))
                 .FirstOrDefault();
-            if (main != null)
+            if (main != null && removeUnreachableProcs)
                 BoogieUtil.pruneProcs(program, main.Name);
 
             // remove aliasing queries
