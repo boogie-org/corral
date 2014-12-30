@@ -146,6 +146,7 @@ namespace AngelicVerifierNull
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
+        static string mainFileName = "main_with_stubs.bpl";
 
 
         static void Main(string[] args)
@@ -258,6 +259,11 @@ namespace AngelicVerifierNull
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
+
+            string stubsfile = null;
+            args.Where(s => s.StartsWith("/stubPath:"))
+                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
+
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
@@ -294,7 +300,17 @@ namespace AngelicVerifierNull
 
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
-                prog = GetProgram(args[0]);
+
+                if (stubsfile != null)
+                {
+                    var mainFile = System.IO.File.ReadAllLines(args[0]);
+                    System.IO.File.WriteAllLines(mainFileName, mainFile);
+                    var stubFile = System.IO.File.ReadAllLines(stubsfile);
+                    System.IO.File.AppendAllLines(mainFileName, stubFile);
+
+                    prog = GetProgram(mainFileName);
+                }
+                else prog = GetProgram(args[0]);
 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
 
