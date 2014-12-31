@@ -1366,7 +1366,7 @@ namespace AngelicVerifierNull
             //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
             // mark some annotations (that enable optimizations) along the path program
-            CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars);
+            CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars, false);
 
             // convert to a persistent program
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
