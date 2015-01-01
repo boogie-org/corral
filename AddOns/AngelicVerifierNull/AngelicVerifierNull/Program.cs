@@ -666,6 +666,9 @@ namespace AngelicVerifierNull
             }
         }
 
+        // How many times an assertion has been blocked for an entrypoint
+        static Dictionary<Tuple<string, string>, int> AssertionBlockedCount = new Dictionary<Tuple<string, string>, int>();
+
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
         private static bool RunCorralIterative(AvnInstrumentation instr, int corralTimeout)
@@ -759,28 +762,48 @@ namespace AngelicVerifierNull
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
-                    var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
-                    pendingTraces.Add(constraintId, traceInfo);
-                    Stats.count("blocked.count");
-
-                    // Check inconsistency
-                    var inconsistent = CheckInconsistency(instr, failingEntryPoint);                    
-
-                    if (inconsistent.Count != 0)
+                    // check how many times we've blocked this guy
+                    var done = false;
+                    if (assertLoc != null)
                     {
-                        Debug.Assert(inconsistent.Contains(constraintId));
-                        Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
-                        // drop asserts
-                        PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
-                        // drop constraints
-                        inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
-                        // drop traces
-                        inconsistent.Iter(id => pendingTraces.Remove(id));
+                        var key = Tuple.Create(assertLoc.ToString(), failingEntryPoint);
+                        if (!AssertionBlockedCount.ContainsKey(key))
+                            AssertionBlockedCount[key] = 0;
+                        AssertionBlockedCount[key]++;
+
+                        if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
+                        {
+                            Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
+                            SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                            done = true;
+                        }
                     }
-                    else
-                    {                        
-                        // Relax env constraints
-                        RelaxEnvironmentConstraints(instr, failingEntryPoint);
+
+                    if (!done)
+                    {
+                        var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
+                        pendingTraces.Add(constraintId, traceInfo);
+                        Stats.count("blocked.count");
+
+                        // Check inconsistency
+                        var inconsistent = CheckInconsistency(instr, failingEntryPoint);
+
+                        if (inconsistent.Count != 0)
+                        {
+                            Debug.Assert(inconsistent.Contains(constraintId));
+                            Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
+                            // drop asserts
+                            PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                            // drop constraints
+                            inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
+                            // drop traces
+                            inconsistent.Iter(id => pendingTraces.Remove(id));
+                        }
+                        else
+                        {
+                            // Relax env constraints
+                            RelaxEnvironmentConstraints(instr, failingEntryPoint);
+                        }
                     }
 
                 }
@@ -1548,6 +1571,7 @@ namespace AngelicVerifierNull
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
         private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
+        private const int MAX_ASSERT_BLOCK_COUNT = 10; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
