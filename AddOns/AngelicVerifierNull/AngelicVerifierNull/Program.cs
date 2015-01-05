@@ -147,6 +147,7 @@ namespace AngelicVerifierNull
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
         static string mainFileName = "main_with_stubs.bpl";
+        static string stubsfile = null;
 
 
         static void Main(string[] args)
@@ -260,7 +261,6 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
 
-            string stubsfile = null;
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
 
@@ -301,16 +301,8 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
 
-                if (stubsfile != null)
-                {
-                    var mainFile = System.IO.File.ReadAllLines(args[0]);
-                    System.IO.File.WriteAllLines(mainFileName, mainFile);
-                    var stubFile = System.IO.File.ReadAllLines(stubsfile);
-                    System.IO.File.AppendAllLines(mainFileName, stubFile);
-
-                    prog = GetProgram(mainFileName);
-                }
-                else prog = GetProgram(args[0]);
+                prog = GetProgram(args[0]);
+                
 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
 
@@ -459,6 +451,30 @@ namespace AngelicVerifierNull
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
 
+            // Adding impl for stubs
+            if (stubsfile != null)
+            {
+                try
+                {
+                    Program stubProg = BoogieUtil.ParseProgram(stubsfile);
+
+                    Dictionary<string, Procedure> procs = new Dictionary<string, Procedure>();
+                    init.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procs.Add(proc.Name, proc));
+                    foreach (Implementation impl in stubProg.TopLevelDeclarations.OfType<Implementation>())
+                    {
+                        if (procs.Keys.Contains(impl.Name))
+                        {
+                            init.AddTopLevelDeclaration(impl);
+                            impl.Proc = procs[impl.Name];
+                        }
+                    }
+                }
+                catch (System.IO.FileNotFoundException)
+                {
+                    Utils.Print(string.Format("Stub file not found : {0}", stubsfile));
+                }
+            }
+
             // Do some instrumentation for the input program
             if (Options.propertyChecked == "typestate")
             {
@@ -547,6 +563,8 @@ namespace AngelicVerifierNull
                         .Iter(cc => cc.Attributes = new QKeyValue(Token.NoToken, "allocator_call",
                             new List<object> { Expr.Literal(id++) }, cc.Attributes)
                             )));
+
+            
 
             //Various instrumentations on the well-formed program
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
