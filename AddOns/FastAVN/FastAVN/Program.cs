@@ -81,6 +81,7 @@ namespace FastAVN
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = ""; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
+        static string mergedBugReportCSV = "results.csv";
         static int numThreads = 4; // default number of parallel AVN instances
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
         static bool fieldNonNull = true; // include angelic field non-null harness
@@ -461,13 +462,30 @@ namespace FastAVN
 
             string trace_path = Path.Combine(Directory.GetCurrentDirectory(), bug_folder);
             int index = 0;
+            Directory.CreateDirectory(bug_folder);
+            
             foreach (string bug in shortest_trace.Keys)
             {
-                Directory.CreateDirectory(bug_folder);
                 string file_name = bug_filename + index.ToString() + trace_extension;
                 if (File.Exists(Path.Combine(trace_path, file_name))) File.Delete(Path.Combine(trace_path, file_name));
-                File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
+                try
+                {
+                    File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
+                }
+                catch (FileNotFoundException)
+                {
+                    Utils.Print(string.Format("Trace file not found: {0}", shortest_trace[bug].Item2));
+                }
                 index++;
+            }
+
+            using (StreamWriter bugReportWriter = new StreamWriter(Path.Combine(Directory.GetCurrentDirectory(), mergedBugReportCSV)))
+            {
+                bugReportWriter.WriteLine("Description,Src File,Line,Procedure");
+                foreach (string bug in shortest_trace.Keys)
+                {
+                    bugReportWriter.WriteLine(bug);
+                }
             }
         }
 
