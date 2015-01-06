@@ -18,7 +18,7 @@ namespace AvnResultDashboard
     {
         public static class Options
         {
-            public static string AVN_ROOT = "D:\\corral-codeplex\\corral\\AddOns\\AngelicVerifierNull"; //TODO: need to change this
+            //public static string AVN_ROOT = "D:\\corral-codeplex\\corral\\AddOns\\AngelicVerifierNull"; //TODO: need to change this
             //common
             public static string defectViewerDir = null;
         }
@@ -221,8 +221,12 @@ namespace AvnResultDashboard
 
                     //script
                     //TODO: hardcoded JS file
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, Options.AVN_ROOT + "\\AvnResultDashboard\\avnDashboard.js");
-                    //htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, "..\\..\\..\\avnDashboard.js");
+                    //htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, Options.AVN_ROOT + "\\AvnResultDashboard\\avnDashboard.js");
+                    string path;
+                    path = System.IO.Path.GetDirectoryName(
+                       System.Reflection.Assembly.GetExecutingAssembly().GetName().CodeBase).Substring("file:/".Length);
+                    Console.WriteLine("path = {0}", path);
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, path + "\\avnDashboard.js");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Script);
                     htmlWriter.RenderEndTag();
                     
