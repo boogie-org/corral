@@ -284,7 +284,7 @@ namespace CoreLib
         // Mark "slic" assume statements
         // Insert captureState for driver methods and start
         // Mark "indirect" call assume statements
-        public static void sdvAnnotateDefectTrace(Program trace, HashSet<string> slicVars)
+        public static void sdvAnnotateDefectTrace(Program trace, HashSet<string> slicVars, bool addSlicAnnotations = true)
         {
             //var slicVars = new HashSet<string>(config.trackedVars);
             //slicVars.Remove("alloc");
@@ -331,10 +331,13 @@ namespace CoreLib
                     impl.Blocks[0].Cmds = nc;
                 }
 
-                // Insert "slic" annotation
-                impl.Blocks.Iter(blk =>
-                    blk.Cmds.OfType<AssumeCmd>()
-                    .Iter(cmd => tagAssume(cmd, impl)));
+                if (addSlicAnnotations)
+                {
+                    // Insert "slic" annotation
+                    impl.Blocks.Iter(blk =>
+                        blk.Cmds.OfType<AssumeCmd>()
+                        .Iter(cmd => tagAssume(cmd, impl)));
+                }
 
                 // Insert "indirect" annotation
                 foreach (var blk in impl.Blocks)

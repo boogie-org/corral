@@ -146,6 +146,8 @@ namespace AngelicVerifierNull
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
+        static string mainFileName = "main_with_stubs.bpl";
+        static string stubsfile = null;
 
 
         static void Main(string[] args)
@@ -258,6 +260,10 @@ namespace AngelicVerifierNull
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
+
+            args.Where(s => s.StartsWith("/stubPath:"))
+                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
+
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
@@ -294,7 +300,9 @@ namespace AngelicVerifierNull
 
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
+
                 prog = GetProgram(args[0]);
+                
 
                 Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
 
@@ -443,6 +451,30 @@ namespace AngelicVerifierNull
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
             CheckInputProgramRequirements(init);
 
+            // Adding impl for stubs
+            if (stubsfile != null)
+            {
+                try
+                {
+                    Program stubProg = BoogieUtil.ParseProgram(stubsfile);
+
+                    Dictionary<string, Procedure> procs = new Dictionary<string, Procedure>();
+                    init.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procs.Add(proc.Name, proc));
+                    foreach (Implementation impl in stubProg.TopLevelDeclarations.OfType<Implementation>())
+                    {
+                        if (procs.Keys.Contains(impl.Name))
+                        {
+                            init.AddTopLevelDeclaration(impl);
+                            impl.Proc = procs[impl.Name];
+                        }
+                    }
+                }
+                catch (System.IO.FileNotFoundException)
+                {
+                    Utils.Print(string.Format("Stub file not found : {0}", stubsfile));
+                }
+            }
+
             // Do some instrumentation for the input program
             if (Options.propertyChecked == "typestate")
             {
@@ -531,6 +563,8 @@ namespace AngelicVerifierNull
                         .Iter(cc => cc.Attributes = new QKeyValue(Token.NoToken, "allocator_call",
                             new List<object> { Expr.Literal(id++) }, cc.Attributes)
                             )));
+
+            
 
             //Various instrumentations on the well-formed program
             mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
@@ -650,6 +684,9 @@ namespace AngelicVerifierNull
             }
         }
 
+        // How many times an assertion has been blocked for an entrypoint
+        static Dictionary<Tuple<string, string>, int> AssertionBlockedCount = new Dictionary<Tuple<string, string>, int>();
+
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
         private static bool RunCorralIterative(AvnInstrumentation instr, int corralTimeout)
@@ -743,28 +780,48 @@ namespace AngelicVerifierNull
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
-                    var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
-                    pendingTraces.Add(constraintId, traceInfo);
-                    Stats.count("blocked.count");
-
-                    // Check inconsistency
-                    var inconsistent = CheckInconsistency(instr, failingEntryPoint);                    
-
-                    if (inconsistent.Count != 0)
+                    // check how many times we've blocked this guy
+                    var done = false;
+                    if (assertLoc != null)
                     {
-                        Debug.Assert(inconsistent.Contains(constraintId));
-                        Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
-                        // drop asserts
-                        PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
-                        // drop constraints
-                        inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
-                        // drop traces
-                        inconsistent.Iter(id => pendingTraces.Remove(id));
+                        var key = Tuple.Create(assertLoc.ToString(), failingEntryPoint);
+                        if (!AssertionBlockedCount.ContainsKey(key))
+                            AssertionBlockedCount[key] = 0;
+                        AssertionBlockedCount[key]++;
+
+                        if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
+                        {
+                            Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
+                            SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                            done = true;
+                        }
                     }
-                    else
-                    {                        
-                        // Relax env constraints
-                        RelaxEnvironmentConstraints(instr, failingEntryPoint);
+
+                    if (!done)
+                    {
+                        var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
+                        pendingTraces.Add(constraintId, traceInfo);
+                        Stats.count("blocked.count");
+
+                        // Check inconsistency
+                        var inconsistent = CheckInconsistency(instr, failingEntryPoint);
+
+                        if (inconsistent.Count != 0)
+                        {
+                            Debug.Assert(inconsistent.Contains(constraintId));
+                            Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
+                            // drop asserts
+                            PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                            // drop constraints
+                            inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
+                            // drop traces
+                            inconsistent.Iter(id => pendingTraces.Remove(id));
+                        }
+                        else
+                        {
+                            // Relax env constraints
+                            RelaxEnvironmentConstraints(instr, failingEntryPoint);
+                        }
                     }
 
                 }
@@ -1350,7 +1407,7 @@ namespace AngelicVerifierNull
             //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
             // mark some annotations (that enable optimizations) along the path program
-            CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars);
+            CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars, false);
 
             // convert to a persistent program
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
@@ -1532,6 +1589,7 @@ namespace AngelicVerifierNull
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
         private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
+        private const int MAX_ASSERT_BLOCK_COUNT = 10; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 

@@ -14,8 +14,8 @@
 
 -------------------- funcatdispatch_correct.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing funcatdispatch_correct.bpl ------
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> !(sdv_irql_current != APC_LEVEL && sdv_irql_current != PASSIVE_LEVEL)
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> !(x_3 == NULL && sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> !(sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> !(sdv_irql_current != APC_LEVEL && x_3 == NULL && sdv_irql_current != PASSIVE_LEVEL))
 
 -------------------- lowerdriverreturn.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
