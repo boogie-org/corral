@@ -91,6 +91,7 @@ namespace FastAVN
         static string bug_folder = "Bugs";
         static string bug_filename = "Bug";
         static bool prune = false;
+        static string stubsfile = null;
 
         static void Main(string[] args)
         {
@@ -108,6 +109,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/noDumpSlices"))
                 dumpSlices = false;
+
+            args.Where(s => s.StartsWith("/stubPath:"))
+                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
 
             args.Where(s => s.StartsWith("/aopt:"))
                 .Iter(s => avnArgs += " /" + s.Substring("/aopt:".Length) + " ");
@@ -155,7 +159,7 @@ namespace FastAVN
                 // Setup Boogie and corral
                 AngelicVerifierNull.Driver.InitializeCorral();
 
-                prog = GetProgram(args[0]); // get the input program
+                prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile); // get the input program
 
                 if (prune)
                 {
@@ -167,13 +171,13 @@ namespace FastAVN
                     {
                         Console.WriteLine("Exception: {0}", e.Message);
                         // recover the program
-                        prog = GetProgram(args[0]);
+                        prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile);
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine("Exception: {0}", e.Message);
                         // recover the program
-                        prog = GetProgram(args[0]);
+                        prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile);
                     }
                 }
 
@@ -739,16 +743,6 @@ namespace FastAVN
             return ret;
         }
         #endregion
-
-        // read program from the disk
-        private static Program GetProgram(string filename)
-        {
-            //Program init = BoogieUtil.ReadAndOnlyResolve(filename);
-            Program init = BoogieUtil.ParseProgram(filename);
-            init.Resolve();
-
-            return init;
-        }
 
         // locate HAVOC_MALLOC
         private static Procedure FindMalloc(Program prog)
