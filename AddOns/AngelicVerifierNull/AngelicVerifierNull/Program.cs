@@ -443,7 +443,8 @@ namespace AngelicVerifierNull
         {
             return;
         }
-        static PersistentProgram GetProgram(string filename)
+
+        public static Program GetInputProgram(string filename, string stubs)
         {
             Program init = BoogieUtil.ReadAndOnlyResolve(filename);
             //Instrumentations.RemoveAssertNonNull ra = new Instrumentations.RemoveAssertNonNull();
@@ -452,17 +453,22 @@ namespace AngelicVerifierNull
             CheckInputProgramRequirements(init);
 
             // Adding impl for stubs
-            if (stubsfile != null)
+            if (stubs != null)
             {
                 try
                 {
-                    Program stubProg = BoogieUtil.ParseProgram(stubsfile);
+                    Program stubProg = BoogieUtil.ParseProgram(stubs);
 
-                    Dictionary<string, Procedure> procs = new Dictionary<string, Procedure>();
+                    var procs = new Dictionary<string, Procedure>();
                     init.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procs.Add(proc.Name, proc));
-                    foreach (Implementation impl in stubProg.TopLevelDeclarations.OfType<Implementation>())
+
+                    var impls = new HashSet<string>();
+                    init.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impls.Add(impl.Name));
+
+                    foreach (var impl in stubProg.TopLevelDeclarations.OfType<Implementation>())
                     {
-                        if (procs.Keys.Contains(impl.Name))
+                        // Add the model if there is a procedure declaration but no implementation
+                        if (procs.ContainsKey(impl.Name) && !impls.Contains(impl.Name))
                         {
                             init.AddTopLevelDeclaration(impl);
                             impl.Proc = procs[impl.Name];
@@ -471,9 +477,16 @@ namespace AngelicVerifierNull
                 }
                 catch (System.IO.FileNotFoundException)
                 {
-                    Utils.Print(string.Format("Stub file not found : {0}", stubsfile));
+                    Utils.Print(string.Format("Stub file not found : {0}", stubs));
                 }
             }
+
+            return init;
+        }
+
+        static PersistentProgram GetProgram(string filename)
+        {
+            var init = GetInputProgram(filename, stubsfile);
 
             // Do some instrumentation for the input program
             if (Options.propertyChecked == "typestate")
