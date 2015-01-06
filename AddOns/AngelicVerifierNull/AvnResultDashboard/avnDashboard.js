@@ -7,7 +7,7 @@ function myFunc() {
 
 //function to launch SDVDefectviewer
 function launchSdvDefectViewer(execDir, srcDir, tracePath) {
-    //document.getElementById("demo").innerHTML = "  execDir: " +  execDir + " srcDir: " + srcDir + "  trace: " + tracePath;
+    document.getElementById("demo").innerHTML = "  execDir: " +  execDir + " srcDir: " + srcDir + "  trace: " + tracePath;
     var shell = new ActiveXObject("WScript.Shell");
     shell.CurrentDirectory = execDir;
     var cmd = "view.cmd " + srcDir + " " + tracePath + " ";
