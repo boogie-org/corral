@@ -446,7 +446,7 @@ namespace AngelicVerifierNull
 
         public static Program GetInputProgram(string filename, string stubs)
         {
-            Program init = BoogieUtil.ReadAndOnlyResolve(filename);
+            Program init = BoogieUtil.ParseProgram(filename);
             //Instrumentations.RemoveAssertNonNull ra = new Instrumentations.RemoveAssertNonNull();
             //BoogieUtil.PrintProgram(ra.VisitProgram(init), "noassert.bpl");
             //Sanity check (currently most of it happens inside HarnessInstrumentation)
@@ -471,15 +471,19 @@ namespace AngelicVerifierNull
                         if (procs.ContainsKey(impl.Name) && !impls.Contains(impl.Name))
                         {
                             init.AddTopLevelDeclaration(impl);
-                            impl.Proc = procs[impl.Name];
+                            //impl.Proc = procs[impl.Name];
                         }
                     }
+
+                    
                 }
                 catch (System.IO.FileNotFoundException)
                 {
                     Utils.Print(string.Format("Stub file not found : {0}", stubs));
                 }
             }
+
+            init.Resolve();
 
             return init;
         }
