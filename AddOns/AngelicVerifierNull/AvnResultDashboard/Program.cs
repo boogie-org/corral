@@ -194,10 +194,13 @@ namespace AvnResultDashboard
             private void LoadDefectTraces()
             {
                 AllTraces = Directory.GetFiles(ResultsDir, @"Trace*.tt").ToList()
+                    .Union(Directory.GetFiles(ResultsDir, @"Bug*.tt"))
                     .Select(x => new DefectTrace(x))
                     .ToList();
                 AngelicTraces = Directory.GetFiles(ResultsDir, @"Angelic*.tt")
                     .Union(Directory.GetFiles(ResultsDir, @"Trace*_defect.tt")) //TODO:older dirs have Tracexx_defect.tt files for angelic
+                    .Union(Directory.GetFiles(ResultsDir, @"Bug*.tt"))
+                    .ToList()
                     .Union(Directory.GetFiles(ResultsDir, @"Bug*_defect.tt"))   //newer traces
                     .Select(x => new DefectTrace(x))
                     .ToList();
