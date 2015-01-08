@@ -23,7 +23,14 @@ function enumAnnots()
     var i = 0;
     for(; i < l.length; ++i)
     {
-        str += ("<trace> <tracenum> " + l[i].id.substring("traceId".length) + "</tracenum> <annot> " + l[i].value + " </annot> </trace>");
+        //str += ("<trace> <tracenum> " + l[i].id.substring("traceId".length) + "</tracenum> <annot> " + l[i].value + " </annot> </trace>");
+        str += "<trace> ";
+        str += "<tracenum> " + l[i].id.substring("traceId".length) + "</tracenum>";
+        //TODO: avoid positional indexing (0 -> <button ..>
+        str += "<category> " + l[i].elements[1].value + " </category>";
+        str += "<prefix> " + "<![CDATA[" + l[i].elements[2].value + "]]>" + " </prefix>"; //treat it as text to avoid special chars
+        str += "<comment> " + l[i].elements[3].value + " </comment>";
+        str += "</trace>";
     }
     str += "</traces>";
     //document.getElementById("displayAllAnnotsHere").innerHTML = str; //doesn;t render xml tags

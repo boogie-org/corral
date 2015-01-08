@@ -126,7 +126,7 @@ namespace AvnResultDashboard
             /// maps an angelic trace to its annotation
             /// </summary>
             /// <returns></returns>
-            public Dictionary<int, string> TraceAnnot { get; set; }
+            public Dictionary<int, Tuple<string,string,string>> TraceAnnot { get; set; }
 
             public string Identifier() 
             {
@@ -156,14 +156,14 @@ namespace AvnResultDashboard
                     .ToList();
                 AngelicTraces = Directory.GetFiles(ResultsDir, @"Angelic*.tt")
                     .Union(Directory.GetFiles(ResultsDir, @"Trace*_defect.tt")) //TODO:older dirs have Tracexx_defect.tt files for angelic
-                    .ToList()
+                    .Union(Directory.GetFiles(ResultsDir, @"Bug*_defect.tt"))   //newer traces
                     .Select(x => new DefectTrace(x))
                     .ToList();
                 Console.WriteLine("Defects: Total/Angelic = {0}/{1}", AllTraces.Count(), AngelicTraces.Count());
             }
             private void LoadTraceAnnots()
             {
-                TraceAnnot = new Dictionary<int,string>();
+                TraceAnnot = new Dictionary<int,Tuple<string,string,string>>();
 
                 XmlDocument xmlDoc = new XmlDocument();
                 try
@@ -175,10 +175,13 @@ namespace AvnResultDashboard
                 }
                 var processTrace = new Action<XmlNode>(x =>
                 {
+                    //These tags should be in sync with avnDashboard.cs::enumAnnots()
                     var n  = Int32.Parse(x.SelectSingleNode("tracenum").InnerText);
-                    var a = x.SelectSingleNode("annot").InnerText;
-                    TraceAnnot[n] = a;
-                    //Console.WriteLine("t[{0}] -> {1}", n, a);
+                    var c = x.SelectSingleNode("category").InnerText;
+                    var p = x.SelectSingleNode("prefix").InnerText;
+                    var a = x.SelectSingleNode("comment").InnerText;
+                    TraceAnnot[n] = Tuple.Create(c, p, a);
+                    Console.WriteLine("t[{0}] -> {1}", n, c + "," + p + "," + a);
                 });
 
                 var xmlTraces = xmlDoc.SelectSingleNode("traces");
@@ -351,7 +354,7 @@ namespace AvnResultDashboard
                     htmlWriter.RenderEndTag();
 
                     //table
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:50%");
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:100%");
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Border, "1");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Table);
                     //heading
@@ -428,14 +431,18 @@ namespace AvnResultDashboard
                     count++; //need to count before any continue, as we need to map count uniquely to a trace
                     if (!filter.Contains(tr)) continue;
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    //reference
-                    //var trace = ari.ResultsDir + "\\\\Angelic" + (count) + ".tt";
-                    //if (!File.Exists(trace))
-                    //    trace = ari.ResultsDir + "\\\\Trace" + (count) + "_defect.tt"; 
+                    //Form 
+                    if (!dontUpdateAnnots)
+                    {
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Name, "traceAnnots");
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "traceId" + count);
+                    }
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Form);
                     var trace = tr.Id;
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Href, trace.Replace("\\\\", "\\")); 
+                    //Raw defect trace
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Href, trace.Replace("\\\\", "\\"));
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.A); //a
-                    htmlWriter.Write("Trace" + count); 
+                    htmlWriter.Write("Trace" + count);
                     htmlWriter.RenderEndTag(); //a
                     //button
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
@@ -446,20 +453,26 @@ namespace AvnResultDashboard
                               "\"" + @trace.Replace("\\", "\\\\") + "\"" +
                                ")");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
-                    htmlWriter.Write("DefectViewer");
+                    htmlWriter.Write("View");
                     htmlWriter.RenderEndTag(); //button
-                    if (!dontUpdateAnnots)
+                    htmlWriter.WriteBreak();
+                    var traceFound = ari.TraceAnnot.ContainsKey(count);
+                    var addInputBoxWithVal = new Action<string, string, string>((str,c, t ) =>
                     {
-                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Name, "traceAnnots");
-                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "traceId" + count);
-                    }
-                    if (ari.TraceAnnot.ContainsKey(count))
-                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Value, ari.TraceAnnot[count]);
-                    else
-                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Value, "");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Input);
-                    htmlWriter.RenderEndTag(); //textarea
-                    htmlWriter.RenderEndTag();
+                        htmlWriter.Write(c);
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Name, c);    
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Value, str);
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, t);
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Input);
+                        htmlWriter.RenderEndTag(); //input
+                        htmlWriter.WriteBreak();
+                    });
+
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item1 : "", "Category", "text");
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item2 : "", "Prefix", "url");
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item3 : "", "Comment", "text");
+                    htmlWriter.RenderEndTag(); //Form
+                    htmlWriter.RenderEndTag(); //P
                 }
                 return count;
             }
