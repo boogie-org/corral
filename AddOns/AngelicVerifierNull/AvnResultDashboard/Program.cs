@@ -58,18 +58,66 @@ namespace AvnResultDashboard
                 isRelativePath(baseDir))
                 throw new Exception("Specify absolute pathnames for arguments");
 
+            var getConfig = new Func<string, string>(x =>
+            { 
+                using (TextReader cf = new StreamReader(Directory.GetFiles(x, "config.txt")[0]))
+                {
+                    return cf.ReadToEnd();
+                }
+            }
+            );
+            var currConfig = getConfig(currDir);
+            var baseConfig = getConfig(baseDir);
+
             var hrg = new HtmlReportGeneration("myhtmlfile.html");
-            var ari1 = new AvnResultInfo(currDir, srcPath); ari1.LoadResultInfo();
-            var ari2 = new AvnResultInfo(baseDir, srcPath); ari2.LoadResultInfo();
+            hrg.WriteString("Current Config ==> " + currConfig);
+            hrg.WriteString("Baseline Config ==> " + baseConfig);
+
+            var stripBplFromName = new Func<string,string> (x => 
+            {
+                if(x.EndsWith(".bpl")) return x.Substring(0, x.LastIndexOf(".bpl"));
+                return null;
+            });
+            var resultSrcPairs = Directory.GetDirectories(currDir, "*.bpl")
+                .Select(x => x.Substring(x.LastIndexOf("\\")+1))
+                .Where(x => Directory.Exists(srcPath + "\\" + stripBplFromName(x)) 
+                    && Directory.Exists(baseDir + "\\" + x))
+                .Select(x => Tuple.Create(x, stripBplFromName(x)));
+                    
+            resultSrcPairs
+                .ToList()
+                .ForEach(x => ProcessSingleModule(x.Item2, currDir + "\\\\" + x.Item1, srcPath + "\\\\" + x.Item2, baseDir + "\\\\" + x.Item1, hrg));
+        }
+
+        /// <summary>
+        /// name is a unique identifier (example name) for each example, currently module name
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="currDir"></param>
+        /// <param name="srcPath"></param>
+        /// <param name="baseDir"></param>
+        /// <param name="hrg"></param>
+        private static void ProcessSingleModule(string name, string currDir, string srcPath, string baseDir, HtmlReportGeneration hrg)
+        {
+            var ari1 = new AvnResultInfo(currDir, srcPath, name); ari1.LoadResultInfo();
+            var ari2 = new AvnResultInfo(baseDir, srcPath, name); ari2.LoadResultInfo();
             var bi = new BaselineInfo(ari1, ari2);
-            bi.MatchResults();
-
-            hrg.WriteHtml(ari1, ari2, bi);
-
+            try
+            {
+                bi.MatchResults();
+                hrg.WriteHtml(ari1, ari2, bi);
+            } catch (Exception e)
+            {
+                Console.WriteLine(string.Format("ERROR: Skipping {0} due to exception {1}", currDir, e.Message));
+            }
         }
 
         public class BaselineInfo
         {
+            public class HashCollisionException : System.Exception
+            {
+                public HashCollisionException(string message) : base(message) { }
+            }
             private AvnResultInfo ar1, ar2;
             public HashSet<Tuple<DefectTrace, DefectTrace>> matchedTraces; //v1 \cap v2
 
@@ -83,7 +131,7 @@ namespace AvnResultDashboard
                     x.ForEach(y => setHash.Add(y));
                     if (x.Count != setHash.Count())
                     {
-                        throw new Exception("Hash collision detected in version ");
+                        throw new HashCollisionException("Hash collision detected in version ");
                     }
                 });
 
@@ -107,7 +155,7 @@ namespace AvnResultDashboard
                         var y = findMatchingTrace(x, ar2);
                         if (y != null)
                         {
-                            Console.WriteLine("MATCH!!: diff {0}  {1}", x.Id, y.Id);
+                            //Console.WriteLine("MATCH!!: diff {0}  {1}", x.Id, y.Id);
                             matchedTraces.Add(Tuple.Create(x, y));
                         }
                     });
@@ -119,9 +167,9 @@ namespace AvnResultDashboard
         {
             public string ResultsDir {get; set;}
             public string SrcDir { get; set;}
+            public string Name { get; set; }
             public List<DefectTrace> AllTraces { get; set; }
             public List<DefectTrace> AngelicTraces { get; set; }
-            public string Config { get; set; }            
             /// <summary>
             /// maps an angelic trace to its annotation
             /// </summary>
@@ -132,22 +180,16 @@ namespace AvnResultDashboard
             {
                 throw new NotImplementedException();
             }
-            public AvnResultInfo(string rDir, string sDir)
+            public AvnResultInfo(string rDir, string sDir, string name)
             {
                 ResultsDir = rDir;
                 SrcDir = sDir;
+                Name = name;
             }
             public void LoadResultInfo()
             {
-                LoadConfigFileInDir();
                 LoadDefectTraces();
                 LoadTraceAnnots();
-            }
-            private void LoadConfigFileInDir()
-            {
-                TextReader cf = new StreamReader(@ResultsDir + @"\..\config.txt");
-                Config = cf.ReadToEnd();
-                cf.Close();
             }
             private void LoadDefectTraces()
             {
@@ -181,7 +223,7 @@ namespace AvnResultDashboard
                     var p = x.SelectSingleNode("prefix").InnerText;
                     var a = x.SelectSingleNode("comment").InnerText;
                     TraceAnnot[n] = Tuple.Create(c, p, a);
-                    Console.WriteLine("t[{0}] -> {1}", n, c + "," + p + "," + a);
+                    //Console.WriteLine("t[{0}] -> {1}", n, c + "," + p + "," + a);
                 });
 
                 var xmlTraces = xmlDoc.SelectSingleNode("traces");
@@ -194,7 +236,7 @@ namespace AvnResultDashboard
         public class DefectTrace
         {
             private List<Tuple<string,string>> trace ; //lines in the trace along with their abstraction
-            static private Func<string, string> abstractionFunc = AbstractConstants; //the function that creates an abstract string (e.g. line = 435 --> line = *)
+            static private Func<string, string> abstractionFunc = /*NoAbstract*/ AbstractConstants; //the function that creates an abstract string (e.g. line = 435 --> line = *)
 
             public string Id { get; set; }
             private int _hashVal;
@@ -325,63 +367,37 @@ namespace AvnResultDashboard
             //    }
             //    htmlFile.Close();
             //}
-            public void WriteHtml(AvnResultInfo ar1, AvnResultInfo ar2,  BaselineInfo bi)
+            public void WriteString(string s)
             {
                 using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
+                {
+                    //paragraph
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
+                    htmlWriter.Write(s);
+                    htmlWriter.RenderEndTag();
+                }
+            }
+            public void WriteHtml(AvnResultInfo ar1, AvnResultInfo ar2,  BaselineInfo bi)
+            {
+                var name = ar1.Name; 
+                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
                 {                    
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Html);
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Body);
-
-                    //script
-                    string path;
-                    path = System.IO.Path.GetDirectoryName(
-                       System.Reflection.Assembly.GetExecutingAssembly().GetName().CodeBase).Substring("file:/".Length);
-                    //Console.WriteLine("path = {0}", path);
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, path + "\\avnDashboard.js");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Script);
-                    htmlWriter.RenderEndTag();
-                    
-                    //config location
-                    //paragraph
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    htmlWriter.Write("Config ==> " + ar1.Config);
-                    htmlWriter.RenderEndTag();
-
-                    //paragraph
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "demo");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    htmlWriter.Write("Command display");
-                    htmlWriter.RenderEndTag();
-
-                    //table
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:100%");
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Border, "1");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Table);
-                    //heading
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
-                    MkTableHeaderColumn(htmlWriter, "Example", true);
-                    MkTableHeaderColumn(htmlWriter, "Num Traces", true);
-                    MkTableHeaderColumn(htmlWriter, "Num Angelic Traces", true);
-                    MkTableHeaderColumn(htmlWriter, "Matched Angelic traces", true);
-                    MkTableHeaderColumn(htmlWriter, "UnMatched Angelic traces", true);
-                    MkTableHeaderColumn(htmlWriter, "Missing Angelic traces", true);
-                    htmlWriter.RenderEndTag(); //tr
-
                     ////row1
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td); //need more info in this column
                     //MkTableHeaderColumn(htmlWriter, ari.ResultsDir);
                     htmlWriter.Write(ar1.ResultsDir);
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "displayAllAnnotsHere");
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "displayAllAnnotsFor_" + name);
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Rows, (ar1.AngelicTraces.Count * 2).ToString());
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Cols, "40");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Textarea);
-                    htmlWriter.Write("Display all annots here");
+                    htmlWriter.Write("Display annots for " + name + " here");
                     htmlWriter.RenderEndTag();
+                    htmlWriter.WriteBreak();
                     //button
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots()");
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots(" + "\"" + name + "\"" + ")");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
                     htmlWriter.Write("Generate content of annots file AND copy/paste into trace_annots.xml in the directory above");
                     htmlWriter.RenderEndTag(); //button
@@ -405,13 +421,8 @@ namespace AvnResultDashboard
                     WriteTracesInHtml(ar2, ar2.AngelicTraces, missingTraces, htmlWriter, true); //don't update the ar1\trace_annots 
                     htmlWriter.RenderEndTag(); //td
 
-                    htmlWriter.RenderEndTag(); //tr
-                    
-                    htmlWriter.RenderEndTag(); //table
-                    htmlWriter.RenderEndTag(); //body
-                    htmlWriter.RenderEndTag(); //html
+                    htmlWriter.RenderEndTag(); //tr                    
                 }
-                htmlFile.Close();
             }
             /// <summary>
             /// Important: Do not pass a subset of traces to this function, as the annotation mapping will get confused
@@ -426,6 +437,11 @@ namespace AvnResultDashboard
                 bool dontUpdateAnnots = false)    
             {
                 int count = -1;
+                if (!dontUpdateAnnots)
+                {
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "tracesPerExample_" + ari.Name);
+                }
+                htmlWriter.RenderBeginTag(HtmlTextWriterTag.Div);
                 foreach (var tr in traces)
                 {
                     count++; //need to count before any continue, as we need to map count uniquely to a trace
@@ -434,7 +450,7 @@ namespace AvnResultDashboard
                     //Form 
                     if (!dontUpdateAnnots)
                     {
-                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Name, "traceAnnots");
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Class, "traceAnnots");
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "traceId" + count);
                     }
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Form);
@@ -474,6 +490,7 @@ namespace AvnResultDashboard
                     htmlWriter.RenderEndTag(); //Form
                     htmlWriter.RenderEndTag(); //P
                 }
+                htmlWriter.RenderEndTag();
                 return count;
             }
             private static void MkTableHeaderColumn(HtmlTextWriter htmlWriter, string str, bool header=false)
@@ -487,9 +504,51 @@ namespace AvnResultDashboard
                 using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
                 {
                     htmlWriter.Write("<!DOCTYPE html>");
+
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Html);
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Body);
+
+                    //paragraph
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "demo");
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
+                    htmlWriter.Write("Current command is displayed here");
+                    htmlWriter.RenderEndTag();
+
+                    //script
+                    string path;
+                    path = System.IO.Path.GetDirectoryName(
+                       System.Reflection.Assembly.GetExecutingAssembly().GetName().CodeBase).Substring("file:/".Length);
+                    //Console.WriteLine("path = {0}", path);
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, path + "\\avnDashboard.js");
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Script);
+                    htmlWriter.RenderEndTag();
+
+                    //table
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:100%");
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Border, "1");
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Table);
+                    //heading
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
+                    MkTableHeaderColumn(htmlWriter, "Example", true);
+                    MkTableHeaderColumn(htmlWriter, "Num Traces", true);
+                    MkTableHeaderColumn(htmlWriter, "Num Angelic Traces", true);
+                    MkTableHeaderColumn(htmlWriter, "Matched Angelic traces", true);
+                    MkTableHeaderColumn(htmlWriter, "UnMatched Angelic traces", true);
+                    MkTableHeaderColumn(htmlWriter, "Missing Angelic traces", true);
+                    htmlWriter.RenderEndTag(); //tr
                 }
             }
-            private void AddHtmlPostlude() {}
+            public void AddHtmlPostlude()
+            {
+                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
+                {
+
+                    htmlWriter.RenderEndTag(); //table
+                    htmlWriter.RenderEndTag(); //body
+                    htmlWriter.RenderEndTag(); //html
+                }
+                htmlFile.Close();
+            }
         }
 
     }
