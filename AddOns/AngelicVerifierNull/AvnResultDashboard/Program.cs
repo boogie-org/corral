@@ -49,7 +49,6 @@ namespace AvnResultDashboard
                 Console.WriteLine("Usage:  AvnResultDashboard /dir:<path-to-avn-result> /srcPath:<path-to-sources> /defectViewerDir:<path-to-view.cmd> [/break /baseline:<path-to-baseline-avn-result>]");
                 return;
             }
-            if (baseDir == null) baseDir = currDir;
 
             var isRelativePath = new Predicate<string>(x => x != null && !x.Contains(":\\"));
             if (isRelativePath(currDir) || 
@@ -66,12 +65,16 @@ namespace AvnResultDashboard
                 }
             }
             );
-            var currConfig = getConfig(currDir);
-            var baseConfig = getConfig(baseDir);
 
-            var hrg = new HtmlReportGeneration("myhtmlfile.html");
+            var hrg = new HtmlReportGeneration("myhtmlfile.html", baseDir != null);
+            var currConfig = getConfig(currDir);
             hrg.WriteString("Current Config ==> " + currConfig);
-            hrg.WriteString("Baseline Config ==> " + baseConfig);
+
+            if (baseDir != null)
+            {
+                var baseConfig = getConfig(baseDir);
+                hrg.WriteString("Baseline Config ==> " + baseConfig);
+            }
 
             var stripBplFromName = new Func<string,string> (x => 
             {
@@ -80,13 +83,17 @@ namespace AvnResultDashboard
             });
             var resultSrcPairs = Directory.GetDirectories(currDir, "*.bpl")
                 .Select(x => x.Substring(x.LastIndexOf("\\")+1))
-                .Where(x => Directory.Exists(srcPath + "\\" + stripBplFromName(x)) 
-                    && Directory.Exists(baseDir + "\\" + x))
+                .Where(x => Directory.Exists(srcPath + "\\" + stripBplFromName(x)))
                 .Select(x => Tuple.Create(x, stripBplFromName(x)));
                     
             resultSrcPairs
                 .ToList()
-                .ForEach(x => ProcessSingleModule(x.Item2, currDir + "\\\\" + x.Item1, srcPath + "\\\\" + x.Item2, baseDir + "\\\\" + x.Item1, hrg));
+                .ForEach(x => ProcessSingleModule(
+                    x.Item2, 
+                    currDir + "\\\\" + x.Item1, 
+                    srcPath + "\\\\" + x.Item2, 
+                    baseDir == null ? null : baseDir + "\\\\" + x.Item1, 
+                    hrg));
         }
 
         /// <summary>
@@ -100,11 +107,16 @@ namespace AvnResultDashboard
         private static void ProcessSingleModule(string name, string currDir, string srcPath, string baseDir, HtmlReportGeneration hrg)
         {
             var ari1 = new AvnResultInfo(currDir, srcPath, name); ari1.LoadResultInfo();
-            var ari2 = new AvnResultInfo(baseDir, srcPath, name); ari2.LoadResultInfo();
-            var bi = new BaselineInfo(ari1, ari2);
             try
             {
-                bi.MatchResults();
+                AvnResultInfo ari2 = null; 
+                BaselineInfo bi = null;
+                if (baseDir != null)
+                {
+                    ari2 = new AvnResultInfo(baseDir, srcPath, name); ari2.LoadResultInfo();
+                    bi = new BaselineInfo(ari1, ari2);
+                    bi.MatchResults();
+                }
                 hrg.WriteHtml(ari1, ari2, bi);
             } catch (Exception e)
             {
@@ -302,8 +314,10 @@ namespace AvnResultDashboard
         public class HtmlReportGeneration
         {
             TextWriter htmlFile;
-            public HtmlReportGeneration(string s) {
+            bool baseline; 
+            public HtmlReportGeneration(string s, bool baseline) {
                 htmlFile = new StreamWriter(s);
+                this.baseline = baseline;
                 AddHtmlPrelude();
             }
             //public void WriteHtmlOld()
@@ -391,6 +405,12 @@ namespace AvnResultDashboard
                     htmlWriter.RenderEndTag();
                 }
             }
+            /// <summary>
+            /// bi = null means that we are only given one version
+            /// </summary>
+            /// <param name="ar1"></param>
+            /// <param name="ar2"></param>
+            /// <param name="bi"></param>
             public void WriteHtml(AvnResultInfo ar1, AvnResultInfo ar2,  BaselineInfo bi)
             {
                 var name = ar1.Name; 
@@ -424,7 +444,7 @@ namespace AvnResultDashboard
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots(" + "\"" + name + "\"" + ")");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
                     //var traceFile = ar1.ResultsDir.Replace("\\\\", "\\") + @"\trace_annots.xml";
-                    var traceFile = ar1.Name + @"\trace_annots.xml";
+                    var traceFile = @"trace_annots.xml";
                     htmlWriter.Write("Generate content of annots");
                     htmlWriter.WriteBreak();
                     htmlWriter.Write(string.Format("Copy/paste into {0}",traceFile));
@@ -433,21 +453,28 @@ namespace AvnResultDashboard
                     htmlWriter.RenderEndTag(); //td
 
                     //MkTableHeaderColumn(htmlWriter, ar1.AllTraces.Count().ToString());
-                    MkTableHeaderColumn(htmlWriter, "Total/Matched = " + ar1.AngelicTraces.Count().ToString() + 
+                    if (!baseline)
+                        MkTableHeaderColumn(htmlWriter, "Total = " + ar1.AngelicTraces.Count().ToString());
+                    else
+                        MkTableHeaderColumn(htmlWriter, "Total/Matched = " + ar1.AngelicTraces.Count().ToString() + 
                         "/" + bi.matchedTraces.Count);
 
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-                    var matchedTraces = ar1.AngelicTraces.Where(t => bi.matchedTraces.Any(x => x.Item1 == t));
+                    var matchedTraces =  //if not baseline, then all traces
+                        ar1.AngelicTraces.Where(t => !baseline || bi.matchedTraces.Any(x => x.Item1 == t));
                     WriteTracesInHtml(ar1, ar1.AngelicTraces, matchedTraces, htmlWriter);
                     htmlWriter.RenderEndTag(); //td
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-                    var unMatchedTraces = ar1.AngelicTraces.Where(t => !bi.matchedTraces.Any(x => x.Item1 == t));
-                    WriteTracesInHtml(ar1, ar1.AngelicTraces, unMatchedTraces, htmlWriter);
-                    htmlWriter.RenderEndTag(); //td
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-                    var missingTraces = ar2.AngelicTraces.Where(t => !bi.matchedTraces.Any(x => x.Item2 == t));
-                    WriteTracesInHtml(ar2, ar2.AngelicTraces, missingTraces, htmlWriter, true); //don't update the ar1\trace_annots 
-                    htmlWriter.RenderEndTag(); //td
+                    if (baseline)
+                    {
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
+                        var unMatchedTraces = ar1.AngelicTraces.Where(t => !bi.matchedTraces.Any(x => x.Item1 == t));
+                        WriteTracesInHtml(ar1, ar1.AngelicTraces, unMatchedTraces, htmlWriter);
+                        htmlWriter.RenderEndTag(); //td
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
+                        var missingTraces = ar2.AngelicTraces.Where(t => !bi.matchedTraces.Any(x => x.Item2 == t));
+                        WriteTracesInHtml(ar2, ar2.AngelicTraces, missingTraces, htmlWriter, true); //don't update the ar1\trace_annots 
+                        htmlWriter.RenderEndTag(); //td
+                    }
 
                     htmlWriter.RenderEndTag(); //tr                    
                 }
@@ -461,7 +488,7 @@ namespace AvnResultDashboard
             /// <param name="filter"></param>
             /// <param name="htmlWriter"></param>
             /// <returns></returns>
-            private static int WriteTracesInHtml(AvnResultInfo ari, List<DefectTrace> traces, IEnumerable<DefectTrace> filter, HtmlTextWriter htmlWriter, 
+            private  int WriteTracesInHtml(AvnResultInfo ari, List<DefectTrace> traces, IEnumerable<DefectTrace> filter, HtmlTextWriter htmlWriter, 
                 bool dontUpdateAnnots = false)    
             {
                 int count = -1;
@@ -499,14 +526,15 @@ namespace AvnResultDashboard
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
                     htmlWriter.Write("View");
                     htmlWriter.RenderEndTag(); //button
-                    htmlWriter.WriteBreak();
+                    if (baseline) htmlWriter.WriteBreak();
                     var traceFound = ari.TraceAnnot.ContainsKey(count);
-                    var addInputBoxWithVal = new Action<string, string, string>((str,c, t ) =>
+                    var addInputBoxWithVal = new Action<string, string, string,int>((str,c, t, size) =>
                     {
                         htmlWriter.Write(c);
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Name, c);    
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Value, str);
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, t);
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Size, size.ToString());
                         htmlWriter.RenderBeginTag(HtmlTextWriterTag.Input);
                         htmlWriter.RenderEndTag(); //input
                         if (t == "url" && str != "")
@@ -516,12 +544,12 @@ namespace AvnResultDashboard
                             htmlWriter.Write("link");
                             htmlWriter.RenderEndTag();
                         }
-                        htmlWriter.WriteBreak();
+                        if (baseline) htmlWriter.WriteBreak();
                     });
 
-                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item1 : "", "Category", "text");
-                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item2 : "", "Prefix", "url");
-                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item3 : "", "Comment", "text");
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item1 : "", "Category", "text", 20);
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item2 : "", "Prefix", "url", 20);
+                    addInputBoxWithVal(traceFound ? ari.TraceAnnot[count].Item3 : "", "Comment", "text", 50);
                     htmlWriter.RenderEndTag(); //Form
                     htmlWriter.RenderEndTag(); //P
                 }
@@ -569,20 +597,31 @@ namespace AvnResultDashboard
                         htmlWriter.RenderBeginTag(HtmlTextWriterTag.Col);
                         htmlWriter.RenderEndTag();
                     });
-                    addColWidth("5%");
-                    addColWidth("5%");
-                    addColWidth("30%");
-                    addColWidth("30%");
-                    addColWidth("30%");
-                    
+                    if (baseline)
+                    {
+                        addColWidth("20%");
+                        addColWidth("10%");
+                        addColWidth("70%");
+                    }
+                    else
+                    {
+                        addColWidth("5%");
+                        addColWidth("5%");
+                        addColWidth("30%");
+                        addColWidth("30%");
+                        addColWidth("30%");
+                    }
                     //heading
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
                     MkTableHeaderColumn(htmlWriter, "Example", true);
                     //MkTableHeaderColumn(htmlWriter, "Num Traces", true);
                     MkTableHeaderColumn(htmlWriter, "Num Angelic Traces", true);
                     MkTableHeaderColumn(htmlWriter, "Matched Angelic traces", true);
-                    MkTableHeaderColumn(htmlWriter, "UnMatched Angelic traces", true);
-                    MkTableHeaderColumn(htmlWriter, "Missing Angelic traces", true);
+                    if (baseline)
+                    {
+                        MkTableHeaderColumn(htmlWriter, "UnMatched Angelic traces", true);
+                        MkTableHeaderColumn(htmlWriter, "Missing Angelic traces", true);
+                    }
                     htmlWriter.RenderEndTag(); //tr
                 }
             }
