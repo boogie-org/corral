@@ -168,6 +168,7 @@ namespace AvnResultDashboard
             public string ResultsDir {get; set;}
             public string SrcDir { get; set;}
             public string Name { get; set; }
+            public string Summary { get; set; }
             public List<DefectTrace> AllTraces { get; set; }
             public List<DefectTrace> AngelicTraces { get; set; }
             /// <summary>
@@ -185,11 +186,13 @@ namespace AvnResultDashboard
                 ResultsDir = rDir;
                 SrcDir = sDir;
                 Name = name;
+                Summary = null;
             }
             public void LoadResultInfo()
             {
                 LoadDefectTraces();
                 LoadTraceAnnots();
+                LoadSummary();
             }
             private void LoadDefectTraces()
             {
@@ -232,6 +235,14 @@ namespace AvnResultDashboard
                 var xmlTraces = xmlDoc.SelectSingleNode("traces");
                 foreach (XmlNode node in xmlTraces.SelectNodes("trace"))
                     processTrace(node);
+            }
+            private void LoadSummary()
+            {
+                var sdir = ResultsDir + @"\summary.txt";
+                if (!Directory.Exists(sdir)) return;
+                var cf = new StreamReader(sdir);
+                Summary = cf.ReadToEnd();
+                cf.Close();
             }
 
         }
@@ -386,14 +397,24 @@ namespace AvnResultDashboard
                 using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
                 {                    
                     ////row1
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Valign, "top");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td); //need more info in this column
-                    //MkTableHeaderColumn(htmlWriter, ari.ResultsDir);
-                    htmlWriter.Write(ar1.ResultsDir);
+                    //htmlWriter.Write(ar1.ResultsDir.Replace("\\\\", "\\"));
+                    htmlWriter.Write(ar1.Name);
+                    htmlWriter.WriteBreak();
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.B);
+                    htmlWriter.Write("STATS:");
+                    htmlWriter.RenderEndTag();
+                    htmlWriter.Write(ar1.Summary);
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.B);
+                    htmlWriter.WriteBreak();
+                    htmlWriter.Write("PREfix link:");
+                    htmlWriter.RenderEndTag();
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "displayAllAnnotsFor_" + name);
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Rows, (ar1.AngelicTraces.Count * 2).ToString());
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Cols, "40");
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Rows, (ar1.AngelicTraces.Count).ToString());
+                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Cols, "30");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Textarea);
                     htmlWriter.Write("Display annots for " + name + " here");
                     htmlWriter.RenderEndTag();
@@ -402,12 +423,16 @@ namespace AvnResultDashboard
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots(" + "\"" + name + "\"" + ")");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
-                    htmlWriter.Write("Generate content of annots file AND copy/paste into trace_annots.xml in the directory above");
+                    //var traceFile = ar1.ResultsDir.Replace("\\\\", "\\") + @"\trace_annots.xml";
+                    var traceFile = ar1.Name + @"\trace_annots.xml";
+                    htmlWriter.Write("Generate content of annots");
+                    htmlWriter.WriteBreak();
+                    htmlWriter.Write(string.Format("Copy/paste into {0}",traceFile));
                     htmlWriter.RenderEndTag(); //button
                     htmlWriter.RenderEndTag(); //P
                     htmlWriter.RenderEndTag(); //td
 
-                    MkTableHeaderColumn(htmlWriter, ar1.AllTraces.Count().ToString());
+                    //MkTableHeaderColumn(htmlWriter, ar1.AllTraces.Count().ToString());
                     MkTableHeaderColumn(htmlWriter, "Total/Matched = " + ar1.AngelicTraces.Count().ToString() + 
                         "/" + bi.matchedTraces.Count);
 
@@ -484,6 +509,13 @@ namespace AvnResultDashboard
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, t);
                         htmlWriter.RenderBeginTag(HtmlTextWriterTag.Input);
                         htmlWriter.RenderEndTag(); //input
+                        if (t == "url" && str != "")
+                        {
+                            htmlWriter.AddAttribute(HtmlTextWriterAttribute.Href, str.TrimStart());
+                            htmlWriter.RenderBeginTag(HtmlTextWriterTag.A);
+                            htmlWriter.Write("link");
+                            htmlWriter.RenderEndTag();
+                        }
                         htmlWriter.WriteBreak();
                     });
 
@@ -530,10 +562,23 @@ namespace AvnResultDashboard
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:100%");
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Border, "1");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Table);
+
+                    var addColWidth = new Action<string>(x =>
+                    {
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Width, x);
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Col);
+                        htmlWriter.RenderEndTag();
+                    });
+                    addColWidth("5%");
+                    addColWidth("5%");
+                    addColWidth("30%");
+                    addColWidth("30%");
+                    addColWidth("30%");
+                    
                     //heading
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
                     MkTableHeaderColumn(htmlWriter, "Example", true);
-                    MkTableHeaderColumn(htmlWriter, "Num Traces", true);
+                    //MkTableHeaderColumn(htmlWriter, "Num Traces", true);
                     MkTableHeaderColumn(htmlWriter, "Num Angelic Traces", true);
                     MkTableHeaderColumn(htmlWriter, "Matched Angelic traces", true);
                     MkTableHeaderColumn(htmlWriter, "UnMatched Angelic traces", true);
