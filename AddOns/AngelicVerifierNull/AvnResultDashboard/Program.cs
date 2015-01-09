@@ -250,9 +250,9 @@ namespace AvnResultDashboard
             }
             private void LoadSummary()
             {
-                var sdir = ResultsDir + @"\summary.txt";
-                if (!Directory.Exists(sdir)) return;
-                var cf = new StreamReader(sdir);
+                var file = ResultsDir + @"\summary.txt";
+                if (!File.Exists(file)) return;
+                var cf = new StreamReader(file);
                 Summary = cf.ReadToEnd();
                 cf.Close();
             }
