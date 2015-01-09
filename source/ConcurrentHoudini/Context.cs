@@ -256,7 +256,7 @@ namespace ConcurrentHoudini
             }
             return false;
         }
-        private List<object> getAttrParams(bpl.QKeyValue attr, string key)
+        private IList<object> getAttrParams(bpl.QKeyValue attr, string key)
         {
             while (attr != null)
             {
