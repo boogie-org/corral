@@ -328,21 +328,20 @@ namespace AvnResultDashboard
         public class HtmlReportGeneration
         {
             TextWriter htmlFile;
+            HtmlTextWriter htmlWriter;
             bool baseline; 
             public HtmlReportGeneration(string s, bool baseline) {
                 htmlFile = new StreamWriter(s);
+                htmlWriter = new HtmlTextWriter(htmlFile);
                 this.baseline = baseline;
                 AddHtmlPrelude();
             }
             public void WriteString(string s)
             {
-                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
-                {
                     //paragraph
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
                     htmlWriter.Write(s);
                     htmlWriter.RenderEndTag(); //P
-                }
             }
             /// <summary>
             /// bi = null means that we are only given one version
@@ -353,8 +352,6 @@ namespace AvnResultDashboard
             public void WriteHtml(AvnResultInfo ar1, AvnResultInfo ar2,  BaselineInfo bi)
             {
                 var name = ar1.Name; 
-                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
-                {                    
                     ////row1
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Valign, "top");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
@@ -419,7 +416,6 @@ namespace AvnResultDashboard
                     }
 
                     htmlWriter.RenderEndTag(); //tr                    
-                }
             }
             /// <summary>
             /// Important: Do not pass a subset of traces to this function, as the annotation mapping will get confused
@@ -506,8 +502,6 @@ namespace AvnResultDashboard
             }
             private void AddHtmlPrelude()
             {
-                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
-                {
                     htmlWriter.Write("<!DOCTYPE html>");
 
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Html);
@@ -568,17 +562,13 @@ namespace AvnResultDashboard
                         MkTableHeaderColumn(htmlWriter, "Missing Angelic traces", true);
                     }
                     htmlWriter.RenderEndTag(); //tr
-                }
             }
             public void AddHtmlPostlude()
             {
-                using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
-                {
-                    //Mystery: these close tags fail
-                    //htmlWriter.RenderEndTag(); //table
-                    //htmlWriter.RenderEndTag(); //body
-                    //htmlWriter.RenderEndTag(); //html
-                }
+                    htmlWriter.RenderEndTag(); //table
+                    htmlWriter.RenderEndTag(); //body
+                    htmlWriter.RenderEndTag(); //html
+                htmlWriter.Close();
                 htmlFile.Close();
             }
         }
