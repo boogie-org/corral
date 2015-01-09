@@ -21,6 +21,7 @@ namespace AvnResultDashboard
         {
             //common
             public static string defectViewerDir = null;
+            public static bool hideAnnotTextarea = false; //if true, then we dont see the window for trace_annots.xml
         }
 
         static void Main(string[] args)
@@ -39,14 +40,23 @@ namespace AvnResultDashboard
             if (args.Any(s => s == "/break"))
                  System.Diagnostics.Debugger.Launch();
 
+            if (args.Any(s => s == "/hideAnnotTextarea"))
+                Options.hideAnnotTextarea = true;
+
+            var help = false;
+            if (args.Any(s => s == "/?"))
+                help = true;
+
+
+
             var currDir = findArg("dir");
             var srcPath = findArg("srcPath");
             var baseDir = findArg("baseline");
             Options.defectViewerDir = findArg("defectViewerDir");
  
-            if (currDir == null || srcPath == null || Options.defectViewerDir == null)
+            if (help || currDir == null || srcPath == null || Options.defectViewerDir == null)
             {
-                Console.WriteLine("Usage:  AvnResultDashboard /dir:<path-to-avn-result> /srcPath:<path-to-sources> /defectViewerDir:<path-to-view.cmd> [/break /baseline:<path-to-baseline-avn-result>]");
+                Console.WriteLine("Usage:  AvnResultDashboard /dir:<path-to-avn-result> /srcPath:<path-to-sources> /defectViewerDir:<path-to-view.cmd> [/? /break /hideAnnotTextarea /baseline:<path-to-baseline-avn-result>]");
                 return;
             }
 
@@ -57,24 +67,8 @@ namespace AvnResultDashboard
                 isRelativePath(baseDir))
                 throw new Exception("Specify absolute pathnames for arguments");
 
-            var getConfig = new Func<string, string>(x =>
-            { 
-                using (TextReader cf = new StreamReader(Directory.GetFiles(x, "config.txt")[0]))
-                {
-                    return cf.ReadToEnd();
-                }
-            }
-            );
 
             var hrg = new HtmlReportGeneration("myhtmlfile.html", baseDir != null);
-            var currConfig = getConfig(currDir);
-            hrg.WriteString("Current Config ==> " + currConfig);
-
-            if (baseDir != null)
-            {
-                var baseConfig = getConfig(baseDir);
-                hrg.WriteString("Baseline Config ==> " + baseConfig);
-            }
 
             var stripBplFromName = new Func<string,string> (x => 
             {
@@ -94,6 +88,26 @@ namespace AvnResultDashboard
                     srcPath + "\\\\" + x.Item2, 
                     baseDir == null ? null : baseDir + "\\\\" + x.Item1, 
                     hrg));
+
+            var getConfig = new Func<string, string>(x =>
+            {
+                using (TextReader cf = new StreamReader(Directory.GetFiles(x, "config.txt")[0]))
+                {
+                    return cf.ReadToEnd();
+                }
+            }
+            );
+
+            var currConfig = getConfig(currDir);
+            //hrg.WriteString("Current Config ==> " + currConfig);
+
+            if (baseDir != null)
+            {
+                var baseConfig = getConfig(baseDir);
+                //hrg.WriteString("Baseline Config ==> " + baseConfig);
+            }
+            hrg.AddHtmlPostlude();
+
         }
 
         /// <summary>
@@ -320,81 +334,6 @@ namespace AvnResultDashboard
                 this.baseline = baseline;
                 AddHtmlPrelude();
             }
-            //public void WriteHtmlOld()
-            //{
-            //    AddHtmlPrelude();
-            //    using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
-            //    {
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Html);
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Body);
-            //        //reference
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Href, "http://www.bing.com");
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.A); //a
-            //        htmlWriter.Write("Bing link");
-            //        htmlWriter.RenderEndTag(); //a
-            //        htmlWriter.RenderEndTag(); //p
-            //        //script
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, "avnDashboard.js");
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Script);
-            //        htmlWriter.RenderEndTag();
-            //        //button
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "myFunc()");
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
-            //        htmlWriter.Write("Alert button");
-            //        htmlWriter.RenderEndTag(); //button
-            //        //paragraph
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "demo");
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-            //        htmlWriter.Write("I will change");
-            //        htmlWriter.RenderEndTag();
-            //        //table
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:50%");
-            //        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Border, "1");
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Table);
-            //        //heading
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Th);
-            //        htmlWriter.Write("First");
-            //        htmlWriter.RenderEndTag(); //th
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Th);
-            //        htmlWriter.Write("Middle");
-            //        htmlWriter.RenderEndTag(); //th
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Th);
-            //        htmlWriter.Write("Last");
-            //        htmlWriter.RenderEndTag(); //th
-            //        htmlWriter.RenderEndTag(); //tr
-            //        //row1
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("John");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("K");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("Doe");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderEndTag(); //tr
-            //        //row2
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Tr);
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("Mark");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("L");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Td);
-            //        htmlWriter.Write("Smith");
-            //        htmlWriter.RenderEndTag(); //td
-            //        htmlWriter.RenderEndTag(); //tr                    
-            //        htmlWriter.RenderEndTag(); //table
-            //        htmlWriter.RenderEndTag(); //body
-            //        htmlWriter.RenderEndTag(); //html
-            //    }
-            //    htmlFile.Close();
-            //}
             public void WriteString(string s)
             {
                 using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
@@ -402,7 +341,7 @@ namespace AvnResultDashboard
                     //paragraph
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
                     htmlWriter.Write(s);
-                    htmlWriter.RenderEndTag();
+                    htmlWriter.RenderEndTag(); //P
                 }
             }
             /// <summary>
@@ -425,31 +364,34 @@ namespace AvnResultDashboard
                     htmlWriter.WriteBreak();
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.B);
                     htmlWriter.Write("STATS:");
-                    htmlWriter.RenderEndTag();
+                    htmlWriter.RenderEndTag(); //B
                     htmlWriter.Write(ar1.Summary);
+                    htmlWriter.WriteBreak(); //B
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.B);
-                    htmlWriter.WriteBreak();
                     htmlWriter.Write("PREfix link:");
-                    htmlWriter.RenderEndTag();
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "displayAllAnnotsFor_" + name);
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Rows, (ar1.AngelicTraces.Count).ToString());
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Cols, "30");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Textarea);
-                    htmlWriter.Write("Display annots for " + name + " here");
-                    htmlWriter.RenderEndTag();
-                    htmlWriter.WriteBreak();
-                    //button
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
-                    htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots(" + "\"" + name + "\"" + ")");
-                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
-                    //var traceFile = ar1.ResultsDir.Replace("\\\\", "\\") + @"\trace_annots.xml";
-                    var traceFile = @"trace_annots.xml";
-                    htmlWriter.Write("Generate content of annots");
-                    htmlWriter.WriteBreak();
-                    htmlWriter.Write(string.Format("Copy/paste into {0}",traceFile));
-                    htmlWriter.RenderEndTag(); //button
-                    htmlWriter.RenderEndTag(); //P
+                    htmlWriter.RenderEndTag(); //B
+                    if (!Options.hideAnnotTextarea)
+                    {
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "displayAllAnnotsFor_" + name);
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Rows, (ar1.AngelicTraces.Count).ToString());
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Cols, "30");
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Textarea);
+                        htmlWriter.Write("Display annots for " + name + " here");
+                        htmlWriter.RenderEndTag(); //textarea
+                        htmlWriter.WriteBreak();
+                        //button
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Type, "button");
+                        htmlWriter.AddAttribute(HtmlTextWriterAttribute.Onclick, "enumAnnots(" + "\"" + name + "\"" + ")");
+                        htmlWriter.RenderBeginTag(HtmlTextWriterTag.Button);
+                        //var traceFile = ar1.ResultsDir.Replace("\\\\", "\\") + @"\trace_annots.xml";
+                        var traceFile = @"trace_annots.xml";
+                        htmlWriter.Write("Generate content of annots");
+                        htmlWriter.WriteBreak();
+                        htmlWriter.Write(string.Format("Copy/paste into {0}", traceFile));
+                        htmlWriter.RenderEndTag(); //button
+                        htmlWriter.RenderEndTag(); //P
+                    }
                     htmlWriter.RenderEndTag(); //td
 
                     //MkTableHeaderColumn(htmlWriter, ar1.AllTraces.Count().ToString());
@@ -542,7 +484,7 @@ namespace AvnResultDashboard
                             htmlWriter.AddAttribute(HtmlTextWriterAttribute.Href, str.TrimStart());
                             htmlWriter.RenderBeginTag(HtmlTextWriterTag.A);
                             htmlWriter.Write("link");
-                            htmlWriter.RenderEndTag();
+                            htmlWriter.RenderEndTag(); //A
                         }
                         if (baseline) htmlWriter.WriteBreak();
                     });
@@ -553,14 +495,14 @@ namespace AvnResultDashboard
                     htmlWriter.RenderEndTag(); //Form
                     htmlWriter.RenderEndTag(); //P
                 }
-                htmlWriter.RenderEndTag();
+                htmlWriter.RenderEndTag(); //div
                 return count;
             }
             private static void MkTableHeaderColumn(HtmlTextWriter htmlWriter, string str, bool header=false)
             {
                 htmlWriter.RenderBeginTag(header? HtmlTextWriterTag.Th : HtmlTextWriterTag.Td);
                 htmlWriter.Write(str);
-                htmlWriter.RenderEndTag(); //th
+                htmlWriter.RenderEndTag(); //td
             }
             private void AddHtmlPrelude()
             {
@@ -569,13 +511,16 @@ namespace AvnResultDashboard
                     htmlWriter.Write("<!DOCTYPE html>");
 
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Html);
+                    htmlWriter.RenderBeginTag(HtmlTextWriterTag.Title);
+                    htmlWriter.Write("Dashboard for Angelic Verifier Results");
+                    htmlWriter.RenderEndTag(); //Title
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Body);
 
                     //paragraph
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Id, "demo");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.P);
-                    htmlWriter.Write("Current command is displayed here");
-                    htmlWriter.RenderEndTag();
+                    //htmlWriter.Write("Current command is displayed here");
+                    htmlWriter.RenderEndTag(); //P
 
                     //script
                     string path;
@@ -584,7 +529,7 @@ namespace AvnResultDashboard
                     //Console.WriteLine("path = {0}", path);
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Src, path + "\\avnDashboard.js");
                     htmlWriter.RenderBeginTag(HtmlTextWriterTag.Script);
-                    htmlWriter.RenderEndTag();
+                    htmlWriter.RenderEndTag(); //script
 
                     //table
                     htmlWriter.AddAttribute(HtmlTextWriterAttribute.Style, "width:100%");
@@ -595,7 +540,7 @@ namespace AvnResultDashboard
                     {
                         htmlWriter.AddAttribute(HtmlTextWriterAttribute.Width, x);
                         htmlWriter.RenderBeginTag(HtmlTextWriterTag.Col);
-                        htmlWriter.RenderEndTag();
+                        htmlWriter.RenderEndTag(); //Col
                     });
                     if (baseline)
                     {
@@ -629,10 +574,10 @@ namespace AvnResultDashboard
             {
                 using (HtmlTextWriter htmlWriter = new HtmlTextWriter(htmlFile))
                 {
-
-                    htmlWriter.RenderEndTag(); //table
-                    htmlWriter.RenderEndTag(); //body
-                    htmlWriter.RenderEndTag(); //html
+                    //Mystery: these close tags fail
+                    //htmlWriter.RenderEndTag(); //table
+                    //htmlWriter.RenderEndTag(); //body
+                    //htmlWriter.RenderEndTag(); //html
                 }
                 htmlFile.Close();
             }
