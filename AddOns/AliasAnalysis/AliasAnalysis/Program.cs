@@ -107,10 +107,14 @@ namespace AliasAnalysis
                     asToAS.Add(s, c);
                     program.AddTopLevelDeclaration(c);
                 }
-                // Add: function AllocationSites(int) : AS
-                AllocationSites = new Function(Token.NoToken, "AllocationSites", new List<Variable>{
-                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true)},
-                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), false));
+                // Add: function AllocationSites(int, AS) : bool
+                AllocationSites = new Function(Token.NoToken, "AllocationSites", 
+                    new List<Variable>{
+                       new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true),
+                       new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), true)
+                    },
+                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "c", btype.Bool), false)
+                    );
                 program.AddTopLevelDeclaration(AllocationSites);
             }
 
@@ -147,10 +151,12 @@ namespace AliasAnalysis
             }
 
             if (fcall != null && result.allocationSites.ContainsKey(fcall.FunctionName))
-            {
-                Expr r = Expr.False;
+            {  
+                //assume true && AS(e,A1) && AS(e,A3);
+                Expr r = Expr.True;
                 foreach (var s in result.allocationSites[fcall.FunctionName])
-                    r = Expr.Or(r, Expr.Eq(new NAryExpr(Token.NoToken, new FunctionCall(AllocationSites), new List<Expr>{node.Args[0]}), Expr.Ident(asToAS[s])));
+                    r = Expr.And(r,
+                         new NAryExpr(Token.NoToken, new FunctionCall(AllocationSites), new List<Expr> { node.Args[0], Expr.Ident(asToAS[s]) }));
                 return r;
             }
 

@@ -10,11 +10,15 @@ procedure {:allocator} malloc() returns (x:int);
 
 procedure foo() 
 {
-   var a, b, c, d, t1, t2, t3: int; 
+   var a, b, c, d, t: int; 
 
    call a := malloc();
    call b := bar();
-   call c := baz();
+   if (t == 1) {
+     call c := baz();
+   } else {
+     call c := bar();
+   }
 
    assume f1(a);
    assume f2(b);
