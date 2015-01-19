@@ -1246,7 +1246,7 @@ namespace AngelicVerifierNull
                 }
 
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
-                    filename + ".tt", "stack.txt");
+                    filename + ".tt", filename + "stack.txt");
 
                 cba.PrintSdvPath.relevantLines = null;
 
