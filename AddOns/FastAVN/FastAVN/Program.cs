@@ -77,7 +77,6 @@ namespace FastAVN
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
-        static bool dumpSlices = true; // dump sliced program for each entrypoint
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = ""; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
@@ -92,6 +91,7 @@ namespace FastAVN
         static string bug_filename = "Bug";
         static bool prune = false;
         static string stubsfile = null;
+        static bool cleanupDir = true;
 
         static void Main(string[] args)
         {
@@ -106,9 +106,6 @@ namespace FastAVN
 
             if (args.Any(s => s == "/prune"))
                 prune = true;
-
-            if (args.Any(s => s == "/noDumpSlices"))
-                dumpSlices = false;
 
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
@@ -140,6 +137,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/dumpAVNOutput"))
                 outputToFile = true;
+
+            if (args.Any(s => s == "/dumpAVNFiles"))
+                cleanupDir = false;
 
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
@@ -332,8 +332,7 @@ namespace FastAVN
                 try
                 {
                     Directory.CreateDirectory(impl.Name); // create new directory for each entrypoint
-                    var pruneFile = (dumpSlices || numThreads > 1) ?
-                        string.Format("{0}\\pruneSlice.bpl", impl.Name) : "pruneSlice.bpl";
+                    var pruneFile = string.Format("{0}\\pruneSlice.bpl", impl.Name);
                     Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
@@ -401,6 +400,12 @@ namespace FastAVN
                             });
                             Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
                         }
+                    }
+
+                    var files = System.IO.Directory.GetFiles(impl.Name, "*.bpl");
+                    foreach (var f in files)
+                    {
+                        System.IO.File.Delete(f);
                     }
                 }
                 catch (Exception e)
