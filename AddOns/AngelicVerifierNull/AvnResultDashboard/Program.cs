@@ -318,7 +318,7 @@ namespace AvnResultDashboard
             }
             private static string AbstractConstants(string s)
             {
-                var tmp = Regex.Replace(s, @"[0-9]+ ", "", RegexOptions.None);
+                var tmp = Regex.Replace(s, @"\=(\-)?[0-9]+", "=", RegexOptions.None);
                 return NoAbstract(tmp);
             }
             #endregion
