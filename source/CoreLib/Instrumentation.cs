@@ -2713,6 +2713,8 @@ namespace cba
             }
         }
 
+        // Tokenize the assertions
+
         public SequentialInstrumentation()
         {
             passName = "SequentialInstrumentation";

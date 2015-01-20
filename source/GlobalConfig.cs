@@ -63,6 +63,9 @@ namespace cba
         // Use ArrayTheory in the boogie verifier
         public static bool useArrayTheory = false;
 
+        // Number of error traces requested
+        public static int numCex = 1;
+
         // Hint for when to start conserving memory
         public static int memLimit
         {

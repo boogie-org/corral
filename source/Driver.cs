@@ -101,6 +101,7 @@ namespace cba
             GlobalConfig.annotations = config.annotations;
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
+            GlobalConfig.numCex = config.NumCex;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
             if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
@@ -253,6 +254,11 @@ namespace cba
                 {
                     throw new InvalidInput("We currently don't support summaries for concurrent programs");
                 }
+                if (config.NumCex > 1)
+                {
+                    throw new InvalidInput("Multiple counterexamples not yet supported for concurrent programs");
+                }
+
                 GlobalConfig.InferPass = null;
             }
 
@@ -271,64 +277,78 @@ namespace cba
                     apass.reset();
                 });
 
-            
-            ////////////////////////////////////
-            // Verification phase
-            ////////////////////////////////////
+            var cex = config.NumCex;
 
-            Log.WriteMemUsage();
-
-            var refinementState = new RefinementState(curr, config.trackedVars, config.useLocalVariableAbstraction);
-
-            ErrorTrace cexTrace = null; 
-            checkAndRefine(curr, refinementState, printTrace, out cexTrace);
-
-            ////////////////////////////////////
-            // Output Phase
-            ////////////////////////////////////
-
-            if (cexTrace != null && !config.noTrace)
+            do
             {
-                if (elPass != null) cexTrace = elPass.mapBackTrace(cexTrace);
-                if (seqInstr != null) cexTrace = seqInstr.mapBackTrace(cexTrace);
-                cexTrace = prune.mapBackTrace(cexTrace);
-                cexTrace = rcalls.mapBackTrace(cexTrace);
+                ////////////////////////////////////
+                // Verification phase
+                ////////////////////////////////////
 
-                //PrintProgramPath.print(rcalls.input, cexTrace, "temp0");
+                Log.WriteMemUsage();
 
-                cexTrace = apass.mapBackTrace(cexTrace);
+                var refinementState = new RefinementState(curr, config.trackedVars, config.useLocalVariableAbstraction);
 
-                if (GlobalConfig.genCTrace)
+                ErrorTrace cexTrace = null;
+                checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+
+                ////////////////////////////////////
+                // Output Phase
+                ////////////////////////////////////
+
+                if (cexTrace != null && !config.noTrace)
                 {
-                    PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, "corral_out");
+                    if (elPass != null) cexTrace = elPass.mapBackTrace(cexTrace);
+                    if (seqInstr != null) cexTrace = seqInstr.mapBackTrace(cexTrace);
+                    cexTrace = prune.mapBackTrace(cexTrace);
+                    cexTrace = rcalls.mapBackTrace(cexTrace);
+
+                    //PrintProgramPath.print(rcalls.input, cexTrace, "temp0");
+
+                    cexTrace = apass.mapBackTrace(cexTrace);
+
+                    if (GlobalConfig.genCTrace)
+                    {
+                        PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, "corral_out");
+                    }
+                    else
+                    {
+                        //PrintProgramPath.print(inputProg, cexTrace, "temp0");
+                        PrintConcurrentProgramPath.print(inputProg, cexTrace, "corral_out");
+
+                        var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+                        PrintConcurrentProgramPath.print(init, cexTrace, config.inputFile);
+
+                    }
+
                 }
-                else
+
+                #region Stats for .NET programs
+                if (cexTrace != null && config.verboseMode > 1)
                 {
-                    //PrintProgramPath.print(inputProg, cexTrace, "temp0");
-                    PrintConcurrentProgramPath.print(inputProg, cexTrace, "corral_out");
-
-                    var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
-                    PrintConcurrentProgramPath.print(init, cexTrace, config.inputFile);
-
+                    CounterexampleDebuggingInfo(config, new HashSet<string>(refinementState.getVars().Variables), cexTrace);
                 }
-                
-            }
+                #endregion
+
+                cex--;
+
+                // Dump state
+                CorralState.DumpCorralState(config, ConfigManager.progVerifyOptions.CallTree, refinementState.getVars().Variables);
+
+                // Reset corral state
+                ConfigManager.progVerifyOptions.CallTree = new HashSet<string>();
+
+                // print timing information
+                Stats.printStats();
+                Log.WriteLine(string.Format("Number of procedures inlined: {0}", Stats.ProgCallTreeSize));
+                Log.WriteLine(string.Format("Number of variables tracked: {0}", refinementState.getVars().Variables.Count));
+                Stats.ProgCallTreeSize = 0;
+
+            } while (cex > 0);
 
             var endTime = DateTime.Now;
 
-            /////////////////////////////
-            // print timing information
-            /////////////////////////////
-            Stats.printStats();
-            Log.WriteLine(string.Format("Number of procedures inlined: {0}", Stats.ProgCallTreeSize));
-            Log.WriteLine(string.Format("Number of variables tracked: {0}", refinementState.getVars().Variables.Count));
-
-            //Log.WriteLine(string.Format("Time spent inside refinement class: {0} s", refinementState.timeSpent.TotalSeconds));
-            //Log.WriteLine(string.Format("Path verify time1: {0} s", BoogieVerify.tempTime.TotalSeconds));
-            //Log.WriteLine(string.Format("Path verify time2: {0} s", VerificationPass.tempTime.TotalSeconds));
-
             Log.WriteLine(string.Format("Total Time: {0} s", (endTime - startTime).TotalSeconds));
-
 
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
@@ -336,68 +356,66 @@ namespace cba
             TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
             Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
 
-            #region Stats for .NET programs
-            if (config.verboseMode > 1)
-            {
-                Log.WriteLine(string.Format("LOC on trace: {0}", PrintConcurrentProgramPath.LOC));
-                // compute number of unique procs inlined
-                var procsInlined = BoogieVerify.UniqueProcsInlined();
-                procsInlined.Add(config.mainProcName);
-                Log.WriteLine(string.Format("Unique procs inlined: {0}", procsInlined.Count));
-                var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
-                BoogieUtil.DoModSetAnalysis(init);
-                Log.WriteLine(string.Format("Total number of procs: {0}", init.TopLevelDeclarations.OfType<Implementation>().Count()));
-                
-                // Compute LOC on inlined procs and non-trivial procs
-                var totalLoc = 0;
-                var inlinedLoc = 0;
 
-                var nonTrivialProcs = new HashSet<string>();
-                var finalVars = new HashSet<string>();
-                refinementState.getVars().Variables.Iter(s => { if(s.StartsWith("F$")) finalVars.Add(s); });
-
-                foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
-                {
-                    var loc = new HashSet<Tuple<string, int>>();
-                    foreach (var blk in impl.Blocks)
-                    {
-                        foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
-                        {
-                            var file = QKeyValue.FindStringAttribute(cmd.Attributes, "sourceFile");
-                            var line = QKeyValue.FindIntAttribute(cmd.Attributes, "sourceLine", -1);
-                            if (file == null || line == -1) continue;
-                            loc.Add(Tuple.Create(file, line));
-                        }
-                    }
-
-                    totalLoc += loc.Count;
-                    if (procsInlined.Contains(impl.Name)) inlinedLoc += loc.Count;
-                    if (procsInlined.Contains(impl.Name) && loc.Count > 0)
-                    {
-                        foreach (IdentifierExpr m in impl.Proc.Modifies)
-                        {
-                            if (finalVars.Contains(m.Name)) { nonTrivialProcs.Add(impl.Name); break; }
-                        }
-                    }
-                }
-
-                Log.WriteLine(string.Format("LOC inlined: {0} out of {1}", inlinedLoc, totalLoc));
-                Log.WriteLine(string.Format("Non-trivial procs: {0}", nonTrivialProcs.Count));
-
-                // Compute number of branches on the trace
-                var nameImplMap = BoogieUtil.nameImplMapping(init);
-                var branches = new HashSet<int>();
-                var tloc = 0;
-                TraceStats(cexTrace, nameImplMap, ref tloc, ref branches);
-                Log.WriteLine(string.Format("Trace length (LOC): {0}", tloc));
-                Log.WriteLine("Trace length (branches): {0}", branches.Print());
-            }
-            #endregion
-
-            CorralState.DumpCorralState(config, ConfigManager.progVerifyOptions.CallTree, refinementState.getVars().Variables);
             Log.Close();
 
             return 0;
+        }
+
+        private static void CounterexampleDebuggingInfo(Configs config, HashSet<string> trackedVars, ErrorTrace cexTrace)
+        {
+            Log.WriteLine(string.Format("LOC on trace: {0}", PrintConcurrentProgramPath.LOC));
+            // compute number of unique procs inlined
+            var procsInlined = BoogieVerify.UniqueProcsInlined();
+            procsInlined.Add(config.mainProcName);
+            Log.WriteLine(string.Format("Unique procs inlined: {0}", procsInlined.Count));
+            var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+            BoogieUtil.DoModSetAnalysis(init);
+            Log.WriteLine(string.Format("Total number of procs: {0}", init.TopLevelDeclarations.OfType<Implementation>().Count()));
+
+            // Compute LOC on inlined procs and non-trivial procs
+            var totalLoc = 0;
+            var inlinedLoc = 0;
+
+            var nonTrivialProcs = new HashSet<string>();
+            var finalVars = new HashSet<string>();
+            trackedVars.Iter(s => { if (s.StartsWith("F$")) finalVars.Add(s); });
+
+            foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var loc = new HashSet<Tuple<string, int>>();
+                foreach (var blk in impl.Blocks)
+                {
+                    foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
+                    {
+                        var file = QKeyValue.FindStringAttribute(cmd.Attributes, "sourceFile");
+                        var line = QKeyValue.FindIntAttribute(cmd.Attributes, "sourceLine", -1);
+                        if (file == null || line == -1) continue;
+                        loc.Add(Tuple.Create(file, line));
+                    }
+                }
+
+                totalLoc += loc.Count;
+                if (procsInlined.Contains(impl.Name)) inlinedLoc += loc.Count;
+                if (procsInlined.Contains(impl.Name) && loc.Count > 0)
+                {
+                    foreach (IdentifierExpr m in impl.Proc.Modifies)
+                    {
+                        if (finalVars.Contains(m.Name)) { nonTrivialProcs.Add(impl.Name); break; }
+                    }
+                }
+            }
+
+            Log.WriteLine(string.Format("LOC inlined: {0} out of {1}", inlinedLoc, totalLoc));
+            Log.WriteLine(string.Format("Non-trivial procs: {0}", nonTrivialProcs.Count));
+
+            // Compute number of branches on the trace
+            var nameImplMap = BoogieUtil.nameImplMapping(init);
+            var branches = new HashSet<int>();
+            var tloc = 0;
+            TraceStats(cexTrace, nameImplMap, ref tloc, ref branches);
+            Log.WriteLine(string.Format("Trace length (LOC): {0}", tloc));
+            Log.WriteLine("Trace length (branches): {0}", branches.Print());
         }
 
         public static PersistentCBAProgram GetInputProgram(Configs config)
