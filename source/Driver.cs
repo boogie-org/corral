@@ -122,7 +122,7 @@ namespace cba
             InstrumentationConfig.cooperativeYield = config.cooperativeYield;
 
             ProgTransformation.TransformationPass.writeAllFiles = false;
-            Log.noDebuggingOutput = false;
+            Log.noDebuggingOutput = true;
 
             config.specialVars.Iter(s => LanguageSemantics.specialVars.Add(s));
             #endregion
