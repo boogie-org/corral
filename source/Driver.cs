@@ -101,7 +101,6 @@ namespace cba
             GlobalConfig.annotations = config.annotations;
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
-            GlobalConfig.numCex = config.NumCex;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
             if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
@@ -296,6 +295,8 @@ namespace cba
                 // Output Phase
                 ////////////////////////////////////
 
+                var currTrace = cexTrace == null ? null : cexTrace.Copy();
+
                 if (cexTrace != null && !config.noTrace)
                 {
                     if (elPass != null) cexTrace = elPass.mapBackTrace(cexTrace);
@@ -307,20 +308,24 @@ namespace cba
 
                     cexTrace = apass.mapBackTrace(cexTrace);
 
+                    var traceName = "corral_out";
+                    if (config.NumCex > 1)
+                        traceName += (config.NumCex - cex);
+
                     if (GlobalConfig.genCTrace)
                     {
-                        PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, "corral_out");
+                        PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, traceName);
                     }
                     else
                     {
                         //PrintProgramPath.print(inputProg, cexTrace, "temp0");
-                        PrintConcurrentProgramPath.print(inputProg, cexTrace, "corral_out");
+                        PrintConcurrentProgramPath.print(inputProg, cexTrace, traceName);
 
                         var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
                         PrintConcurrentProgramPath.print(init, cexTrace, config.inputFile);
-
                     }
 
+                    apass.reset();
                 }
 
                 #region Stats for .NET programs
@@ -331,6 +336,11 @@ namespace cba
                 #endregion
 
                 cex--;
+                if (cexTrace == null) cex = 0;
+
+                // Disable the failing assertion in the program
+                if (cex > 0)
+                    curr = DisableAssert(curr, currTrace, seqInstr.assertsPassedName);
 
                 // Dump state
                 CorralState.DumpCorralState(config, ConfigManager.progVerifyOptions.CallTree, refinementState.getVars().Variables);
@@ -360,6 +370,35 @@ namespace cba
             Log.Close();
 
             return 0;
+        }
+
+        private static PersistentCBAProgram DisableAssert(PersistentCBAProgram program, ErrorTrace trace, string assertsPassed)
+        {
+            var prog = program.getCBAProgram();
+
+            // walk the trace and program in lock step -- find the failing assertion
+            var location = ErrorTrace.FindCmd(prog, trace, c => (c is AssumeCmd) && QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, RewriteAsserts.AssertIdentificationAttribute));
+            Debug.Assert(location != null);
+
+            // Disable assert
+            var acmd = location.Item2.Cmds[location.Item3] as AssumeCmd;
+            Debug.Assert(acmd != null);
+            acmd.Expr = Expr.False;
+
+            // Disable assignment to assertsPassed (for better mod-set invariants)
+            for(int i = 0; i < location.Item2.Cmds.Count; i++) 
+            {
+                var cmd = location.Item2.Cmds[i] as AssignCmd;
+                if (cmd == null) continue;
+                if (cmd.Lhss.Any(lhs => lhs.DeepAssignedVariable.Name == assertsPassed))
+                {
+                    location.Item2.Cmds[i] = BoogieAstFactory.MkAssume(Expr.True);
+                }
+            }
+
+            BoogieUtil.PrintProgram(prog, "next.bpl");
+
+            return new PersistentCBAProgram(prog, prog.mainProcName, prog.contextBound, program.mode);
         }
 
         private static void CounterexampleDebuggingInfo(Configs config, HashSet<string> trackedVars, ErrorTrace cexTrace)
