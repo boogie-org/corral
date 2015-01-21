@@ -2411,6 +2411,10 @@ namespace cba.Util
                     if (dbg) Console.WriteLine("{0} -> {1}", le.Val.ToString(), hash_value[currBlock][le.Val.ToString()].ToString());
                     return hash_value[currBlock][le.Val.ToString()];
                 }
+                else if (expr is OldExpr)
+                {
+                    return new Term();
+                }
                 else
                 {
                     Debug.Assert(false);
