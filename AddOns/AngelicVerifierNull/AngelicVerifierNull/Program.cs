@@ -119,6 +119,7 @@ namespace AngelicVerifierNull
         public static readonly string EnvironmentAssumptionAttr = "Ebasic";
         public static readonly string ReachableStatesAttr = "ReachableStates";
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
+        public static readonly int RelaxConstraintsStackDepthBound = 6;
     }
 
     public class Driver
@@ -591,7 +592,7 @@ namespace AngelicVerifierNull
             if (Options.AddMapSelectNonNullAssumptions)
                 (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
 
-            if (deadCodeDetect || Options.propertyChecked == "nonnull")
+            if ( (deadCodeDetect || Options.propertyChecked == "nonnull"))
             {
                 // Tag branches as reachable
                 init = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysis, false);
@@ -947,7 +948,7 @@ namespace AngelicVerifierNull
 
             // shallow checking only
             var sd = CommandLineOptions.Clo.StackDepthBound;
-            CommandLineOptions.Clo.StackDepthBound = 4;
+            CommandLineOptions.Clo.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
             //BoogieUtil.PrintProgram(program, "env.bpl");
 
             var ret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
@@ -1139,7 +1140,7 @@ namespace AngelicVerifierNull
             Console.WriteLine("CheckInconsistency: {0} soft constraints and {1} assertions", softcnt, assertcnt);
 
             var sd = CommandLineOptions.Clo.StackDepthBound;
-            CommandLineOptions.Clo.StackDepthBound = 4;
+            CommandLineOptions.Clo.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
 
             // Relax
             var softret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
@@ -1476,7 +1477,7 @@ namespace AngelicVerifierNull
             {
                 iter++;
                 cba.ErrorTrace cex = null;
-                var pprog = new PersistentProgram(program, main, 1); pprog.writeToFile("rl.bpl");
+                var pprog = new PersistentProgram(program, main, 1); // pprog.writeToFile("rl.bpl");
                 corralState = new cba.CorralState();
                 if(ap != null) corralState.TrackedVariables.Add(ap);
 
