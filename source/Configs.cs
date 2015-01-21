@@ -145,6 +145,8 @@ namespace cba
         public string prevCorralState { get; private set; }
         public string dumpCorralState { get; private set; }
 
+        public int NumCex { get; private set; }
+
         public HashSet<string> extraFlags { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
@@ -327,6 +329,8 @@ namespace cba
             newStratifiedInlining = false;
             newStratifiedInliningAlgo = "";
 
+            NumCex = 1;
+
             extraFlags = new HashSet<string>();
         }
 
@@ -458,6 +462,11 @@ namespace cba
             else if (flag == "/cadeTiming")
             {
                 cadeTiming = true;
+            }
+            else if (flag.StartsWith("/cex:"))
+            {
+                var split = flag.Split(sep);
+                NumCex = Int32.Parse(split[1]);
             }
             else if (flag == "/useArrayTheory")
             {
