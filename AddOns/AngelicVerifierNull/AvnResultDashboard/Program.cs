@@ -22,6 +22,7 @@ namespace AvnResultDashboard
             //common
             public static string defectViewerDir = null;
             public static bool hideAnnotTextarea = false; //if true, then we dont see the window for trace_annots.xml
+            public static bool onlyConsiderFailingLocation = false;
         }
 
         static void Main(string[] args)
@@ -42,6 +43,9 @@ namespace AvnResultDashboard
 
             if (args.Any(s => s == "/hideAnnotTextarea"))
                 Options.hideAnnotTextarea = true;
+
+            if (args.Any(s => s == "/onlyConsiderFailingLocation"))
+                Options.onlyConsiderFailingLocation = true;
 
             var help = false;
             if (args.Any(s => s == "/?"))
@@ -165,13 +169,20 @@ namespace AvnResultDashboard
                 var hashes1 = ar1.AngelicTraces.Select(x => x.HashVal).ToList();
                 var hashes2 = ar2.AngelicTraces.Select(x => x.HashVal).ToList();
 
+                var failingLocHashes1 = ar1.AngelicTraces.Select(x => x.hashTrace).ToList();
+                var failingLocHashes2 = ar2.AngelicTraces.Select(x => x.hashTrace).ToList();
+
                 checkForCollision(hashes1);
                 checkForCollision(hashes2);
 
                 matchedTraces = new HashSet<Tuple<DefectTrace, DefectTrace>>();
                 var findMatchingTrace = new Func<DefectTrace, AvnResultInfo, DefectTrace>((t, ar) =>
                 {
-                    var r = ar.AngelicTraces.Where(x => x.HashVal == t.HashVal);
+                    var r = new List<DefectTrace>();
+                    if (Options.onlyConsiderFailingLocation)
+                        r = ar.AngelicTraces.Where(x => x.hashTrace.Equals(t.hashTrace)).ToList();
+                    else
+                        r = ar.AngelicTraces.Where(x => x.HashVal == t.HashVal).ToList();
                     if (r.Count() == 0) return null;
                     return r.First();
                 });
@@ -222,6 +233,7 @@ namespace AvnResultDashboard
             }
             private void LoadDefectTraces()
             {
+                var trace2stack = new Func<string, string>(x => x.Substring(0, x.LastIndexOf(".tt")) + "stack.txt");
                 AllTraces = Directory.GetFiles(ResultsDir, @"Trace*.tt").ToList()
                     .Union(Directory.GetFiles(ResultsDir, @"Bug*.tt"))
                     .Select(x => new DefectTrace(x))
@@ -231,7 +243,7 @@ namespace AvnResultDashboard
                     .Union(Directory.GetFiles(ResultsDir, @"Bug*.tt"))
                     .ToList()
                     .Union(Directory.GetFiles(ResultsDir, @"Bug*_defect.tt"))   //newer traces
-                    .Select(x => new DefectTrace(x))
+                    .Select(x => new DefectTrace(x, trace2stack(x)))
                     .ToList();
                 Console.WriteLine("Defects: Total/Angelic = {0}/{1}", AllTraces.Count(), AngelicTraces.Count());
             }
@@ -277,19 +289,62 @@ namespace AvnResultDashboard
         {
             private List<Tuple<string,string>> trace ; //lines in the trace along with their abstraction
             static private Func<string, string> abstractionFunc = /*NoAbstract*/ AbstractConstants; //the function that creates an abstract string (e.g. line = 435 --> line = *)
+            private List<Tuple<string, string>> stackTrace; // lines in the stack trace along with their abstraction
+            static private Func<string, string> stackAbstractionFunc = NoStackAbstraction;
 
             public string Id { get; set; }
+            public string StackId { get; set; }
             private int _hashVal;
             public int HashVal 
             { 
                 get { if (trace == null) LoadTrace(); return _hashVal; } 
                 set { _hashVal = value; } 
             }    //hashed value 
-            public DefectTrace(string path) { Id = path; trace = null; }
+            public DefectTrace(string path, string stackPath = null) { Id = path; trace = null; StackId = stackPath; stackTrace = null; hashTrace = new HashTrace(); }
+            public class HashTrace
+            {
+                private List<int> hashvals;
+
+                public HashTrace()
+                {
+                    hashvals = new List<int>();
+                }
+
+                public void Add(int n)
+                {
+                    hashvals.Add(n);
+                }
+
+                public override bool Equals(object obj)
+                {
+                    if (obj is HashTrace)
+                    {
+                        var h = obj as HashTrace;
+                        if (hashvals.Count == h.hashvals.Count)
+                        {
+                            for (int i = 0 ; i < hashvals.Count ; i++)
+                            {
+                                if (hashvals[i] != h.hashvals[i]) return false;
+                            }
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                public override int GetHashCode()
+                {
+                    return hashvals.GetHashCode();
+                }
+            }
+
+            public HashTrace hashTrace;
+
             private void LoadTrace()
             {
                 var hashString = "";
-                trace = new List<Tuple<string, string>>();                    
+                trace = new List<Tuple<string, string>>();
+                List<string> lines = new List<string>();
                 using (StreamReader sr = new StreamReader(Id))
                 {
                     string str = sr.ReadLine();
@@ -298,22 +353,51 @@ namespace AvnResultDashboard
                         var aStr = abstractionFunc(str);
                         trace.Add(Tuple.Create(str, aStr));
                         hashString += aStr;
+                        lines.Add(aStr);
                         str = sr.ReadLine();
                     }
                 }
                 HashVal = hashString.GetHashCode();
+
+                string failingLocation = lines[lines.Count - 2];
+                Console.WriteLine(failingLocation);
+                hashTrace.Add(failingLocation.GetHashCode());
+
+                if (!File.Exists(StackId)) return;
+
+                hashString = "";
+                stackTrace = new List<Tuple<string, string>>();
+                using (StreamReader sr = new StreamReader(StackId))
+                {
+                    string str = sr.ReadLine();
+                    while (str != null)
+                    {
+                        var aStr = stackAbstractionFunc(str);
+                        stackTrace.Add(Tuple.Create(str, aStr));
+                        hashString += aStr;
+                        str = sr.ReadLine();
+                    }
+                }
+                Console.WriteLine(hashString);
+                hashTrace.Add(hashString.GetHashCode());
             }
             #region a couple of abstraction functions
             /*
                  * 0 "?" 0 false ^ Call "OS" "main"
                  * 3 ".\src\bus.c" 1252 true ^WPP_GLOBAL_Control=151^&WPP_GLOBAL_Control=151_relevant_^====Auto===== Atomic Conditional
                  * Error 
-                 */
+            */
+
+            private static string NoStackAbstraction(string s)
+            {
+                return s;
+            }
 
             private static string NoAbstract(string s)
             {
                 var tmp = Regex.Replace(s, @"_relevant_", "", RegexOptions.None); //older traces did not have it
                 tmp = Regex.Replace(tmp, @"_irrelevant_", "", RegexOptions.None); //older traces did not have it
+                tmp = Regex.Replace(tmp, @"[0-9]+ """, "", RegexOptions.None); // removing the starting line numbers
                 return tmp;
             }
             private static string AbstractConstants(string s)
