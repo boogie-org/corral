@@ -23,6 +23,7 @@ namespace AvnResultDashboard
             public static string defectViewerDir = null;
             public static bool hideAnnotTextarea = false; //if true, then we dont see the window for trace_annots.xml
             public static bool onlyConsiderFailingLocation = false;
+            public static bool considerFailingStackTrace = false;
         }
 
         static void Main(string[] args)
@@ -46,6 +47,9 @@ namespace AvnResultDashboard
 
             if (args.Any(s => s == "/onlyConsiderFailingLocation"))
                 Options.onlyConsiderFailingLocation = true;
+
+            if (args.Any(s => s == "/considerFailingStackTrace"))
+                Options.considerFailingStackTrace = true;
 
             var help = false;
             if (args.Any(s => s == "/?"))
@@ -360,10 +364,9 @@ namespace AvnResultDashboard
                 HashVal = hashString.GetHashCode();
 
                 string failingLocation = lines[lines.Count - 2];
-                Console.WriteLine(failingLocation);
                 hashTrace.Add(failingLocation.GetHashCode());
 
-                if (!File.Exists(StackId)) return;
+                if (!File.Exists(StackId) || !Options.considerFailingStackTrace) return;
 
                 hashString = "";
                 stackTrace = new List<Tuple<string, string>>();
@@ -378,7 +381,6 @@ namespace AvnResultDashboard
                         str = sr.ReadLine();
                     }
                 }
-                Console.WriteLine(hashString);
                 hashTrace.Add(hashString.GetHashCode());
             }
             #region a couple of abstraction functions
