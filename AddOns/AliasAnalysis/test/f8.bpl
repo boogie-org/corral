@@ -23,7 +23,7 @@ procedure foo()
      call c := bar();
    }
 
-   assume f1(a);
+   assume {:allocsitesassume} f1(a);
    assume f2(b);
    assume f3(c);
    assume f4(g); 
