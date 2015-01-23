@@ -20,7 +20,6 @@ namespace ExplainError
     public class ControlFlowDependency
     {
         Program prog;
-        //a null block indicates returnBlock
         //impl -> {(b,j,S) | b is branch,j is join and S is the modset between b and j}
         Dictionary<string, HashSet<Tuple<string,string,HashSet<Variable>>>> branchJoinPairModSet;
         bool coarseProcedureLevelOnly; //if this flag is on, only consider branch/join as beginproc/endproc for a procedure with entire modset
@@ -32,18 +31,18 @@ namespace ExplainError
         }
         public void Run()
         {
-            Console.WriteLine("###ControlFlowDependencyPrePass####\n");
-            //perform interprocedural modset analysis
+            Console.WriteLine("Performing ControlFlowDependencyPrePass.....\n");
             (new ModSetCollector()).DoModSetAnalysis(prog);
             prog.Implementations.Iter(impl => (new SplitBranchBlocks(impl)).Run());
             prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
-            // Add place holders
+            // Add place holders for variables/blocks
             prog.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(InstrumentImplementation);
         }
 
         /// <summary>
         /// We need to split a block {B: ... goto B1, B2;} into {B: ...; goto B';} and {B': goto B1, B2;}
+        /// This ensures that branch nodes have empty modsets
         /// </summary>
         private class SplitBranchBlocks
         {
@@ -57,7 +56,7 @@ namespace ExplainError
                     var gotoCmd = blk.TransferCmd as GotoCmd;
                     if (gotoCmd == null) continue;
                     if (gotoCmd.labelTargets.Count < 2) continue; //not a branch node
-                    if (blk.Cmds.Count == 0) continue; //no command
+                    if (blk.Cmds.Count == 0) continue; //no command and hence no modification
                     var b = new Block(Token.NoToken, "__split__xxx_" + blk.Label, new List<Cmd>(), blk.TransferCmd);
                     blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block>() { b });
                     newBlks.Add(b);
@@ -116,7 +115,7 @@ namespace ExplainError
             Dictionary<Block, HashSet<Block>> mergeJoinSuccessors; //maps a merge/join node to its merge/join successors
             HashSet<Tuple<Block, Block>> branchJoinPairs;
             Stopwatch sw;
-            int TIME_PER_IMPL = 500; //500000; //max per implementation
+            int TIME_PER_IMPL = 1; //500000; //max per implementation
             public IntraProcModSetComputerPerImpl(ControlFlowDependency cfd, Implementation impl) 
             { 
                 parent = cfd;
@@ -137,6 +136,7 @@ namespace ExplainError
                 parent.branchJoinPairModSet[impl.Name] = new HashSet<Tuple<string, string, HashSet<Variable>>>();
                 if (!parent.coarseProcedureLevelOnly)
                 {
+                    //revert back to the safer option if this times out or throws some exception e.g. irreducible graph
                     try
                     {
                         PerformFineGrainedControlDependency();
@@ -146,7 +146,7 @@ namespace ExplainError
                         parent.branchJoinPairModSet[impl.Name].Clear(); //remove any partial computation
                     }
                 }
-                //only add the procedure level modset (currently undoing all the work of block/join)
+                //add the procedure level modset 
                 var modsetImpl = new HashSet<Variable> (impl.Proc.Modifies.Select(x => x.Decl).Union(impl.Proc.OutParams));
                 parent.branchJoinPairModSet[impl.Name]
                     .Add(Tuple.Create("beginproc", "endproc", modsetImpl));
@@ -166,9 +166,9 @@ namespace ExplainError
                     );
                 //initialize the WL
                 InitializeModSets();
-                //compress nodes with single pred and succ, and initializes WL
+                //compress nodes with single pred and succ, and initializes WL (optimization)
                 RemoveChainBlocks();
-                //run the fixed point
+                //run the fixpoint
                 ComputeTransitiveModSets();
                 //find the (branch,join) pairs
                 FindBranchJoinPairs();
@@ -284,8 +284,11 @@ namespace ExplainError
                         }
                         //both b and b2 are not chainBlocks
                         mergeJoinSuccessors[b].Add(b2);
-                        workList.Add(Tuple.Create(b, b2));
-                        mods.Iter(x => intraProcPairBlockModSet[Tuple.Create(b, b2)].Add(x)); //union existing mod set from other edges
+                        var bb2 = Tuple.Create(b, b2);
+                        workList.Add(bb2);
+                        if (!intraProcPairBlockModSet.ContainsKey(bb2))
+                            intraProcPairBlockModSet[bb2] = new HashSet<Variable>();
+                        mods.Iter(x => intraProcPairBlockModSet[bb2].Add(x)); //union existing mod set from other edges
                     }
                 }
             }
