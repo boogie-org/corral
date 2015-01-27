@@ -58,6 +58,7 @@ namespace cba
 
         public bool genCTrace { get; private set; }
         public bool noTrace { get; private set; }
+        public bool noTraceOnDisk { get; private set; }
 
         public bool computeStats { get; private set; }
 
@@ -258,6 +259,7 @@ namespace cba
             ignoreAssertMethods = new HashSet<string>();
             genCTrace = false;
             noTrace = false;
+            noTraceOnDisk = false;
             computeStats = false;
             printProgress = false;
             inputFile = null;
@@ -589,6 +591,10 @@ namespace cba
             else if (flag == "/noTrace")
             {
                 noTrace = true;
+            }
+            else if (flag == "/noTraceOnDisk")
+            {
+                noTraceOnDisk = true;
             }
             else if (flag == "/catchAll")
             {

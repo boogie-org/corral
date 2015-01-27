@@ -35,6 +35,8 @@ namespace cba
         // in trace
         public static void print(PersistentCBAProgram program, ErrorTrace trace, string file)
         {
+            if (file == null) return;
+
             trace = trace.Copy();
             ErrorTrace.fillInContextSwitchInfo(trace);
 
