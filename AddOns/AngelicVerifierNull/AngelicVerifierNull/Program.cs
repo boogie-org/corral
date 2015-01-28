@@ -119,7 +119,7 @@ namespace AngelicVerifierNull
         public static readonly string EnvironmentAssumptionAttr = "Ebasic";
         public static readonly string ReachableStatesAttr = "ReachableStates";
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
-        public static readonly int RelaxConstraintsStackDepthBound = 6;
+        public static readonly int RelaxConstraintsStackDepthBound = 4;
     }
 
     public class Driver
