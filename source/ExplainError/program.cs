@@ -262,7 +262,7 @@ namespace ExplainError
             HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
             Stack<Tuple<string, string>> branchJoinStack = new Stack<Tuple<string, string>>();
 
-            var GetSupportVars = new Func<Expr, HashSet<Variable>>(x =>
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
             {
                 var vc = new VariableCollector();
                 vc.Visit(x);
@@ -1274,7 +1274,7 @@ namespace ExplainError
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
-            if (CommandLineOptions.Clo.ProcsToCheck != null && CommandLineOptions.Clo.ProcsToCheck.FindAll(x => impl.Name.StartsWith(x)).Count == 0)
+            if (CommandLineOptions.Clo.ProcsToCheck != null && !CommandLineOptions.Clo.ProcsToCheck.Any(x => impl.Name.StartsWith(x)))
             {
                 returnStatus = STATUS.ILLEGAL; return false;
             }

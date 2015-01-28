@@ -276,7 +276,7 @@ namespace cba.Util
         }
 
         // Is there a Key called "name"
-        public static List<object> getAttr(string name, QKeyValue attr)
+        public static IList<object> getAttr(string name, QKeyValue attr)
         {
             for (; attr != null; attr = attr.Next)
             {
