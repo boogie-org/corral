@@ -1702,7 +1702,7 @@ namespace ExplainError
                     op.Op == BinaryOperator.Opcode.Eq ||
                     op.Op == BinaryOperator.Opcode.Neq);
             }
-            public static Expr MySubstituteInExpr(Expr p, List<AssignLhs> lhss, List<Expr> rhss)
+            public static Expr MySubstituteInExpr(Expr p, IList<AssignLhs> lhss, IList<Expr> rhss)
             {
                 var h = new Dictionary<Variable, Expr>();
                 for (int i = 0; i < lhss.Count; ++i)

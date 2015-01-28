@@ -1739,10 +1739,10 @@ namespace AngelicVerifierNull
             usedVarsCollector.Visit(expr);
             Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
 
-            var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
+            var nexpr = (new Instrumentations.RewriteConstants(new HashSet<Variable>(usedVarsCollector.usedVars))).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
-            var aexpr = AbstractRepeatedMapsInBlock(expr, usedVarsCollector.usedVars);
+            var aexpr = AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars));
             if (aexpr != null)
             {
                 Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));

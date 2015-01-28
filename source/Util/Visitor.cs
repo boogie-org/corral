@@ -839,7 +839,7 @@ namespace cba.Util
             return base.VisitEnsures(ensures);
         }
 
-        public override ExistsExpr VisitExistsExpr(ExistsExpr node)
+        public override Expr VisitExistsExpr(ExistsExpr node)
         {
             add(node);
             return base.VisitExistsExpr(node);
@@ -851,7 +851,7 @@ namespace cba.Util
             return base.VisitExpr(node);
         }
 
-        public override ForallExpr VisitForallExpr(ForallExpr node)
+        public override Expr VisitForallExpr(ForallExpr node)
         {
             add(node);
             return base.VisitForallExpr(node);
@@ -899,7 +899,7 @@ namespace cba.Util
             return base.VisitImplementation(node);
         }
 
-        public override LiteralExpr VisitLiteralExpr(LiteralExpr node)
+        public override Expr VisitLiteralExpr(LiteralExpr node)
         {
             add(node);
             return base.VisitLiteralExpr(node);

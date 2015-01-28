@@ -229,7 +229,7 @@ namespace ExplainError
                         if (cmd is AssignCmd)
                         {
                             var ac = cmd as AssignCmd;
-                            ac.Lhss.ForEach(x => modVars.Add(x.DeepAssignedVariable));
+                            ac.Lhss.Iter(x => modVars.Add(x.DeepAssignedVariable));
                         }
                         if (cmd is HavocCmd)
                         {
