@@ -322,8 +322,7 @@ namespace CoreLib
                 if (isDriverImpl(impl))
                 {
                     var ac = new AssumeCmd(Token.NoToken, Expr.True);
-                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(), null);
-                    ac.Attributes.Params.Add(impl.Name);
+                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>{impl.Name}, null);
 
                     var nc = new List<Cmd>();
                     nc.Add(ac);
