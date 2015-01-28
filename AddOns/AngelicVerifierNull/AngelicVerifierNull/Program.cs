@@ -1605,7 +1605,7 @@ namespace AngelicVerifierNull
             Debug.Assert(block.Cmds[currLoc.instrNo] is AssignCmd);
             var ac = block.Cmds[currLoc.instrNo] as AssignCmd;
             // block assert
-            ac.Rhss[0] = Expr.True;
+            ac.SetAssignCmdRhs(0, Expr.True);
             //block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
         }
         #endregion
