@@ -198,7 +198,61 @@ namespace cba.Util
 
             return reachable;
         }
-         
+
+        // Call graph over implementations
+        public static Graph<string> GetCallGraph(Program program)
+        {
+            var graph = new Graph<string>();
+            var impls = new HashSet<string>(program.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                impl.Blocks
+                    .Iter(blk => blk.Cmds
+                        .OfType<CallCmd>()
+                        .Where(cc => impls.Contains(cc.callee))
+                        .Iter(cc => graph.AddEdge(impl.Name, cc.callee)));
+            }
+            return graph;
+        }
+
+        // Return nodes on some cycle
+        public static HashSet<Node> GetCyclicNodes<Node>(Graph<Node> graph) where Node: class
+        {
+            var ret = new HashSet<Node>();
+            var scc = new StronglyConnectedComponents<Node>(graph.Nodes,
+                new Adjacency<Node>(n => graph.Predecessors(n)), new Adjacency<Node>(n => graph.Successors(n)));
+            scc.Compute();
+
+            foreach (var s in scc)
+            {
+                if(s.Count == 0) continue;
+
+                if (s.Count > 1 || graph.Successors(s.First()).Contains(s.First()))
+                {
+                    ret.UnionWith(s);
+                }
+            }
+
+            return ret;
+        }
+
+        // Get reachable nodes
+        public static HashSet<Node> GetReachableNodes<Node>(Node n, Graph<Node> graph) where Node : class
+        {
+            var ret = new HashSet<Node>{ n };
+            var frontier = new HashSet<Node> { n };
+
+            while (frontier.Count > 0)
+            {
+                var next = new HashSet<Node>();
+                frontier.Iter(v => next.UnionWith(graph.Successors(v)));
+                next.ExceptWith(ret);
+                ret.UnionWith(next);
+                frontier = next;
+            }
+            return ret;
+        }
+
         public static HashSet<string> getVarsModified(Cmd cmd, HashSet<string> procsWithImpl)
         {
             var ret = new HashSet<string>();

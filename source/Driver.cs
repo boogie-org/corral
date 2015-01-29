@@ -240,7 +240,7 @@ namespace cba
                 // extract loops
                 if (GlobalConfig.InferPass != null)
                 {
-                    elPass = new ExtractLoopsPass();
+                    elPass = new ExtractLoopsPass(true);
                     curr = elPass.run(curr);
                     CommandLineOptions.Clo.ExtractLoops = false;
                 }
@@ -811,6 +811,7 @@ namespace cba
                     LBoptions.useDI = false;
                     LBoptions.useFwdBck = false;
                     LBoptions.NonUniformUnfolding = false;
+                    LBoptions.extraFlags = new HashSet<string>();
                     var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
@@ -993,8 +994,6 @@ namespace cba
             {
                 Console.WriteLine("prog.c(1,1): error PF5001: This assertion can fail");
                 Console.WriteLine("Program has bugs");
-
-                //PrintProgramPath.print(curr, buggyTrace, "temp0");
 
                 passes.Reverse<CompilerPass>()
                                    .Iter(cp => buggyTrace = cp.mapBackTrace(buggyTrace));

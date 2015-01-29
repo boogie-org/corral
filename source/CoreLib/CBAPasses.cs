@@ -1143,9 +1143,12 @@ namespace cba
                     {
                         blk.Cmds = dup.VisitCmdSeq(blk.Cmds);
                     }
-                    addIds.VisitImplementation(impl);
                 }
-                
+
+                // Add labels again to all procedures
+                foreach (var impl in p.TopLevelDeclarations
+                    .OfType<Implementation>())
+                    addIds.VisitImplementation(impl);                    
             }
 
             info = new Dictionary<string, Dictionary<string, string>>();
