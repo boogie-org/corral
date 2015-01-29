@@ -66,7 +66,7 @@ namespace cba
                 ev.printEvent();
             }
 
-            pathFile.Close();
+            if(pathFile != null) pathFile.Close();
         }
 
         // Print an interleaved trace, using the execution context information present
@@ -352,21 +352,21 @@ namespace cba
         private static void setupPrint(PersistentCBAProgram program, ErrorTrace trace, string file)
         {
             // Set output files
-            pathFile = new TokenTextWriter(file + "_trace.txt");
-            program.writeToFile(file + ".bpl");
+            pathFile = file == null ? null : new TokenTextWriter(file + "_trace.txt");
+            if(pathFile != null) program.writeToFile(file + ".bpl");
             Program prog = program.getProgram();
 
             // Initialization
-            initialize(prog, trace, file + ".bpl");
+            initialize(prog, trace, file == null ? null : file + ".bpl");
 
-            pathFile.WriteLine("s");
-            pathFile.WriteLine("#");
+            if (pathFile != null) pathFile.WriteLine("s");
+            if (pathFile != null) pathFile.WriteLine("#");
         }
 
         private static void initialize(Program program, ErrorTrace trace, string filename)
         {
             // Initialization
-            fileName = filename;
+            fileName = filename == null ? "null" : filename;
             nameImplMap = BoogieUtil.nameImplMapping(program);
             events = new List<Event>();
             threadStacks = new Dictionary<int, List<WorkItem>>();
@@ -461,9 +461,12 @@ namespace cba
                             {
                                 var cmd = pblk.Cmds[pcnt] as CallCmd;
                                 Debug.Assert(cmd.Ins.Count == 1);
+                                var prefix = QKeyValue.FindStringAttribute(cmd.Attributes, "cexpr");
+                                if (prefix == null) prefix = "v";
+                                prefix += " = ";
                                 if (cc.info.hasVar("si_arg"))
                                 {
-                                    callstr += "v = " + cc.info.getVal("si_arg").ToString();
+                                    callstr += prefix + cc.info.getVal("si_arg").ToString();
                                 }
                             }
                         }
@@ -600,12 +603,12 @@ namespace cba
                 }
                 lastEvent = check;
 
-                pathFile.Write(getString(eid, extra));
+                if(pathFile != null) pathFile.Write(getString(eid, extra));
             }
 
             private void printToFile(string str)
             {
-                pathFile.Write(str);
+                if(pathFile != null) pathFile.Write(str);
             }
 
             private string getString(int eid, string extra)

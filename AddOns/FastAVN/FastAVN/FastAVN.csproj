@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -94,6 +95,14 @@
     <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\AliasAnalysis\AliasAnalysis\AliasAnalysis.csproj">
+      <Project>{584822a6-f933-484f-aff3-5d3cc2337198}</Project>
+      <Name>AliasAnalysis</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\AngelicVerifierNull\AngelicVerifierNull\AngelicVerifierNull.csproj">
+      <Project>{71e626cd-6fc4-42f0-b91d-5cc42b2875cf}</Project>
+      <Name>AngelicVerifierNull</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

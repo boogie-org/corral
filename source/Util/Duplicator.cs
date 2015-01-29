@@ -102,7 +102,7 @@ namespace cba.Util
         {
             return base.VisitDeclWithFormals((DeclWithFormals)node.Clone());
         }
-        public override ExistsExpr VisitExistsExpr(ExistsExpr node)
+        public override Expr VisitExistsExpr(ExistsExpr node)
         {
             return base.VisitExistsExpr((ExistsExpr)node.Clone());
         }
@@ -114,7 +114,7 @@ namespace cba.Util
         {
             return base.VisitExprSeq(new List<Expr>(list));
         }
-        public override ForallExpr VisitForallExpr(ForallExpr node)
+        public override Expr VisitForallExpr(ForallExpr node)
         {
             return base.VisitForallExpr((ForallExpr)node.Clone());
         }
@@ -150,7 +150,7 @@ namespace cba.Util
         {
             return base.VisitImplementation((Implementation)node.Clone());
         }
-        public override LiteralExpr VisitLiteralExpr(LiteralExpr node)
+        public override Expr VisitLiteralExpr(LiteralExpr node)
         {
             return base.VisitLiteralExpr((LiteralExpr)node.Clone());
         }
@@ -256,6 +256,14 @@ namespace cba.Util
         {
             return base.VisitRequires((Requires)node.Clone());
         }
+        public override Expr VisitBvConcatExpr(BvConcatExpr node)
+        {
+            return base.VisitBvConcatExpr((BvConcatExpr)node.Clone());
+        }
+        public override Expr VisitBvExtractExpr(BvExtractExpr node)
+        {
+            return base.VisitBvExtractExpr((BvExtractExpr)node.Clone());
+        }
         public override Expr VisitCodeExpr(CodeExpr node)
         {
             var clone = (CodeExpr)node.Clone();
@@ -271,7 +279,7 @@ namespace cba.Util
             {
                 subst.Add(node.Blocks[i], clone.Blocks[i]);
             }
-            foreach (Block/*!*/ b in clone.Blocks)
+            foreach (Block b in clone.Blocks)
             {
                 GotoCmd g = b.TransferCmd as GotoCmd;
                 if (g != null)

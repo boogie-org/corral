@@ -99,7 +99,7 @@ implementation sdv_stub_dispatch_end()
 	}
 }
 
-procedure  MouFilter_PnP({:pointer} DeviceObject: int, {:pointer} Irp: int);
+procedure MouFilter_PnP({:pointer} DeviceObject: int, {:pointer} Irp: int);
 
 implementation MouFilter_PnP(DeviceObject: int, Irp: int)
 {

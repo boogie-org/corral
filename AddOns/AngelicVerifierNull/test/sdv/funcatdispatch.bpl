@@ -41,6 +41,7 @@ procedure {:origName "sdv_stub_power_completion_begin"} sdv_stub_power_completio
 implementation {:origName "sdv_stub_power_completion_begin"} sdv_stub_power_completion_begin()
 {
   anon0:
+	assert {:sourcefile ".\src\power.c"} {:sourceline 0} {:print "Return"} true;
 	sdv_irql_current := DISPATCH_LEVEL;
 	goto Lfinal;
 
@@ -53,6 +54,7 @@ procedure {:origName "IoBuildDeviceIoControlRequest"} IoBuildDeviceIoControlRequ
 implementation {:origName "IoBuildDeviceIoControlRequest"} IoBuildDeviceIoControlRequest()
 {
   anon0:
+	assert {:sourcefile ".\src\power.c"} {:sourceline 0} {:print "Return"} true;
 	goto anon0_Then, anon0_Else;
 
   anon0_Then:
@@ -81,6 +83,7 @@ procedure {:origName "t1394_GetGenerationCount"} t1394_GetGenerationCount({:poin
 implementation {:origName "t1394_GetGenerationCount"} t1394_GetGenerationCount(DeviceObject: int, Irp: int, GenerationCount: int)
 {
   anon0:
+	assert {:sourcefile ".\src\power.c"} {:sourceline 0} {:print "Return"} true;
 	goto anon0_Then, anon0_Else;
 
   anon0_Then:

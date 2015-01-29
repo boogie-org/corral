@@ -36,6 +36,7 @@ namespace AngelicVerifierNull
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public Dictionary<string, Constant> impl2BlockingConstant; //inverse of the above map
             public HashSet<string> entrypoints; // set of entrypoints identified
+            public HashSet<string> stubs; // set of stubs identified
             List<Variable> globalParams = new List<Variable>(); // parameters as global variables
 
             public HarnessInstrumentation(Program program, string corralName, bool useProvidedEntryPoints)
@@ -46,6 +47,7 @@ namespace AngelicVerifierNull
                 this.impl2BlockingConstant = new Dictionary<string, Constant>();
                 blockEntryPointConstants = new Dictionary<string,string>();
                 entrypoints = new HashSet<string>();
+                stubs = new HashSet<string>();
             }
             public void DoInstrument()
             {
@@ -105,7 +107,7 @@ namespace AngelicVerifierNull
                 List<Block> mainBlocks = new List<Block>();
                 List<Variable> locals = new List<Variable>();
                 Stats.numProcs = prog.TopLevelDeclarations.Where(x => x is Implementation).Count();
-                Stats.numProcsAnalyzed = 0;
+                
                 HashSet<Constant> blockCallConsts = new HashSet<Constant>(); 
                 foreach (Implementation impl in prog.TopLevelDeclarations.Where(x => x is Implementation))
                 {
@@ -117,7 +119,7 @@ namespace AngelicVerifierNull
                         QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr))
                         continue;
 
-                    Stats.numProcsAnalyzed++;
+                    
                     impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
                     impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                     entrypoints.Add(impl.Name);
@@ -180,6 +182,10 @@ namespace AngelicVerifierNull
                     var blk = BoogieAstFactory.MkBlock(cmds, txCmd);
                     mainBlocks.Add(blk);
                 }
+                foreach (Procedure proc in prog.TopLevelDeclarations.OfType<Procedure>())
+                {
+                    proc.Attributes = BoogieUtil.removeAttr("entrypoint", proc.Attributes);
+                }
                 // add global variables to prog
                 // globals.Iter(x => prog.AddTopLevelDeclaration(x)); 
                 //add the constants to the prog
@@ -207,11 +213,52 @@ namespace AngelicVerifierNull
                 var blocks = new List<Block>();
                 blocks.Add(blkStart);
                 blocks.AddRange(mainBlocks);
-                var mainProcImpl = BoogieAstFactory.MkImpl("CorralMain", new List<Variable>(), new List<Variable>(), locals, blocks);
+                var mainProcImpl = BoogieAstFactory.MkImpl(AvnAnnotations.CORRAL_MAIN_PROC, new List<Variable>(), new List<Variable>(), locals, blocks);
                 mainProcImpl[0].AddAttribute("entrypoint");
                 prog.AddTopLevelDeclarations(mainProcImpl);
             }
-            
+
+            // Remove the dispatch to certain entrypoints
+            public static void RemoveEntryPoints(Program program, HashSet<string> procs)
+            {
+                var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, AvnAnnotations.CORRAL_MAIN_PROC);
+                foreach (var block in mainImpl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in block.Cmds)
+                    {
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null)
+                        {
+                            ncmds.Add(cmd);
+                            continue;
+                        }
+                        if (procs.Contains(ccmd.callee))
+                        {
+                            ncmds.Add(new AssumeCmd(Token.NoToken, Expr.False, new QKeyValue(Token.NoToken, "PrunedEntryPoint", new List<object>(), null)));
+                        }
+                        else
+                        {
+                            ncmds.Add(cmd);
+                        }
+                    }
+                    block.Cmds = ncmds;
+                }
+                BoogieUtil.pruneProcs(program, mainImpl.Name);
+            }
+
+            // Remove the dispatch to certain entrypoints
+            public void PruneEntryPoints(Program program, HashSet<string> procs)
+            {
+                RemoveEntryPoints(program, procs);
+
+                // Get other information in sync
+                entrypoints.ExceptWith(procs);
+                var bc = new HashSet<string>(impl2BlockingConstant.Where(tup => procs.Contains(tup.Key)).Select(tup => tup.Value.Name));
+                bc.Iter(b => blockEntryPointConstants.Remove(b));
+                procs.Iter(p => impl2BlockingConstant.Remove(p));
+            }
+
             // create a copy ofthe variables without annotations
             private List<Variable> DropAnnotations(List<Variable> vars)
             {
@@ -246,10 +293,16 @@ namespace AngelicVerifierNull
             {
                 List<Cmd> cmds = new List<Cmd>();
                 List<Variable> localVars = new List<Variable>();
+                stubs.Add(p.Name);
                 foreach (var op in p.OutParams)
                 {
                     if (IsPointerVariable(op)) cmds.Add(AllocatePointerAsUnknown(op));
-                    else cmds.Add(BoogieAstFactory.MkHavocVar(op)); //Corral alias analysis crashes (what is semantics of uninit var for inlining)
+                    else
+                    {
+                        // Avoid using Havoc -- we'll let this fall on the floor as an
+                        // uninitialized variable. AVN will take care of concretizing it
+                        //cmds.Add(BoogieAstFactory.MkHavocVar(op)); 
+                    }
                 }
                 foreach (var ip in p.InParams)
                 {
@@ -286,13 +339,17 @@ namespace AngelicVerifierNull
             }
             private Cmd AllocatePointerAsUnknown(Variable x)
             {
-                return BoogieAstFactory.MkCall(mallocProcedureFull, 
-                    new List<Expr>(){new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE)}, 
-                    new List<Variable>() {x});
+                var cc = BoogieAstFactory.MkCall(mallocProcedureFull,
+                    new List<Expr>() { new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE) },
+                    new List<Variable>() { x }) as CallCmd;
+                cc.Attributes = new QKeyValue(Token.NoToken, "AllocatorConstantName", new List<object> { x.Name }, cc.Attributes);
+                return cc;
+                
             }
             private List<Cmd> AllocatePointersAsUnknowns(List<Variable> vars)
             {
                 return GetPointerVars(vars)
+                    .Where(v => !QKeyValue.FindBoolAttribute(v.Attributes, "guardvar")) // HACK!!
                     .Select(x => AllocatePointerAsUnknown(x)).ToList();
             }
             public static Function FindReachableStatesFunc(Program program)
@@ -307,6 +364,7 @@ namespace AngelicVerifierNull
                 ret = new Function(Token.NoToken, "MustReach", new List<Variable>{
                     BoogieAstFactory.MkFormal("x", btype.Bool, true)},
                     BoogieAstFactory.MkFormal("y", btype.Bool, false));
+                ret.AddAttribute(AvnAnnotations.ReachableStatesAttr);
 
                 program.AddTopLevelDeclaration(ret);
                 return ret;
@@ -412,7 +470,7 @@ namespace AngelicVerifierNull
         {
             Program prog;
 
-            public const string mallocTriggerFuncName = "mallocTrigger_";
+            public const string mallocTriggerFuncName = "unknownTrigger_";
             // allocator_call -> trigger function
             public Dictionary<int, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
 
@@ -524,6 +582,13 @@ namespace AngelicVerifierNull
             public AssertCountVisitor()
             {
                 notfalse = new NAryExpr(Token.NoToken, new UnaryOperator(Token.NoToken, UnaryOperator.Opcode.Not), new List<Expr> { Expr.False }).ToString();
+            }
+
+            public static int Count(Program program)
+            {
+                var v = new AssertCountVisitor();
+                v.VisitProgram(program);
+                return v.assertCount;
             }
 
             public override Cmd VisitAssertCmd(AssertCmd node)
@@ -726,6 +791,7 @@ namespace AngelicVerifierNull
         cba.InsertionTrans assertInstrInfo;
         cba.InsertionTrans blanksInfo;
         cba.DeepAssertRewrite da;
+        List<cba.InsertionTrans> suppressInfo;
 
         // The harness instrumentation (kept here for
         // round-robin mode)
@@ -781,6 +847,7 @@ namespace AngelicVerifierNull
             origMainName = null;
             blockingMode = false;
             procsWithEnvAssumptions = new HashSet<string>();
+            suppressInfo = new List<cba.InsertionTrans>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram program)
@@ -791,8 +858,15 @@ namespace AngelicVerifierNull
             // Remove unreachable procedures
             BoogieUtil.pruneProcs(program, program.mainProcName);
 
-            // Remove source line annotations
-            sourceInfo = cba.PrintSdvPath.DeleteSourceInfo(program);
+            if (!Options.TraceSlicing)
+            {
+                // Remove source line annotations
+                sourceInfo = cba.PrintSdvPath.DeleteSourceInfo(program);
+            }
+            else
+            {
+                sourceInfo = null;
+            }
 
             // Remove print info
             //printInfo = cba.PrintSdvPath.DeletePrintCmds(program);
@@ -1066,10 +1140,14 @@ namespace AngelicVerifierNull
                 ptrace = da.mapBackTrace(trace);
             }
 
-            trace = assertInstrInfo.mapBackTrace(ptrace);
+            trace = ptrace;
+            (suppressInfo as IEnumerable<cba.InsertionTrans>)
+                .Reverse().Iter(tinfo => trace = tinfo.mapBackTrace(trace));
+
+            trace = assertInstrInfo.mapBackTrace(trace);
             trace = compressBlocks.mapBackTrace(trace);
             //trace = printInfo.mapBackTrace(trace);
-            trace = sourceInfo.mapBackTrace(trace);
+            if(sourceInfo != null) trace = sourceInfo.mapBackTrace(trace);
             trace = blanksInfo.mapBackTrace(trace);
             return trace;
         }
@@ -1093,7 +1171,11 @@ namespace AngelicVerifierNull
         // Block all entrypoints but one
         public void BlockAllButThis(string impl)
         {
-            BlockAllButThis(harnessInstr.impl2BlockingConstant[impl]);
+            var constant = GetRoundRobinBlockingConstants()
+                .Where(c => harnessInstr.impl2BlockingConstant[impl].Name == c.Name)
+                .FirstOrDefault();
+
+            BlockAllButThis(constant);
         }
 
         // Block all entrypoints but one
@@ -1107,7 +1189,7 @@ namespace AngelicVerifierNull
             var blockExpr = tmp.Aggregate((Expr)Expr.True, (x, y) => (Expr.And(x, Expr.Not(IdentifierExpr.Ident(y)))));
             var mainProc = currProg.TopLevelDeclarations.OfType<Procedure>()
                 .Where(x => x.Name == (output as PersistentProgram).mainProcName).FirstOrDefault();
-            mainProc.Requires.Add(new Requires(Token.NoToken, false, blockExpr, null, 
+            mainProc.Requires.Add(new Requires(Token.NoToken, true, blockExpr, null, 
                 new QKeyValue(Token.NoToken, "RRBlocking", new List<object>(), null))); 
         }
 
@@ -1121,23 +1203,55 @@ namespace AngelicVerifierNull
             mainProc.Requires.RemoveAll(x => QKeyValue.FindBoolAttribute(x.Attributes, "RRBlocking"));
         }
 
+        // Return the set of stubs used along the trace
+        public HashSet<string> GetStubs(cba.ErrorTrace trace)
+        {
+            var ret = new HashSet<string>();
+            GetStubs(trace, ret);
+            return ret;
+        }
+
+        void GetStubs(cba.ErrorTrace trace, HashSet<string> ret)
+        {
+            if(trace == null)
+                return;
+            
+            if (harnessInstr.stubs.Contains(trace.procName))
+                ret.Add(trace.procName);
+
+            trace.Blocks
+                .Iter(blk => blk.Cmds.OfType<cba.CallInstr>()
+                    .Iter(cc => GetStubs(cc.calleeTrace, ret)));                   
+        }
+
         // Returns file and line of the failing assert. Dumps
         // error trace to disk.
-        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename)
+        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> eeSlicedSourceLines)
         {
             trace = mapBackTrace(trace);
             
             if (Driver.printTraceMode == Driver.PRINT_TRACE_MODE.Boogie)
             {
-                cba.PrintProgramPath.print(input, trace, filename + ".txt");
+                cba.PrintProgramPath.print(input, trace, filename);
                 return null;
             }
             else
             {
+                // relevant lines
+                cba.PrintSdvPath.relevantLines = null;
+                if (eeSlicedSourceLines != null)
+                {
+                    cba.PrintSdvPath.relevantLines = new HashSet<Tuple<string, int>>();
+                    eeSlicedSourceLines.Iter(tup => cba.PrintSdvPath.relevantLines.Add(Tuple.Create(tup.Item1, tup.Item2)));
+                }
+
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
-                    filename + ".tt", "stack.txt");
-                //if (cba.PrintSdvPath.lastDriverLocation == null) // TODO: error trace for buffer asserts
-                //    return Tuple.Create(".//models.c", 1);
+                    filename + ".tt", filename + "stack.txt");
+
+                cba.PrintSdvPath.relevantLines = null;
+
+                if (cba.PrintSdvPath.lastDriverLocation == null)
+                    return null;
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
             }
         }
@@ -1304,31 +1418,63 @@ namespace AngelicVerifierNull
             req.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.BlockingConstraintAttr, 
                 new List<object> { Expr.Literal(ret) }, req.Attributes);
 
+            // For mapback
+            var tinfo = new cba.InsertionTrans();
+            
             // find the call to the entrypoint and put the assume there
             var added = false;
             foreach (var block in main.Blocks)
             {
+                tinfo.addTrans(main.Name, block.Label, block.Label);
+
                 var ncmds = new List<Cmd>();
+                var cnt = -1;
                 foreach (var cmd in block.Cmds)
                 {
                     var ccmd = cmd as CallCmd;
-                    if (ccmd == null)
+                    cnt++;
+                    if (ccmd == null || ccmd.callee != entrypoint)
                     {
                         ncmds.Add(cmd);
+                        tinfo.addTrans(main.Name, block.Label, cnt, cmd, 
+                            block.Label, ncmds.Count - 1, new List<Cmd> { cmd });
                         continue;
                     }
 
-                    if (ccmd.callee == entrypoint)
-                    {
-                        added = true;
-                        ncmds.Add(req);
-                    }
+                    added = true;
+                    ncmds.Add(req);
                     ncmds.Add(cmd);
+                    tinfo.addTrans(main.Name, block.Label, cnt, cmd,
+                        block.Label, ncmds.Count - 1, new List<Cmd> { cmd });
+
                 }
                 block.Cmds = ncmds;
             }
             Debug.Assert(added);
+            suppressInfo.Add(tinfo);
             return ret;
+        }
+
+        // Suppress an input constraint
+        public void RemoveInputSuppression(int id, string entrypoint)
+        {
+            // find main
+            var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
+                origMainName);
+
+            // Assume has the right id?
+            var Mutate = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssumeCmd;
+                    if (acmd == null) return cmd;
+                    if (QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.BlockingConstraintAttr, -1) == id)
+                        return new AssumeCmd(acmd.tok, Expr.True);
+                    return cmd;
+                });
+
+            // find the call to the entrypoint and put the assume there
+            foreach (var block in main.Blocks)
+                block.Cmds = new List<Cmd>(block.Cmds.Map(c => Mutate(c)));
         }
 
         // Adds a new main:
@@ -1433,7 +1579,7 @@ namespace AngelicVerifierNull
         static string getNewLabel()
         {
             labelCnt++;
-            return "SeqInstr_" + labelCnt.ToString();
+            return "AvnSeqInstr_" + labelCnt.ToString();
         }
 
         // Record the fact that we added instruction corresponding to "in" as the last instruction
@@ -1479,7 +1625,9 @@ namespace AngelicVerifierNull
         }
     }
 
-    // Replace "assume x == NULL" with "assume x == NULL; assert false;"
+    // Replace "assume x == NULL" with 
+    //     "assume x == NULL; assert false;" OR
+    //     "assume x == NULL; assume Reach(true);"
     // provided x can indeed alias NULL
     public class InstrumentBranches
     {
@@ -1487,23 +1635,36 @@ namespace AngelicVerifierNull
         Dictionary<int, Function> id2Func;
         List<Function> queries;
         Function nullQuery;
+        public Function reach;
         int id;
+        bool useAA;
+        bool injectAssert;
 
-        InstrumentBranches(Program program)
+        InstrumentBranches(Program program, bool useAA, bool injectAssert)
         {
             this.program = program;
             queries = new List<Function>();
             id2Func = new Dictionary<int, Function>();
             nullQuery = null;
+            this.useAA = useAA;
+            this.injectAssert = injectAssert;
+            reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
         }
 
         // Replace "assume x == NULL" with "assume x == NULL; assert false;"
         // provided x can indeed alias NULL
-        public static PersistentProgram Run(PersistentProgram inp)
+        public static Program Run(Program program, string ep, bool useAA, bool injectAssert)
         {
-            var program = inp.getProgram();
-            var ib = new InstrumentBranches(program);
-            ib.instrument(inp.mainProcName);
+            var ib = new InstrumentBranches(program, useAA, injectAssert);
+            ib.instrument(ep);
+
+            if (!useAA)
+            {
+                return program;
+            }
+
+            var inp = new PersistentProgram(program, ep, 1);
+            //inp.writeToFile("progbefore.bpl");
 
             // Make sure that aliasing queries are on identifiers only
             var af =
@@ -1523,39 +1684,60 @@ namespace AngelicVerifierNull
             var nil = res.allocationSites[ib.nullQuery.Name].FirstOrDefault();
             Debug.Assert(nil != null);
 
-            // add the assert false
-            var assertFlase = BoogieAstFactory.MkAssert(Expr.False);
-            (assertFlase as AssertCmd).Attributes = new QKeyValue(Token.NoToken,
+            // add the assert false OR assume reach(true)
+            var assertFlase = injectAssert ? BoogieAstFactory.MkAssert(Expr.False) :
+                new AssumeCmd(Token.NoToken,
+                                new NAryExpr(Token.NoToken, new FunctionCall(ib.reach), new List<Expr> { Expr.True }));
+
+            (assertFlase as PredicateCmd).Attributes = new QKeyValue(Token.NoToken,
                 "deadcode", new List<object>() { }, null);
             program = inp.getProgram();
-            var id = 0;
+            var id = 0; var added = 0;
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 foreach (var blk in impl.Blocks)
                 {
                     var ncmds = new List<Cmd>();
-                    foreach (var cmd in blk.Cmds)
+                    for(int i = 0; i < blk.Cmds.Count; i++)
                     {
-                        ncmds.Add(cmd);
-                        var acmd = cmd as AssumeCmd;
-                        if (acmd == null) continue;
+                        ncmds.Add(blk.Cmds[i]);
+                        var acmd = blk.Cmds[i] as AssumeCmd;
+                        if (acmd == null)
+                            continue;
+
                         id++;
                         if (!ib.id2Func.ContainsKey(id))
                             continue;
+
                         var asites = res.allocationSites[ib.id2Func[id].Name];
-                        if (!asites.Contains(nil) && asites.Count  != 0)
+                        if (!asites.Contains(nil) && asites.Count != 0)
+                        {
                             ncmds.Add(assertFlase);
+                            added++;
+                        }
+                        i++;
                     }
                     blk.Cmds = ncmds;
-
+                    blk.Cmds.RemoveAll(c => (c is AssumeCmd) && QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, "ForDeadCodeDetection"));
                 }
             }
+            //BoogieUtil.PrintProgram(program, "progafter.bpl");
 
-            return new PersistentProgram(program, inp.mainProcName, 0);
+            Console.WriteLine("For deadcode detection, we added {0} assumes", added);
+            return program;
         }
 
         void instrument(string main)
         {
+            if (!useAA)
+            {
+                // Instrument branches
+                id = 0;
+                program.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => instrument(impl));
+                return;
+            }
+
             // find the entrypoint
             var ep = program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => impl.Name == main)
@@ -1603,9 +1785,26 @@ namespace AngelicVerifierNull
                         x = expr.Args[0];
                     if (x == null) continue;
 
-                    var func = GetQueryFunc();
-                    id2Func.Add(id, func);
-                    ncmds.Add(GetQuery(func, x));
+                    if (useAA)
+                    {
+                        var func = GetQueryFunc();
+                        id2Func.Add(id, func);
+                        ncmds.Add(GetQuery(func, x));
+                    }
+                    else
+                    {
+                        if (injectAssert)
+                        {
+                            // assert false
+                            ncmds.Add(new AssertCmd(Token.NoToken, Expr.False));
+                        }
+                        else
+                        {
+                            // assume reach(true);
+                            ncmds.Add(new AssumeCmd(Token.NoToken,
+                                new NAryExpr(Token.NoToken, new FunctionCall(reach), new List<Expr> { Expr.True })));
+                        }
+                    }
                 }
                 blk.Cmds = ncmds;
             }
@@ -1623,7 +1822,9 @@ namespace AngelicVerifierNull
 
         AssumeCmd GetQuery(Function func, Expr arg)
         {
-            return new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr> { arg }));
+            var ret = new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(func), new List<Expr> { arg }));
+            ret.Attributes = new QKeyValue(Token.NoToken, "ForDeadCodeDetection", new List<object>(), ret.Attributes);
+            return ret;
         }
     }
 }

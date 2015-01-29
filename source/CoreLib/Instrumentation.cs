@@ -2236,7 +2236,6 @@ namespace cba
         }
     }
 
-
     public class AssertLocation : IEqualityComparer<AssertLocation>
     {
         public string procName;
@@ -2283,6 +2282,8 @@ namespace cba
     //   ...
     public class RewriteAsserts
     {
+        public static readonly string AssertIdentificationAttribute = "corral_assert_pt";
+
         // The transformation carried out
         HashSet<string> lab1BlocksAdded;
         HashSet<string> lab1BlocksAddedForReq;
@@ -2495,7 +2496,8 @@ namespace cba
             currLabel = lab1;
             currCmds = new List<Cmd>();
 
-            currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(aexpr)));
+            currCmds.Add(new AssumeCmd(Token.NoToken, Expr.Not(aexpr), 
+                new QKeyValue(Token.NoToken, AssertIdentificationAttribute, new List<object>(), null)));
             currCmds.Add(acallcmd);
             // cannot put assume false here: when the assert is inside
             // an atomic block then a context switch would not happen between
@@ -2714,12 +2716,27 @@ namespace cba
             }
         }
 
+        // Tokenize the assertions
+
+
         public SequentialInstrumentation()
         {
             passName = "SequentialInstrumentation";
             tinfo = new InsertionTrans();
+            assertsPassed = null;
+        }
+
+        private void CreateAssertsPassedVar(Program program)
+        {
+            var name = "assertsPassed";
+            var cnt = 0;
+            while (program.TopLevelDeclarations.OfType<GlobalVariable>().Any(g => g.Name == name))
+            {
+                name = "assertsPassed" + (++cnt);
+            }
+
             assertsPassed = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
-                "assertsPassed", Microsoft.Boogie.Type.Bool));
+                name, Microsoft.Boogie.Type.Bool));
         }
 
         // If the program has no reachable "async" calls then it is single threaded, i.e., sequential.
@@ -2842,6 +2859,7 @@ namespace cba
 
         public override CBAProgram runCBAPass(CBAProgram program)
         {
+            CreateAssertsPassedVar(program);
             var impls = BoogieUtil.nameImplMapping(program);
             var pwa = procsWithAsserts(program);
 
@@ -2981,6 +2999,7 @@ namespace cba
 
             var blk = new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken));
             newMain.Blocks = new List<Block>();
+            newMain.LocVars = new List<Variable>();
             newMain.Blocks.Add(blk);
 
             program.AddTopLevelDeclaration(newProc);

@@ -82,9 +82,6 @@ namespace cba.Util
         }
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
-            if (node.Name != node.Decl.Name || node.Name != node.Decl.TypedIdent.Name)
-                throw new InternalError("Inconsistent variable/ident naming on " + node.Name + " " + node.Decl.Name + " " + node.Decl.TypedIdent.Name);
-
             if (node.Decl != null)
             {
                 varsUsed.Add(node.Decl.Name);
@@ -842,7 +839,7 @@ namespace cba.Util
             return base.VisitEnsures(ensures);
         }
 
-        public override ExistsExpr VisitExistsExpr(ExistsExpr node)
+        public override Expr VisitExistsExpr(ExistsExpr node)
         {
             add(node);
             return base.VisitExistsExpr(node);
@@ -854,7 +851,7 @@ namespace cba.Util
             return base.VisitExpr(node);
         }
 
-        public override ForallExpr VisitForallExpr(ForallExpr node)
+        public override Expr VisitForallExpr(ForallExpr node)
         {
             add(node);
             return base.VisitForallExpr(node);
@@ -902,7 +899,7 @@ namespace cba.Util
             return base.VisitImplementation(node);
         }
 
-        public override LiteralExpr VisitLiteralExpr(LiteralExpr node)
+        public override Expr VisitLiteralExpr(LiteralExpr node)
         {
             add(node);
             return base.VisitLiteralExpr(node);

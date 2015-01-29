@@ -86,7 +86,7 @@ namespace AliasAnalysis
             this.asToAS = asToAS;
         }
 
-        public static void Prune(Program program, AliasAnalysisResults result)
+        public static void Prune(Program program, AliasAnalysisResults result, bool removeUnreachableProcs = true)
         {
             Function AllocationSites = null;
             Dictionary<string, Constant> asToAS = new Dictionary<string, Constant>();
@@ -107,10 +107,14 @@ namespace AliasAnalysis
                     asToAS.Add(s, c);
                     program.AddTopLevelDeclaration(c);
                 }
-                // Add: function AllocationSites(int) : AS
-                AllocationSites = new Function(Token.NoToken, "AllocationSites", new List<Variable>{
-                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true)},
-                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), false));
+                // Add: function AllocationSites(int, AS) : bool
+                AllocationSites = new Function(Token.NoToken, "AllocationSites", 
+                    new List<Variable>{
+                       new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", btype.Int), true),
+                       new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", new CtorType(Token.NoToken, asType, new List<btype>())), true)
+                    },
+                    new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "c", btype.Bool), false)
+                    );
                 program.AddTopLevelDeclaration(AllocationSites);
             }
 
@@ -123,7 +127,7 @@ namespace AliasAnalysis
             var main = program.TopLevelDeclarations.OfType<Procedure>()
                 .Where(proc => QKeyValue.FindBoolAttribute(proc.Attributes, "entrypoint"))
                 .FirstOrDefault();
-            if (main != null)
+            if (main != null && removeUnreachableProcs)
                 BoogieUtil.pruneProcs(program, main.Name);
 
             // remove aliasing queries
@@ -147,10 +151,12 @@ namespace AliasAnalysis
             }
 
             if (fcall != null && result.allocationSites.ContainsKey(fcall.FunctionName))
-            {
-                Expr r = Expr.False;
+            {  
+                //assume true && AS(e,A1) && AS(e,A3);
+                Expr r = Expr.True;
                 foreach (var s in result.allocationSites[fcall.FunctionName])
-                    r = Expr.Or(r, Expr.Eq(new NAryExpr(Token.NoToken, new FunctionCall(AllocationSites), new List<Expr>{node.Args[0]}), Expr.Ident(asToAS[s])));
+                    r = Expr.And(r,
+                         new NAryExpr(Token.NoToken, new FunctionCall(AllocationSites), new List<Expr> { node.Args[0], Expr.Ident(asToAS[s]) }));
                 return r;
             }
 
@@ -702,7 +708,7 @@ namespace AliasAnalysis
                     foreach (string aS in PointsTo[s]) Console.Write(aS + " ");
                     Console.WriteLine();
                 });
-            null_alloc_site = PointsTo["NULL"].First();
+            null_alloc_site = PointsTo.ContainsKey("NULL") ? PointsTo["NULL"].First() : null;
         }
 
         /*
@@ -1639,6 +1645,7 @@ namespace AliasAnalysis
         bool solved;
         const int environmentPointersUnroll = 0;
         public static bool dbg = false;
+        public static bool NoEmptyLoads = false;
         string null_allocSite;
 
         public AliasConstraintSolver()
@@ -1705,6 +1712,64 @@ namespace AliasAnalysis
             }
             foreach (var a in constraints.OfType<AssignConstraint>())
                 G.InitAndAdd(a.source, a.target);
+
+            ProcessWorklist(G, variables, varToStore, varToLoad);
+
+            if (NoEmptyLoads)
+            {
+                do
+                {
+                    // Gather all empty loads
+                    var emptyloads = constraints.OfType<LoadConstraint>().Select(GetEmptyLoads).Aggregate(
+                        (a, b) => a.Union(b));
+
+                    if (!emptyloads.Any()) break;
+
+                    Console.WriteLine("There were {0} empty loads, trying again", emptyloads.Count());
+
+                    // Add {o} to the points-to set of o.f
+                    foreach (var tup in emptyloads)
+                    {
+                        var of = GetODotf(tup.Item1, tup.Item2);
+                        DiffProp(new HashSet<string> { tup.Item1 }, of);
+                        PointsTo[of].UnionWith(PointsToDelta[of]);
+                    }
+
+                    ProcessWorklist(G, variables, varToStore, varToLoad);
+                } while (true);
+
+            }
+
+            #region stats
+            if (dbg)
+            {
+                Console.WriteLine("Num constraints: {0}", constraints.Count);
+                Console.WriteLine("Num variables, maps, alloc-sites: {0}, {1},  {2}", variables.Count, maps.Count, allocSites.Count);
+                Console.WriteLine("Time: {0}", sw.Elapsed.TotalSeconds);
+            }
+            #endregion
+            solved = true;
+        }
+
+        // Return (o,f) such that PointsTo(o.f) is empty
+        private HashSet<Tuple<string, string>> GetEmptyLoads(LoadConstraint lc)
+        {
+            var ret = new HashSet<Tuple<string, string>>();
+            if(!PointsTo.ContainsKey(lc.source)) return ret;
+
+            var pts = PointsTo[lc.source];
+            foreach (var o in pts)
+            {
+                var of = GetODotf(o, lc.map);
+                if (!PointsTo.ContainsKey(of) || PointsTo[of].Count == 0)
+                    ret.Add(Tuple.Create(o, lc.map));
+            }
+            return ret;
+        }
+
+        private void ProcessWorklist(Dictionary<string, HashSet<string>> G, HashSet<string> variables,
+            Dictionary<string, List<StoreConstraint>> varToStore, Dictionary<string, List<LoadConstraint>> varToLoad)
+        {
             while (worklist.Count != 0)
             {
                 var n = worklist.First();
@@ -1760,15 +1825,7 @@ namespace AliasAnalysis
                 PointsTo[n].UnionWith(PointsToDelta[n]);
                 PointsToDelta[n] = new HashSet<string>();
             }
-            #region stats
-            if (dbg)
-            {
-                Console.WriteLine("Num constraints: {0}", constraints.Count);
-                Console.WriteLine("Num variables, maps, alloc-sites: {0}, {1},  {2}", variables.Count, maps.Count, allocSites.Count);
-                Console.WriteLine("Time: {0}", sw.Elapsed.TotalSeconds);
-            }
-            #endregion
-            solved = true;
+
         }
 
         public Dictionary<string, HashSet<string>> GetPointsToSet()

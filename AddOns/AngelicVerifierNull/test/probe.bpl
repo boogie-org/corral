@@ -10,15 +10,19 @@ var mem:[int]int;
 
 //Probe function
 procedure Probe(a:int, size:int)
-requires !isValid[a];
 {
+  var t:int;
+  //assert !isValid[a]; 
+  if (isValid[a]) {
+     t := t + 1; //throw error
+  }
   isValid[a] := true; //easier to write than a modifies with quantifiers or map updates  
 }
 
 //Access functions
-procedure Access(a:int);
-requires isValid[a];
-
+procedure Access(a:int){
+   assert isValid[a];
+}
 
 //an entry point
 procedure {:entrypoint} Entry1({:pointer} a: int, b:int)

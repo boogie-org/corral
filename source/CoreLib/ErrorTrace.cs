@@ -670,6 +670,33 @@ namespace cba
             if (info.tid < 0) return;
             info.tid = newVal[info.tid];
         }
+
+        // Find the first occurance of "pred" along the trace
+        public static Tuple<Implementation, Block, int> FindCmd(Program program, ErrorTrace trace, Predicate<Cmd> pred)
+        {
+            if(trace == null) return null;
+
+            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, trace.procName);
+            var l2b = BoogieUtil.labelBlockMapping(impl);
+
+            foreach (var tb in trace.Blocks)
+            {
+                var block = l2b[tb.blockName];
+                for (int i = 0; i < Math.Min(block.Cmds.Count, tb.Cmds.Count); i++)
+                {
+                    if (pred(block.Cmds[i]))
+                        return Tuple.Create(impl, block, i);
+                }
+
+                foreach (var ct in tb.Cmds.OfType<CallInstr>().Select(cc => cc.calleeTrace))
+                {
+                    var ret = FindCmd(program, ct, pred);
+                    if (ret != null) return ret;
+                }
+            }
+
+            return null;
+        }
     }
 
     // A sequence of instruction through a basic block
@@ -1270,6 +1297,9 @@ namespace cba
         public static Dictionary<int, HashSet<int>> memWritesCS;
         public static Dictionary<int, HashSet<string>> scalarWrites; // CS -> "scalar value written"
 
+        // relevant lines (trace slicing)
+        public static HashSet<Tuple<string, int>> relevantLines = null;
+
         // Address -> the type with which it is accessed
         public static Dictionary<int, HashSet<string>> memType;
 
@@ -1766,6 +1796,14 @@ namespace cba
             var extraMsg = extra.Replace("\\\"", "\"");
             if (extraMsg.StartsWith("Call \"main\" "))
                 permVars += aliasingPre;
+
+            if (relevantLines != null)
+            {
+                if (relevantLines.Contains(Tuple.Create(file, line)))
+                    dataValuesCurrent += "_sdvRelevantTraceLine_";
+                else
+                    dataValuesCurrent += "_sdvIrrelevantTraceLine_";
+            }
 
             pathFile.WriteLine("{0} \"{1}\" {2} true {3}^====Auto====={4} {5}", gcnt, file, line, dataValuesCurrent, permVars, extraMsg);
             gcnt++;

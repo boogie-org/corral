@@ -77,7 +77,7 @@ implementation sdv_IoSetCompletionRoutine()
 	irp_event := set_in_completion;
 }
 
-procedure {:entrypoint} ToasterSendIrpSynchronously({:pointer} DeviceObject: int, {:pointer} Irp: int) returns ({:scalar} status: int);
+procedure ToasterSendIrpSynchronously({:pointer} DeviceObject: int, {:pointer} Irp: int) returns ({:scalar} status: int);
 
 implementation ToasterSendIrpSynchronously(DeviceObject: int, Irp: int) returns (status: int)
 {

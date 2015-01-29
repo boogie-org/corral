@@ -58,6 +58,7 @@ namespace cba
 
         public bool genCTrace { get; private set; }
         public bool noTrace { get; private set; }
+        public bool noTraceOnDisk { get; private set; }
 
         public bool computeStats { get; private set; }
 
@@ -144,6 +145,8 @@ namespace cba
 
         public string prevCorralState { get; private set; }
         public string dumpCorralState { get; private set; }
+
+        public int NumCex { get; private set; }
 
         public HashSet<string> extraFlags { get; private set; }
 
@@ -256,6 +259,7 @@ namespace cba
             ignoreAssertMethods = new HashSet<string>();
             genCTrace = false;
             noTrace = false;
+            noTraceOnDisk = false;
             computeStats = false;
             printProgress = false;
             inputFile = null;
@@ -326,6 +330,8 @@ namespace cba
 
             newStratifiedInlining = false;
             newStratifiedInliningAlgo = "";
+
+            NumCex = 1;
 
             extraFlags = new HashSet<string>();
         }
@@ -419,6 +425,18 @@ namespace cba
                 var split = flag.Split(sep);
                 extraFlags.Add(split[1]);
             }
+            else if (flag.StartsWith("/killAfter:"))
+            {
+                var split = flag.Split(sep);
+                var timeout = Int32.Parse(split[1]);
+                var timeouttask = new System.Threading.Tasks.Task(() =>
+                    {
+                        System.Threading.Thread.Sleep(timeout * 1000);
+                        Console.WriteLine("Corral timed out");
+                        Process.GetCurrentProcess().Kill();
+                    });
+                timeouttask.Start();
+            }
             else if (flag.StartsWith("/recursionBound:"))
             {
                 var split = flag.Split(sep);
@@ -446,6 +464,11 @@ namespace cba
             else if (flag == "/cadeTiming")
             {
                 cadeTiming = true;
+            }
+            else if (flag.StartsWith("/cex:"))
+            {
+                var split = flag.Split(sep);
+                NumCex = Int32.Parse(split[1]);
             }
             else if (flag == "/useArrayTheory")
             {
@@ -568,6 +591,10 @@ namespace cba
             else if (flag == "/noTrace")
             {
                 noTrace = true;
+            }
+            else if (flag == "/noTraceOnDisk")
+            {
+                noTraceOnDisk = true;
             }
             else if (flag == "/catchAll")
             {

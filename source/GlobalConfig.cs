@@ -51,6 +51,9 @@ namespace cba
             }
         }
 
+        // static inlining?
+        public static int staticInlining = 0;
+
         // Generic annotations
         public static List<string> annotations = new List<string>();
 

@@ -1,0 +1,5 @@
+# Boogie binaries
+*.dll
+*.pdb
+*.mdb
+*.exe

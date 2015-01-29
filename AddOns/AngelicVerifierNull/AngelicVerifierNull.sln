@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AliasAnalysis", "..\AliasAn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FastAVN", "..\FastAVN\FastAVN\FastAVN.csproj", "{CF2E53FE-96C7-4CDB-AE35-43DE7620C1DF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvnResultDashboard", "AvnResultDashboard\AvnResultDashboard.csproj", "{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -195,6 +197,26 @@ Global
 		{CF2E53FE-96C7-4CDB-AE35-43DE7620C1DF}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{CF2E53FE-96C7-4CDB-AE35-43DE7620C1DF}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{CF2E53FE-96C7-4CDB-AE35-43DE7620C1DF}.Release|Win32.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.HWSW|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.HWSW|Mixed Platforms.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.HWSW|Win32.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Internal|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Internal|Mixed Platforms.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Internal|Win32.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Any CPU.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Win32.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
