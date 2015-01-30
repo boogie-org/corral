@@ -352,7 +352,7 @@ namespace AngelicVerifierNull
 
                     // package up the program
                     prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
-                    //prog.writeToFile("inst.bpl");
+                    prog.writeToFile("inst.bpl");
                 }
 
                 PrintAssertStats(prog);
@@ -1652,15 +1652,21 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                
+
+                //First compute a control slice (soundly irrespective of EE assume filters)
+                var skipAssumes = new HashSet<AssumeCmd>();
+                if (Options.TraceSlicing)
+                    skipAssumes = ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
+                //Now perform the precondition generation, taking skipAssumes into account
+                List<Tuple<string, int, string>> tmpEESlicedSourceLines; //don't overwrite the sound slice if the error is displayed
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
-                    out eeStatus, out eeComplexExprs, out preDisjuncts, out eeSlicedSourceLines);
+                    skipAssumes,
+                    out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
-                //Override the sliced lines with the true slice
-                if (Options.TraceSlicing)
-                    ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
                     if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
