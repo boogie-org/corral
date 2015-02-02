@@ -886,6 +886,7 @@ namespace cba
                     LBoptions.useFwdBck = false;
                     LBoptions.NonUniformUnfolding = false;
                     LBoptions.extraFlags = new HashSet<string>();
+                    LBoptions.newStratifiedInliningAlgo = ""; 
                     var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));

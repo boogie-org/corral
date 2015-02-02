@@ -417,7 +417,7 @@ namespace CoreLib
                     Debug.Assert(!boundAsserted.Contains(scs));
                     openCallSites.Remove(scs);
                     var svc = Expand(scs);
-                    openCallSites.UnionWith(svc.CallSites);
+                    if(svc != null) openCallSites.UnionWith(svc.CallSites);
                     Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                 }
             }
