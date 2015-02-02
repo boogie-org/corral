@@ -77,6 +77,8 @@ namespace FastAVN
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
+        static string psexecPath = null; // path to psexec
+        static bool dumpSlices = true; // dump sliced program for each entrypoint
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = ""; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
@@ -92,9 +94,12 @@ namespace FastAVN
         static bool prune = false;
         static string stubsfile = null;
         static bool cleanupDir = true;
+        static FastAvnConfig config = null;
 
         static void Main(string[] args)
         {
+            Console.CancelKeyPress += Console_CancelKeyPress;
+
             if (args.Length < 1)
             {
                 Console.WriteLine("Usage: FastAVN file.bpl");
@@ -131,6 +136,10 @@ namespace FastAVN
 
             args.Where(s => s.StartsWith("/numThreads:"))
                 .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
+
+            // Get config for remote execution
+            args.Where(s => s.StartsWith("/config:"))
+                .Iter(s => config = FastAvnConfig.DeSerialize(s.Substring("/config:".Length)));
 
             if (args.Any(s => s == "/noFieldNonNull"))
                 fieldNonNull = false;
@@ -303,6 +312,10 @@ namespace FastAVN
                 avnPath = Path.Combine(runDir, avn);
             }
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
+
+            if (!File.Exists(Path.Combine(runDir, "psexec.exe")))
+                throw new FileNotFoundException("Cannot find PSEXEC!");
+            psexecPath = Path.Combine(runDir, "psexec.exe");
         }
 
         /// <summary>
@@ -317,17 +330,106 @@ namespace FastAVN
             ConcurrentDictionary<string, int> mergedBugs = new ConcurrentDictionary<string, int>();
 
             var edges = buildCallGraph(prog);
+            
+            // Create a list of resources
+            var worklist = new ConcurrentBag<string>();
+            var remotedirs = new HashSet<string>();
+            for (int i = 0; i < numThreads; i++) worklist.Add(Directory.GetCurrentDirectory());
+            if (config != null)
+            {
+                foreach (var r in config.RemoteRoots)
+                {
+                    remotedirs.Add(r.dir);
+                    for (int i = 0; i < r.Threads; i++) worklist.Add(r.dir);
+                }
+            }
+
+            // max threads
+            var threadsToSpawn = worklist.Count;
+
+            // semaphore for limiting at most numThreads threads running at one time on local machine
+            var sem = new Semaphore(numThreads, numThreads);
 
             Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation && 
                 QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint")),
-                new ParallelOptions { MaxDegreeOfParallelism = numThreads }, i =>
+                new ParallelOptions { MaxDegreeOfParallelism = threadsToSpawn }, i =>
             {
                 var impl = (Implementation)i;
-
                 entryPoints.Add(impl.Name);
+
+                var rd = "";
+                while (!worklist.TryTake(out rd)) { Thread.Sleep(100);  }
+
+                sem.WaitOne();
+
+                var wd = Path.Combine(rd, impl.Name); // create new directory for each entrypoint
+
                 // slice the program by entrypoints
                 Program shallowP = pruneDeepProcs(prog, ref edges, impl.Name, approximationDepth);
+                Directory.CreateDirectory(wd); // create new directory for each entrypoint
+                RemoteExec.CleanDirectory(wd);
+                var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
+                BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
+                sem.Release();
+
+                if (!remotedirs.Contains(rd))
+                {
+                    // spawn the job -- local
+                    var output = RemoteExec.run(wd, avnPath, pruneFile + " " + avnArgs);
+
+                    // delete temp files
+                    var files = System.IO.Directory.GetFiles(wd, "*.bpl");
+                    foreach (var f in files)
+                        System.IO.File.Delete(f);
+
+                    using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
+                        output.Iter(s => sw.WriteLine("{0}", s));
+                }
+                else
+                {
+                    // spawn the job -- remote
+
+                    // find the name of the machine from the remote folder name
+                    var machine = "";
+                    var remoteroot = RemoteExec.GetRemoteFolder(rd, out machine);
+
+                    // psexec machine -w remoteroot\impl remoteroot\fastavn\fastavn.exe remoteroot args
+                    wd = Path.Combine(remoteroot, impl.Name);
+                    var cmd = string.Format("{0} -w {1} {2} {3} {4}", machine, wd, Path.Combine(remoteroot, "fastavn", "fastavn.exe"),
+                        "pruneSlice.bpl", avnArgs);
+
+                    var output = RemoteExec.run(Directory.GetCurrentDirectory(), psexecPath, cmd);
+
+                    // delete temp files
+                    var files = System.IO.Directory.GetFiles(wd, "*.bpl");
+                    foreach (var f in files)
+                        System.IO.File.Delete(f);
+
+                    // copy the results back
+                    Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), impl.Name));
+                    RemoteExec.CopyFolder(rd, Directory.GetCurrentDirectory(), impl.Name, true);
+
+                    using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
+                        output.Iter(s => sw.WriteLine("{0}", s));
+                }
+
+                sem.WaitOne();
+
+                // collect and merge bugs
+                var bugs = collectBugs(Path.Combine(Directory.GetCurrentDirectory(), impl.Name, bugReportFileName));
+                bugs.Iter(b =>
+                {
+                    if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
+                    mergedBugs[b] += 1;
+                });
+                Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
+
+                sem.Release();
+
+                worklist.Add(rd);
+
+                /*
                 var runAVNargs = " ";
                 try
                 {
@@ -414,12 +516,27 @@ namespace FastAVN
                     Console.WriteLine(e.Message);
                     Console.WriteLine(e.StackTrace);
                 }
+                 * */
             });
 
             printBugs(ref mergedBugs, entryPoints.Count);
             mergeBugs(entryPoints);
             Utils.Print(string.Format("#EntryPoints : {0}", entryPoints.Count), Utils.PRINT_TAG.AV_STATS);
             Utils.Print(string.Format("#Bugs : {0}", mergedBugs.Count), Utils.PRINT_TAG.AV_STATS);
+        }
+
+        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            Console.WriteLine("Got Ctrl-C");
+            
+            lock (RemoteExec.SpawnedProcesses)
+            {
+                foreach (var p in RemoteExec.SpawnedProcesses)
+                    p.Kill();
+                RemoteExec.SpawnedProcesses.Clear();
+            }
+            System.Diagnostics.Process.GetCurrentProcess()
+                .Kill();
         }
 
         private static void mergeBugs(ConcurrentBag<string> entryPoints)
