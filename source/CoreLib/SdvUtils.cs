@@ -322,8 +322,7 @@ namespace CoreLib
                 if (isDriverImpl(impl))
                 {
                     var ac = new AssumeCmd(Token.NoToken, Expr.True);
-                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(), null);
-                    ac.Attributes.Params.Add(impl.Name);
+                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>{impl.Name}, null);
 
                     var nc = new List<Cmd>();
                     nc.Add(ac);
@@ -650,12 +649,12 @@ namespace CoreLib
             accesses = new List<Tuple<Variable, Expr>>();
         }
 
-        public override ForallExpr VisitForallExpr(ForallExpr node)
+        public override Expr VisitForallExpr(ForallExpr node)
         {
             return node;
         }
 
-        public override ExistsExpr VisitExistsExpr(ExistsExpr node)
+        public override Expr VisitExistsExpr(ExistsExpr node)
         {
             return node;
         }

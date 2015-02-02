@@ -1099,7 +1099,8 @@ namespace CoreLib
             }
 
             var o = CheckAssumptions(reporter, assumptions);
-            Debug.Assert(o == Outcome.Correct || o == Outcome.Errors);
+            if(o != Outcome.Correct && o != Outcome.Errors)
+                throw new cba.Util.InternalError(string.Format("z3 ran out of resources in RefinementLoop: {0}", o));
             prover.LogComment("FindLeast: Query End");
 
             return (o == Outcome.Correct);

@@ -314,12 +314,13 @@ namespace cba
 
                     if (GlobalConfig.genCTrace)
                     {
-                        PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, traceName);
+                        PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, config.noTraceOnDisk ? null : traceName);
                     }
                     else
                     {
                         //PrintProgramPath.print(inputProg, cexTrace, "temp0");
-                        PrintConcurrentProgramPath.print(inputProg, cexTrace, traceName);
+                        if(!config.noTraceOnDisk)
+                            PrintConcurrentProgramPath.print(inputProg, cexTrace, traceName);
 
                         var init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
                         PrintConcurrentProgramPath.print(init, cexTrace, config.inputFile);

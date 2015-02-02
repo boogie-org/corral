@@ -119,7 +119,7 @@ namespace AngelicVerifierNull
         public static readonly string EnvironmentAssumptionAttr = "Ebasic";
         public static readonly string ReachableStatesAttr = "ReachableStates";
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
-        public static readonly int RelaxConstraintsStackDepthBound = 6;
+        public static readonly int RelaxConstraintsStackDepthBound = 4;
     }
 
     public class Driver
@@ -352,7 +352,7 @@ namespace AngelicVerifierNull
 
                     // package up the program
                     prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
-                    //prog.writeToFile("inst.bpl");
+                    prog.writeToFile("inst.bpl");
                 }
 
                 PrintAssertStats(prog);
@@ -1605,7 +1605,7 @@ namespace AngelicVerifierNull
             Debug.Assert(block.Cmds[currLoc.instrNo] is AssignCmd);
             var ac = block.Cmds[currLoc.instrNo] as AssignCmd;
             // block assert
-            ac.Rhss[0] = Expr.True;
+            ac.SetAssignCmdRhs(0, Expr.True);
             //block.Cmds[currLoc.instrNo] = new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
         }
         #endregion
@@ -1652,15 +1652,21 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                
+
+                //First compute a control slice (soundly irrespective of EE assume filters)
+                var skipAssumes = new HashSet<AssumeCmd>();
+                if (Options.TraceSlicing)
+                    skipAssumes = ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
+                //Now perform the precondition generation, taking skipAssumes into account
+                List<Tuple<string, int, string>> tmpEESlicedSourceLines; //don't overwrite the sound slice if the error is displayed
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
-                    out eeStatus, out eeComplexExprs, out preDisjuncts, out eeSlicedSourceLines);
+                    skipAssumes,
+                    out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
-                //Override the sliced lines with the true slice
-                if (Options.TraceSlicing)
-                    ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
                     if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
@@ -1739,10 +1745,10 @@ namespace AngelicVerifierNull
             usedVarsCollector.Visit(expr);
             Utils.Print(string.Format("List of used vars in {0} => {1}", expr, String.Join(", ", usedVarsCollector.usedVars)));
 
-            var nexpr = (new Instrumentations.RewriteConstants(usedVarsCollector.usedVars)).VisitExpr(expr); //get the expr in scope of pprog
+            var nexpr = (new Instrumentations.RewriteConstants(new HashSet<Variable>(usedVarsCollector.usedVars))).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
-            var aexpr = AbstractRepeatedMapsInBlock(expr, usedVarsCollector.usedVars);
+            var aexpr = AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars));
             if (aexpr != null)
             {
                 Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));

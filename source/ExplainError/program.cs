@@ -106,6 +106,7 @@ namespace ExplainError
         /// <param name="impl"></param>
         /// <param name="pr"></param>
         /// <param name="tmout"></param>
+        /// <param name="skipAssumes">a set of assumes to skip from slicing</param>
         /// <param name="explainErrorFilters"></param>
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
@@ -113,6 +114,7 @@ namespace ExplainError
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
             string extraArgs,
             ControlFlowDependency cntrlFlowDependencyInfo,
+            HashSet<AssumeCmd> skipAssumes, 
             out STATUS status, out Dictionary<string, string> complexCExprsRet,
             out HashSet<List<Expr>> preInDnfForm,
             out List<Tuple<string,int,string>> eeSlicedSourceLines)
@@ -150,12 +152,15 @@ namespace ExplainError
                 foreach (var a in ExplainError.Toplevel.prog.TopLevelDeclarations)
                     if ((a is Function) && QKeyValue.FindStringAttribute(((Function)a).Attributes, "fieldmap") != null)
                         ExplainError.Toplevel.fieldMapFuncs.Add(((Function)a).Name);
-            var tmp = Go(impl, out preInDnfForm, out eeSlicedSourceLines);
+            var tmp = Go(impl, skipAssumes, out preInDnfForm, out eeSlicedSourceLines);
             status = returnStatus;
             complexCExprsRet = complexCExprs;
             return tmp;
         }
-        public static List<string> Go(Implementation impl, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeSlicedSourceLines)
+        public static List<string> Go(Implementation impl,
+            HashSet<AssumeCmd> skipAssumes,
+            out HashSet<List<Expr>> preInDnfForm, 
+            out List<Tuple<string,int,string>> eeSlicedSourceLines)
         {
             sw = new Stopwatch();
             sw.Start();
@@ -169,7 +174,7 @@ namespace ExplainError
             try
             {
                 //SimplifyAssumesUsingForwardPass();
-                ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out eeSlicedSourceLines);
+                ComputePreCmdSeq(impl.Blocks[0].Cmds, skipAssumes, out preInDnfForm, out eeSlicedSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
                 //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
                 //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
@@ -209,12 +214,14 @@ namespace ExplainError
         /// <param name="tmout"></param>
         /// <param name="cntrlFlowDependencyInfo"></param>
         /// <param name="eeSlicedSourceLines"></param>
-        /// <returns></returns>
-        public static bool TrueTraceSlicing(Implementation impl, Program pr, int tmout, 
+        /// <returns>the set of assumes that were skipped</returns>
+        public static HashSet<AssumeCmd> TrueTraceSlicing(Implementation impl, Program pr, int tmout, 
             ControlFlowDependency cntrlFlowDependencyInfo,
             out List<Tuple<string,int,string>> eeSlicedSourceLines)
         {
-            Console.WriteLine("\n\nEE: ** Reexecuting the trace ** inside TrueTraceSlicing");
+            sw = new Stopwatch();
+            sw.Start();
+            Console.WriteLine("\n\nEE: Performning sound TraceSlicing with no EE filter");
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
             /////////////////////////////////////
@@ -230,8 +237,9 @@ namespace ExplainError
             ExplainError.Toplevel.fieldMapFuncs = new HashSet<string>();
             //Don't care variables
             HashSet<List<Expr>> preInDnfForm;
-            ComputePreCmdSeq(impl.Blocks[0].Cmds, out preInDnfForm, out eeSlicedSourceLines,true);
-            return true;
+            HashSet<AssumeCmd> skippedAssumes = new HashSet<AssumeCmd>(); //set of assumes to skip starts emtpy and modified by ComputePreCmdSeq
+            ComputePreCmdSeq(impl.Blocks[0].Cmds, skippedAssumes, out preInDnfForm, out eeSlicedSourceLines,true);
+            return skippedAssumes;
         }
 
         private static void PersistSuggestionsInFile(HashSet<List<Expr>> preInDnfForm, List<string> preStrings)
@@ -256,13 +264,15 @@ namespace ExplainError
         /// </summary>
         /// <param name="cmdseq"></param>
         /// <param name="preInDnfForm"></param>
-        private static void ComputePreCmdSeq(List<Cmd> cmdseq, out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeRelevantSourceLines,
+        private static void ComputePreCmdSeq(List<Cmd> cmdseq, 
+            HashSet<AssumeCmd> skipAssumes, /* modified */
+            out HashSet<List<Expr>> preInDnfForm, out List<Tuple<string,int,string>> eeRelevantSourceLines,
             bool traceSlicingOnly=false)
         {
             HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
             Stack<Tuple<string, string>> branchJoinStack = new Stack<Tuple<string, string>>();
 
-            var GetSupportVars = new Func<Expr, HashSet<Variable>>(x =>
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
             {
                 var vc = new VariableCollector();
                 vc.Visit(x);
@@ -345,10 +355,13 @@ namespace ExplainError
                         continue;
                     }
                     if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) continue;
-                    numAssumes++;
-                    if (branchJoinStack.Count > 0)
+                    numAssumes++; //this assume permitted by filter
+                    if (skipAssumes.Contains(cmd) || branchJoinStack.Count > 0)
                     {
-                        numAssumeSkipped++; continue;
+                        numAssumeSkipped++; 
+                        //we are adding to skipAssumes when !skipAssumes.Contains(cmd) && branchJoinStack.Count > 0
+                        skipAssumes.Add(cmd as AssumeCmd); 
+                        continue;
                     }
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
@@ -381,7 +394,6 @@ namespace ExplainError
             }
             var slicingStr = traceSlicingOnly ? "TraceSlicing" : "Precond";
             Console.WriteLine("ExplainError[{2}]: Num of conditionals considered by slice/Total Num conditionals = {0}/{1}", numAssumes-numAssumeSkipped, numAssumes, slicingStr);
-            //Console.WriteLine("ExplainError[{2}]: Num of assigns considered by slice/Total Num assigns = {0}/{1}", numAssigns - numAssignsSkipped, numAssigns,slicingStr);
             Console.WriteLine("ExplainError[{2}]: Num of relevant source lines considered by slice/Total source lines = {0}/{1}", 
                 eeRelevantSourceLines.Count, allSourceLines.Count, slicingStr);
             Console.WriteLine("ExplainError[{0}]: Sliced Trace => \n\t{1}", slicingStr,
@@ -1274,7 +1286,7 @@ namespace ExplainError
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
-            if (CommandLineOptions.Clo.ProcsToCheck != null && CommandLineOptions.Clo.ProcsToCheck.FindAll(x => impl.Name.StartsWith(x)).Count == 0)
+            if (CommandLineOptions.Clo.ProcsToCheck != null && !CommandLineOptions.Clo.ProcsToCheck.Any(x => impl.Name.StartsWith(x)))
             {
                 returnStatus = STATUS.ILLEGAL; return false;
             }
@@ -1702,7 +1714,7 @@ namespace ExplainError
                     op.Op == BinaryOperator.Opcode.Eq ||
                     op.Op == BinaryOperator.Opcode.Neq);
             }
-            public static Expr MySubstituteInExpr(Expr p, List<AssignLhs> lhss, List<Expr> rhss)
+            public static Expr MySubstituteInExpr(Expr p, IList<AssignLhs> lhss, IList<Expr> rhss)
             {
                 var h = new Dictionary<Variable, Expr>();
                 for (int i = 0; i < lhss.Count; ++i)

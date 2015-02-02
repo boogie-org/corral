@@ -8,6 +8,23 @@ using System.Diagnostics;
 
 namespace cba.Util
 {
+    public static class BoogieAstExtensions
+    {
+        public static void SetAssignCmdRhs(this AssignCmd ac, int index, Expr expr)
+        {
+            var ls = new List<Expr>(ac.Rhss);
+            ls[index] = expr;
+            ac.Rhss = ls;
+        }
+
+        public static void SetAssignCmdLhs(this AssignCmd ac, int index, AssignLhs expr)
+        {
+            var ls = new List<AssignLhs>(ac.Lhss);
+            ls[index] = expr;
+            ac.Lhss = ls;
+        }
+    }
+
     public class BoogieUtil
     {
         public static bool InitializeBoogie(string clo)
@@ -276,7 +293,7 @@ namespace cba.Util
         }
 
         // Is there a Key called "name"
-        public static List<object> getAttr(string name, QKeyValue attr)
+        public static IList<object> getAttr(string name, QKeyValue attr)
         {
             for (; attr != null; attr = attr.Next)
             {
@@ -1658,7 +1675,7 @@ namespace cba.Util
                     if (ac.Lhss[i] is SimpleAssignLhs)
                     {
                         SimpleAssignLhs lhs = ac.Lhss[i] as SimpleAssignLhs;
-                        ac.Lhss[i] = new SimpleAssignLhs(lhs.tok, CSEVisitor.getExpr(lhs.DeepAssignedIdentifier, live_vars, var2expr) as IdentifierExpr);
+                        ac.SetAssignCmdLhs(i, new SimpleAssignLhs(lhs.tok, CSEVisitor.getExpr(lhs.DeepAssignedIdentifier, live_vars, var2expr) as IdentifierExpr));
                     }
                     else if (ac.Lhss[i] is MapAssignLhs)
                     {
@@ -1708,7 +1725,7 @@ namespace cba.Util
                 for (int i = 0; i < ac.Rhss.Count; i++)
                 {
                     Expr rhs = ac.Rhss[i];
-                    ac.Rhss[i] = CSEVisitor.getExpr(rhs, live_vars, var2expr);
+                    ac.SetAssignCmdRhs(i, CSEVisitor.getExpr(rhs, live_vars, var2expr));
                 }
             }
         }
@@ -2190,7 +2207,7 @@ namespace cba.Util
                     if (lhs is SimpleAssignLhs && defsIn.ContainsKey((lhs as SimpleAssignLhs).AssignedVariable.Decl))
                     {
                         var v = (lhs as SimpleAssignLhs).AssignedVariable.Decl;
-                        acmd.Lhss[i] = new SimpleAssignLhs(lhs.tok, Expr.Ident(varInstances(v, defsOut[v])));
+                        acmd.SetAssignCmdLhs(i, new SimpleAssignLhs(lhs.tok, Expr.Ident(varInstances(v, defsOut[v]))));
                     }
                     else if(lhs is MapAssignLhs)
                     {
@@ -2563,7 +2580,7 @@ namespace cba.Util
                 for (int i = 0; i < ac.Rhss.Count; i++)
                 {
                     Expr rhs = ac.Rhss[i];
-                    ac.Rhss[i] = GVNVisitor.getExpr(rhs);
+                    ac.SetAssignCmdRhs(i, GVNVisitor.getExpr(rhs));
                     AssignLhs lhs = ac.Lhss[i];
                     if (lhs is SimpleAssignLhs)
                     {

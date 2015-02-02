@@ -91,6 +91,8 @@ namespace FastAVN
         static string trace_extension = ".tt";
         static string bug_folder = "Bugs";
         static string bug_filename = "Bug";
+        static string angelic_stack = "stack";
+        static string stack_extension = ".txt";
         static bool prune = false;
         static string stubsfile = null;
         static bool cleanupDir = true;
@@ -542,7 +544,8 @@ namespace FastAVN
         private static void mergeBugs(ConcurrentBag<string> entryPoints)
         {
             bool dbg = false;
-            Dictionary<string, Tuple<int, string>> shortest_trace = new Dictionary<string, Tuple<int, string>>();
+            // failing location -> (metric_val, path_to_tt_file, path_to_stack_file)
+            Dictionary<string, Tuple<int, string, string>> shortest_trace = new Dictionary<string, Tuple<int, string, string>>();
 
             foreach (string impl in entryPoints)
             {
@@ -559,7 +562,9 @@ namespace FastAVN
                         // extract line from bug report but ignore the entrypoint info
                         string bug_info = line.Substring(0, line.LastIndexOf(","));
                         string file_name = angelic + traceNum.ToString() + trace_extension;
+                        string stack_filename = angelic + traceNum.ToString() + angelic_stack + stack_extension;
                         string trace_file = Path.Combine(Directory.GetCurrentDirectory(), impl, file_name);
+                        string stack_file = Path.Combine(Directory.GetCurrentDirectory(), impl, stack_filename);
                         int metric = getMetric(traceNum, trace_file);
 
                         if (dbg) Utils.Print(string.Format("Bug File -> {0} {1}", bug_info, trace_file), Utils.PRINT_TAG.AV_DEBUG);
@@ -567,9 +572,9 @@ namespace FastAVN
 
                         if (shortest_trace.ContainsKey(bug_info))
                         {
-                            if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file);
+                            if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
                         }
-                        else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file));
+                        else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file, stack_file));
                         traceNum++;
                     }
 
@@ -593,10 +598,11 @@ namespace FastAVN
             foreach (string bug in shortest_trace.Keys)
             {
                 string file_name = bug_filename + index.ToString() + trace_extension;
-                if (File.Exists(Path.Combine(trace_path, file_name))) File.Delete(Path.Combine(trace_path, file_name));
+                string stack_filename = bug_filename + index.ToString() + angelic_stack + stack_extension;
                 try
                 {
                     File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
+                    File.Copy(shortest_trace[bug].Item3, Path.Combine(trace_path, stack_filename));
                 }
                 catch (FileNotFoundException)
                 {
