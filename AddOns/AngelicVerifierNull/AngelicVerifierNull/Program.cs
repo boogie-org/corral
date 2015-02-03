@@ -51,6 +51,8 @@ namespace AngelicVerifierNull
         public static string propertyChecked = "";
         // ExplainError timeout (in seconds)
         public static int eeTimeout = 1000;
+        // Flag for generalization
+        public static bool generalize = true;
     }
 
     class Stats
@@ -226,6 +228,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noEE"))
                 Options.useEE = false;
+
+            if (args.Any(s => s == "/dontGeneralize"))
+                Options.generalize = false;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -1614,7 +1619,7 @@ namespace AngelicVerifierNull
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
         private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
-        private const int MAX_ASSERT_BLOCK_COUNT = 10; // maximum times we try to block an assertion
+        private const int MAX_ASSERT_BLOCK_COUNT = 3; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
@@ -1748,7 +1753,7 @@ namespace AngelicVerifierNull
             var nexpr = (new Instrumentations.RewriteConstants(new HashSet<Variable>(usedVarsCollector.usedVars))).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
-            var aexpr = AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars));
+            var aexpr = Options.generalize? AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars)) : null;
             if (aexpr != null)
             {
                 Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));
