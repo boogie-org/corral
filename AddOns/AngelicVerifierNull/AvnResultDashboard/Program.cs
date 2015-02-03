@@ -399,6 +399,8 @@ namespace AvnResultDashboard
             {
                 var tmp = Regex.Replace(s, @"_relevant_", "", RegexOptions.None); //older traces did not have it
                 tmp = Regex.Replace(tmp, @"_irrelevant_", "", RegexOptions.None); //older traces did not have it
+                tmp = Regex.Replace(s, @"_sdvRelevantTraceLine_", "", RegexOptions.None); //older traces did not have it
+                tmp = Regex.Replace(tmp, @"_sdvIrrelevantTraceLine_", "", RegexOptions.None); //older traces did not have it
                 tmp = Regex.Replace(tmp, @"[0-9]+ """, "", RegexOptions.None); // removing the starting line numbers
                 return tmp;
             }
