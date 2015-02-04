@@ -201,6 +201,9 @@ namespace AngelicVerifierNull
                     globalCmds.Add(BoogieAstFactory.MkCall(init.Proc, new List<Expr>(), new List<Variable>()));
 
                 // initialize globals
+                prog.GlobalVariables
+                    .Where(g => g.Name != "alloc")
+                    .Iter(g => g.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "scalar", "pointer" }, g.Attributes));
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
 
                 // globals for parameters
