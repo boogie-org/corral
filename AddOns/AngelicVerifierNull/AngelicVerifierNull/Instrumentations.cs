@@ -1643,6 +1643,7 @@ namespace AngelicVerifierNull
         int id;
         bool useAA;
         bool injectAssert;
+        int assertsAdded;
 
         InstrumentBranches(Program program, bool useAA, bool injectAssert)
         {
@@ -1654,6 +1655,7 @@ namespace AngelicVerifierNull
             this.useAA = useAA;
             this.injectAssert = injectAssert;
             reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
+            assertsAdded = 0;
         }
 
         // Replace "assume x == NULL" with "assume x == NULL; assert false;"
@@ -1666,6 +1668,7 @@ namespace AngelicVerifierNull
 
             if (!useAA)
             {
+                Console.WriteLine("For deadcode detection, we added {0} angelic assertions", ib.assertsAdded);
                 return Tuple.Create<Program, Dictionary<int, HashSet<int>>>(program, null);
             }
 
@@ -1768,7 +1771,7 @@ namespace AngelicVerifierNull
             }
             //BoogieUtil.PrintProgram(program, "progafter.bpl");
 
-            Console.WriteLine("For deadcode detection, we added {0} assumes", added);
+            Console.WriteLine("For deadcode detection, we added {0} angelic assertions", added);
             return Tuple.Create(program, depInfo);
         }
 
@@ -1859,6 +1862,8 @@ namespace AngelicVerifierNull
                     }
                     else
                     {
+                        assertsAdded++;
+
                         if (injectAssert)
                         {
                             // assert false

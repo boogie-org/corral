@@ -274,7 +274,7 @@ namespace FastAVN
             BoogieUtil.pruneProcs(progAfter, harnessInstrumentation.entrypoints.Intersection(canReachAssert));
 
             // Set flag to stop AA
-            avnArgs += " /noAA ";
+            avnArgs += " /noAA:1 ";
 
             // Stats
             Console.WriteLine("FastAvn: AA took {0} seconds", (DateTime.Now - start).TotalSeconds.ToString("F2"));

@@ -22,7 +22,9 @@ namespace AngelicVerifierNull
         // Reuse tracked variables and explored call tree across corral runs
         public static bool UsePrevCorralState = true;
         // Don't use alias analysis
-        public static bool UseAliasAnalysis = true;
+        public static bool UseAliasAnalysisForAssertions = true;
+        // Don't use alias analysis for deadcode
+        public static bool UseAliasAnalysisForAngelicAssertions = true;
         // Don't use context and flow sensitive alias analysis
         public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
@@ -181,7 +183,16 @@ namespace AngelicVerifierNull
                 allocateParameters = false;
 
             if (args.Any(s => s == "/noAA"))
-                Options.UseAliasAnalysis = false;
+            {
+                Options.UseAliasAnalysisForAssertions = false;
+                Options.UseAliasAnalysisForAngelicAssertions = false;
+            }
+
+            if (args.Any(s => s == "/noAA:0"))
+                Options.UseAliasAnalysisForAngelicAssertions = false;
+
+            if (args.Any(s => s == "/noAA:1"))
+                Options.UseAliasAnalysisForAssertions = false;
 
             if (args.Any(s => s == "/CSFSAA"))
                 Options.UseCSFSAliasAnalysis = true;
@@ -612,7 +623,7 @@ namespace AngelicVerifierNull
             if ( (deadCodeDetect || Options.propertyChecked == "nonnull"))
             {
                 // Tag branches as reachable
-                var tup = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysis, false);
+                var tup = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysisForAngelicAssertions, false);
                 init = tup.Item1;
                 DeadCodeBranchesDependencyInfo = tup.Item2;
             }
@@ -1922,7 +1933,7 @@ namespace AngelicVerifierNull
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
             AliasAnalysis.AliasAnalysisResults res = null;
-            if (Options.UseAliasAnalysis)
+            if (Options.UseAliasAnalysisForAssertions)
             {
                 // Do SSA
                 program =
