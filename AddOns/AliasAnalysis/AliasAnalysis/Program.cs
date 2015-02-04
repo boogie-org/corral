@@ -1643,7 +1643,7 @@ namespace AliasAnalysis
         HashSet<string> maps;
         HashSet<string> worklist;
         bool solved;
-        const int environmentPointersUnroll = 0;
+        public const int environmentPointersUnroll = 0;
         public static bool dbg = false;
         public static bool NoEmptyLoads = false;
         string null_allocSite;

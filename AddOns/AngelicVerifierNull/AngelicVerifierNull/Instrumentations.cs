@@ -473,6 +473,7 @@ namespace AngelicVerifierNull
             public const string mallocTriggerFuncName = "unknownTrigger_";
             // allocator_call -> trigger function
             public Dictionary<int, string> mallocTriggersLocation; //don't keep any objects (e.g. Function) since program changes
+            public Dictionary<string, int> mallocTriggerToAllocationSite; //don't keep any objects (e.g. Function) since program changes
 
             public MallocInstrumentation(Program program)
             {
@@ -495,6 +496,7 @@ namespace AngelicVerifierNull
                     instance = mi;
                     mallocTriggers = new Dictionary<CallCmd, Function>();
                     instance.mallocTriggersLocation = new Dictionary<int, string>();
+                    instance.mallocTriggerToAllocationSite = new Dictionary<string, int>();
                 }
                 public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
                 {
@@ -515,6 +517,7 @@ namespace AngelicVerifierNull
                             var callId = QKeyValue.FindIntAttribute(callCmd.Attributes, "allocator_call", -1);
                             Debug.Assert(callId != -1, "Calls to the allocator must be tagged with a unique ID");
                             instance.mallocTriggersLocation[callId] = mallocTriggerFn.Name;
+                            instance.mallocTriggerToAllocationSite[mallocTriggerFn.Name] = callId;
                             instance.prog.AddTopLevelDeclaration(mallocTriggerFn);
                             var fnApp = new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),
@@ -1633,6 +1636,7 @@ namespace AngelicVerifierNull
     {
         Program program;
         Dictionary<int, Function> id2Func;
+        Dictionary<int, Function> allocationSite2Func;
         List<Function> queries;
         Function nullQuery;
         public Function reach;
@@ -1645,6 +1649,7 @@ namespace AngelicVerifierNull
             this.program = program;
             queries = new List<Function>();
             id2Func = new Dictionary<int, Function>();
+            allocationSite2Func = new Dictionary<int, Function>();
             nullQuery = null;
             this.useAA = useAA;
             this.injectAssert = injectAssert;
@@ -1653,14 +1658,15 @@ namespace AngelicVerifierNull
 
         // Replace "assume x == NULL" with "assume x == NULL; assert false;"
         // provided x can indeed alias NULL
-        public static Program Run(Program program, string ep, bool useAA, bool injectAssert)
+        // Also returns a map from allocation_site to possible branches affected by it
+        public static Tuple<Program, Dictionary<int, HashSet<int>>> Run(Program program, string ep, bool useAA, bool injectAssert)
         {
             var ib = new InstrumentBranches(program, useAA, injectAssert);
             ib.instrument(ep);
 
             if (!useAA)
             {
-                return program;
+                return Tuple.Create<Program, Dictionary<int, HashSet<int>>>(program, null);
             }
 
             var inp = new PersistentProgram(program, ep, 1);
@@ -1684,19 +1690,47 @@ namespace AngelicVerifierNull
             var nil = res.allocationSites[ib.nullQuery.Name].FirstOrDefault();
             Debug.Assert(nil != null);
 
-            // add the assert false OR assume reach(true)
-            var assertFlase = injectAssert ? BoogieAstFactory.MkAssert(Expr.False) :
-                new AssumeCmd(Token.NoToken,
-                                new NAryExpr(Token.NoToken, new FunctionCall(ib.reach), new List<Expr> { Expr.True }));
+            var deadcodeAssertId = 0;
 
-            (assertFlase as PredicateCmd).Attributes = new QKeyValue(Token.NoToken,
-                "deadcode", new List<object>() { }, null);
+            // add the assert false OR assume reach(true)
+            var MkAssertFalse = new Func<int, PredicateCmd>(i =>
+                {
+                    var acmd = injectAssert ? BoogieAstFactory.MkAssert(Expr.False) as PredicateCmd :
+                        new AssumeCmd(Token.NoToken,
+                                new NAryExpr(Token.NoToken, new FunctionCall(ib.reach), new List<Expr> { Expr.True })) as PredicateCmd;
+
+                    acmd.Attributes = new QKeyValue(Token.NoToken,
+                        "deadcode", new List<object>{ Expr.Literal(i) }, null);
+
+                    return acmd;
+                });
+
+            // build a map from AA allocation sites to allocation_site id
+            var as2id = new Dictionary<string, HashSet<int>>();
+            foreach (var tup in ib.allocationSite2Func)
+            {
+                var asites = res.allocationSites[tup.Value.Name];
+                asites.Where(s => !as2id.ContainsKey(s)).Iter(s => as2id.Add(s, new HashSet<int>()));
+                asites.Iter(s => as2id[s].Add(tup.Key));
+            }
+
+            if (AliasAnalysis.AliasConstraintSolver.environmentPointersUnroll != 0)
+            {
+                Console.WriteLine("AA Warning: EnvironmentPointersUnroll is non-zero, which means that the dependency information for deadcode branches is not sound.");
+                Console.WriteLine("AA Warning: We currently rely on: forall unknown allocation sites that return a, ReachableAllocationSitesViaFields(a) = {a}.");
+            }
+
+            // map from allocation_site to possible branches affected by it
+            var depInfo = new Dictionary<int, HashSet<int>>();
+
             program = inp.getProgram();
             var id = 0; var added = 0;
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 foreach (var blk in impl.Blocks)
                 {
+                    blk.Cmds.RemoveAll(c => (c is AssumeCmd) && QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, "ForDeadCodeDetection"));
+
                     var ncmds = new List<Cmd>();
                     for(int i = 0; i < blk.Cmds.Count; i++)
                     {
@@ -1710,21 +1744,32 @@ namespace AngelicVerifierNull
                             continue;
 
                         var asites = res.allocationSites[ib.id2Func[id].Name];
-                        if (!asites.Contains(nil) && asites.Count != 0)
+                        if (!Options.disbleDeadcodeOpt || !asites.Contains(nil) && asites.Count != 0)
                         {
-                            ncmds.Add(assertFlase);
+                            var assertid = deadcodeAssertId++;
+                            ncmds.Add(MkAssertFalse(assertid));
+
+                            // compute dependent allocations for this branch
+                            var dep = new HashSet<int>();
+                            asites.Where(a => as2id.ContainsKey(a))
+                                .Iter(a => dep.UnionWith(as2id[a]));
+
+                            dep.Where(d => !depInfo.ContainsKey(d))
+                                .Iter(d => depInfo.Add(d, new HashSet<int>()));
+
+                            dep.Iter(d => depInfo[d].Add(assertid));
+
                             added++;
                         }
-                        i++;
+                        //i++;
                     }
                     blk.Cmds = ncmds;
-                    blk.Cmds.RemoveAll(c => (c is AssumeCmd) && QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, "ForDeadCodeDetection"));
                 }
             }
             //BoogieUtil.PrintProgram(program, "progafter.bpl");
 
             Console.WriteLine("For deadcode detection, we added {0} assumes", added);
-            return program;
+            return Tuple.Create(program, depInfo);
         }
 
         void instrument(string main)
@@ -1757,6 +1802,27 @@ namespace AngelicVerifierNull
             // Get the allocation site for NULL
             nullQuery = GetQueryFunc();
             ep.Blocks[0].Cmds.Add(GetQuery(nullQuery, Expr.Ident(nil)));
+
+            // Instrumentation allocation sites
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (var blk in impl.Blocks)
+                {
+                    var ncmds = new List<Cmd>();
+                    foreach (var cmd in blk.Cmds)
+                    {
+                        ncmds.Add(cmd);
+                        var ccmd = cmd as CallCmd;
+                        if (ccmd == null) continue;
+                        var aid = QKeyValue.FindIntAttribute(ccmd.Attributes, "allocator_call", -1);
+                        if (aid == -1) continue;
+                        var func = GetQueryFunc();
+                        ncmds.Add(GetQuery(func, ccmd.Outs[0]));
+                        allocationSite2Func.Add(aid, func);
+                    }
+                    blk.Cmds = ncmds;
+                }
+            }
 
             program.AddTopLevelDeclarations(queries);
         }
