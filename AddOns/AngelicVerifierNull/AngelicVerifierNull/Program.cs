@@ -53,6 +53,8 @@ namespace AngelicVerifierNull
         public static int eeTimeout = 1000;
         // Flag for generalization
         public static bool generalize = true;
+        // Flag for reporting assertion when MAX_ASSERT_BLOCK_COUNT is reached
+        public static bool reportOnMaxBlockCount = false;
     }
 
     class Stats
@@ -145,7 +147,7 @@ namespace AngelicVerifierNull
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
-        static bool deadCodeDetect = false; // do dead code detection        
+        static bool deadCodeDetect = false; // do dead code detection
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -231,6 +233,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/dontGeneralize"))
                 Options.generalize = false;
+
+            if (args.Any(s => s == "/reportOnMaxBlock"))
+                Options.reportOnMaxBlockCount = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -815,8 +820,16 @@ namespace AngelicVerifierNull
                         if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
                         {
                             Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
-                            SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
-                            done = true;
+                            if (Options.reportOnMaxBlockCount)
+                            {
+                                PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                                done = false;
+                            }
+                            else
+                            {
+                                SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                                done = true;
+                            }
                         }
                     }
 
