@@ -865,7 +865,9 @@ namespace AngelicVerifierNull
                         Stats.count("blocked.count");
 
                         // Check inconsistency
+                        Console.WriteLine("Checking inconsistency"); var startTime = DateTime.Now;
                         var inconsistent = CheckInconsistency(instr, failingEntryPoint, BranchesAffected(eeStatus.Item2));
+                        Console.WriteLine("Inconsistency check took: {0} seconds", (DateTime.Now - startTime).TotalSeconds.ToString("F2"));
 
                         if (inconsistent.Count != 0)
                         {
@@ -1124,8 +1126,6 @@ namespace AngelicVerifierNull
 
         private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint, HashSet<int> deadcodeBranches)
         {
-            Console.WriteLine("Checking inconsistency");
-
             // only consider the given entrypoint
             var blocked = false;
             if (!instr.InBlockingMode())
