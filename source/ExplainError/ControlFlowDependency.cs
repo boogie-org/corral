@@ -298,8 +298,11 @@ namespace ExplainError
                     {
                         CheckTimeout();
                         Debug.Assert(b1 != null && b2 != null && b3 != null);
+                        //mod(b1,b2) + b2.mod + mod(b2,b3)
                         var vs1 = intraProcPairBlockModSet[Tuple.Create(b1, b2)];
                         var vs2 = intraProcPairBlockModSet[Tuple.Create(b2, b3)];
+                        var vs3 = modSetBlock[b2]; //add b2's modset
+                        var vs = vs1.Union(vs2.Union(vs3));
                         int prevCount = 0; 
                         var b1b3 = Tuple.Create(b1,b3);
                         if (intraProcPairBlockModSet.ContainsKey(b1b3))
@@ -307,7 +310,7 @@ namespace ExplainError
                         else
                             intraProcPairBlockModSet[b1b3] = new HashSet<Variable>();
                         var newvs = new HashSet<Variable>();
-                        vs1.Union(vs2.Union(intraProcPairBlockModSet[b1b3])).Iter(x => newvs.Add(x));
+                        vs.Union(intraProcPairBlockModSet[b1b3]).Iter(x => newvs.Add(x));
                         if (newvs.Count > prevCount) //add if previously not present or weight has changed
                         {
                             newvs.Iter(x => intraProcPairBlockModSet[b1b3].Add(x));

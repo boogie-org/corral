@@ -30,6 +30,10 @@ namespace AliasAnalysis
                 doSSA = false;
             if (args.Any(s => s == "/dbg"))
                 dbg = true;
+            if (args.Any(s => s == "/full"))
+                AliasConstraintSolver.NoEmptyLoads = true;
+            if (args.Any(s => s == "/warn"))
+                AliasConstraintSolver.printWarnings = true;
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
 
@@ -1643,9 +1647,10 @@ namespace AliasAnalysis
         HashSet<string> maps;
         HashSet<string> worklist;
         bool solved;
-        const int environmentPointersUnroll = 0;
+        public const int environmentPointersUnroll = 0;
         public static bool dbg = false;
-        public static bool NoEmptyLoads = false;
+        public static bool NoEmptyLoads = true;
+        public static bool printWarnings = false;
         string null_allocSite;
 
         public AliasConstraintSolver()
@@ -1717,27 +1722,68 @@ namespace AliasAnalysis
 
             if (NoEmptyLoads)
             {
+                var newAllocSitesToDepth = new Dictionary<string, int>();
+
                 do
                 {
                     // Gather all empty loads
-                    var emptyloads = constraints.OfType<LoadConstraint>().Select(GetEmptyLoads).Aggregate(
+                    var emptyloads = constraints.OfType<LoadConstraint>().Select(GetEmptyLoads).Aggregate(new HashSet<Tuple<string, string>>(),
                         (a, b) => a.Union(b));
 
                     if (!emptyloads.Any()) break;
 
                     Console.WriteLine("There were {0} empty loads, trying again", emptyloads.Count());
 
-                    // Add {o} to the points-to set of o.f
+
                     foreach (var tup in emptyloads)
                     {
-                        var of = GetODotf(tup.Item1, tup.Item2);
-                        DiffProp(new HashSet<string> { tup.Item1 }, of);
-                        PointsTo[of].UnionWith(PointsToDelta[of]);
+                        var o = tup.Item1;
+                        var f = tup.Item2;
+
+                        var currDepth = newAllocSitesToDepth.ContainsKey(o) ? newAllocSitesToDepth[o] : 0;
+                        if (currDepth == environmentPointersUnroll)
+                        {
+                            // Add {o} to the points-to set of o.f
+                            var of = GetODotf(o, f);
+                            DiffProp(new HashSet<string> { o }, of);
+                            PointsTo[of].UnionWith(PointsToDelta[of]);
+                        }
+                        else
+                        {
+                            // create a new allocation site 
+                            var oprime = "aa_as_otf" + newAllocSitesToDepth.Count;
+                            newAllocSitesToDepth.Add(oprime, currDepth + 1);
+
+                            if (!PointsTo.ContainsKey(oprime)) PointsTo.Add(oprime, new HashSet<string>());
+                            if (!PointsToDelta.ContainsKey(oprime)) PointsToDelta.Add(oprime, new HashSet<string>());
+
+
+                            // Add {o'} to the points-to set of o.f
+                            var of = GetODotf(o, f);
+                            DiffProp(new HashSet<string> { oprime }, of);
+                            PointsTo[of].UnionWith(PointsToDelta[of]);
+                        }
                     }
 
                     ProcessWorklist(G, variables, varToStore, varToLoad);
+
                 } while (true);
 
+            }
+
+            // Warnings
+            if (printWarnings)
+            {
+                foreach (var lc in constraints.OfType<LoadConstraint>().Where(lc =>
+                    !PointsTo.ContainsKey(lc.source) || PointsTo[lc.source].Count == 0))
+                {
+                    Console.WriteLine("Warning: loading from an unallocated value: {0}", lc);
+                }
+                foreach (var sc in constraints.OfType<StoreConstraint>().Where(sc =>
+                    !PointsTo.ContainsKey(sc.target) || PointsTo[sc.target].Count == 0))
+                {
+                    Console.WriteLine("Warning: storing to an unallocated value: {0}", sc);
+                }
             }
 
             #region stats

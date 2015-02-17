@@ -22,7 +22,9 @@ namespace AngelicVerifierNull
         // Reuse tracked variables and explored call tree across corral runs
         public static bool UsePrevCorralState = true;
         // Don't use alias analysis
-        public static bool UseAliasAnalysis = true;
+        public static bool UseAliasAnalysisForAssertions = true;
+        // Don't use alias analysis for deadcode
+        public static bool UseAliasAnalysisForAngelicAssertions = true;
         // Don't use context and flow sensitive alias analysis
         public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
@@ -51,6 +53,12 @@ namespace AngelicVerifierNull
         public static string propertyChecked = "";
         // ExplainError timeout (in seconds)
         public static int eeTimeout = 1000;
+        // Flag for generalization
+        public static bool generalize = true;
+        // disable optimized deadcode detection
+        public static bool disbleDeadcodeOpt = false;
+        // Flag for reporting assertion when MAX_ASSERT_BLOCK_COUNT is reached
+        public static bool reportOnMaxBlockCount = false;
     }
 
     class Stats
@@ -119,7 +127,7 @@ namespace AngelicVerifierNull
         public static readonly string EnvironmentAssumptionAttr = "Ebasic";
         public static readonly string ReachableStatesAttr = "ReachableStates";
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
-        public static readonly int RelaxConstraintsStackDepthBound = 4;
+        public static int RelaxConstraintsStackDepthBound = 6;
     }
 
     public class Driver
@@ -143,7 +151,7 @@ namespace AngelicVerifierNull
         static bool trackAllVars = false; //track all variables
         static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
-        static bool deadCodeDetect = false; // do dead code detection        
+        static bool deadCodeDetect = false; // do dead code detection
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -177,7 +185,16 @@ namespace AngelicVerifierNull
                 allocateParameters = false;
 
             if (args.Any(s => s == "/noAA"))
-                Options.UseAliasAnalysis = false;
+            {
+                Options.UseAliasAnalysisForAssertions = false;
+                Options.UseAliasAnalysisForAngelicAssertions = false;
+            }
+
+            if (args.Any(s => s == "/noAA:0"))
+                Options.UseAliasAnalysisForAngelicAssertions = false;
+
+            if (args.Any(s => s == "/noAA:1"))
+                Options.UseAliasAnalysisForAssertions = false;
 
             if (args.Any(s => s == "/CSFSAA"))
                 Options.UseCSFSAliasAnalysis = true;
@@ -226,6 +243,18 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noEE"))
                 Options.useEE = false;
+
+            if (args.Any(s => s == "/tmpF"))
+            {
+                Options.disbleDeadcodeOpt = true;
+                AvnAnnotations.RelaxConstraintsStackDepthBound = 4;
+            }
+
+            if (args.Any(s => s == "/dontGeneralize"))
+                Options.generalize = false;
+
+            if (args.Any(s => s == "/reportOnMaxBlock"))
+                Options.reportOnMaxBlockCount = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -352,7 +381,7 @@ namespace AngelicVerifierNull
 
                     // package up the program
                     prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
-                    //prog.writeToFile("inst.bpl");
+                    prog.writeToFile("inst.bpl");
                 }
 
                 PrintAssertStats(prog);
@@ -433,6 +462,8 @@ namespace AngelicVerifierNull
         //globals
         static Instrumentations.MallocInstrumentation mallocInstrumentation = null;
         static Instrumentations.HarnessInstrumentation harnessInstrumentation = null;
+        static Dictionary<int, HashSet<int>> DeadCodeBranchesDependencyInfo = null; // unknown -> set of affected branches
+
         /// <summary>
         /// TODO: Check that the input program satisfies some sanity requirements
         /// NULL is declared as constant
@@ -592,10 +623,14 @@ namespace AngelicVerifierNull
             if (Options.AddMapSelectNonNullAssumptions)
                 (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
 
+            BoogieUtil.pruneProcs(init, AvnAnnotations.CORRAL_MAIN_PROC);
+
             if ( (deadCodeDetect || Options.propertyChecked == "nonnull"))
             {
                 // Tag branches as reachable
-                init = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysis, false);
+                var tup = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysisForAngelicAssertions, false);
+                init = tup.Item1;
+                DeadCodeBranchesDependencyInfo = tup.Item2;
             }
         
             //Print the instrumented program
@@ -810,8 +845,16 @@ namespace AngelicVerifierNull
                         if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
                         {
                             Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
-                            SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
-                            done = true;
+                            if (Options.reportOnMaxBlockCount)
+                            {
+                                PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                                done = false;
+                            }
+                            else
+                            {
+                                SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                                done = true;
+                            }
                         }
                     }
 
@@ -822,7 +865,9 @@ namespace AngelicVerifierNull
                         Stats.count("blocked.count");
 
                         // Check inconsistency
-                        var inconsistent = CheckInconsistency(instr, failingEntryPoint);
+                        Console.WriteLine("Checking inconsistency"); var startTime = DateTime.Now;
+                        var inconsistent = CheckInconsistency(instr, failingEntryPoint, BranchesAffected(eeStatus.Item2));
+                        Console.WriteLine("Inconsistency check took: {0} seconds", (DateTime.Now - startTime).TotalSeconds.ToString("F2"));
 
                         if (inconsistent.Count != 0)
                         {
@@ -838,7 +883,7 @@ namespace AngelicVerifierNull
                         else
                         {
                             // Relax env constraints
-                            RelaxEnvironmentConstraints(instr, failingEntryPoint);
+                            RelaxEnvironmentConstraints(instr, failingEntryPoint, null, false);
                         }
                     }
 
@@ -850,8 +895,32 @@ namespace AngelicVerifierNull
             return ret;
         }
 
+        // Given the EE blocking condition, find the deadcode branches that are possibly affected
+        static HashSet<int> BranchesAffected(Expr expr)
+        {
+            // null means all
+            if (Options.disbleDeadcodeOpt || DeadCodeBranchesDependencyInfo == null) return null;
+
+            // find the set of triggers used in the Expr, get their allocation sites
+            var asites = new HashSet<int>();
+            var vu = new VarsUsed();
+            vu.VisitExpr(expr);
+            vu.functionsUsed.Where(f => mallocInstrumentation.mallocTriggerToAllocationSite.ContainsKey(f))
+                .Iter(f => asites.Add(mallocInstrumentation.mallocTriggerToAllocationSite[f]));
+
+            //Console.WriteLine("Blocking condition has triggers: {0}", asites.Print());
+
+            var ret = new HashSet<int>();
+            asites.Where(a => DeadCodeBranchesDependencyInfo.ContainsKey(a))
+                .Iter(a => ret.UnionWith(DeadCodeBranchesDependencyInfo[a]));
+
+            //Console.WriteLine("Blocking condition can potentially affect branches: {0}", ret.Print());
+
+            return ret;
+        }
+
         // Relax environment constraints Ebasic
-        private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint, bool onlydeadcode = false)
+        private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint, HashSet<int> branchesToInstrument, bool onlydeadcode)
         {
             if (!Options.useEbasic)
                 return;
@@ -914,11 +983,20 @@ namespace AngelicVerifierNull
                 if (acmd == null) return cmd;
                 var nary = acmd.Expr as NAryExpr;
                 if (nary == null) return cmd;
-                if (onlydeadcode && !QKeyValue.FindBoolAttribute(acmd.Attributes, "deadcode")) return cmd;
+                if (onlydeadcode && !BoogieUtil.checkAttrExists("deadcode", acmd.Attributes)) return cmd;
                 if (nary.Fun is FunctionCall && (nary.Fun as FunctionCall).FunctionName == reach.Name)
                 {
-                    assertcnt++;
-                    return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
+                    var id = QKeyValue.FindIntAttribute(acmd.Attributes, "deadcode", -1);
+                    if (id == -1 || branchesToInstrument == null ||
+                        branchesToInstrument.Contains(id))
+                    {
+                        assertcnt++;
+                        return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
+                    }
+                    else
+                    {
+                        return new AssumeCmd(Token.NoToken, Expr.True);
+                    }
                 }
                 else
                     return cmd;
@@ -1046,10 +1124,8 @@ namespace AngelicVerifierNull
             //    Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
         }
 
-        private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint)
+        private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint, HashSet<int> deadcodeBranches)
         {
-            Console.WriteLine("Checking inconsistency");
-
             // only consider the given entrypoint
             var blocked = false;
             if (!instr.InBlockingMode())
@@ -1085,6 +1161,7 @@ namespace AngelicVerifierNull
 
             // change assume Reachable(e) to assert !e
             var assertcnt = 0;
+            var prunedassert = 0;
             var mutate = new Func<Cmd, Cmd>(cmd =>
                 {
                     var acmd = cmd as AssumeCmd;
@@ -1093,8 +1170,18 @@ namespace AngelicVerifierNull
                     if (nary == null) return cmd;
                     if (nary.Fun is FunctionCall && (nary.Fun as FunctionCall).FunctionName == reach.Name)
                     {
-                        assertcnt++;
-                        return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
+                        var id = QKeyValue.FindIntAttribute(acmd.Attributes, "deadcode", -1);
+                        if (id == -1 || deadcodeBranches == null ||
+                            deadcodeBranches.Contains(id))
+                        {
+                            assertcnt++;
+                            return new AssertCmd(Token.NoToken, Expr.Not(nary.Args[0]));
+                        }
+                        else
+                        {
+                            prunedassert++;
+                            return new AssumeCmd(Token.NoToken, Expr.True);
+                        }
                     }
                     else
                         return cmd;
@@ -1137,7 +1224,7 @@ namespace AngelicVerifierNull
             cprogram = (new cba.CompileRequiresAndEnsures()).runCBAPass(cprogram);
 
             //BoogieUtil.PrintProgram(cprogram, "relax.bpl");
-            Console.WriteLine("CheckInconsistency: {0} soft constraints and {1} assertions", softcnt, assertcnt);
+            Console.WriteLine("CheckInconsistency: {0} soft constraints and {1} assertions ({2} pruned)", softcnt, assertcnt, prunedassert);
 
             var sd = CommandLineOptions.Clo.StackDepthBound;
             CommandLineOptions.Clo.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
@@ -1248,7 +1335,7 @@ namespace AngelicVerifierNull
             prog = instr.run(prog);
 
             // dead code
-            RelaxEnvironmentConstraints(instr, null, true);
+            RelaxEnvironmentConstraints(instr, null, null, true);
 
             Stats.resume("round.robin");
             //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
@@ -1614,7 +1701,7 @@ namespace AngelicVerifierNull
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
         private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
-        private const int MAX_ASSERT_BLOCK_COUNT = 10; // maximum times we try to block an assertion
+        private const int MAX_ASSERT_BLOCK_COUNT = 3; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
@@ -1652,15 +1739,21 @@ namespace AngelicVerifierNull
             try
             {            
                 HashSet<List<Expr>> preDisjuncts;
-                
+
+                //First compute a control slice (soundly irrespective of EE assume filters)
+                var skipAssumes = new HashSet<AssumeCmd>();
+                if (Options.TraceSlicing)
+                    skipAssumes = ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
+                //Now perform the precondition generation, taking skipAssumes into account
+                List<Tuple<string, int, string>> tmpEESlicedSourceLines; //don't overwrite the sound slice if the error is displayed
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     controlFlowDependencyInformation,
-                    out eeStatus, out eeComplexExprs, out preDisjuncts, out eeSlicedSourceLines);
+                    skipAssumes,
+                    out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
-                //Override the sliced lines with the true slice
-                if (Options.TraceSlicing)
-                    ExplainError.Toplevel.TrueTraceSlicing(mainImpl, nprog, Options.eeTimeout, controlFlowDependencyInformation, out eeSlicedSourceLines);
+
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
                     if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
@@ -1742,7 +1835,7 @@ namespace AngelicVerifierNull
             var nexpr = (new Instrumentations.RewriteConstants(new HashSet<Variable>(usedVarsCollector.usedVars))).VisitExpr(expr); //get the expr in scope of pprog
             Debug.Assert(expr.ToString() == nexpr.ToString(), "Unexpected difference introduced during porting expression to current program");
 
-            var aexpr = AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars));
+            var aexpr = Options.generalize? AbstractRepeatedMapsInBlock(expr, new HashSet<Variable>(usedVarsCollector.usedVars)) : null;
             if (aexpr != null)
             {
                 Utils.Print(string.Format("Generalizing field block expression for {0} to {1}", expr, aexpr));
@@ -1853,7 +1946,7 @@ namespace AngelicVerifierNull
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
             AliasAnalysis.AliasAnalysisResults res = null;
-            if (Options.UseAliasAnalysis)
+            if (Options.UseAliasAnalysisForAssertions)
             {
                 // Do SSA
                 program =

@@ -499,8 +499,8 @@ namespace AngelicVerifierNull
             // branches. the branches are selected according to alias analysis results
             var deadProg_ = InstrumentBranches.Run(progNoNonNull.getProgram(), progNoNonNull.mainProcName, true, true);
             
-            BoogieUtil.PrintProgram(deadProg_, "dead.bpl");
-            var deadProg = new PersistentProgram(deadProg_, progNoNonNull.mainProcName, 1);
+            BoogieUtil.PrintProgram(deadProg_.Item1, "dead.bpl");
+            var deadProg = new PersistentProgram(deadProg_.Item1, progNoNonNull.mainProcName, 1);
 
             var detector = new DeadCodeDetection(deadProg, _config);
             HashSet<string> AssumptionsToRemove = detector.FindDeadBranchIterative();

@@ -1154,7 +1154,7 @@ namespace cba.Util
             return new AssumeCmd(Token.NoToken, e);
         }
 
-        public static Cmd MkAssert(Expr e)
+        public static AssertCmd MkAssert(Expr e)
         {
             return new AssertCmd(Token.NoToken, e);
         }

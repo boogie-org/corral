@@ -11,7 +11,7 @@ procedure A(x:int,y:int,z:int) returns (r:int)
 
   b := y ; 
 
-  if(z == 55) {    //z is irrelevant
+  if(z == 55) {    //z is irrelevant since a's mod does not affect after merge
      a := b + 1;
   }
 
