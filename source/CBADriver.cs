@@ -36,15 +36,16 @@ namespace cba
             //////
             
             VariableSlicePass cp1 = new VariableSlicePass(trackedVars);
-            StaticInliningAndUnrollingPass cp2 = null;
-            if(GlobalConfig.staticInlining > 0) cp2 = new StaticInliningAndUnrollingPass(new StaticSettings(CommandLineOptions.Clo.RecursionBound, CommandLineOptions.Clo.RecursionBound));
-            CompilerPass cp3 = null;
+            StormInstrumentationPass cp2 = null;
             var recordK = new HashSet<string>();
 
             if (!GlobalConfig.isSingleThreaded)
             {
-                cp3 = new StormInstrumentationPass();
+                cp2 = new StormInstrumentationPass();
             }
+
+            StaticInliningAndUnrollingPass cp3 = null;
+            if (GlobalConfig.staticInlining > 0) cp3 = new StaticInliningAndUnrollingPass(new StaticSettings(CommandLineOptions.Clo.RecursionBound, CommandLineOptions.Clo.RecursionBound));
 
             ContractInfer ciPass = null;
 
@@ -67,10 +68,9 @@ namespace cba
             }
 
             // record k and tid
-            if (cp3 != null)
+            if (cp2 != null)
             {
-                var sipass = (cp3 as StormInstrumentationPass);
-                recordK.Add(sipass.varKName); recordK.Add(sipass.tidVarName);
+                recordK.Add(cp2.varKName); recordK.Add(cp2.tidVarName);
             }
 
             // Now verify  
