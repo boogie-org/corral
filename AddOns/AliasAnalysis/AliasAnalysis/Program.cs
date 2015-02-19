@@ -34,8 +34,12 @@ namespace AliasAnalysis
                 AliasConstraintSolver.NoEmptyLoads = true;
             if (args.Any(s => s == "/warn"))
                 AliasConstraintSolver.printWarnings = true;
+            
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
+
+            args.Where(s => s.StartsWith("/envUnroll:"))
+                .Iter(s => AliasConstraintSolver.environmentPointersUnroll = Int32.Parse(s.Split(':')[1]));
 
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -1647,9 +1651,9 @@ namespace AliasAnalysis
         HashSet<string> maps;
         HashSet<string> worklist;
         bool solved;
-        public const int environmentPointersUnroll = 0;
+        public static int environmentPointersUnroll = 0;
         public static bool dbg = false;
-        public static bool NoEmptyLoads = true;
+        public static bool NoEmptyLoads = false;
         public static bool printWarnings = false;
         string null_allocSite;
 
