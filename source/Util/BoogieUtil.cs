@@ -2696,6 +2696,22 @@ namespace cba.Util
             return (expr as IdentifierExpr).ToString().Equals("NULL");
         }
 
+        private static bool checkIfNot(IAppliable fun)
+        {
+            if (fun is UnaryOperator &&
+                (fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
+                return true;
+            else return false;
+        }
+
+        private static bool checkIfAliasingQuery(IAppliable fun)
+        {
+            if (fun is FunctionCall &&
+                BoogieUtil.checkAttrExists("aliasingQuery", (fun as FunctionCall).Func.Attributes))
+                return true;
+            else return false;
+        }
+
         // Check if assert cmd is assert !aliasQnull(var, NULL) or assert !aliasQnull(M[x], NULL)
         public static bool validAssertCmd(AssertCmd ac)
         {
@@ -2703,10 +2719,10 @@ namespace cba.Util
                             ac.Expr.ToString() == null) return false;
             if (ac.Expr != null &&
                 ac.Expr is NAryExpr &&
-                ((NAryExpr)ac.Expr).Fun.FunctionName.Equals("!") &&
+                checkIfNot(((NAryExpr)ac.Expr).Fun) &&
                 ((NAryExpr)ac.Expr).Args != null &&
                 (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
-                ((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Fun.FunctionName.Contains("aliasQnull") &&
+                checkIfAliasingQuery(((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Fun) &&
                 ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null &&
                 ((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Args.Count >= 2 &&
                 checkIfNull(((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Args[1]))
