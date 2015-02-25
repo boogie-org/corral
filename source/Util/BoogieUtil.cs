@@ -1849,6 +1849,7 @@ namespace cba.Util
 
             // Common Subexpression Elimination
             DoCSE();
+            BoogieUtil.PrintProgram(program, "cse.bpl");
 
             // Global Value Numbering
             program = GVN.Do(program);
@@ -2703,9 +2704,13 @@ namespace cba.Util
                             ac.Expr.ToString() == null) return false;
             if (ac.Expr != null &&
                 ac.Expr is NAryExpr &&
+                ((NAryExpr)ac.Expr).Fun.FunctionName.Equals("!") &&
                 ((NAryExpr)ac.Expr).Args != null &&
                 (((NAryExpr)ac.Expr).Args).First() is NAryExpr &&
-                ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null)
+                ((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Fun.FunctionName.Contains("aliasQnull") &&
+                ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args != null &&
+                ((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Args.Count >= 2 &&
+                checkIfNull(((NAryExpr)((NAryExpr)ac.Expr).Args[0]).Args[1]))
                 return true;
             else return false;
         }
