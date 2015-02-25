@@ -1849,7 +1849,6 @@ namespace cba.Util
 
             // Common Subexpression Elimination
             DoCSE();
-            BoogieUtil.PrintProgram(program, "cse.bpl");
 
             // Global Value Numbering
             program = GVN.Do(program);
