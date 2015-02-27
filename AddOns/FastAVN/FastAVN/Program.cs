@@ -315,9 +315,10 @@ namespace FastAVN
             }
             Utils.Print(String.Format("Found AVN at: {0}", avnPath));
 
-            if (!File.Exists(Path.Combine(runDir, "psexec.exe")))
-                throw new FileNotFoundException("Cannot find PSEXEC!");
-            psexecPath = Path.Combine(runDir, "psexec.exe");
+            if (!File.Exists(Path.Combine(runDir, "psexec.exe"))) 
+                psexecPath = null;
+            else
+                psexecPath = Path.Combine(runDir, "psexec.exe");                
         }
 
         static ConcurrentBag<string> Shuffle(ConcurrentBag<string> bag)
@@ -641,6 +642,8 @@ namespace FastAVN
                     else
                     {
                         // spawn the job -- remote
+                        if(psexecPath == null)
+                            throw new FileNotFoundException("Cannot find PSEXEC!");
 
                         // find the name of the machine from the remote folder name
                         var machine = "";
