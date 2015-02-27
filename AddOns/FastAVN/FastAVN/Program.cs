@@ -98,6 +98,11 @@ namespace FastAVN
         static bool cleanupDir = true;
         static FastAvnConfig config = null;
 
+        static DateTime startingTime = DateTime.Now;
+        static volatile bool deadlineReached = false;
+        static bool printingOutput = false;
+        static int deadline = 0;
+
         static void Main(string[] args)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
@@ -151,6 +156,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/dumpAVNFiles"))
                 cleanupDir = false;
+
+            args.Where(s => s.StartsWith("/killAfter:"))
+                .Iter(s => deadline = int.Parse(s.Substring("/killAfter:".Length)));
 
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
@@ -349,7 +357,7 @@ namespace FastAVN
         private static void sliceAndRunAVN(Program prog, int approximationDepth)
         {
             edges = buildCallGraph(prog);
-            
+
             // Create a list of resources
             var worklist = new ConcurrentBag<string>();
             
@@ -386,6 +394,45 @@ namespace FastAVN
                 .Where(x => QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint")));
             var epNames = new HashSet<string>(entrypoints.Select(impl => impl.Name));
 
+            // deadline
+            if (deadline > 0)
+            {
+                deadline = deadline - (int)((DateTime.Now - startingTime).TotalSeconds + 0.5);
+                if (deadline < 0) deadline = 1;
+            }
+
+            if (deadline > 100)
+            {
+                var timeouttask = new System.Threading.Tasks.Task(() =>
+                {
+                    System.Threading.Thread.Sleep((deadline - 100) * 1000);
+                    Console.WriteLine("FastAvn deadline reached; consolidating results");
+
+                    deadlineReached = true;
+                    KillSpawnedProcesses();
+
+                    // Sleep for 2 seconds
+                    System.Threading.Thread.Sleep(2 * 1000);
+
+                    // collate bugs
+                    lock (fslock)
+                    {
+                        if (printingOutput) return;
+                        printingOutput = true;
+                        printBugs(ref mergedBugs, epNames.Count);
+                        mergeBugs(epNames);
+                    }
+
+                    // Kill self
+                    Process.GetCurrentProcess().Kill();
+                });
+                timeouttask.Start();
+            }
+            else if (deadline != 0)
+            {
+                Console.WriteLine("Ignoring small deadline of {0} seconds", deadline);
+            }
+
             var threads = new List<Thread>();
             for (int i = 0; i < threadsToSpawn; i++)
             {
@@ -396,188 +443,13 @@ namespace FastAVN
             threads.Iter(t => t.Start());
             threads.Iter(t => t.Join());
 
-            /*
-            Parallel.ForEach(prog.TopLevelDeclarations.Where(x => x is Implementation && 
-                QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint")),
-                new ParallelOptions { MaxDegreeOfParallelism = threadsToSpawn }, i =>
+            lock (fslock)
             {
-                var impl = (Implementation)i;
-
-                var rd = "";
-                while (!worklist.TryTake(out rd)) { Thread.Sleep(100);  }
-
-                sem.WaitOne();
-
-                var wd = Path.Combine(rd, impl.Name); // create new directory for each entrypoint
-
-                // slice the program by entrypoints
-                Program shallowP = pruneDeepProcs(prog, ref edges, impl.Name, approximationDepth);
-                Directory.CreateDirectory(wd); // create new directory for each entrypoint
-                RemoteExec.CleanDirectory(wd);
-                var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
-                BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
-
-                sem.Release();
-
-                if (!remotedirs.Contains(rd))
-                {
-                    Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
-
-                    // spawn the job -- local
-                    var output = RemoteExec.run(wd, avnPath, pruneFile + " " + avnArgs);
-
-                    // delete temp files
-                    var files = System.IO.Directory.GetFiles(wd, "*.bpl");
-                    foreach (var f in files)
-                        System.IO.File.Delete(f);
-
-                    using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
-                        output.Iter(s => sw.WriteLine("{0}", s));
-
-                    Console.WriteLine("Running entrypoint {0} locally }}", impl.Name);
-                }
-                else
-                {
-                    // spawn the job -- remote
-
-                    // find the name of the machine from the remote folder name
-                    var machine = "";
-                    var remoteroot = RemoteExec.GetRemoteFolder(rd, out machine);
-
-                    Console.WriteLine("Running entrypoint {0} on {1} {{", impl.Name, machine);
-
-                    // psexec machine -w remoteroot\impl remoteroot\fastavn\fastavn.exe remoteroot args
-                    wd = Path.Combine(remoteroot, impl.Name);
-                    var cmd = string.Format("{0} -w {1} {2} {3} {4}", machine, wd, Path.Combine(remoteroot, "fastavn", "fastavn.exe"),
-                        "pruneSlice.bpl", avnArgs);
-
-                    var output = RemoteExec.run(Directory.GetCurrentDirectory(), psexecPath, cmd);
-
-                    // delete temp files
-                    var files = System.IO.Directory.GetFiles(wd, "*.bpl");
-                    foreach (var f in files)
-                        System.IO.File.Delete(f);
-
-                    // copy the results back
-                    Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), impl.Name));
-                    RemoteExec.CopyFolder(rd, Directory.GetCurrentDirectory(), impl.Name, true);
-
-                    using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
-                        output.Iter(s => sw.WriteLine("{0}", s));
-
-                    Console.WriteLine("Running entrypoint {0} on {1} }}", impl.Name, machine);
-                }
-
-                sem.WaitOne();
-
-                // collect and merge bugs
-                var bugs = collectBugs(Path.Combine(Directory.GetCurrentDirectory(), impl.Name, bugReportFileName));
-                bugs.Iter(b =>
-                {
-                    if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
-                    mergedBugs[b] += 1;
-                });
-                Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
-
-                sem.Release();
-
-                worklist.Add(rd);
-
-                /*
-                var runAVNargs = " ";
-                try
-                {
-                    Directory.CreateDirectory(impl.Name); // create new directory for each entrypoint
-                    var pruneFile = string.Format("{0}\\pruneSlice.bpl", impl.Name);
-                    Utils.Print(string.Format("Start running AVN: {0} {1}", pruneFile, avnArgs), Utils.PRINT_TAG.AV_DEBUG);
-                    BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
-
-                    runAVNargs += Path.Combine(Directory.GetCurrentDirectory(), pruneFile) + " " + avnArgs;
-                    using (Process p = new Process())
-                    {
-                        p.StartInfo.FileName = avnPath;
-                        p.StartInfo.Arguments = runAVNargs;
-                        p.StartInfo.WorkingDirectory = Path.Combine(Directory.GetCurrentDirectory(), impl.Name);
-                        p.StartInfo.RedirectStandardOutput = true;
-                        p.StartInfo.RedirectStandardError = true;
-                        p.StartInfo.UseShellExecute = false;
-                        p.StartInfo.CreateNoWindow = true;
-
-                        // redirect output
-                        StringBuilder output = new StringBuilder();
-                        StringBuilder error = new StringBuilder();
-                        using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
-                        using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
-                        {
-                            p.OutputDataReceived += (sender, e) =>
-                            {
-                                if (e.Data == null)
-                                    outputWaitHandle.Set();
-                                else
-                                    output.AppendLine(e.Data);
-                            };
-                            p.ErrorDataReceived += (sender, e) =>
-                            {
-                                if (e.Data == null)
-                                    errorWaitHandle.Set();
-                                else
-                                    error.AppendLine(e.Data);
-                            };
-
-                            p.Start();
-                            // asyncronous read of stdout and stderr to avoid deadlock
-                            p.BeginOutputReadLine();
-                            p.BeginErrorReadLine();
-
-                            p.WaitForExit(); // wait untill AVN terminates
-                            outputWaitHandle.WaitOne();
-                            errorWaitHandle.WaitOne();
-                            // TODO: we can also wait only a predefined amount of time
-                            readAVNOutput(output.ToString());
-
-                            if (outputToFile)
-                            {
-                                // print redirected console output
-                                using (StreamWriter sw = new StreamWriter(Path.Combine(p.StartInfo.WorkingDirectory,
-                                    "stdout.txt")))
-                                    sw.Write(output.ToString());
-                                using (StreamWriter sw = new StreamWriter(Path.Combine(p.StartInfo.WorkingDirectory,
-                                    "stderr.txt")))
-                                    sw.Write(error.ToString());
-                            }
-
-                            // collect and merge bugs
-                            var bugs = collectBugs(Path.Combine(p.StartInfo.WorkingDirectory,
-                                    bugReportFileName));
-                            bugs.Iter(b =>
-                            {
-                                if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
-                                mergedBugs[b] += 1;
-                            });
-                            Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
-                        }
-                    }
-
-                    var files = System.IO.Directory.GetFiles(impl.Name, "*.bpl");
-                    foreach (var f in files)
-                    {
-                        System.IO.File.Delete(f);
-                    }
-                }
-                catch (Exception e)
-                {
-                    Utils.Print("Error running: " + avnPath + " " + runAVNargs);
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine(e.StackTrace);
-                }
-              
-            });
-            */
-
-            printBugs(ref mergedBugs, epNames.Count);
-            mergeBugs(epNames);
-            Utils.Print(string.Format("#EntryPoints : {0}", epNames.Count), Utils.PRINT_TAG.AV_STATS);
-            Utils.Print(string.Format("#Bugs : {0}", mergedBugs.Count), Utils.PRINT_TAG.AV_STATS);
+                if (printingOutput) return;
+                printingOutput = true;
+                printBugs(ref mergedBugs, epNames.Count);
+                mergeBugs(epNames);
+            }
         }
 
         class Worker
@@ -623,6 +495,8 @@ namespace FastAVN
                     {
                         Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
 
+                        if (deadlineReached) return;
+
                         // spawn the job -- local
                         var output = RemoteExec.run(wd, avnPath, pruneFile + " " + avnArgs);
 
@@ -656,7 +530,9 @@ namespace FastAVN
                         var cmd = string.Format("{0} -w {1} {2} {3} {4}", machine, wd, Path.Combine(remoteroot, "fastavn", "AngelicVerifierNull.exe"),
                             "pruneSlice.bpl", avnArgs);
                         //Console.WriteLine("PSEXEC Running: {0}", cmd);
-                        
+
+                        if (deadlineReached) return;
+
                         var output = RemoteExec.run(Directory.GetCurrentDirectory(), psexecPath, cmd);
 
                         lock (fslock)
@@ -707,15 +583,21 @@ namespace FastAVN
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             Console.WriteLine("Got Ctrl-C");
-            
+
+            KillSpawnedProcesses();
+
+            System.Diagnostics.Process.GetCurrentProcess()
+                .Kill();
+        }
+
+        public static void KillSpawnedProcesses()
+        {
             lock (RemoteExec.SpawnedProcesses)
             {
                 foreach (var p in RemoteExec.SpawnedProcesses)
                     p.Kill();
                 RemoteExec.SpawnedProcesses.Clear();
             }
-            System.Diagnostics.Process.GetCurrentProcess()
-                .Kill();
         }
 
         private static void mergeBugs(HashSet<string> entryPoints)
