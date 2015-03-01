@@ -1626,7 +1626,8 @@ namespace cba.Util
                             if (c is AssumeCmd)
                             {
                                 var ac = c as AssumeCmd;
-                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssume(ac));
+                                var node = CleanAssert.getExprFromAssume(ac);
+                                //node = dup.VisitExpr(node);
                                 LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
                                 var2expr.Add(lv, dup.VisitExpr(node));
 
@@ -1637,7 +1638,8 @@ namespace cba.Util
                             else if (c is AssertCmd)
                             {
                                 var ac = c as AssertCmd;
-                                Expr node = dup.VisitExpr(CleanAssert.getExprFromAssert(ac));
+                                var node = CleanAssert.getExprFromAssert(ac);
+                                //node = dup.VisitExpr(node);
                                 LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
                                 var2expr.Add(lv, dup.VisitExpr(node));
 
