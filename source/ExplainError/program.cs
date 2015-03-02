@@ -842,7 +842,7 @@ namespace ExplainError
             var t = s.Substring(0, l) + "->" + s.Substring(l + 1);
             return Expr.Ident(t, expr.Type);
         }
-        private static bool IsFieldDeref(List<Expr> args)
+        private static bool IsFieldDeref(IList<Expr> args)
         {
             if (args == null || args.Count != 2) return false;
             if (!args[0].ToString().StartsWith("Mem_")) return false;

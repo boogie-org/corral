@@ -1180,7 +1180,7 @@ namespace cba
                 absHoudini = new AbstractHoudini(program);
                 absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
                 // Abstract houdini sets a prover option for the time limit. Get rid of that now
-                CommandLineOptions.Clo.RemoveAllProverOptions(str => str.StartsWith("TIME_LIMIT"));
+                CommandLineOptions.Clo.ProverOptions = CommandLineOptions.Clo.ProverOptions.Where(str => !str.StartsWith("TIME_LIMIT"));
 
                 // Record new summaries
                 predicates = absHoudini.GetPredicates();
@@ -1469,7 +1469,7 @@ namespace cba
                     absHoudini = new AbstractHoudini(program);
                     absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
                     // Abstract houdini sets a prover option for the time limit. Get rid of that now
-                    CommandLineOptions.Clo.RemoveAllProverOptions(str => str.StartsWith("TIME_LIMIT"));
+                    CommandLineOptions.Clo.ProverOptions = CommandLineOptions.Clo.ProverOptions.Where(str => !str.StartsWith("TIME_LIMIT"));
                 }
                 else
                 {

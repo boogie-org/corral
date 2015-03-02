@@ -259,7 +259,7 @@ namespace AvnResultDashboard
                 try
                 {
                     xmlDoc.Load(ResultsDir + "\\trace_annots.xml"); //hardcoded
-                } catch (FileNotFoundException _)
+                } catch (FileNotFoundException)
                 {
                     return;
                 }

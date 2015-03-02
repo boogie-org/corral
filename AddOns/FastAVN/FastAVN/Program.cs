@@ -73,12 +73,10 @@ namespace FastAVN
         }
 
         static int timeout = 0; // system timeout
-        static int avnTimeout = 200; // default AVN timeout
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
         static string psexecPath = null; // path to psexec
-        static bool dumpSlices = true; // dump sliced program for each entrypoint
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = ""; // default AVN arguments
         static string mergedBugReportName = "bugs.txt";
@@ -86,7 +84,6 @@ namespace FastAVN
         static int numThreads = 4; // default number of parallel AVN instances
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
         static bool fieldNonNull = true; // include angelic field non-null harness
-        static bool outputToFile = false; // dump AVN output to disk
         static string angelic = "Angelic";
         static string trace_extension = ".tt";
         static string bug_folder = "Bugs";
@@ -95,7 +92,6 @@ namespace FastAVN
         static string stack_extension = ".txt";
         static bool prune = false;
         static string stubsfile = null;
-        static bool cleanupDir = true;
         static FastAvnConfig config = null;
 
         static DateTime startingTime = DateTime.Now;
@@ -150,12 +146,6 @@ namespace FastAVN
 
             if (args.Any(s => s == "/noFieldNonNull"))
                 fieldNonNull = false;
-
-            if (args.Any(s => s == "/dumpAVNOutput"))
-                outputToFile = true;
-
-            if (args.Any(s => s == "/dumpAVNFiles"))
-                cleanupDir = false;
 
             args.Where(s => s.StartsWith("/killAfter:"))
                 .Iter(s => deadline = int.Parse(s.Substring("/killAfter:".Length)));

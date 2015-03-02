@@ -110,7 +110,7 @@ namespace cba.Util
         {
             return base.VisitExpr((Expr)node.Clone());
         }
-        public override List<Expr> VisitExprSeq(List<Expr> list)
+        public override IList<Expr> VisitExprSeq(IList<Expr> list)
         {
             return base.VisitExprSeq(new List<Expr>(list));
         }

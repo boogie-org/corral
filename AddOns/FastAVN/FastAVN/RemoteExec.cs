@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Xml.Serialization;
 using System.IO;
-using System.ComponentModel;
-using System.Xml.Serialization;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Threading;
