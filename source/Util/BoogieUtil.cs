@@ -1583,7 +1583,7 @@ namespace cba.Util
                         }
                         else
                         {
-                            Expr node = dup.VisitExpr(string2expr[expr]);
+                            Expr node = string2expr[expr];
                             LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
                             var2expr.Add(lv, dup.VisitExpr(node));
                             live_vars.Add(lv);
