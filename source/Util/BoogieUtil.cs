@@ -1453,7 +1453,7 @@ namespace cba.Util
             exprs = new Dictionary<string, Variable>();
             foreach (Variable v in vlist)
             {
-                exprs.Add(SSA.expr2key(var2expr[v]), v);
+                exprs.Add(CSE.expr2key(var2expr[v]), v);
             }
         }
 
@@ -1470,46 +1470,28 @@ namespace cba.Util
 
         public override Expr VisitExpr(Expr node)
         {
-            if (exprs.ContainsKey(SSA.expr2key(node))) return Expr.Ident(exprs[SSA.expr2key(node)]);
+            if (exprs.ContainsKey(CSE.expr2key(node))) return Expr.Ident(exprs[CSE.expr2key(node)]);
             else return base.VisitExpr(node);
         }
     }
 
-    // Type of phi function encoding "x3 = phi(x1,x2)"
-    // Modeled: left as an uninterpreted function such that (x3 == x1 || x3 == x2)
-    // Verifiable: x3 := x2 and x3 := x1 pushed up towards the definitions of x2 and x1
-    // Passifiable: one after which assignments can be converted to assumes. This is
-    //              currently not implemented. It requires appropriate placement
-    //              of assignments for the phi function
-    public enum PhiFunctionEncoding { Verifiable, Modeled, Passifiable };
-
-    public class SSA
+    public class CSE
     {
         Program program;
-        PhiFunctionEncoding encoding;
-        List<Procedure> phiProcsDecl;
-        HashSet<string> typesToInstrument;
         bool dbg = false;
 
-        private SSA(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
+        CSE(Program prog)
         {
-            this.program = program;
-            this.encoding = encoding;
-            this.phiProcsDecl = new List<Procedure>();
-            this.typesToInstrument = typesToInstrument;
-            if (encoding == PhiFunctionEncoding.Passifiable)
-                throw new NotImplementedException();
+            program = prog;
         }
 
+        public static Program Do(Program prog)
+        {
+            CSE cse = new CSE(prog);
+            cse.DoCSE();
+            return cse.program;
+        }
 
-        /*
-         * We go to every implementation, and look at assert (expr != NULL) and assume (expr != NULL)
-         * Now, we introduce a temporary variable and assignment cseTmp{i} := expr;
-         * Now, as long as this temporary variable is available, we replace expr by cseTmp{i}
-         * When the same expr is available from multiple vars from different predecessors, we introduce a new cseTmp{i} var := expr
-         * We now perform SSA, and then do the alias analysis
-         * This improves the precision of alias analysis, since these cseTmp vars are always non null, and hence, NULL cannot flow through these vars
-         */
         private void DoCSE()
         {
             // name -> implementation required for getVarsModified
@@ -1528,7 +1510,7 @@ namespace cba.Util
 
                 // cseTmp variable -> expression
                 Dictionary<Variable, Expr> var2expr = new Dictionary<Variable, Expr>();
-                
+
                 // block_name -> set of variables available at the end of the block
                 Dictionary<string, HashSet<Variable>> block2livevars = new Dictionary<string, HashSet<Variable>>();
 
@@ -1614,7 +1596,7 @@ namespace cba.Util
                         }
 
                         if (dbg) Console.WriteLine(c.ToString());
-                        
+
                         HashSet<Variable> live_vars_in = new HashSet<Variable>(live_vars);
                         HashSet<Variable> live_vars_out;
 
@@ -1651,7 +1633,7 @@ namespace cba.Util
 
                         // Replace RHS
                         ProcessCmdReplaceRHS(c, live_vars_in, var2expr);
-                        
+
                         // Replace LHS
                         ProcessCmdReplaceLHS(c, live_vars_out, var2expr);
 
@@ -1669,7 +1651,7 @@ namespace cba.Util
         {
             HashSet<Variable> live_vars_out = new HashSet<Variable>(live_vars_in);
             gen_cmd = false;
-            
+
             if (c is AssumeCmd)
             {
                 var ac = c as AssumeCmd;
@@ -1713,14 +1695,14 @@ namespace cba.Util
             foreach (Variable v in live_vars_in)
             {
                 HashSet<string> sub_exprs = getSubExprs(var2expr[v]);
-                if (vars_modified.Intersection(sub_exprs).Count > 0) live_vars_out.Remove(v); 
+                if (vars_modified.Intersection(sub_exprs).Count > 0) live_vars_out.Remove(v);
             }
 
             return live_vars_out;
         }
 
         // Perform substitution on LHS of cmd
-        private void ProcessCmdReplaceLHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
+        private static void ProcessCmdReplaceLHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
         {
             if (c is AssignCmd)
             {
@@ -1753,7 +1735,7 @@ namespace cba.Util
         }
 
         // Perform substitution on RHS of cmd
-        private void ProcessCmdReplaceRHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
+        private static void ProcessCmdReplaceRHS(Cmd c, HashSet<Variable> live_vars, Dictionary<Variable, Expr> var2expr)
         {
             if (c is AssumeCmd)
             {
@@ -1796,7 +1778,7 @@ namespace cba.Util
          * Check if two expressions are the same or not
          * TODO : Not compare strings, but actually compare expressions
          */
-        public static bool ExprEquals(Expr e1, Expr e2)
+        private bool ExprEquals(Expr e1, Expr e2)
         {
             if (expr2key(e1).Equals(expr2key(e2))) return true;
             else return false;
@@ -1824,22 +1806,46 @@ namespace cba.Util
             }
             return ret;
         }
+    }
+
+    // Type of phi function encoding "x3 = phi(x1,x2)"
+    // Modeled: left as an uninterpreted function such that (x3 == x1 || x3 == x2)
+    // Verifiable: x3 := x2 and x3 := x1 pushed up towards the definitions of x2 and x1
+    // Passifiable: one after which assignments can be converted to assumes. This is
+    //              currently not implemented. It requires appropriate placement
+    //              of assignments for the phi function
+    public enum PhiFunctionEncoding { Verifiable, Modeled, Passifiable };
+
+    public class SSA
+    {
+        Program program;
+        PhiFunctionEncoding encoding;
+        List<Procedure> phiProcsDecl;
+        HashSet<string> typesToInstrument;
+        public static bool dbg = false;
+
+        private SSA(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
+        {
+            this.program = program;
+            this.encoding = encoding;
+            this.phiProcsDecl = new List<Procedure>();
+            this.typesToInstrument = typesToInstrument;
+            if (encoding == PhiFunctionEncoding.Passifiable)
+                throw new NotImplementedException();
+        }
+
+
+        /*
+         * We go to every implementation, and look at assert (expr != NULL) and assume (expr != NULL)
+         * Now, we introduce a temporary variable and assignment cseTmp{i} := expr;
+         * Now, as long as this temporary variable is available, we replace expr by cseTmp{i}
+         * When the same expr is available from multiple vars from different predecessors, we introduce a new cseTmp{i} var := expr
+         * We now perform SSA, and then do the alias analysis
+         * This improves the precision of alias analysis, since these cseTmp vars are always non null, and hence, NULL cannot flow through these vars
+         */
+        
 
         public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
-        {
-            var ssa = new SSA(program,encoding, typesToInstrument);
-            ssa.Compute();
-            return program;
-        }
-
-        private bool instrumentType(Microsoft.Boogie.Type type)
-        {
-            if (type.IsMap) return false;
-            if (typesToInstrument.Count == 0) return true;
-            return typesToInstrument.Contains(type.ToString());
-        }
-
-        private void Compute()
         {
             var irreducible = new HashSet<string>();
 
@@ -1850,18 +1856,39 @@ namespace cba.Util
             program.ExtractLoops(out irreducible);
 
             // Common Subexpression Elimination
-            DoCSE();
+            program = CSE.Do(program);
 
             // Global Value Numbering
             program = GVN.Do(program);
 
+            // Writing and reading back
+            program = BoogieUtil.ReResolve(program);
+
+            // Static Single Assignment
+            var ssa = new SSA(program,encoding, typesToInstrument);
+            ssa.Compute(irreducible);
+
+            BoogieUtil.PrintProgram(program, "ssa.bpl");
+
+            CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
+
+            return program;
+        }
+
+        private bool instrumentType(Microsoft.Boogie.Type type)
+        {
+            if (type.IsMap) return false;
+            if (typesToInstrument.Count == 0) return true;
+            return typesToInstrument.Contains(type.ToString());
+        }
+
+        private void Compute(HashSet<string> irreducible)
+        {
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => !irreducible.Contains(impl.Name))
                 .Iter(SSARename);
 
             program.AddTopLevelDeclarations(phiProcsDecl);
-
-            CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
         }
 
         private void SSARename(Implementation impl)
