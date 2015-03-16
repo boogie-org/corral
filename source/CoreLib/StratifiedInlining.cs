@@ -172,6 +172,9 @@ namespace CoreLib
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
 
+        /* VC of main */
+        private StratifiedVC mainVC;
+
         /*  Parent linking -- used only for computing the recursion depth */
         public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;        
 
@@ -646,6 +649,29 @@ namespace CoreLib
             return outcome;
         }
 
+        // For testing "Must reach" assertion
+        public void TestMustReach(StratifiedVC svc)
+        {
+            // test code
+            if (svc.info.impl.Name != "MustReach")
+                return;
+
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+
+            if (!attachedVCInv.ContainsKey(svc))
+                return;
+
+            var iter = attachedVCInv[svc]; 
+            while (parent.ContainsKey(iter))
+            {
+                var vc = attachedVC[parent[iter]];
+                var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
+                prover.Assert(vc.MustReach(callblock), true);
+                iter = parent[iter];
+            }
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+        }
+
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
         {
@@ -862,6 +888,7 @@ namespace CoreLib
             Push();
 
             StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
+            mainVC = svc;
             di.RegisterMain(svc);
             HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
             prover.Assert(svc.vcexpr, true);
@@ -1001,7 +1028,9 @@ namespace CoreLib
             if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 || 
                 BoogieVerify.options.extraFlags.Contains("DumpDag"))
                 di.Dump("ct" + (dumpCnt++) + ".dot");
-            
+
+            if (BoogieVerify.options.extraFlags.Contains("TestSplit")) di.TestSplit();
+
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
             {
@@ -1076,6 +1105,7 @@ namespace CoreLib
 
                 attachedVC[scs] = svc;
                 attachedVCInv[svc] = scs;
+                //TestMustReach(svc);
                 ret = svc;
             }
             else
@@ -1327,7 +1357,7 @@ namespace CoreLib
         }
     }
 
-    class BijectiveDictionary<T1, T2> : IEnumerable
+    class BijectiveDictionary<T1, T2> : IEnumerable<KeyValuePair<T1, T2>>, IEnumerable
     {
         Dictionary<T1, T2> map1;
         Dictionary<T2, T1> map2;
@@ -1370,6 +1400,16 @@ namespace CoreLib
             return map2[key];
         }
 
+        public IEnumerable<T1> GetDomain()
+        {
+            return map1.Keys;
+        }
+
+        public IEnumerable<T2> GetRange()
+        {
+            return map2.Keys;
+        }
+
         public bool ContainsDomain(T1 key)
         {
             return map1.ContainsKey(key);
@@ -1384,9 +1424,14 @@ namespace CoreLib
         {
             return map1.GetEnumerator();
         }
+
+        IEnumerator<KeyValuePair<T1, T2>> IEnumerable<KeyValuePair<T1, T2>>.GetEnumerator()
+        {
+            return map1.GetEnumerator();
+        }
     }
 
-    public enum MERGING_STRATEGY { FIRST, RANDOM_PICK, RANDOM, MAXC, OPT };
+    public enum MERGING_STRATEGY { NONE, FIRST, RANDOM_PICK, RANDOM, MAXC, OPT };
 
     class DI
     {    
@@ -1454,24 +1499,29 @@ namespace CoreLib
         public static MERGING_STRATEGY PickStrategy()
         {
             var strategy = MERGING_STRATEGY.FIRST;
+            if (BoogieVerify.options.extraFlags.Contains("DiNone"))
+            {
+                Console.WriteLine("Selecting DAG Inilining strategy: None");
+                strategy = MERGING_STRATEGY.NONE;
+            }
             if (BoogieVerify.options.extraFlags.Contains("DiRandom"))
             {
-                Console.WriteLine("Selecting strategy: Random");
+                Console.WriteLine("Selecting DAG Inilining strategy: Random");
                 strategy = MERGING_STRATEGY.RANDOM;
             }
             if (BoogieVerify.options.extraFlags.Contains("DiRandomPick"))
             {
-                Console.WriteLine("Selecting strategy: RandomPick");
+                Console.WriteLine("Selecting DAG Inilining strategy: RandomPick");
                 strategy = MERGING_STRATEGY.RANDOM_PICK;
             }
             if (BoogieVerify.options.extraFlags.Contains("DiMaxc"))
             {
-                Console.WriteLine("Selecting strategy: maxc");
+                Console.WriteLine("Selecting DAG Inilining strategy: maxc");
                 strategy = MERGING_STRATEGY.MAXC;
             }
             if (BoogieVerify.options.extraFlags.Contains("DiOpt"))
             {
-                Console.WriteLine("Selecting strategy: static opt");
+                Console.WriteLine("Selecting DAG Inilining strategy: static opt");
                 strategy = MERGING_STRATEGY.OPT;
             }
             return strategy;
@@ -1587,6 +1637,17 @@ namespace CoreLib
             return id2;
         }
 
+        public void TestSplit()
+        {
+            var score = new List<Tuple<int, int, int>>();
+            foreach (var n in vcNodeMap.GetRange())
+            {
+                int s; int d;
+                currentDag.TestSplit(n, out s, out d);
+                Console.WriteLine("TestSplit: {0} {1} {2}", n.ImplName, s, d);
+            }
+        }
+
         public StratifiedVC FindMergeCandidate(StratifiedCallSite cs)
         {
             var st = DateTime.Now;
@@ -1598,6 +1659,8 @@ namespace CoreLib
         StratifiedVC FindMergeCandidateInternal(StratifiedCallSite cs)
         {
             if (disabled) return null;
+            if (strategy == MERGING_STRATEGY.NONE) return null;
+
             Debug.Assert(!SI.attachedVC.ContainsKey(cs));
 
             var e = QKeyValue.FindIntAttribute(cs.callSite.Attributes, "si_unique_call", -1);
@@ -1998,6 +2061,17 @@ namespace CoreLib
             var ret = 0;
             Nodes.Iter(node => ret += node.Size);
             return ret;
+        }
+
+        public void TestSplit(DagNode n, out int s, out int d)
+        {
+            s = Descendants(n).Count;
+            d = 0;
+            foreach (var np in IdToNodes[n.id])
+            {
+                if (IsDisjoint(n, np))
+                    d += Descendants(np).Count;
+            }
         }
 
         public IEnumerable<DagNode> FindMergeCandidates(DagNode n1, int cs, string targetId)

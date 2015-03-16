@@ -514,6 +514,9 @@ namespace cba
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
                 BoogieVerify.options.newStratifiedInlining = config.newStratifiedInlining;
                 BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
+                BoogieVerify.options.useDI = config.useDI;
+                BoogieVerify.options.extraFlags = config.extraFlags;
+                if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
                 BoogieVerify.Verify(init, out err);
                 if (err == null || err.Count == 0)
                     Console.WriteLine("All entrypoints verified");
