@@ -29,6 +29,7 @@
 020\f2.bpl b
 021\waitlock.bpl c
 022\childtid.bpl c
+023\f.bpl b
 smack\a.bpl b
 codeexpr\f1.bpl c
 codeexpr\f2.bpl c

@@ -980,6 +980,10 @@ namespace cba
                     // Replace call assert_dummy() with assertsPassed := false; raiseException := !inAtomicBlock;
                     if (policy.isAssertCmd(cmd))
                     {
+                        // raise exception before the assert
+                        curr_label = addRaiseExceptionInstrumentation(instrumented, curr, curr_label, true);
+                        curr = new List<Cmd>();
+
                         curr.Add(BoogieAstFactory.MkVarEqConst(mgr.errorVar, false));
                         addedTrans(impl.Name, block.Label, incnt, cmd, curr_label, curr);
 
