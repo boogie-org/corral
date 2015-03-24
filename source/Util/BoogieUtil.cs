@@ -397,7 +397,7 @@ namespace cba.Util
             return p;
         }
 
-        public static Program ReadAndResolve(string filename)
+        public static Program ReadAndResolve(string filename, bool doTypecheck = true)
         {
             Program p = ParseProgram(filename);
 
@@ -410,7 +410,7 @@ namespace cba.Util
             {
                 throw new InvalidProg("Cannot resolve " + filename);
             }
-            if (TypecheckProgram(p, filename))
+            if (doTypecheck && TypecheckProgram(p, filename))
             {
                 throw new InvalidProg("Cannot typecheck " + filename);
             }
@@ -436,17 +436,17 @@ namespace cba.Util
         }
         // Prints the program into a file, reads it back in, parses it,
         // resolves it and typechecks it
-        public static Program ReResolve(Program p)
+        public static Program ReResolve(Program p, bool doTypecheck = true)
         {
-            return ReResolve(p, "temp_rar.bpl");
+            return ReResolve(p, "temp_rar.bpl", doTypecheck);
         }
 
         // Prints the program into a file, reads it back in, parses it,
         // resolves it and typechecks it
-        public static Program ReResolve(Program p, string filename)
+        public static Program ReResolve(Program p, string filename, bool doTypecheck = true)
         {
             PrintProgram(p, filename);
-            return ReadAndResolve(filename);
+            return ReadAndResolve(filename, doTypecheck);
         }
 
         public static void PrintGlobalVariables(Program p)
@@ -1862,7 +1862,7 @@ namespace cba.Util
             program = GVN.Do(program);
 
             // Writing and reading back
-            program = BoogieUtil.ReResolve(program);
+            program = BoogieUtil.ReResolve(program, false);
 
             // Static Single Assignment
             var ssa = new SSA(program,encoding, typesToInstrument);
