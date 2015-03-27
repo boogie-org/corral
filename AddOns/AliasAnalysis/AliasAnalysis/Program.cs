@@ -36,6 +36,8 @@ namespace AliasAnalysis
                 AliasConstraintSolver.printWarnings = true;
             if (args.Any(s => s == "/eliminateCycles"))
                 AliasConstraintSolver.doCycleElimination = true;
+            if (args.Any(s => s == "/useSolver"))
+                AliasAnalysis.useSolver = true;
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -366,7 +368,9 @@ namespace AliasAnalysis
         int counter;
         public static bool dbg = false;
         CSFSAliasAnalysis csfsAnalysis;
-        public static HashSet<string> non_null_vars = null; 
+        public static HashSet<string> non_null_vars = null;
+        public static bool useSolver = false;
+        AASolver z3solver;
 
         private AliasAnalysis(Program program)
         {
@@ -375,6 +379,7 @@ namespace AliasAnalysis
             solver = new AliasConstraintSolver();
             counter = 0;
             csfsAnalysis = new CSFSAliasAnalysis(program);
+            z3solver = new AASolver();
         }
 
         private void getReturnAllocSites(Dictionary<string, HashSet<string>> PointsTo)
@@ -441,7 +446,7 @@ namespace AliasAnalysis
             aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
-            aa.solver.Solve();
+            aa.solver.Solve(aa.z3solver);
             aa.getReturnAllocSites(aa.solver.GetPointsToSet());
             if (dbg) Console.WriteLine("Done");
 
@@ -579,6 +584,7 @@ namespace AliasAnalysis
                 {
                     allocatedConstants.Add(c.Name);
                     solver.Add(new AllocationConstraint(ConstructVariableName(c, null), false));
+                    z3solver.AddAllocationConstraint(ConstructVariableName(c, null));
                 });
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -598,6 +604,7 @@ namespace AliasAnalysis
                             {
                                 cmd2AllocationConstraint.Add(new Tuple<Implementation, Block, Cmd>(impl, block, ccmd), AllocationConstraint.getSite());
                                 solver.Add(new AllocationConstraint(ConstructVariableName(ccmd.Outs[0].Decl, impl.Name), funkyAllocators.Contains(ccmd.callee)));
+                                z3solver.AddAllocationConstraint(ConstructVariableName(ccmd.Outs[0].Decl, impl.Name));
                             }
                             else if (nameToImpl.ContainsKey(ccmd.callee))
                             {
@@ -636,6 +643,7 @@ namespace AliasAnalysis
             ProcessAssignment(loadTargetTmp, indexRead, sourceProcName);
             ProcessAssignment(storeTargetTmp, rs, sourceProcName);
             solver.Add(new StoreConstraint(storeTargetTmp, loadTargetTmp, loadMap));
+            z3solver.AddStoreConstraint(storeTargetTmp, loadMap, loadTargetTmp);
         }
 
         private void ProcessAssignment(string target, HashSet<Tuple<Variable, List<string>>> sourceReadSet, string sourceProcName)
@@ -645,7 +653,10 @@ namespace AliasAnalysis
             {
                 var y = ConstructVariableName(tup.Item1, sourceProcName);
                 if (tup.Item2.Count == 0)
+                {
                     solver.Add(new AssignConstraint(y, x));
+                    z3solver.AddAssignConstraint(x, y);
+                }
                 else
                 {
                     var currTarget = x;
@@ -653,6 +664,7 @@ namespace AliasAnalysis
                     {
                         var currSource = (i == tup.Item2.Count - 1) ? y : ("tmpVar" + (counter++).ToString());
                         solver.Add(new LoadConstraint(currSource, currTarget, tup.Item2[i]));
+                        z3solver.AddLoadConstraint(currTarget, currSource, tup.Item2[i]);
                         currTarget = currSource;
                     }
                 }
@@ -1828,8 +1840,14 @@ namespace AliasAnalysis
             }
         }
 
-        public void Solve()
+        public void Solve(AASolver z3solver)
         {
+            if (AliasAnalysis.useSolver)
+            {
+                PointsTo = z3solver.GetPointsToData();
+                return;
+            }
+
             var sw = new Stopwatch();
             sw.Start();
 
