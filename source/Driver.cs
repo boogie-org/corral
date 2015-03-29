@@ -238,13 +238,6 @@ namespace cba
                         ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
                 }
 
-                // extract loops
-                if (GlobalConfig.InferPass != null)
-                {
-                    elPass = new ExtractLoopsPass(true);
-                    curr = elPass.run(curr);
-                    CommandLineOptions.Clo.ExtractLoops = false;
-                }
             }
             else
             {
@@ -259,6 +252,34 @@ namespace cba
                 }
 
                 GlobalConfig.InferPass = null;
+            }
+
+            // extract loops
+            if ( (GlobalConfig.isSingleThreaded && GlobalConfig.InferPass != null) ||
+                config.maxStaticLoopBound > 0)
+            {
+                elPass = new ExtractLoopsPass(true);
+                curr = elPass.run(curr);
+                CommandLineOptions.Clo.ExtractLoops = false;
+            }
+
+            // infer loop bound (assuming program is sequential)
+            if (config.maxStaticLoopBound > 0)
+            {
+                // abstract away globals
+                var abs = new VariableSlicePass(new VarSet());
+                var absprog = abs.run(curr);
+
+                var LBoptions = ConfigManager.progVerifyOptions.Copy();
+                LBoptions.useDI = false;
+                LBoptions.useFwdBck = false;
+                LBoptions.NonUniformUnfolding = false;
+                LBoptions.extraFlags = new HashSet<string>();
+                LBoptions.newStratifiedInliningAlgo = "";
+                var bounds = LoopBound.Compute(absprog.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
+                ConfigManager.progVerifyOptions.extraRecBound = new Dictionary<string, int>();
+                bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
+                Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
             }
 
             ProgTransformation.PersistentProgram.FreeParserMemory();
@@ -883,14 +904,16 @@ namespace cba
                 // Infer min. loop bounds
                 if (iterCnt == 1)
                 {
-                    //abs.writeToFile("abs.bpl");
+                    // In SDV mode, the default is 10
+                    var maxBound = config.maxStaticLoopBound == 0 ? 10 : config.maxStaticLoopBound;
+
                     var LBoptions = ConfigManager.progVerifyOptions.Copy();
                     LBoptions.useDI = false;
                     LBoptions.useFwdBck = false;
                     LBoptions.NonUniformUnfolding = false;
                     LBoptions.extraFlags = new HashSet<string>();
-                    LBoptions.newStratifiedInliningAlgo = ""; 
-                    var bounds = LoopBound.Compute(abs.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
+                    LBoptions.newStratifiedInliningAlgo = "";
+                    var bounds = LoopBound.Compute(abs.getCBAProgram(), maxBound, GlobalConfig.annotations, LBoptions);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                     Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));

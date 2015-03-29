@@ -113,10 +113,6 @@ namespace cba
             maxBound = max;
             var start = DateTime.Now;
 
-            // remove main from the program because it has an assert
-            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            program.RemoveTopLevelDeclaration(main);
-
             // remove non-free ensures and requires
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
@@ -131,6 +127,10 @@ namespace cba
             var allLoopImpls = new List<Implementation>();
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => { if (impl.Name.Contains("loop")) allLoopImpls.Add(impl); });
+
+            // remove main from the program because it has an assert
+            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
+            program.RemoveTopLevelDeclaration(main);
 
             // Prune to the right form
             var loopImpls = allLoopImpls.Filter(CheckImpl);

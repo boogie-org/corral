@@ -30,6 +30,8 @@
 021\waitlock.bpl c
 022\childtid.bpl c
 023\f.bpl b
+loop\seq.bpl b
+loop\conc.bpl b
 smack\a.bpl b
 codeexpr\f1.bpl c
 codeexpr\f2.bpl c

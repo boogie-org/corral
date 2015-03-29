@@ -140,6 +140,7 @@ namespace cba
         public bool printAllTraces { get; private set; }
 
         public int maxStaticLoopBound { get; private set; }
+        
         public bool disableStaticAnalysis { get; private set; }
         public bool useDuality { get; private set; }
 
@@ -296,7 +297,8 @@ namespace cba
             checkStaticAnalysis = false;
             siOnly = false;
             annotations = new List<string>();
-            maxStaticLoopBound = 10;
+            maxStaticLoopBound = 0;
+            
             NonUniformUnfolding = false;
             FwdBckSearch = 0;
             useDI = false;
