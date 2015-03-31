@@ -217,6 +217,29 @@ namespace cba
             curr = prune.run(curr);
             PruneProgramPass.RemoveUnreachable = false;
 
+            // infer loop bound (assuming program is sequential)
+            if (config.maxStaticLoopBound > 0)
+            {
+                // abstract away globals
+                var abs = new VariableSlicePass(new VarSet());
+                var lprog = abs.run(curr);
+
+                // extract loops
+                var el = new ExtractLoopsPass(true);
+                lprog = el.run(lprog);
+
+                var LBoptions = ConfigManager.progVerifyOptions.Copy();
+                LBoptions.useDI = false;
+                LBoptions.useFwdBck = false;
+                LBoptions.NonUniformUnfolding = false;
+                LBoptions.extraFlags = new HashSet<string>();
+                LBoptions.newStratifiedInliningAlgo = "";
+                var bounds = LoopBound.Compute(lprog.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
+                ConfigManager.progVerifyOptions.extraRecBound = new Dictionary<string, int>();
+                bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
+                Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
+            }
+
             // Sequential instrumentation
             ExtractLoopsPass elPass = null;
             var seqInstr = new SequentialInstrumentation();
@@ -238,6 +261,13 @@ namespace cba
                         ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
                 }
 
+                // extract loops
+                if (GlobalConfig.InferPass != null)
+                {
+                    elPass = new ExtractLoopsPass(true);
+                    curr = elPass.run(curr);
+                    CommandLineOptions.Clo.ExtractLoops = false;
+                }
             }
             else
             {
@@ -252,34 +282,6 @@ namespace cba
                 }
 
                 GlobalConfig.InferPass = null;
-            }
-
-            // extract loops
-            if ( (GlobalConfig.isSingleThreaded && GlobalConfig.InferPass != null) ||
-                config.maxStaticLoopBound > 0)
-            {
-                elPass = new ExtractLoopsPass(true);
-                curr = elPass.run(curr);
-                CommandLineOptions.Clo.ExtractLoops = false;
-            }
-
-            // infer loop bound (assuming program is sequential)
-            if (config.maxStaticLoopBound > 0)
-            {
-                // abstract away globals
-                var abs = new VariableSlicePass(new VarSet());
-                var absprog = abs.run(curr);
-
-                var LBoptions = ConfigManager.progVerifyOptions.Copy();
-                LBoptions.useDI = false;
-                LBoptions.useFwdBck = false;
-                LBoptions.NonUniformUnfolding = false;
-                LBoptions.extraFlags = new HashSet<string>();
-                LBoptions.newStratifiedInliningAlgo = "";
-                var bounds = LoopBound.Compute(absprog.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
-                ConfigManager.progVerifyOptions.extraRecBound = new Dictionary<string, int>();
-                bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
-                Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
             }
 
             ProgTransformation.PersistentProgram.FreeParserMemory();
