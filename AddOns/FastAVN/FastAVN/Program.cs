@@ -598,6 +598,8 @@ namespace FastAVN
 
             foreach (string impl in entryPoints)
             {
+                if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), impl))) continue;
+
                 string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
                 if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
                 int traceNum = 0;
