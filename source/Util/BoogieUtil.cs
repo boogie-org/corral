@@ -1868,7 +1868,7 @@ namespace cba.Util
             var ssa = new SSA(program,encoding, typesToInstrument);
             ssa.Compute(irreducible);
 
-            BoogieUtil.PrintProgram(program, "ssa.bpl");
+            //BoogieUtil.PrintProgram(program, "ssa.bpl");
 
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
 
