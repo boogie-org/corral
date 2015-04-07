@@ -2716,6 +2716,7 @@ namespace cba
         {
             get
             {
+                if (assertsPassed == null) return null;
                 return assertsPassed.Name;
             }
         }

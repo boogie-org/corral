@@ -104,7 +104,6 @@ namespace cba
             UserAnnotations = Annotations;
         }
 
-        // precondition: the only assert is in main
         public static Dictionary<string, int> Compute(CBAProgram program, int max, List<string> Annotations, BoogieVerifyOptions options)
         {
             var loopBounds = new Dictionary<string, int>();
@@ -113,16 +112,20 @@ namespace cba
             maxBound = max;
             var start = DateTime.Now;
 
-            // remove main from the program because it has an assert
-            var main = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            program.RemoveTopLevelDeclaration(main);
-
             // remove non-free ensures and requires
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Iter(proc => proc.Requires = proc.Requires.Filter(en => en.Free));
-
+            // convert assertions to assumes
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(blk => blk.Cmds = blk.Cmds.Map(c =>
+                        {
+                            var ac = c as AssertCmd;
+                            if (ac == null) return c;
+                            return new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
+                        })));
 
             // Call graph
             ComputeCallGraph(program);
