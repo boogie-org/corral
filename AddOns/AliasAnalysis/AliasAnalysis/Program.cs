@@ -2290,6 +2290,14 @@ namespace AliasAnalysis
                         if (!PointsTo.ContainsKey(of))
                             PointsTo.Add(of, new HashSet<string>());
                         PointsTo[of].Add(nsite);
+                        if (doCycleElimination)
+                        {
+                            FakeNode fakeof = new FakeNode(of);
+                            if (!string2node.ContainsKey(of)) string2node[of] = fakeof;
+                            if (!FakePointsTo.ContainsKey(string2node[of]))
+                                FakePointsTo.Add(string2node[of], new HashSet<string>());
+                            FakePointsTo[string2node[of]].Add(nsite);
+                        }
                         next.Add(nsite);
                     }
                 }
