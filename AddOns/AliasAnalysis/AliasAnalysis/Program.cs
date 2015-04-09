@@ -34,8 +34,8 @@ namespace AliasAnalysis
                 AliasConstraintSolver.NoEmptyLoads = true;
             if (args.Any(s => s == "/warn"))
                 AliasConstraintSolver.printWarnings = true;
-            if (args.Any(s => s == "/eliminateCycles"))
-                AliasConstraintSolver.doCycleElimination = true;
+            if (args.Any(s => s == "/dontEliminateCycles"))
+                AliasConstraintSolver.doCycleElimination = false;
             if (args.Any(s => s == "/useSolver"))
                 AliasAnalysis.useSolver = true;
             
@@ -449,7 +449,7 @@ namespace AliasAnalysis
             aa.solver.Solve(aa.z3solver);
             aa.getReturnAllocSites(aa.solver.GetPointsToSet());
             if (dbg) Console.WriteLine("Done");
-
+            Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
             // Solve the queries
             return
                 AliasQuerySolver.Solve(program, new Func<Variable, Variable, Implementation, bool>((v1, v2, impl) => aa.solver.IsAlias(
@@ -1682,7 +1682,8 @@ namespace AliasAnalysis
         public static bool NoEmptyLoads = false;
         public static bool printWarnings = false;
         string null_allocSite;
-        public static bool doCycleElimination = false;
+        public static bool doCycleElimination = true;
+        public static int numCycles = 0;
 
         // fake node implementation
         Dictionary<FakeNode, HashSet<string>> FakePointsTo;
@@ -1730,6 +1731,14 @@ namespace AliasAnalysis
                 int hash = 0;
                 foreach (string s in collection) hash += s.GetHashCode();
                 return hash;
+            }
+
+            public override string ToString()
+            {
+                string s = "{";
+                foreach (string c in collection) s += c + " ";
+                s += "}";
+                return s;
             }
         }
 
@@ -1807,6 +1816,7 @@ namespace AliasAnalysis
                 if (scc.Count > 1)
                 {
                     //Console.WriteLine("Found one!");
+                    numCycles++;
                     FakeNode newnode = new FakeNode();
                     FakePointsTo.Add(newnode, new HashSet<string>());
                     FakePointsToDelta.Add(newnode, new HashSet<string>());
@@ -1822,13 +1832,18 @@ namespace AliasAnalysis
                         //Console.WriteLine();
                         foreach (FakeNode succ in Succ[fn])
                         {
-                            if (!scc.Contains(succ)) newnode_succs.Add(succ);
+                            if (!scc.Contains(succ))
+                            {
+                                newnode_succs.Add(succ);
+                                Pred[succ].Remove(fn);
+                                Pred[succ].Add(newnode);
+                            }
                         }
                         foreach (FakeNode pred in Pred[fn])
                         {
                             if (!scc.Contains(pred))
                             {
-                                if (!G.ContainsKey(pred)) G.Add(pred, new HashSet<FakeNode>());
+                                //if (!G.ContainsKey(pred)) Console.WriteLine(pred.ToString());
                                 G[pred].Remove(fn);
                                 G[pred].Add(newnode);
                             }
@@ -1882,6 +1897,7 @@ namespace AliasAnalysis
             InitFullAllocators();
 
             var G = new Dictionary<string, HashSet<string>>();
+            var origG = new Dictionary<string, HashSet<string>>();
 
             // FakeNode points-to graph
             var fakeG = new Dictionary<FakeNode, HashSet<FakeNode>>();
@@ -1898,6 +1914,7 @@ namespace AliasAnalysis
             {
                 foreach (var a in constraints.OfType<AllocationConstraint>())
                 {
+                    if (a.target.Equals("NULL")) continue;
                     FakeNode target = new FakeNode(a.target);
                     string2node[a.target] = target;
                     FakePointsToDelta.InitAndAdd(target, a.allocSite);
@@ -1919,9 +1936,55 @@ namespace AliasAnalysis
 
                 foreach (string s in string2node.Keys)
                 {
-                    PointsTo.Add(s, new HashSet<string>());
+                    if (!PointsTo.ContainsKey(s)) PointsTo.Add(s, new HashSet<string>());
                     if (FakePointsTo.ContainsKey(string2node[s])) foreach (string aS in FakePointsTo[string2node[s]]) PointsTo[s].Add(aS); 
                 }
+
+                
+                foreach (var a in constraints.OfType<AllocationConstraint>())
+                {
+                    if (!a.target.Equals("NULL")) continue;
+                    PointsToDelta.InitAndAdd(a.target, a.allocSite);
+                    worklist.Add(a.target);
+                }
+
+                foreach (var a in constraints.OfType<AssignConstraint>())
+                    origG.InitAndAdd(a.source, a.target);
+                
+                foreach (var n in PointsTo.Keys)
+                {
+                    if (variables.Contains(n))
+                    {
+                        foreach (var store in varToStore[n])
+                        {
+                            var x = store.target;
+                            var y = store.source;
+                            var f = store.map;
+
+                            foreach (string o in PointsTo[n])
+                            {
+                                var of = GetODotf(o, f);
+                                origG.InitAndAdd(y, of);
+                            }
+                        }
+
+                        foreach (var load in varToLoad[n])
+                        {
+                            var x = load.source;
+                            var y = load.target;
+                            var f = load.map;
+
+                            foreach (string o in PointsTo[n])
+                            {
+                                var of = GetODotf(o, f);
+                                origG.InitAndAdd(of, y);
+                            }
+                        }
+                    }
+                }
+
+                ProcessWorklist(origG, variables, varToStore, varToLoad);
+                
             }
             else
             {
@@ -2132,7 +2195,7 @@ namespace AliasAnalysis
                                 {
                                     G[string2node[y]].Add(string2node[of]);
                                     //DetectCycle(G, string2node[y]);
-                                    MergeSCCs(G);
+                                    //MergeSCCs(G);
                                     if (!FakePointsTo.ContainsKey(string2node[y])) FakePointsTo.Add(string2node[y], new HashSet<string>());
                                     FakeDiffProp(FakePointsTo[string2node[y]], string2node[of]);
                                 }
@@ -2160,7 +2223,7 @@ namespace AliasAnalysis
                                 {
                                     G[string2node[of]].Add(string2node[y]);
                                     //DetectCycle(G, string2node[of]);
-                                    MergeSCCs(G);
+                                    //MergeSCCs(G);
                                     if (!FakePointsTo.ContainsKey(string2node[of])) FakePointsTo.Add(string2node[of], new HashSet<string>());
                                     FakeDiffProp(FakePointsTo[string2node[of]], string2node[y]);
                                 }
@@ -2227,6 +2290,14 @@ namespace AliasAnalysis
                         if (!PointsTo.ContainsKey(of))
                             PointsTo.Add(of, new HashSet<string>());
                         PointsTo[of].Add(nsite);
+                        if (doCycleElimination)
+                        {
+                            FakeNode fakeof = new FakeNode(of);
+                            if (!string2node.ContainsKey(of)) string2node[of] = fakeof;
+                            if (!FakePointsTo.ContainsKey(string2node[of]))
+                                FakePointsTo.Add(string2node[of], new HashSet<string>());
+                            FakePointsTo[string2node[of]].Add(nsite);
+                        }
                         next.Add(nsite);
                     }
                 }
