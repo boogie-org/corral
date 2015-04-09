@@ -188,9 +188,6 @@ namespace CoreLib
         /* main procedure (fake main) */
         private Procedure mainProc;
 
-        /* map to stratified VCs (stack of VCs, as we can have several VCs for the same procedure) */
-        private Dictionary<string, Stack<StratifiedVC>> implName2SVC;
-
         /* Call Tree after VerifyImplementation */
         private HashSet<string> CallTree;
 
@@ -202,21 +199,6 @@ namespace CoreLib
         public HashSet<string> GetCallTree()
         {
             return CallTree;
-        }
-
-        /* creates or retrieves a VC */
-        public StratifiedVC getSVC(string name)
-        {
-            StratifiedVC vc;
-            if (!implName2SVC.ContainsKey(name) || implName2SVC[name] == null || implName2SVC[name].Count <= 0)
-            {
-                implName2SVC[name] = new Stack<StratifiedVC>();
-                vc = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
-                implName2SVC[name].Push(vc);
-            }
-            else
-                vc = implName2SVC[name].First();
-            return vc;
         }
 
         /* initial analyses */
@@ -261,7 +243,6 @@ namespace CoreLib
             base(program, logFilePath, appendLogFile, new List<Checker>())
         {
             stats = new Stats();
-            implName2SVC = new Dictionary<string, Stack<StratifiedVC>>();
 
             if (cba.Util.BoogieVerify.options.useFwdBck)
             {
@@ -369,6 +350,217 @@ namespace CoreLib
             stats.stacksize--;
             prover.Pop();
 
+        }
+
+        struct SiState
+        {
+            public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
+            public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
+            public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
+            public HashSet<StratifiedCallSite> openCallSites;
+
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
+            {
+                var ret = new SiState();
+                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(SI.attachedVC);
+                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(SI.attachedVCInv);
+                ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
+                ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
+                return ret;
+            }
+
+            public HashSet<StratifiedCallSite> ApplyState(StratifiedInlining SI)
+            {
+                SI.attachedVC = attachedVC;
+                SI.attachedVCInv = attachedVCInv;
+                SI.parent = parent;
+                return openCallSites;
+            }
+        }
+
+        enum DecisionType { MUST_REACH, BLOCK };
+        class Decision : Tuple<DecisionType, int, StratifiedCallSite>
+        {
+            public Decision(DecisionType dt, int num, StratifiedCallSite cs)
+                : base(dt, num, cs) { }
+
+            public DecisionType decisionType
+            {
+                get { return Item1; }
+            }
+
+            public int num
+            {
+                get { return Item2; }
+            }
+
+            public StratifiedCallSite cs
+            {
+                get { return Item3; }
+            }
+        }
+
+        // Comment TODO
+        public Outcome MustReachStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
+        {
+            Outcome outcome = Outcome.Inconclusive;
+            reporter.reportTraceIfNothingToExpand = true;
+
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<Decision>();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+
+            var indent = new Func<int, string>(i =>
+            {
+                var ret = "";
+                while (i > 0) { i--; ret += " "; }
+                return ret;
+            });
+
+            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+                {
+                    var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                    prevMustAsserted.ToList().Iter(ls =>
+                        ls.Iter(tup => ret.Add(tup)));
+                    return ret;
+                });
+            
+            var rand = new Random();
+            var reachedBound = false;
+
+            var decideToInline = new Func<bool>(() =>
+                {
+                    return rand.Next(100) != 0;
+                });
+
+            while (true)
+            {
+                MacroSI.PRINT_DETAIL("  - overapprox");
+
+                // Find cex
+                foreach (StratifiedCallSite cs in openCallSites)
+                {                    
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        prover.Assert(cs.callSiteExpr, false);
+                        reachedBound = true;
+                    }
+                }
+                MacroSI.PRINT_DETAIL("    - check");
+                reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                outcome = CheckVC(reporter);
+
+                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+
+                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                {
+                    break; // done (T/O)
+                }
+
+                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                {
+                    return Outcome.Errors; // done (error found)
+                }
+
+                if (outcome == Outcome.Errors)
+                {
+                    // pick one to inline
+                    while (reporter.callSitesToExpand.Count != 0)
+                    {
+                        var rand_choice = rand.Next(reporter.callSitesToExpand.Count);
+                        var scs = reporter.callSitesToExpand[rand_choice];
+                        openCallSites.Remove(scs);
+                        reporter.callSitesToExpand.Remove(scs);
+
+                        // make a decision 
+                        if (decideToInline())
+                        {
+                            Console.WriteLine("{0}>>> Inlining({1})", indent(decisions.Count), scs.callSite.calleeName);
+                            // Inline
+                            var svc = Expand(scs);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                        }
+                        else
+                        {
+                            Console.WriteLine("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
+                            decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                            Push();
+
+                            // Inline
+                            var svc = Expand(scs);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                            // Assert MustReach
+                            prevMustAsserted.Push(
+                                AssertMustReach(svc, PrevAsserted()));
+                        }
+                    }
+                }
+                else
+                {
+                    // outcome == Outcome.Correct
+                    Decision topDecision = null;
+                    SiState topState = SiState.SaveState(this, openCallSites);
+                    var doneBT = false;
+                    do
+                    {
+                        if (decisions.Count == 0)
+                        {
+                            doneBT = true;
+                            break;
+                        }
+
+                        topDecision = decisions.Peek();
+                        topState = backtrackingPoints.Peek();
+
+                        // Pop
+                        Pop();
+                        decisions.Pop();
+                        backtrackingPoints.Pop();
+                        prevMustAsserted.Pop();
+                        Console.WriteLine("{0}>>> Pop", indent(decisions.Count));
+                    }while (topDecision.num == 1);
+
+                    if (doneBT)
+                        break;
+
+                    openCallSites = topState.ApplyState(this);
+
+                    // flip the decision
+                    
+                    Push();
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+
+                    if (topDecision.decisionType == DecisionType.MUST_REACH)
+                    {
+                        // Block
+                        prover.Assert(topDecision.cs.callSiteExpr, false);
+                        Console.WriteLine("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                        decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                    }
+                    else
+                    {
+                        // Must Reach
+                        Console.WriteLine("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                        decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
+                        var svc = Expand(topDecision.cs);
+                        if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                        prevMustAsserted.Push(
+                           AssertMustReach(svc, PrevAsserted()));
+                    }
+
+
+                }
+            }
+            reporter.reportTraceIfNothingToExpand = false;
+
+            if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
+            return outcome;
         }
 
         // Does not make under-approx queries; doesn't do push/pop
@@ -649,27 +841,33 @@ namespace CoreLib
             return outcome;
         }
 
-        // For testing "Must reach" assertion
-        public void TestMustReach(StratifiedVC svc)
+        // Assert that we must reach this VC; returns the list of call sites asserted
+        public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
-            // test code
-            if (svc.info.impl.Name != "MustReach")
-                return;
+            var ret = new List<Tuple<StratifiedVC, Block>>();
 
+            // This is most likely redundant
             prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
 
             if (!attachedVCInv.ContainsKey(svc))
-                return;
+                return ret;
 
             var iter = attachedVCInv[svc]; 
             while (parent.ContainsKey(iter))
             {
                 var vc = attachedVC[parent[iter]];
                 var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
-                prover.Assert(vc.MustReach(callblock), true);
+                
+                var key = Tuple.Create(vc, callblock);
+                if (prevAsserted != null && !prevAsserted.Contains(key))
+                {
+                    prover.Assert(vc.MustReach(callblock), true);
+                    ret.Add(key);
+                }
                 iter = parent[iter];
             }
             prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+            return ret;
         }
 
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
@@ -991,6 +1189,11 @@ namespace CoreLib
             {
                 outcome = FwdNoUnder(openCallSites, reporter);
             }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreach")
+            {
+                Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
+                outcome = MustReachStyle(openCallSites, reporter);
+            }
             else
             {
                 int currRecursionBound = 1;
@@ -1206,6 +1409,16 @@ namespace CoreLib
 
         public override Outcome FindLeastToVerify(Implementation impl, ref HashSet<string> allBoolVars)
         {
+            var name2VC = new Dictionary<string, StratifiedVC>();
+            var getSVC = new Func<string, StratifiedVC>(name =>
+                {
+                    if (name2VC.ContainsKey(name))
+                        return name2VC[name];
+                    var tt = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
+                    name2VC.Add(name, tt);
+                    return tt;
+                });
+
             Push();
 
             StratifiedVC svc = getSVC(impl.Name);
