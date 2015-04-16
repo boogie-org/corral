@@ -1598,7 +1598,8 @@ namespace AliasAnalysis
 
         public AllocationConstraint(string target, bool full)
         {
-            this.allocSite = "allocSite" + (counter++).ToString();
+            if (full) this.allocSite = "allocSiteSpecial";
+            else this.allocSite = "allocSite" + (counter++).ToString();
             this.target = target;
             this.full = full;
         }
@@ -1682,7 +1683,7 @@ namespace AliasAnalysis
         public static bool NoEmptyLoads = false;
         public static bool printWarnings = false;
         string null_allocSite;
-        public static bool doCycleElimination = true;
+        public static bool doCycleElimination = false;
         public static int numCycles = 0;
 
         // fake node implementation
