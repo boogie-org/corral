@@ -84,6 +84,40 @@ namespace AliasAnalysis
 
     }
 
+    public class MarkMustAliasQueries : FixedVisitor
+    {
+        AliasAnalysisResults result;
+        public static string mustNULL = "mustNULL";
+        AssertCmd currCmd;
+
+        public MarkMustAliasQueries(AliasAnalysisResults result)
+        {
+            this.result = result;
+            currCmd = null;
+        }
+
+        public override Cmd VisitAssertCmd(AssertCmd node)
+        {
+            currCmd = node;
+            var ret = base.VisitAssertCmd(node);
+            currCmd = null;
+            return ret;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var fcall = node.Fun as FunctionCall;
+            if (fcall != null && result.mustbeNULL.ContainsKey(fcall.FunctionName))
+            {
+                if (result.mustbeNULL[fcall.FunctionName] == true)
+                {
+                    currCmd.Attributes = new QKeyValue(Token.NoToken, mustNULL, new List<object>(), currCmd.Attributes);
+                }
+            }
+            return base.VisitNAryExpr(node);
+        }
+    }
+
     public class PruneAliasingQueries : FixedVisitor
     {
         AliasAnalysisResults result;
@@ -130,6 +164,11 @@ namespace AliasAnalysis
                 program.AddTopLevelDeclaration(AllocationSites);
             }
 
+            // marking aliasing queries as mustNULL
+            var mark = new MarkMustAliasQueries(result);
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => mark.VisitImplementation(impl));
+
             var prune = new PruneAliasingQueries(result, AllocationSites, asToAS);
 
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -145,6 +184,7 @@ namespace AliasAnalysis
             // remove aliasing queries
             program.TopLevelDeclarations = new List<Declaration>(program.TopLevelDeclarations
                 .Where(decl => !(decl is Function && BoogieUtil.checkAttrExists("aliasingQuery", decl.Attributes))));
+
         }
 
         public override Expr VisitNAryExpr(NAryExpr node)
@@ -352,10 +392,12 @@ namespace AliasAnalysis
     {
         public Dictionary<string, bool> aliases;
         public Dictionary<string, HashSet<string>> allocationSites;
+        public Dictionary<string, bool> mustbeNULL;
         public AliasAnalysisResults()
         {
             aliases = new Dictionary<string, bool>();
             allocationSites = new Dictionary<string, HashSet<string>>();
+            mustbeNULL = new Dictionary<string, bool>();
         }
     }
 
@@ -459,7 +501,10 @@ namespace AliasAnalysis
                     aa.ConstructVariableName(v1, impl.Name),
                     aa.ConstructVariableName(v2, impl.Name))),
                     new Func<Variable, Implementation, HashSet<string>>((v1, impl) => aa.solver.AllocationSites(
-                    aa.ConstructVariableName(v1, impl.Name)))
+                    aa.ConstructVariableName(v1, impl.Name))),
+                    new Func<Variable, Variable, Implementation, bool>((v1, v2, impl) => aa.solver.IsMustAlias(
+                    aa.ConstructVariableName(v1, impl.Name),
+                    aa.ConstructVariableName(v2, impl.Name)))
                     );
         }
 
@@ -477,6 +522,7 @@ namespace AliasAnalysis
             Func<Variable, Variable, Implementation, bool> IsAlias;
             Func<Variable, Variable, Implementation, bool> IsReachable;
             Func<Variable, Implementation, HashSet<string>> PointsToSet;
+            Func<Variable, Variable, Implementation, bool> IsMustAlias;
             HashSet<string> aliasQueryFuncs;
             HashSet<string> reachableQueryFuncs;
             HashSet<string> allocationSitesQueryFuncs;
@@ -486,6 +532,7 @@ namespace AliasAnalysis
             private AliasQuerySolver(HashSet<string> aliasQueryFuncs, HashSet<string> reachableQueryFuncs, HashSet<string> allocationSitesQueryFuncs, 
                 Func<Variable, Variable, Implementation, bool> IsAlias,
                 Func<Variable, Variable, Implementation, bool> IsReachable,
+                Func<Variable, Variable, Implementation, bool> IsMustAlias,
                 Func<Variable, Implementation, HashSet<string>> PointsToSet)
             {
                 this.aliasQueryFuncs = aliasQueryFuncs;
@@ -494,16 +541,20 @@ namespace AliasAnalysis
                 this.results = new AliasAnalysisResults();
                 this.IsAlias = IsAlias;
                 this.IsReachable = IsReachable;
+                this.IsMustAlias = IsMustAlias;
                 this.PointsToSet = PointsToSet;
                 aliasQueryFuncs.Iter(q => results.aliases.Add(q, false));
+                aliasQueryFuncs.Iter(q => results.mustbeNULL.Add(q, true));
                 reachableQueryFuncs.Iter(q => results.aliases.Add(q, false));
+                reachableQueryFuncs.Iter(q => results.mustbeNULL.Add(q, true));
                 allocationSitesQueryFuncs.Iter(q => results.allocationSites.Add(q, new HashSet<string>()));
             }
 
             public static AliasAnalysisResults Solve(Program program, 
                 Func<Variable, Variable, Implementation, bool> IsAlias,
                 Func<Variable, Variable, Implementation, bool> IsReachable,
-                Func<Variable, Implementation, HashSet<string>> PointsToSet)
+                Func<Variable, Implementation, HashSet<string>> PointsToSet,
+                Func<Variable, Variable, Implementation, bool> IsMustAlias)
             {
                 var aq = new HashSet<string>();
                 var rq = new HashSet<string>();
@@ -517,7 +568,7 @@ namespace AliasAnalysis
                     else aq.Add(func.Name);
                 }
 
-                var qSolver = new AliasQuerySolver(aq, rq, asq, IsAlias, IsReachable, PointsToSet);
+                var qSolver = new AliasQuerySolver(aq, rq, asq, IsAlias, IsReachable, IsMustAlias, PointsToSet);
                 program.TopLevelDeclarations.OfType<Implementation>()
                     .Iter(impl =>
                     {
@@ -544,7 +595,11 @@ namespace AliasAnalysis
                             results.aliases[func] = aliasQueryFuncs.Contains(func) ?
                                 IsAlias(arg1.Decl, arg2.Decl, currImpl) :
                                 IsReachable(arg1.Decl, arg2.Decl, currImpl);
+                        }
 
+                        if (results.mustbeNULL[func])
+                        {
+                            results.mustbeNULL[func] = IsMustAlias(arg1.Decl, arg2.Decl, currImpl);
                         }
                     }
                     if (allocationSitesQueryFuncs.Contains(func))
@@ -2385,6 +2440,27 @@ namespace AliasAnalysis
                 return false;
             }
 
+            return PointsTo[var1].Intersection(PointsTo[var2]).Any();
+        }
+
+        // Does var1 only point to NULL?
+        public bool IsMustAlias(string var1, string var2)
+        {
+            Debug.Assert(solved);
+            if (!PointsTo.ContainsKey(var1) || PointsTo[var1].Count == 0)
+            {
+                if (dbg) Console.WriteLine("Warning: empty points-to set for {0}", var1);
+                return false;
+            }
+
+            if (!PointsTo.ContainsKey(var2) || PointsTo[var2].Count == 0)
+            {
+                if (dbg) Console.WriteLine("Warning: empty points-to set for {0}", var2);
+                return false;
+            }
+
+            if (!var2.Equals("NULL")) return false;
+            if (PointsTo[var1].Count > 1) return false;
             return PointsTo[var1].Intersection(PointsTo[var2]).Any();
         }
 
