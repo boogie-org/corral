@@ -297,7 +297,7 @@ namespace AngelicVerifierNull
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
-                ResultsFile.WriteLine("Description,Src File,Line,Procedure,EntryPoint"); // result file header
+                ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status,EntryPoint"); // result file header
                 ResultsFile.Flush();
             }
 
@@ -1057,6 +1057,8 @@ namespace AngelicVerifierNull
         }
 
         static int AngelicCount = 0;
+        private static string mustFail = "mustFail";
+        private static string notmustFail = "notmustFail";
 
         private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
         {
@@ -1092,6 +1094,15 @@ namespace AngelicVerifierNull
             {
                 var tok = instr.SuppressAssert(traceInfo.TraceProgram);
                 var failingAssert = instr.GetFailingAssert(tok);
+                
+                string failStatus = null;
+                if (BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes))
+                {
+                    failStatus = mustFail;
+                    Stats.count("mustfail.count");
+                }
+                else failStatus = notmustFail;
+
                 var failingProc = instr.GetFailingAssertProcName(tok);
 
                 var output = "";
@@ -1105,8 +1116,8 @@ namespace AngelicVerifierNull
                     // format: Description, Src File, Line, Procedure, EntryPoint
                     if (ResultsFile != null)
                     {
-                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
-                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, traceInfo.FailingEntryPoint);
+                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4},{5}",
+                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, failStatus, traceInfo.FailingEntryPoint);
                         ResultsFile.Flush();
                     }
                 }

@@ -2443,7 +2443,7 @@ namespace AliasAnalysis
             return PointsTo[var1].Intersection(PointsTo[var2]).Any();
         }
 
-        // Does var1 only point to NULL?
+        // Does var1 only point to var2?
         public bool IsMustAlias(string var1, string var2)
         {
             Debug.Assert(solved);
@@ -2459,8 +2459,7 @@ namespace AliasAnalysis
                 return false;
             }
 
-            if (!var2.Equals("NULL")) return false;
-            if (PointsTo[var1].Count > 1) return false;
+            if (PointsTo[var1].Count > 1 || PointsTo[var2].Count > 1) return false;
             return PointsTo[var1].Intersection(PointsTo[var2]).Any();
         }
 
