@@ -175,6 +175,7 @@ namespace FastAVN
                     try
                     {
                         prog = PruneProgram(prog);
+                        BoogieUtil.PrintProgram(prog, "alias.bpl");
                     }    
                     catch (OutOfMemoryException e)
                     {
@@ -727,8 +728,8 @@ namespace FastAVN
             {
                 Utils.Print(string.Format("========= Merged Bugs for {0} Entry Points =========", numEntries),
                     Utils.PRINT_TAG.AV_OUTPUT);
-                Utils.Print("Description,Src File,Line,Procedure", Utils.PRINT_TAG.AV_OUTPUT);
-                bugReport.WriteLine("Description,Src File,Line,Procedure");
+                Utils.Print("Description,Src File,Line,Procedure,Fail Status", Utils.PRINT_TAG.AV_OUTPUT);
+                bugReport.WriteLine("Description,Src File,Line,Procedure,Fail Status");
                 foreach (string bug in mergedBugs.Keys)
                 {
                     Utils.Print(string.Format("Bug: {0} Count: {1}", bug, mergedBugs[bug]), Utils.PRINT_TAG.AV_OUTPUT);
