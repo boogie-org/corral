@@ -1238,7 +1238,7 @@ namespace AngelicVerifierNull
 
         // Returns file and line of the failing assert. Dumps
         // error trace to disk.
-        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> eeSlicedSourceLines)
+        public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> eeSlicedSourceLines, string failStatus)
         {
             trace = mapBackTrace(trace);
             
@@ -1257,13 +1257,23 @@ namespace AngelicVerifierNull
                     eeSlicedSourceLines.Iter(tup => cba.PrintSdvPath.relevantLines.Add(Tuple.Create(tup.Item1, tup.Item2)));
                 }
 
+                cba.PrintSdvPath.failingLocation = null;
+                cba.PrintSdvPath.failStatus = failStatus;
+
+                cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
+                    filename + ".tt", filename + "stack.txt");
+
+                if (cba.PrintSdvPath.lastDriverLocation == null)
+                    return null;
+                cba.PrintSdvPath.failingLocation = Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
+
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", filename + "stack.txt");
 
                 cba.PrintSdvPath.relevantLines = null;
+                cba.PrintSdvPath.failingLocation = null;
+                cba.PrintSdvPath.failStatus = null;
 
-                if (cba.PrintSdvPath.lastDriverLocation == null)
-                    return null;
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
             }
         }

@@ -800,10 +800,15 @@ namespace AngelicVerifierNull
 
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
-                var pprog = GetPathProgram(cex, prog, out concretize);                
+                var pprog = GetPathProgram(cex, prog, out concretize);
 
                 var ppprog = pprog.getProgram();
-                var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);          
+                var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);
+
+                // find failing assert cmd from path program
+                var failingAssert = GetFailingAssertFromTraceProg(instr, ppprog);
+                Console.WriteLine("Assert -> {0}", failingAssert);
+                var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
                 //call ExplainError 
                 BoogieUtil.PrintProgram(ppprog, "ee.bpl");
@@ -817,7 +822,7 @@ namespace AngelicVerifierNull
                 // print the trace to disk
                 var traceName = "Trace" + traceCount;
                 Console.WriteLine("Printing trace {0}", traceName);
-                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines);
+                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
                 var stubs = instr.GetStubs(cex);
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
@@ -893,6 +898,32 @@ namespace AngelicVerifierNull
             }
             Stats.stop("run.corral.iterative");
             return ret;
+        }
+
+        private static AssertCmd GetFailingAssertFromTraceProg(AvnInstrumentation instr, Program pathProgram)
+        {
+            var tok = GetToken(instr, pathProgram);
+            var failingAssert = instr.GetFailingAssert(tok);
+            return failingAssert;
+        }
+
+        private static AssertToken GetToken(AvnInstrumentation instr, Program pathProgram)
+        {
+            var impl = pathProgram.TopLevelDeclarations.OfType<Implementation>()
+                .First();
+
+            var tokenId = -1;
+            foreach (var acmd in impl.Blocks[0].Cmds.OfType<PredicateCmd>())
+            {
+                tokenId = QKeyValue.FindIntAttribute(acmd.Attributes, "avn", -1);
+                if (tokenId == -1) continue;
+                break;
+            }
+
+            Debug.Assert(tokenId != -1);
+            var token = new AssertToken(tokenId);
+
+            return token;
         }
 
         // Given the EE blocking condition, find the deadcode branches that are possibly affected
@@ -1057,8 +1088,6 @@ namespace AngelicVerifierNull
         }
 
         static int AngelicCount = 0;
-        private static string mustFail = "mustFail";
-        private static string notmustFail = "notmustFail";
 
         private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
         {
@@ -1098,10 +1127,9 @@ namespace AngelicVerifierNull
                 string failStatus = null;
                 if (BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes))
                 {
-                    failStatus = mustFail;
-                    Stats.count("mustfail.count");
+                    failStatus = cba.PrintSdvPath.mustFail;
                 }
-                else failStatus = notmustFail;
+                else failStatus = cba.PrintSdvPath.notmustFail;
 
                 var failingProc = instr.GetFailingAssertProcName(tok);
 

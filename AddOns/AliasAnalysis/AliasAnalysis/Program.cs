@@ -88,6 +88,7 @@ namespace AliasAnalysis
     {
         AliasAnalysisResults result;
         public static string mustNULL = "mustNULL";
+        public static int countmustNULL = 0;
         AssertCmd currCmd;
 
         public MarkMustAliasQueries(AliasAnalysisResults result)
@@ -112,6 +113,7 @@ namespace AliasAnalysis
                 if (result.mustbeNULL[fcall.FunctionName] == true)
                 {
                     currCmd.Attributes = new QKeyValue(Token.NoToken, mustNULL, new List<object>(), currCmd.Attributes);
+                    countmustNULL++;
                 }
             }
             return base.VisitNAryExpr(node);

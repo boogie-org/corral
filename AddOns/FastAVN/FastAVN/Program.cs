@@ -175,7 +175,6 @@ namespace FastAVN
                     try
                     {
                         prog = PruneProgram(prog);
-                        BoogieUtil.PrintProgram(prog, "alias.bpl");
                     }    
                     catch (OutOfMemoryException e)
                     {
@@ -282,6 +281,7 @@ namespace FastAVN
                 .OfType<Implementation>()
                 .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                 .Count());
+            Console.WriteLine("FastAVN: AA marked {0} assertions as must-fail", AliasAnalysis.MarkMustAliasQueries.countmustNULL);
 
             return progAfter;
         }
@@ -665,7 +665,7 @@ namespace FastAVN
 
             using (StreamWriter bugReportWriter = new StreamWriter(Path.Combine(Directory.GetCurrentDirectory(), mergedBugReportCSV)))
             {
-                bugReportWriter.WriteLine("Description,Src File,Line,Procedure");
+                bugReportWriter.WriteLine("Description,Src File,Line,Procedure,Fail Status");
                 foreach (string bug in shortest_trace.Keys)
                 {
                     bugReportWriter.WriteLine(bug);
@@ -733,6 +733,7 @@ namespace FastAVN
                 foreach (string bug in mergedBugs.Keys)
                 {
                     Utils.Print(string.Format("Bug: {0} Count: {1}", bug, mergedBugs[bug]), Utils.PRINT_TAG.AV_OUTPUT);
+                    if (bug.Contains("mustFail")) Stats.count("mustfail.report.count");
                     bugReport.WriteLine(bug);
                 }
             }

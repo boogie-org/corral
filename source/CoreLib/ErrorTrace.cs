@@ -1300,11 +1300,18 @@ namespace cba
         // relevant lines (trace slicing)
         public static HashSet<Tuple<string, int>> relevantLines = null;
 
+        public static Tuple<string, int> failingLocation = null;
+        // failing status (mustFail or notmustFail)
+        public static string failStatus = null;
+
         // Address -> the type with which it is accessed
         public static Dictionary<int, HashSet<string>> memType;
 
         private static List<PrintProgramPath.WorkItem> stack;
         private static bool recordStack =false;
+
+        public static string mustFail = "mustFail";
+        public static string notmustFail = "notmustFail";
 
         class SourceInfo
         {
@@ -1803,6 +1810,17 @@ namespace cba
                     dataValuesCurrent += "_sdvRelevantTraceLine_";
                 else
                     dataValuesCurrent += "_sdvIrrelevantTraceLine_";
+            }
+
+            if (failingLocation != null)
+            {
+                if (failingLocation.Equals(Tuple.Create(file, line)))
+                {
+                    if (failStatus.Equals(mustFail))
+                        dataValuesCurrent += "_sdvMustFailLocation_";
+                    else if (failStatus.Equals(notmustFail))
+                        dataValuesCurrent += "_sdvNotMustFailLocation_";
+                }
             }
 
             pathFile.WriteLine("{0} \"{1}\" {2} true {3}^====Auto====={4} {5}", gcnt, file, line, dataValuesCurrent, permVars, extraMsg);
