@@ -20,17 +20,17 @@ namespace CoreLib
     // TODO: replace this with conventional functions
     public class MacroSI
     {
-        public static void PRINT(string s, int lvl)
+        public static void PRINT(int lvl, string s, params object[] args)
         {
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > lvl)
-                Console.WriteLine(s);
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose >= lvl)
+                Console.WriteLine(s, args);
         }
 
-        public static void PRINT(string s) { PRINT(s, 0); }
+        public static void PRINT(string s, params object[] args) { PRINT(0, s, args); }
 
-        public static void PRINT_DETAIL(string s) { PRINT(s, 1); }
+        public static void PRINT_DETAIL(string s, params object[] args) { PRINT(1, s, args); }
 
-        public static void PRINT_DEBUG(string s) { PRINT(s, 3); }
+        public static void PRINT_DEBUG(string s, params object[] args) { PRINT(2, s, args); }
     }
 
     /****************************************
@@ -220,12 +220,12 @@ namespace CoreLib
             /* if no asserts in methods, we don't need fwd/bck, neither callgraph and the associated transformations */
             if (assertMethods.Count <= 0)
             {
-                MacroSI.PRINT("No assert detected in the methods -- use foward approach instead.");
+                MacroSI.PRINT_DETAIL("No assert detected in the methods -- use foward approach instead.");
                 return;
             }
             else
             {
-                MacroSI.PRINT(assertMethods.Count + " methods containing asserts detected");
+                MacroSI.PRINT_DETAIL(assertMethods.Count + " methods containing asserts detected");
                 if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
                     foreach (var method in assertMethods)
                         Console.WriteLine("-> " + method.Name);
@@ -358,6 +358,7 @@ namespace CoreLib
             public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
             public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
             public HashSet<StratifiedCallSite> openCallSites;
+            public DI di;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -366,15 +367,17 @@ namespace CoreLib
                 ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(SI.attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
                 ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
+                ret.di = SI.di.Copy();
                 return ret;
             }
 
-            public HashSet<StratifiedCallSite> ApplyState(StratifiedInlining SI)
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites)
             {
                 SI.attachedVC = attachedVC;
                 SI.attachedVCInv = attachedVCInv;
                 SI.parent = parent;
-                return openCallSites;
+                SI.di = di;
+                openCallSites = this.openCallSites;
             }
         }
 
@@ -398,6 +401,393 @@ namespace CoreLib
             {
                 get { return Item3; }
             }
+        }
+
+        class TimeGraph 
+        {
+            Dictionary<int, string> Nodes;
+            Dictionary<int, HashSet<Tuple<int, string, double>>> Edges;
+            Stack<int> currNodeStack;
+            DateTime startTime;
+            static int dmpCnt = 0;
+
+            public TimeGraph()
+            {
+                currNodeStack = new Stack<int>();
+                Nodes = new Dictionary<int, string>();
+                Edges = new Dictionary<int, HashSet<Tuple<int, string, double>>>();
+                startTime = DateTime.Now;
+
+                Nodes.Add(0, "main");
+                Push(0);
+            }
+
+            public int Count()
+            {
+                return Nodes.Count;
+            }
+
+
+            private void AddEdge(int n1, int n2, string label1, double label2)
+            {
+                if(!Edges.ContainsKey(n1))
+                    Edges.Add(n1, new HashSet<Tuple<int, string, double>>());
+                Edges[n1].Add(Tuple.Create(n2, label1, label2));
+            }
+
+            public void ToDot()
+            {
+                using (var fs = new System.IO.StreamWriter("tg" + (dmpCnt++) + ".dot"))
+                {
+                    fs.WriteLine("digraph TG {");
+
+                    foreach (var tup in Nodes)
+                    {
+                        fs.WriteLine("{0} [label=\"{1}\"]", tup.Key, tup.Value);
+                    }
+
+                    foreach (var tup in Edges)
+                    {
+                        foreach (var tgt in tup.Value)
+                            fs.WriteLine("{0} -> {1} [label=\"{2} {3}\"]", tup.Key, tgt.Item1, tgt.Item2, tgt.Item3.ToString("F2"));
+                    }
+                        
+                    fs.WriteLine("}");
+
+                }
+            }
+
+            void Push(int node)
+            {
+                currNodeStack.Push(node);
+            }
+
+            public void Pop(int n)
+            {
+                while (n > 0) { n--; currNodeStack.Pop(); }
+                startTime = DateTime.Now;
+            }
+
+            public void AddEdge(string tgt, string label)
+            {
+                var tgtnode = Nodes.Count;
+                Nodes.Add(tgtnode, tgt);
+
+                AddEdge(currNodeStack.Peek(), tgtnode, label, (DateTime.Now - startTime).TotalSeconds);
+                Push(tgtnode);
+                startTime = DateTime.Now;
+            }
+
+            public void AddEdgeDone(string label)
+            {
+                var tgtnode = Nodes.Count;
+                Nodes.Add(tgtnode, "Done");
+
+                AddEdge(currNodeStack.Peek(), tgtnode, label, (DateTime.Now - startTime).TotalSeconds);
+                startTime = DateTime.Now;
+            }
+
+            public double ComputeTimes(int nthreads)
+            {
+                // First, construct the time graph properly with times on nodes (not edges)
+                var nodeToTime = new Dictionary<int, double>();
+                var nodeToChildren = new Dictionary<int, HashSet<int>>();
+
+                // Nodes
+                foreach (var tup in Edges)
+                    foreach (var e in tup.Value)
+                        nodeToTime.Add(e.Item1, e.Item3);
+
+                nodeToTime.Keys.Iter(n => nodeToChildren.Add(n, new HashSet<int>()));
+
+                // Edges
+                foreach (var tup in Edges)
+                    foreach (var e in tup.Value)
+                    {
+                        var n1 = tup.Key;
+                        var n2 = e.Item1;
+                        if (!nodeToTime.ContainsKey(n1) || !nodeToTime.ContainsKey(n2))
+                            continue;
+                        nodeToChildren[n1].Add(n2);
+                    }
+
+                var rand = new Random((int)DateTime.Now.Ticks);
+
+                var root = Edges[0].First().Item1;
+                var isZero = new Func<double, bool>(d => d < 0.00001);
+                var isNull = new Func<Tuple<int, double>, bool>(t => t.Item1 < 0);
+
+                var threads = new Tuple<int, double>[nthreads];
+                for (int i = 0; i < nthreads; i++)
+                    threads[i] = Tuple.Create(-1, 0.0);
+
+                var totaltime = 0.0;
+                var available = new List<int>();
+                available.Add(root);
+
+                while (true)
+                {
+                    // Allocate to idle threads
+                    for (int i = 0; i < nthreads; i++)
+                    {
+                        if (!isNull(threads[i])) continue;
+                        if (!available.Any()) continue;
+                        var index = rand.Next(available.Count);
+                        threads[i] = Tuple.Create(available[index], nodeToTime[available[index]]);
+                        available.RemoveAt(index);
+                    }
+                    if (threads.All(t => isNull(t))) break;
+
+                    // Run
+                    var min = threads.Where(t => !isNull(t)).Min(t => t.Item2);
+                    totaltime += min;
+                    for (int i = 0; i < nthreads; i++)
+                    {
+                        if (isNull(threads[i])) continue;
+                        var tleft = threads[i].Item2 - min;
+                        if (isZero(tleft))
+                        {
+                            nodeToChildren[threads[i].Item1].Iter(n => available.Add(n));
+                            threads[i] = Tuple.Create(-1, 0.0);
+                        }
+                        else
+                            threads[i] = Tuple.Create(threads[i].Item1, tleft);
+                    }
+                }
+
+                return totaltime;
+            }
+        }
+
+        // Comment TODO
+        public Outcome MustReachSplitStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
+        {
+            Outcome outcome = Outcome.Inconclusive;
+            reporter.reportTraceIfNothingToExpand = true;
+
+            int treesize = 0;
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<Decision>();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+
+            var timeGraph = new TimeGraph();
+            
+            var indent = new Func<int, string>(i =>
+            {
+                var ret = "";
+                while (i > 0) { i--; ret += " "; }
+                return ret;
+            });
+
+            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
+
+            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>( (d,n) =>
+                {
+                    if (d == DecisionType.BLOCK)
+                    {
+                        di.DeleteNode(n);
+                    }
+                    if (d == DecisionType.MUST_REACH)
+                    {
+                        var disj = di.DisjointNodes(n);
+
+                        disj.Iter(m => di.DeleteNode(m));
+                    }
+                });
+
+            var rand = new Random();
+            var reachedBound = false;
+
+            var tt = TimeSpan.Zero;
+
+            while (true)
+            {
+                // Lets split when the tree has become big enough
+                var size = di.ComputeSize(); 
+                
+                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > treesize + 20))
+                {
+                    var st = DateTime.Now;
+
+                    // find a node to split on
+                    StratifiedVC maxVc = null;
+                    int maxVcScore = 0;
+
+                    var toRemove = new HashSet<StratifiedVC>();
+                    var sizes = di.ComputeSubtreeSizes();
+                    var disj = di.ComputeNumDisjoint();
+
+                    foreach (var vc in attachedVCInv.Keys)
+                    {
+                        if (!di.VcExists(vc))
+                        {
+                            toRemove.Add(vc);
+                            continue;
+                        }
+
+                        var score = Math.Min(sizes[vc], disj[vc]);
+                        if (score >= maxVcScore)
+                        {
+                            maxVc = vc;
+                            maxVcScore = score;
+                        }
+                    }
+                    toRemove.Iter(vc => attachedVCInv.Remove(vc));
+
+                    var scs = attachedVCInv[maxVc];
+                    Debug.Assert(!openCallSites.Contains(scs));
+
+                    // Push & Block
+                    MacroSI.PRINT("{0}>>> Pushing Block({1}, {2})", indent(decisions.Count), scs.callSite.calleeName, maxVcScore);
+
+                    var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                    timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                    Push();
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                    decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                    applyDecisionToDI(DecisionType.BLOCK, maxVc);
+
+
+                    prover.Assert(scs.callSiteExpr, false);
+                    treesize = di.ComputeSize();
+
+                    tt += (DateTime.Now - st);
+                    Console.WriteLine("Time spent taking a decision: {0} s", (DateTime.Now - st).TotalSeconds.ToString("F2"));
+                }
+
+                MacroSI.PRINT_DEBUG("  - overapprox");
+
+                // Find cex
+                foreach (StratifiedCallSite cs in openCallSites)
+                {
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        prover.Assert(cs.callSiteExpr, false);
+                        reachedBound = true;
+                    }
+                }
+                MacroSI.PRINT_DEBUG("    - check");
+                reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                outcome = CheckVC(reporter);
+
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+
+                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    break; // done (T/O)
+                }
+
+                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    break; // done (error found)
+                }
+
+                if (outcome == Outcome.Errors)
+                {
+                    foreach (var scs in reporter.callSitesToExpand)
+                    {
+                        openCallSites.Remove(scs);
+                        var svc = Expand(scs);
+                        if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                    }
+                }
+                else
+                {
+                    // outcome == Outcome.Correct
+                    Decision topDecision = null;
+                    SiState topState = SiState.SaveState(this, openCallSites);
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    var doneBT = false;
+                    var npops = 0;
+                    do
+                    {
+                        if (decisions.Count == 0)
+                        {
+                            doneBT = true;
+                            break;
+                        }
+
+                        topDecision = decisions.Peek();
+                        topState = backtrackingPoints.Peek();
+
+                        // Pop
+                        Pop();
+                        decisions.Pop();
+                        backtrackingPoints.Pop();
+                        prevMustAsserted.Pop();
+                        npops++;
+                        MacroSI.PRINT("{0}>>> Pop", indent(decisions.Count));
+                    } while (topDecision.num == 1);
+
+                    if (doneBT)
+                        break;
+
+                    topState.ApplyState(this, ref openCallSites);
+                    timeGraph.Pop(npops - 1);
+
+                    // flip the decision
+
+                    Push();
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+
+                    if (topDecision.decisionType == DecisionType.MUST_REACH)
+                    {
+                        // Block
+                        prover.Assert(topDecision.cs.callSiteExpr, false);
+                        MacroSI.PRINT("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                        decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
+                        applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                        treesize = di.ComputeSize();
+                    }
+                    else
+                    {
+                        // Must Reach
+                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                        decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
+                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
+                        prevMustAsserted.Push(
+                           AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                        treesize = di.ComputeSize();
+                    }
+
+
+                }
+                
+            }
+            reporter.reportTraceIfNothingToExpand = false;
+
+            Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
+
+            timeGraph.ToDot();
+            Console.Write("SplitSearch: ");
+            for (int i = 1; i <= 16; i++)
+            {
+                var sum = 0.0;
+                for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
+                sum = sum / 5;
+
+                Console.Write("{0}\t", sum.ToString("F2"));                
+            }
+            Console.WriteLine();
+
+            if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
+            return outcome;
         }
 
         // Comment TODO
@@ -435,7 +825,7 @@ namespace CoreLib
 
             while (true)
             {
-                MacroSI.PRINT_DETAIL("  - overapprox");
+                MacroSI.PRINT_DEBUG("  - overapprox");
 
                 // Find cex
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -450,11 +840,11 @@ namespace CoreLib
                         reachedBound = true;
                     }
                 }
-                MacroSI.PRINT_DETAIL("    - check");
+                MacroSI.PRINT_DEBUG("    - check");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
 
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
@@ -528,7 +918,7 @@ namespace CoreLib
                     if (doneBT)
                         break;
 
-                    openCallSites = topState.ApplyState(this);
+                    topState.ApplyState(this, ref openCallSites);
 
                     // flip the decision
                     
@@ -574,7 +964,7 @@ namespace CoreLib
 
             while (true)
             {
-                MacroSI.PRINT_DETAIL("  - overapprox");
+                MacroSI.PRINT_DEBUG("  - overapprox");
 
                 // overapproximate query
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -592,11 +982,11 @@ namespace CoreLib
                         }
                     }
                 }
-                MacroSI.PRINT_DETAIL("    - check");
+                MacroSI.PRINT_DEBUG("    - check");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
 
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                 if (outcome != Outcome.Errors)
                 {
                     if (boundAsserted.Count > 0 && outcome == Outcome.Correct)
@@ -689,14 +1079,14 @@ namespace CoreLib
                 if (outcome != Outcome.Correct) break;
 
 #endif
-                MacroSI.PRINT_DETAIL("  - overapprox");
+                MacroSI.PRINT_DEBUG("  - overapprox");
                 // overapproximate query
 
-                MacroSI.PRINT_DETAIL("    - check");
+                MacroSI.PRINT_DEBUG("    - check");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
 
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                 // timeout?
                 if (outcome != Outcome.Errors && outcome != Outcome.Correct)
@@ -776,7 +1166,7 @@ namespace CoreLib
             var boundHit = false;
             while (true)
             {
-                MacroSI.PRINT_DETAIL("  - underapprox");
+                MacroSI.PRINT_DEBUG("  - underapprox");
                 boundHit = false;
 
                 // underapproximate query
@@ -788,14 +1178,14 @@ namespace CoreLib
                     prover.Assert(cs.callSiteExpr, false);
                 }
 
-                MacroSI.PRINT_DETAIL("    - check");
+                MacroSI.PRINT_DEBUG("    - check");
                 reporter.reportTrace = main;
                 outcome = CheckVC(reporter);
                 Pop();
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                 if (outcome != Outcome.Correct) break;
 
-                MacroSI.PRINT_DETAIL("  - overapprox");
+                MacroSI.PRINT_DEBUG("  - overapprox");
                 // overapproximate query
                 Push();
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -811,12 +1201,12 @@ namespace CoreLib
                         boundHit = true;
                     }
                 }
-                MacroSI.PRINT_DETAIL("    - check");
+                MacroSI.PRINT_DEBUG("    - check");
                 reporter.reportTrace = false;
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 outcome = CheckVC(reporter);
                 Pop();
-                MacroSI.PRINT_DETAIL("    - checked: " + outcome);
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                 if (outcome != Outcome.Errors)
                 {
                     if (boundHit && outcome == Outcome.Correct)
@@ -917,11 +1307,11 @@ namespace CoreLib
                     var ccs = new HashSet<StratifiedCallSite>(callerOpenCallSites);
                     ccs.Remove(cs);
 
-                    MacroSI.PRINT_DETAIL("    ~ bck to " + caller.Name);
+                    MacroSI.PRINT_DEBUG("    ~ bck to " + caller.Name);
 
                     outcome = Bck(callerVC, ccs, callerReporter, backboneRecDepth);
 
-                    MacroSI.PRINT_DETAIL("    ~ bck to " + caller.Name + " Done");
+                    MacroSI.PRINT_DEBUG("    ~ bck to " + caller.Name + " Done");
 
                     foreach (var s in svc.CallSites)
                         parent.Remove(s);
@@ -954,7 +1344,7 @@ namespace CoreLib
 
         public Outcome FwdBckVerify(Implementation impl, VerifierCallback callback)
         {
-            MacroSI.PRINT("Starting forward/backward approach...");
+            MacroSI.PRINT_DETAIL("Starting forward/backward approach...");
             Outcome outcome = Outcome.Correct;
             var backbonedepth = new Dictionary<string, int>();
             program.TopLevelDeclarations.OfType<Procedure>()
@@ -996,7 +1386,7 @@ namespace CoreLib
                 if (outcome == Outcome.ReachedBound)
                     boundHit = true;
 
-                MacroSI.PRINT("No bug starting from " + assertMethod.Name + ". Selecting next method (if existing)...");
+                MacroSI.PRINT_DETAIL("No bug starting from " + assertMethod.Name + ". Selecting next method (if existing)...");
             }
 
             /* none of the methods containing an assert reaches successfully the main -- the program is safe */
@@ -1079,9 +1469,9 @@ namespace CoreLib
                 return DepthFirstStyle(impl, callback);
             }
 
-            MacroSI.PRINT("Starting forward approach...");
+            MacroSI.PRINT_DETAIL("Starting forward approach...");
 
-            di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo != "");
+            di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
 
             Push();
 
@@ -1124,7 +1514,7 @@ namespace CoreLib
                         toRemove.Add(scs);
                         var ss = Expand(scs);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
-                        MacroSI.PRINT(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
+                        MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
                     }
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
@@ -1194,6 +1584,11 @@ namespace CoreLib
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 outcome = MustReachStyle(openCallSites, reporter);
             }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "split" && !di.disabled)
+            {
+                Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
+                outcome = MustReachSplitStyle(openCallSites, reporter);
+            }
             else
             {
                 int currRecursionBound = 1;
@@ -1232,8 +1627,6 @@ namespace CoreLib
                 BoogieVerify.options.extraFlags.Contains("DumpDag"))
                 di.Dump("ct" + (dumpCnt++) + ".dot");
 
-            if (BoogieVerify.options.extraFlags.Contains("TestSplit")) di.TestSplit();
-
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
             {
@@ -1262,7 +1655,7 @@ namespace CoreLib
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
         {
-            MacroSI.PRINT_DETAIL("    ~ extend callsite " + scs.callSite.calleeName);
+            MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
             StratifiedVC ret = null;
@@ -1321,7 +1714,7 @@ namespace CoreLib
 
         private void Merge(StratifiedCallSite scs, StratifiedVC vc)
         {
-            MacroSI.PRINT_DETAIL("    ~ attaching to existing callsite ");
+            MacroSI.PRINT_DEBUG("    ~ attaching to existing callsite ");
             prover.LogComment("Attaching for " + scs.callSite.calleeName);
             var toassert = AttachByEquality(scs, vc);
             var cb = GetControlBoolean(vc);
@@ -1670,6 +2063,9 @@ namespace CoreLib
 
         Random random;
 
+        private DI()
+        { }
+
         public DI(StratifiedInlining SI, bool disabled)
         {
             this.SI = SI;
@@ -1709,6 +2105,31 @@ namespace CoreLib
             timeTaken += (DateTime.Now - st);
         }
 
+        public DI Copy()
+        {
+            var ret = new DI();
+            ret.SI = SI;
+            ret.disabled = disabled;
+            ret.Disj = Disj;
+            ret.strategy = strategy;
+            ret.timeTaken = TimeSpan.Zero;
+            ret.containingVC = new Dictionary<StratifiedCallSite, StratifiedVC>(containingVC);
+            ret.vcToRecVector = new Dictionary<StratifiedVC, int[]>(vcToRecVector);
+            ret.IndexC = IndexC;
+            ret.currentDag = currentDag.Copy();
+            
+            ret.vcNodeMap = new BijectiveDictionary<StratifiedVC, DagOracle.DagNode>();
+            ret.currentOptNodeMapping = new BijectiveDictionary<DagOracle.DagNode, DagOracle.DagNode>();
+            foreach (var n in vcNodeMap.GetDomain())
+                ret.vcNodeMap.Add(n, vcNodeMap[n]);
+            foreach (var n in currentOptNodeMapping.GetDomain())
+                ret.currentOptNodeMapping.Add(n, currentOptNodeMapping.GetRange(n));
+
+            ret.random = new Random((int)DateTime.Now.Ticks);
+
+            return ret;
+        }
+
         public static MERGING_STRATEGY PickStrategy()
         {
             var strategy = MERGING_STRATEGY.FIRST;
@@ -1743,6 +2164,58 @@ namespace CoreLib
         public DagOracle GetDag()
         {
             return currentDag;
+        }
+
+        public int ComputeSize()
+        {
+            return currentDag.ComputeSize();
+        }
+
+        public HashSet<StratifiedVC> DisjointNodes(StratifiedVC vc)
+        {
+            var ret = new HashSet<StratifiedVC>();
+            var disj = currentDag.AllDisjointNodes();
+            disj.Iter(tup => tup.Value.Iter(
+                n => Debug.Assert(currentDag.IsDisjoint(tup.Key, n))));
+            disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
+            return ret;
+        }
+
+        // Return the number of disjoint nodes for each node
+        public Dictionary<StratifiedVC, int> ComputeNumDisjoint()
+        {
+            var ret = new Dictionary<StratifiedVC, int>();
+            var disj = currentDag.AllDisjointNodes();
+            foreach (var tup in disj)
+                ret.Add(vcNodeMap[tup.Key], tup.Value.Count);
+            return ret;
+        }
+
+        // Return subtree sizes for each node
+        public Dictionary<StratifiedVC, int> ComputeSubtreeSizes()
+        {
+            var ret = new Dictionary<StratifiedVC, int>();
+            Dictionary<DagOracle.DagNode, int> nodeToTreeSize;
+            Dictionary<DagOracle.DagNode, HashSet<DagOracle.DagNode>> nodeToChildren;
+            currentDag.ComputeDagSizes(out nodeToTreeSize, out nodeToChildren);
+
+            nodeToChildren.Iter(tup => ret.Add(vcNodeMap[tup.Key], tup.Value.Count));
+            return ret;
+        }
+
+        public void DeleteNode(StratifiedVC vc)
+        {
+            Debug.Assert(vcNodeMap.ContainsDomain(vc));
+            var node = vcNodeMap[vc];
+            if(currentDag.Nodes.Contains(node))
+                currentDag.DeleteNodeAndDecendants(node);
+        }
+
+        public bool VcExists(StratifiedVC vc)
+        {
+            if (!vcNodeMap.ContainsDomain(vc))
+                return false;
+            return currentDag.Nodes.Contains(vcNodeMap[vc]);
         }
 
         public void CheckSanity()
@@ -1848,17 +2321,6 @@ namespace CoreLib
             var id2 = IndexC.GetIndex(cs.callSite.calleeName, rv2);
 
             return id2;
-        }
-
-        public void TestSplit()
-        {
-            var score = new List<Tuple<int, int, int>>();
-            foreach (var n in vcNodeMap.GetRange())
-            {
-                int s; int d;
-                currentDag.TestSplit(n, out s, out d);
-                Console.WriteLine("TestSplit: {0} {1} {2}", n.ImplName, s, d);
-            }
         }
 
         public StratifiedVC FindMergeCandidate(StratifiedCallSite cs)
@@ -2224,7 +2686,7 @@ namespace CoreLib
         Dictionary<string, string> idToProc;
 
         // For stats
-        TimeSpan tmpTime1, tmpTime2;
+        TimeSpan tmpTime1; //, tmpTime2;
 
         public DagOracle(Program program)
             :this(program, new ProgramDisjointness(program))
@@ -2242,6 +2704,19 @@ namespace CoreLib
 
             this.Disj = disj;
             this.program = program;
+        }
+
+        // Create a fresh copy of the Dag
+        public DagOracle Copy()
+        {
+            var ret = new DagOracle(program, Disj);
+            foreach (var n in Nodes)
+                ret.AddNode(n);
+            foreach (var e in Edges)
+                ret.AddEdge(e);
+            ret.Root = Root;
+
+            return ret;
         }
 
         public void SetRoot(DagNode node)
@@ -2274,17 +2749,6 @@ namespace CoreLib
             var ret = 0;
             Nodes.Iter(node => ret += node.Size);
             return ret;
-        }
-
-        public void TestSplit(DagNode n, out int s, out int d)
-        {
-            s = Descendants(n).Count;
-            d = 0;
-            foreach (var np in IdToNodes[n.id])
-            {
-                if (IsDisjoint(n, np))
-                    d += Descendants(np).Count;
-            }
         }
 
         public IEnumerable<DagNode> FindMergeCandidates(DagNode n1, int cs, string targetId)
@@ -2336,9 +2800,49 @@ namespace CoreLib
             yield break;
         }
 
-        private bool IsDisjoint(DagNode n1, DagNode n2)
+        // Return the set of all nodes disjoint with n. The second argument is optional; used for optimization
+        // Precondition: This only works correctly when the DAG is a tree
+        public Dictionary<DagNode, HashSet<DagNode>> AllDisjointNodes()
+        {
+            Dictionary<DagNode, int> nodeToTreeSize;
+            Dictionary<DagNode, HashSet<DagNode>> nodeToChildren;
+            ComputeDagSizes(out nodeToTreeSize, out nodeToChildren);
+
+            var ret = new Dictionary<DagNode, HashSet<DagNode>>();
+            Nodes.Iter(n => ret.Add(n, new HashSet<DagNode>()));
+            AllDisjointNodesHelper(Root, ret, nodeToChildren);
+            return ret;
+        }
+
+        void AllDisjointNodesHelper(DagNode n, Dictionary<DagNode, HashSet<DagNode>> nodeToDisj, Dictionary<DagNode, HashSet<DagNode>> nodeToDescendants)
+        {
+            foreach (var c in Children[n].Select(e => e.Target))
+            {
+                nodeToDisj[c].UnionWith(nodeToDisj[n]);
+            }
+
+            foreach (var e1 in Children[n])
+            {
+                foreach (var e2 in Children[n])
+                {
+                    if (e1 == e2) continue;
+                    if (!Disj.IsExclusive(n.ImplName, e1.CallSite, e2.CallSite)) continue;
+                    nodeToDisj[e1.Source].UnionWith(nodeToDescendants[e2.Target]);
+                }
+            }
+
+            foreach (var c in Children[n].Select(e => e.Target))
+            {
+                AllDisjointNodesHelper(c, nodeToDisj, nodeToDescendants);
+            }
+
+        }
+
+
+        public bool IsDisjoint(DagNode n1, DagNode n2)
         {
             if (n1 == n2) return false;
+            if (Ancestors(n1).Contains(n2)) return false;
 
             // Light up ancestors of n2
             var ancestors = Ancestors(n2);
@@ -3381,7 +3885,8 @@ namespace CoreLib
         }
 
         // Return the sizes of shared dags; and more info about the largest shared sub-tree
-        public int ComputeDagSizes()
+        public void ComputeDagSizes(out Dictionary<DagNode, int> nodeToTreeSizeMap,
+            out Dictionary<DagNode, HashSet<DagNode>> nodeToChildrenMap)
         {
             var graph = new Microsoft.Boogie.GraphUtil.Graph<DagNode>();
 
@@ -3394,9 +3899,6 @@ namespace CoreLib
             var sorted = graph.TopologicalSort();
             var nodeToTreeSize = new Dictionary<DagNode, int>();
             var nodeToChildren = new Dictionary<DagNode, HashSet<DagNode>>();
-            var hist = new Dictionary<int, int>(); // size -> count
-            var largestsize = 0;
-            DagNode largestnode = null;
 
             Nodes.Iter(vc => nodeToTreeSize.Add(vc, 0));
             Nodes.Iter(vc => nodeToChildren.Add(vc, new HashSet<DagNode>()));
@@ -3410,10 +3912,25 @@ namespace CoreLib
                 }
                 nodeToTreeSize[n]++;
                 nodeToChildren[n].Add(n);
+            }
 
-                //Console.WriteLine("Got {0}, size {1} preds {2} succs {3}", n.info.impl.Name, nodeToSize[n],
-                //    graph.Successors(n).Count(), graph.Predecessors(n).Count());
+            nodeToChildrenMap = nodeToChildren;
+            nodeToTreeSizeMap = nodeToTreeSize;
+        }
 
+        // Return the sizes of shared dags; and more info about the largest shared sub-tree
+        public int ComputeDagSizes()
+        {
+            Dictionary<DagNode, int> nodeToTreeSize;
+            Dictionary<DagNode, HashSet<DagNode>> nodeToChildren;
+            ComputeDagSizes(out nodeToTreeSize, out nodeToChildren);
+
+            var hist = new Dictionary<int, int>(); // size -> count
+            var largestsize = 0;
+            DagNode largestnode = null;
+
+            foreach (var n in Nodes)
+            {
                 if (Parents[n].Count > 1)
                 {
                     var size = nodeToChildren[n].Count;

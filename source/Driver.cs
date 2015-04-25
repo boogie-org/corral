@@ -540,7 +540,7 @@ namespace cba
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
-                BoogieVerify.Verify(init, out err);
+                BoogieVerify.Verify(init, out err, true);
                 if (err == null || err.Count == 0)
                     Console.WriteLine("All entrypoints verified");
                 else
@@ -548,10 +548,11 @@ namespace cba
                     foreach (var trace in err.OfType<BoogieAssertErrorTrace>())
                     {
                         Console.WriteLine("{0} did not verify", trace.impl.Name);
-                        trace.cex.Print(0, Console.Out);
+                        if(!config.noTrace) trace.cex.Print(0, Console.Out);
                     }
                 }
 
+                Console.WriteLine(string.Format("Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
                 Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
                 throw new NormalExit("Done");
