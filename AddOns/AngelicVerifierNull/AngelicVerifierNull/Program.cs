@@ -807,7 +807,7 @@ namespace AngelicVerifierNull
 
                 // find failing assert cmd from path program
                 var failingAssert = GetFailingAssertFromTraceProg(instr, ppprog);
-                Console.WriteLine("Assert -> {0}", failingAssert);
+                //Console.WriteLine("Assert -> {0}", failingAssert);
                 var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
                 //call ExplainError 
@@ -822,8 +822,9 @@ namespace AngelicVerifierNull
                 // print the trace to disk
                 var traceName = "Trace" + traceCount;
                 Console.WriteLine("Printing trace {0}", traceName);
-                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
                 var stubs = instr.GetStubs(cex);
+                if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
+                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
 
@@ -834,7 +835,7 @@ namespace AngelicVerifierNull
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
-                    PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                    PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
@@ -852,7 +853,7 @@ namespace AngelicVerifierNull
                             Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
                             if (Options.reportOnMaxBlockCount)
                             {
-                                PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                                PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
                                 done = false;
                             }
                             else
@@ -879,7 +880,7 @@ namespace AngelicVerifierNull
                             Debug.Assert(inconsistent.Contains(constraintId));
                             Console.WriteLine("Hard constraint inconsistency detected: ", inconsistent.Print());
                             // drop asserts
-                            PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value));
+                            PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value), failStatus);
                             // drop constraints
                             inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
                             // drop traces
@@ -1089,7 +1090,7 @@ namespace AngelicVerifierNull
 
         static int AngelicCount = 0;
 
-        private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
+        private static void PrintAndSuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos, string failStatus)
         {
             Stats.count("bug.count");
 
@@ -1123,13 +1124,6 @@ namespace AngelicVerifierNull
             {
                 var tok = instr.SuppressAssert(traceInfo.TraceProgram);
                 var failingAssert = instr.GetFailingAssert(tok);
-                
-                string failStatus = null;
-                if (BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes))
-                {
-                    failStatus = cba.PrintSdvPath.mustFail;
-                }
-                else failStatus = cba.PrintSdvPath.notmustFail;
 
                 var failingProc = instr.GetFailingAssertProcName(tok);
 

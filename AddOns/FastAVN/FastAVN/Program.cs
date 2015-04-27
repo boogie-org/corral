@@ -733,7 +733,7 @@ namespace FastAVN
                 foreach (string bug in mergedBugs.Keys)
                 {
                     Utils.Print(string.Format("Bug: {0} Count: {1}", bug, mergedBugs[bug]), Utils.PRINT_TAG.AV_OUTPUT);
-                    if (bug.Contains("mustFail")) Stats.count("mustfail.report.count");
+                    if (bug.Contains("mustFail") && !bug.Contains("notmustFail")) Stats.count("mustfail.report.count");
                     bugReport.WriteLine(bug);
                 }
             }
