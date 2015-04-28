@@ -601,6 +601,8 @@ namespace CoreLib
                     }
                 });
 
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
+
             var rand = new Random();
             var reachedBound = false;
 
@@ -611,7 +613,7 @@ namespace CoreLib
                 // Lets split when the tree has become big enough
                 var size = di.ComputeSize(); 
                 
-                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > treesize + 20))
+                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > 2 * treesize))
                 {
                     var st = DateTime.Now;
 
@@ -620,7 +622,7 @@ namespace CoreLib
                     int maxVcScore = 0;
 
                     var toRemove = new HashSet<StratifiedVC>();
-                    var sizes = di.ComputeSubtreeSizes();
+                    var sizes = di.ComputeSubtrees();
                     var disj = di.ComputeNumDisjoint();
 
                     foreach (var vc in attachedVCInv.Keys)
@@ -631,7 +633,7 @@ namespace CoreLib
                             continue;
                         }
 
-                        var score = Math.Min(sizes[vc], disj[vc]);
+                        var score = Math.Min(sizes[vc].Count, disj[vc]);
                         if (score >= maxVcScore)
                         {
                             maxVc = vc;
@@ -643,8 +645,12 @@ namespace CoreLib
                     var scs = attachedVCInv[maxVc];
                     Debug.Assert(!openCallSites.Contains(scs));
 
+                    var desc = sizes[maxVc];
+                    var cnt = 0;
+                    openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                    
                     // Push & Block
-                    MacroSI.PRINT("{0}>>> Pushing Block({1}, {2})", indent(decisions.Count), scs.callSite.calleeName, maxVcScore);
+                    MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
 
                     var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
                     timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
@@ -660,7 +666,6 @@ namespace CoreLib
                     treesize = di.ComputeSize();
 
                     tt += (DateTime.Now - st);
-                    Console.WriteLine("Time spent taking a decision: {0} s", (DateTime.Now - st).TotalSeconds.ToString("F2"));
                 }
 
                 MacroSI.PRINT_DEBUG("  - overapprox");
@@ -2175,8 +2180,6 @@ namespace CoreLib
         {
             var ret = new HashSet<StratifiedVC>();
             var disj = currentDag.AllDisjointNodes();
-            disj.Iter(tup => tup.Value.Iter(
-                n => Debug.Assert(currentDag.IsDisjoint(tup.Key, n))));
             disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
             return ret;
         }
@@ -2192,14 +2195,16 @@ namespace CoreLib
         }
 
         // Return subtree sizes for each node
-        public Dictionary<StratifiedVC, int> ComputeSubtreeSizes()
+        public Dictionary<StratifiedVC, HashSet<StratifiedVC>> ComputeSubtrees()
         {
-            var ret = new Dictionary<StratifiedVC, int>();
+            var ret = new Dictionary<StratifiedVC, HashSet<StratifiedVC>>();
             Dictionary<DagOracle.DagNode, int> nodeToTreeSize;
             Dictionary<DagOracle.DagNode, HashSet<DagOracle.DagNode>> nodeToChildren;
             currentDag.ComputeDagSizes(out nodeToTreeSize, out nodeToChildren);
 
-            nodeToChildren.Iter(tup => ret.Add(vcNodeMap[tup.Key], tup.Value.Count));
+            nodeToChildren.Iter(tup => ret.Add(vcNodeMap[tup.Key],
+                new HashSet<StratifiedVC>(tup.Value.Select(n => vcNodeMap[n]))));
+
             return ret;
         }
 
@@ -2827,7 +2832,7 @@ namespace CoreLib
                 {
                     if (e1 == e2) continue;
                     if (!Disj.IsExclusive(n.ImplName, e1.CallSite, e2.CallSite)) continue;
-                    nodeToDisj[e1.Source].UnionWith(nodeToDescendants[e2.Target]);
+                    nodeToDisj[e1.Target].UnionWith(nodeToDescendants[e2.Target]);
                 }
             }
 
