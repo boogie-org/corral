@@ -249,8 +249,15 @@ namespace FastAVN
             var origProgram = inputProg.getProgram();
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res, false);
 
+            // program initialization procedure
+            var initproc = origProgram.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, AngelicVerifierNull.AvnAnnotations.InitialializationProcAttr))
+                .FirstOrDefault();
+            var extraProc = new HashSet<string>();
+            if (initproc != null) extraProc.Add(initproc.Name);
+
             // remove unreachable procedures (because of indirect call resolution)
-            BoogieUtil.pruneProcs(origProgram, harnessInstrumentation.entrypoints);
+            BoogieUtil.pruneProcs(origProgram, harnessInstrumentation.entrypoints.Union(extraProc));
 
             // Put inside a persistent program
             inputProg = new PersistentProgram(origProgram, "", 1);
@@ -269,7 +276,7 @@ namespace FastAVN
                         impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                         impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
                     });
-            BoogieUtil.pruneProcs(progAfter, harnessInstrumentation.entrypoints.Intersection(canReachAssert));
+            BoogieUtil.pruneProcs(progAfter, (harnessInstrumentation.entrypoints.Intersection(canReachAssert)).Union(extraProc));
 
             // Set flag to stop AA
             avnArgs += " /noAA:1 ";
