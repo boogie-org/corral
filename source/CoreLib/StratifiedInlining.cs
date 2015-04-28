@@ -820,7 +820,7 @@ namespace CoreLib
 
             var decideToInline = new Func<bool>(() =>
                 {
-                    return rand.Next(100) != 0;
+                    return false; // rand.Next(100) != 0;
                 });
 
             while (true)
