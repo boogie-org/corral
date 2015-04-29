@@ -126,6 +126,10 @@ namespace cba
                             if (ac == null) return c;
                             return new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
                         })));
+            // delete yield
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl => impl.Blocks
+                    .Iter(blk => blk.Cmds.RemoveAll(c => c is YieldCmd)));
 
             // Call graph
             ComputeCallGraph(program);
