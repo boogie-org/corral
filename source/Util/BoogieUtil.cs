@@ -441,6 +441,30 @@ namespace cba.Util
             return ReResolve(p, "temp_rar.bpl", doTypecheck);
         }
 
+        public static Program ReResolveInMem(Program p, bool doTypecheck = true)
+        {
+            Program output;
+            using (var writer = new System.IO.MemoryStream())
+            {
+                p.Emit(new TokenTextWriter(new System.IO.StreamWriter(writer)));
+                writer.Flush();
+
+                writer.Seek(0, System.IO.SeekOrigin.Begin);
+                var s = ParserHelper.Fill(writer, new List<string>());
+
+                var v = Parser.Parse(s, "ReResolveInMem", out output);
+                if (ResolveProgram(p, "ReResolveInMem"))
+                {
+                    throw new InvalidProg("Cannot resolve " + "ReResolveInMem");
+                }
+                if (doTypecheck && TypecheckProgram(p, "ReResolveInMem"))
+                {
+                    throw new InvalidProg("Cannot typecheck " + "ReResolveInMem");
+                }
+            }
+            return output;
+        }
+
         // Prints the program into a file, reads it back in, parses it,
         // resolves it and typechecks it
         public static Program ReResolve(Program p, string filename, bool doTypecheck = true)

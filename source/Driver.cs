@@ -81,6 +81,8 @@ namespace cba
 
         public static void Initialize(Configs config)
         {
+            // Batch-mode GC is best for performance
+            System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Batch;
 
             BoogieVerify.useDuality = config.useDuality;
 
