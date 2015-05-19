@@ -87,7 +87,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DeadCodeDetection.cs" />
     <Compile Include="DefaultModels.cs" />
     <Compile Include="Instrumentations.cs" />
     <Compile Include="Program.cs" />

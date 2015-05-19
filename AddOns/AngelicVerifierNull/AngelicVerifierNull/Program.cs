@@ -344,15 +344,6 @@ namespace AngelicVerifierNull
 
                 prog.writeToFile("alias.bpl");
 
-                // Do dead code detection -- deprecated!
-                if (false && deadCodeDetect)
-                {
-                    Stats.resume("dead.code");
-                    Console.WriteLine("Running dead code detection");
-                    prog = DeadCodeDetection.Detect(prog, corralConfig);
-                    Stats.stop("dead.code");
-                }
-
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
                 if (Options.AddMapSelectNonNullAssumptions)
