@@ -153,7 +153,6 @@ namespace AngelicVerifierNull
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
-        static string mainFileName = "main_with_stubs.bpl";
         static string stubsfile = null;
 
 
