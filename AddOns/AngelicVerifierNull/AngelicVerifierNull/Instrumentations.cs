@@ -54,18 +54,10 @@ namespace AngelicVerifierNull
                 FindMalloc();
                 FindNULL();
                 var reach = FindReachableStatesFunc(prog);
-                if (Options.bufferDetect)
-                {
-                    //DisableNonNullAsserts();
-                    AddSystemModels(); // TODO: add system models for buffer detection
-                }
+
                 CreateMainProcedure();
                 ChangeStubsIntoUnkowns();
                 EntryPointsReachable(reach);
-                if (Options.bufferDetect)
-                {
-                    BufferInstrumentations();
-                }
             }
 
             // The beginning of an entry point must be reachable
@@ -82,23 +74,10 @@ namespace AngelicVerifierNull
                 }
             }
 
-            private void BufferInstrumentations()
-            {
-                Console.WriteLine("Doing buffer instrumentation");
-                prog = DefaultModels.BufferInstrument(ref prog);
-            }
-
             private void DisableNonNullAsserts()
             {
                 RemoveAssertNonNull rn = new RemoveAssertNonNull();
                 prog = rn.VisitProgram(prog);
-            }
-
-            private void AddSystemModels()
-            {
-                // Add System Models
-                Console.WriteLine("Adding system models");
-                prog = DefaultModels.AddModels(ref prog);
             }
             
             private void CreateMainProcedure()
@@ -404,9 +383,6 @@ namespace AngelicVerifierNull
                     throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
                         mallocProcedure.Name, mallocProcedure.InParams.Count));
                 }
-
-                if (Options.bufferDetect)
-                    BufferInstrument(mallocProcedure);
 
                 // Drop annotations on mallocProcedureFull. We will use it 
                 // as our "unknown" theory

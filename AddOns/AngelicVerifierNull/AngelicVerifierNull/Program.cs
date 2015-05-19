@@ -35,8 +35,6 @@ namespace AngelicVerifierNull
         public static bool DeepAsserts = false;
         // Use field non-null assumption
         public static bool FieldNonNull = true;
-        // do buffer overrun detection
-        public static bool bufferDetect = false;
         // relax environment constraints
         public static bool RelaxEnvironment = false;
         // use procs tagged as {:harness} as potential entrypoints as well
@@ -225,9 +223,6 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/deadCodeDetection"))
                 deadCodeDetect = true;
-
-            if (args.Any(s => s == "/bufferDetection"))
-                Options.bufferDetect = true;
 
             if (args.Any(s => s == "/dumpTimedoutCorralQueries"))
                 dumpTimedoutCorralQueries = true;
