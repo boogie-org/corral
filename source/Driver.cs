@@ -542,7 +542,8 @@ namespace cba
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
-                BoogieVerify.Verify(init, out err, true);
+                var rstatus = BoogieVerify.Verify(init, out err, true);
+                Console.WriteLine("Return status: {0}", rstatus);
                 if (err == null || err.Count == 0)
                     Console.WriteLine("All entrypoints verified");
                 else
