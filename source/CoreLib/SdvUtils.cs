@@ -125,7 +125,7 @@ namespace CoreLib
             var rtprog = rt.getProgram();
 
             // Build a map of where the alloc constants are from
-            allocConstants = rt.allocConstantToCall;
+            allocConstants = rt.concretizeConstantToCall;
 
             /*
             foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())

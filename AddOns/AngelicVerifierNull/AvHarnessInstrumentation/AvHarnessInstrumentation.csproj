@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}</ProjectGuid>
+    <ProjectGuid>{E2C5B356-6D38-406D-A074-1185834634DD}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AngelicVerifierNull</RootNamespace>
-    <AssemblyName>AngelicVerifierNull</AssemblyName>
+    <RootNamespace>AvHarnessInstrumentation</RootNamespace>
+    <AssemblyName>AvHarnessInstrumentation</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -21,7 +21,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -102,10 +101,6 @@
     <ProjectReference Include="..\..\..\source\CoreLib\CoreLib.csproj">
       <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
       <Name>CoreLib</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
-      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
-      <Name>ExplainError</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>

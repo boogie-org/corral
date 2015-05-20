@@ -1,8 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.21005.1
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AngelicVerifierNull", "AngelicVerifierNull\AngelicVerifierNull.csproj", "{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorralUtil", "..\..\source\Util\CorralUtil.csproj", "{186DE4BD-014D-47C7-A914-831EA98116A9}"
@@ -20,6 +18,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FastAVN", "..\FastAVN\FastAVN\FastAVN.csproj", "{CF2E53FE-96C7-4CDB-AE35-43DE7620C1DF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvnResultDashboard", "AvnResultDashboard\AvnResultDashboard.csproj", "{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvHarnessInstrumentation", "AvHarnessInstrumentation\AvHarnessInstrumentation.csproj", "{E2C5B356-6D38-406D-A074-1185834634DD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvUtil", "AvUtil\AvUtil.csproj", "{04D1EBFE-F934-44D2-86C6-407BC99AE00A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -217,6 +219,46 @@ Global
 		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{244AD0FC-CB54-4DC5-AD3A-8DF22BE2C220}.Release|Win32.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.HWSW|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.HWSW|Mixed Platforms.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.HWSW|Win32.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Internal|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Internal|Mixed Platforms.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Internal|Win32.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{E2C5B356-6D38-406D-A074-1185834634DD}.Release|Win32.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Mixed Platforms.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Win32.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Mixed Platforms.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Win32.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Win32.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

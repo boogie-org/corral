@@ -4,16 +4,15 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <ProjectGuid>{04D1EBFE-F934-44D2-86C6-407BC99AE00A}</ProjectGuid>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AngelicVerifierNull</RootNamespace>
-    <AssemblyName>AngelicVerifierNull</AssemblyName>
+    <RootNamespace>AvUtil</RootNamespace>
+    <AssemblyName>AvUtil</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -21,10 +20,8 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -87,42 +84,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Instrumentations.cs" />
-    <Compile Include="Program.cs" />
+    <Compile Include="Utils.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\cba.csproj">
-      <Project>{b05d046d-a620-4233-9d52-0255c7a69760}</Project>
-      <Name>cba</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\CoreLib\CoreLib.csproj">
-      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
-      <Name>CoreLib</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
-      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
-      <Name>ExplainError</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
-      <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
-      <Name>ProgTransformation</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
-      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
-      <Name>CorralUtil</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\AliasAnalysis\AliasAnalysis\AliasAnalysis.csproj">
-      <Project>{584822a6-f933-484f-aff3-5d3cc2337198}</Project>
-      <Name>AliasAnalysis</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\AvUtil\AvUtil.csproj">
-      <Project>{04d1ebfe-f934-44d2-86c6-407bc99ae00a}</Project>
-      <Name>AvUtil</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

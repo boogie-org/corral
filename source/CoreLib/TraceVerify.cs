@@ -28,10 +28,13 @@ namespace cba
         private HashSet<int> newFixedContextProcs;
         // Add proc declaration for Fix_RaiseException
         private bool addRaiseExceptionProcDecl;
+
         // Add concretization assignments
         public static bool addConcretization = false;
         public static bool addConcretizationAsConstants = false;
-        public Dictionary<string, int> allocConstantToCall;
+        public static readonly string ConcretizeConstantNameAttr = "ConcretizeConstantName";
+        public static readonly string ConcretizeCallIdAttr = "ConcretizeCallId";
+        public Dictionary<string, int> concretizeConstantToCall;
         // Convert non-failing asserts to assumes
         public static bool convertNonFailingAssertsToAssumes = false;
 
@@ -47,7 +50,7 @@ namespace cba
             tinfo = t;
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
-            allocConstantToCall = new Dictionary<string, int>();
+            concretizeConstantToCall = new Dictionary<string, int>();
         }
 
         private string addIntToString(string s, int i)
@@ -206,7 +209,7 @@ namespace cba
                         if (addConcretization && cc.Outs.Count == 1 &&
                             (call_instr.info.hasIntVar("si_arg") || call_instr.info.hasBoolVar("si_arg")))
                         {
-                            if (!addConcretizationAsConstants || !BoogieUtil.checkAttrExists("allocator", cc.Proc.Attributes))
+                            if (!addConcretizationAsConstants)
                             {
                                 if(call_instr.info.hasBoolVar("si_arg"))
                                     traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getBoolVal("si_arg")));
@@ -220,7 +223,7 @@ namespace cba
                                 // for concretization
 
                                 // do we use a specific name for the constant?
-                                var constantName = QKeyValue.FindStringAttribute(cc.Attributes, "AllocatorConstantName");
+                                var constantName = QKeyValue.FindStringAttribute(cc.Attributes, ConcretizeConstantNameAttr);
                                 if (constantName == null) constantName = "";
 
                                 var val = call_instr.info.getIntVal("si_arg");
@@ -232,8 +235,8 @@ namespace cba
                                 output.AddTopLevelDeclaration(constant);
                                 output.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
 
-                                var id = QKeyValue.FindIntAttribute(cc.Attributes, "allocator_call", -1);
-                                if (id != -1) allocConstantToCall.Add(constant.Name, id);
+                                var id = QKeyValue.FindIntAttribute(cc.Attributes, ConcretizeCallIdAttr, -1);
+                                if (id != -1) concretizeConstantToCall.Add(constant.Name, id);
                             }
 
                         }
