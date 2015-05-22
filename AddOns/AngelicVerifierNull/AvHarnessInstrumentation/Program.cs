@@ -44,7 +44,6 @@ namespace AvHarnessInstrumentation
         // Globals
         static Dictionary<int, HashSet<int>> DeadCodeBranchesDependencyInfo = null; // unknown -> set of affected branches
         static Instrumentations.HarnessInstrumentation harnessInstrumentation = null;
-        static HashSet<string> IdentifiedEntryPoints = new HashSet<string>();
 
         /// <summary>
         /// TODO: Check that the input program satisfies some sanity requirements
@@ -243,16 +242,48 @@ namespace AvHarnessInstrumentation
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
 
-            var prog = GetProgram(args[0], stubsfile);
-            BoogieUtil.PrintProgram(prog, args[1]);
+            // Initialize Boogie
+            CommandLineOptions.Install(new CommandLineOptions());
+            CommandLineOptions.Clo.PrintInstrumented = true;
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
+
+            var sw = new Stopwatch();
+
+            // Get the program, install the harness and do basic instrumentation
+            var inprog = GetProgram(args[0], stubsfile);
+            var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
+
+            Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
+            Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
+            Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
+            Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+            // Run alias analysis
+            Stats.resume("alias.analysis");
+            Console.WriteLine("Running alias analysis");
+            program = RunAliasAnalysis(program);
+            Stats.stop("alias.analysis");
+
+            Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+            Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+            // run Houdini pass
+            if (Options.HoudiniPass)
+            {
+                Utils.Print("Running Houdini Pass");
+                program = RunHoudiniPass(program);
+                Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+            }
+
+            program.writeToFile(args[1]);
         }
 
 
         public static PersistentProgram RunHoudiniPass(PersistentProgram prog)
         {
             Stats.resume("houdini");
-            Utils.Print("Start Houdini Pass ...");
-
+            
             HashSet<Variable> templateVars = new HashSet<Variable>();
             List<Requires> reqs = new List<Requires>();
             List<Ensures> enss = new List<Ensures>();
@@ -332,10 +363,9 @@ namespace AvHarnessInstrumentation
         static void PruneRedundantEntryPoints(Program program)
         {
             var procs = BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
-            procs = IdentifiedEntryPoints.Difference(procs);
+            procs = harnessInstrumentation.entrypoints.Difference(procs);
             Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", procs.Count);
             harnessInstrumentation.PruneEntryPoints(program, procs);
-            IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
         }
 
         #endregion
