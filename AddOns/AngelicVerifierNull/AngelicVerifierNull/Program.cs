@@ -1197,8 +1197,8 @@ namespace AngelicVerifierNull
             });
             nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
-            // Add these flags by default
-            var eeflags = new List<string>{"/onlySlicAssumes+", "/ignoreAllAssumes-"};
+            // Add these flags by default (nothing right now)
+            var eeflags = new List<string>(); // {"/onlySlicAssumes+", "/ignoreAllAssumes-"};
             eeflags.AddRange(extraEEflags);
 
             Dictionary<string, string> eeComplexExprs;
@@ -1230,18 +1230,31 @@ namespace AngelicVerifierNull
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
                         blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
-
-                        /*HACK: supress the assertion when it cannot be blocked*/
-                        if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
+                        
+                        /* HACK: We should existentially quantify demonic non-determinism, but currently we just
+                         * avoiding blocking */
+                        var vu = new VarsUsed(); vu.Visit(blockExpr);
+                        var demonicVars = vu.Vars.Where(v => concretize.allocConstants.ContainsKey(v.Name) || (!(v is BoundVariable) && !(v is Constant) && v.TypedIdent.Type.IsBasic));
+                        if (demonicVars.Any())
                         {
-                            if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
-                                throw new Exception("Repeating block expression detected. Not able to block!");
+                            // blocking expression has a scalar that is not bound by an unknownTrigger
+                            Utils.Print(String.Format("Found free variables :: {0}", demonicVars.Select(v => v.Name).Concat(" ")), Utils.PRINT_TAG.AV_OUTPUT);
+                            status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True);
                         }
                         else
-                            blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)] = 1;
-                        
-                        Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
-                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
+                        {
+                            /*HACK: supress the assertion when it cannot be blocked*/
+                            if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
+                            {
+                                if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
+                                    throw new Exception("Repeating block expression detected. Not able to block!");
+                            }
+                            else
+                                blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)] = 1;
+
+                            Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
+                            status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr);
+                        }
                     }
                 }
             }
@@ -1273,7 +1286,10 @@ namespace AngelicVerifierNull
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
             int allocConstCount = 0;
             allocConsts.ToList()
-                .ForEach(x =>
+                // triggers for unknown are created by mallocInstrumentation, and each is tagged with ConcretizeCallIdAttr;
+                // Others should be skipped
+                .Where(x => x.Value >= 0)
+                .Iter(x =>
                     {
                         var xConst = nprog.TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
                         if (xConst == null)

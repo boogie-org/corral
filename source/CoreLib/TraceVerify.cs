@@ -236,7 +236,7 @@ namespace cba
                                 output.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
 
                                 var id = QKeyValue.FindIntAttribute(cc.Attributes, ConcretizeCallIdAttr, -1);
-                                if (id != -1) concretizeConstantToCall.Add(constant.Name, id);
+                                concretizeConstantToCall.Add(constant.Name, id);
                             }
 
                         }
