@@ -385,6 +385,8 @@ namespace AvHarnessInstrumentation
                 mallocProcedureFull.Requires = new List<Requires>();
                 mallocProcedureFull.Ensures = new List<Ensures>();
                 mallocProcedureFull.Modifies = new List<IdentifierExpr>();
+                // unknown
+                mallocProcedureFull.AddAttribute(AvnAnnotations.AngelicUnknownCall);
             }
             private void FindNULL()
             {
