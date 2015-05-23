@@ -446,18 +446,21 @@ namespace cba.Util
             Program output;
             using (var writer = new System.IO.MemoryStream())
             {
-                p.Emit(new TokenTextWriter(new System.IO.StreamWriter(writer)));
+                var st = new System.IO.StreamWriter(writer);
+                var tt = new TokenTextWriter(st);
+                p.Emit(tt);
                 writer.Flush();
-
+                st.Flush();
+                
                 writer.Seek(0, System.IO.SeekOrigin.Begin);
                 var s = ParserHelper.Fill(writer, new List<string>());
 
                 var v = Parser.Parse(s, "ReResolveInMem", out output);
-                if (ResolveProgram(p, "ReResolveInMem"))
+                if (ResolveProgram(output, "ReResolveInMem"))
                 {
                     throw new InvalidProg("Cannot resolve " + "ReResolveInMem");
                 }
-                if (doTypecheck && TypecheckProgram(p, "ReResolveInMem"))
+                if (doTypecheck && TypecheckProgram(output, "ReResolveInMem"))
                 {
                     throw new InvalidProg("Cannot typecheck " + "ReResolveInMem");
                 }
