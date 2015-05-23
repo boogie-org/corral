@@ -764,53 +764,105 @@ namespace cba
             if (gused.globalsUsed.Any(g => !globals.ContainsKey(g) && !templateVarNames.Contains(g)))
                 return ret;
 
+            var subst = new Dictionary<string, Variable>();
+
             var templateVarUsed = gused.globalsUsed.Intersection(templateVarNames);
             if (templateVarUsed.Count == 0)
             {
-                var subst = new Dictionary<string, Variable>();
                 var e = dup.VisitExpr(template);
                 e = (new VarSubstituter(subst, globals, funcs)).VisitExpr(e);
                 ret.Add(e);
                 return ret;
             }
-            Debug.Assert(templateVarUsed.Count == 1, "Can only handle 1 template variable per expression");
-            var tvName = templateVarUsed.First();
-            var tv = templateVars.First(v => v.Name == tvName);
 
+            // Set of matches for each template variable
+            var matches = new Dictionary<string, HashSet<Variable>>();
 
-            var includeFormalIn = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalIn");
-            var includeFormalOut = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalOut");
-            var includeGlobals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeGlobals");
-
-            if (!includeFormalIn && !includeFormalOut && !includeGlobals)
+            foreach (var tvName in templateVarUsed)
             {
-                includeFormalIn = true;
-                includeFormalOut = true;
-                includeGlobals = true;
+                var tv = templateVars.First(v => v.Name == tvName);
+                matches.Add(tvName, new HashSet<Variable>());
+
+                var includeFormalIn = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalIn");
+                var includeFormalOut = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalOut");
+                var includeGlobals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeGlobals");
+
+                if (!includeFormalIn && !includeFormalOut && !includeGlobals)
+                {
+                    includeFormalIn = true;
+                    includeFormalOut = true;
+                    includeGlobals = true;
+                }
+
+                var onlyMatchVar = QKeyValue.FindStringAttribute(tv.Attributes, "match");
+                System.Text.RegularExpressions.Regex matchRegEx = null;
+                if (onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
+
+                foreach (var kvp in globals.Concat(formals))
+                {
+                    if (tv.TypedIdent.Type.ToString() != kvp.Value.TypedIdent.Type.ToString())
+                        continue;
+
+                    if (kvp.Value is Constant) continue;
+                    if (matchRegEx != null && !matchRegEx.IsMatch(kvp.Key)) continue;
+                    if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
+                    if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
+                    if (!includeGlobals && kvp.Value is GlobalVariable) continue;
+
+                    matches[tvName].Add(kvp.Value);
+
+                }
             }
 
-            var onlyMatchVar = QKeyValue.FindStringAttribute(tv.Attributes, "match");
-            System.Text.RegularExpressions.Regex matchRegEx = null;
-            if(onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
+            // return if empty set of matches
+            if (matches.Any(kvp => kvp.Value.Count == 0))
+                return ret;
 
-            foreach (var kvp in globals.Concat(formals))
+            // take cartesian product
+            var tvars = new List<string>(matches.Keys);
+            var matchArr = new List<Variable[]>();
+            for (int i = 0; i < tvars.Count; i++)
             {
-                if (tv.TypedIdent.Type.ToString() !=  kvp.Value.TypedIdent.Type.ToString())
-                    continue;
+                var arr = new Variable[matches[tvars[i]].Count];
+                int j = 0;
+                foreach (var v in matches[tvars[i]]) arr[j++] = v;
+                matchArr.Add(arr);
+            }
 
-                if (kvp.Value is Constant) continue;
-                if (matchRegEx != null && !matchRegEx.IsMatch(kvp.Key)) continue;
-                if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
-                if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
-                if (!includeGlobals && kvp.Value is GlobalVariable) continue;
+            // N-bit counter
+            var counter = new int[tvars.Count];
+            for (int i = 0; i < counter.Length; i++) counter[i] = 0;
+            var GetNext = new Func<bool>(() =>
+                {
+                    var done = false;
+                    var i = 0;
+                    while (!done)
+                    {
+                        counter[i]++;
+                        if (counter[i] == matchArr[i].Length)
+                        {
+                            counter[i] = 0;
+                            i++;
+                            if (i == counter.Length)
+                                return false;
+                        }
+                        else
+                        {
+                            done = true;
+                        }
+                    }
+                    return true;
+                });
 
-                var subst = new Dictionary<string, Variable>();
-                subst.Add(tvName, kvp.Value);
-
+            do
+            {
+                subst = new Dictionary<string, Variable>();
+                for (int i = 0; i < tvars.Count; i++)
+                    subst.Add(tvars[i], matchArr[i][counter[i]]);
                 var e = dup.VisitExpr(template);
                 e = (new VarSubstituter(subst, globals)).VisitExpr(e);
                 ret.Add(e);
-            }
+            } while (GetNext());
 
             return ret;
         }
