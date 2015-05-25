@@ -226,6 +226,8 @@ namespace cba.Util
         {
             var graph = new Graph<string>();
             var impls = new HashSet<string>(program.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+            impls.Iter(p => graph.Nodes.Add(p));
+
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 impl.Blocks

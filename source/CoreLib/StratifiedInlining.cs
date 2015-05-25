@@ -239,8 +239,8 @@ namespace CoreLib
                 callGraph.PrintOut(Console.Out);
         }
 
-        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile) :
-            base(program, logFilePath, appendLogFile, new List<Checker>())
+        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
+            base(program, logFilePath, appendLogFile, new List<Checker>(), PassiveImplInstrumentation)
         {
             stats = new Stats();
 
