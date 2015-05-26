@@ -115,6 +115,7 @@
     <Compile Include="BoogieVerify.cs" />
     <Compile Include="CBAPasses.cs" />
     <Compile Include="CBAProgram.cs" />
+    <Compile Include="HoudiniLite.cs" />
     <Compile Include="SdvUtils.cs" />
     <Compile Include="StratifiedInlining.cs" />
     <Compile Include="CompilerPass.cs" />
