@@ -53,7 +53,7 @@ namespace HoudiniLite
             Console.WriteLine("HoudiniLite took: {0} seconds", sw.Elapsed.TotalSeconds.ToString("F2"));
             HoudiniStats.Print();
             Console.WriteLine("Num true = {0}", assignment.Count);
-            Console.WriteLine("True assignment: {0}", assignment.Concat(" "));
+            //Console.WriteLine("True assignment: {0}", assignment.Concat(" "));
 
             if (check)
             {
@@ -233,90 +233,53 @@ namespace HoudiniLite
                 var provedFalse = new HashSet<string>();
                 var idepth = Math.Max(0, CommandLineOptions.Clo.InlineDepth);
 
-                foreach (var cs in openCallSites)
-                {
-                    var callee = new HoudiniVC(hi.implName2StratifiedInliningInfo[cs.callSite.calleeName], impls, assignment);
-                    var calleevc = cs.Attach(callee);
-                    prover.Assert(prover.VCExprGen.Implies(cs.callSiteExpr, calleevc), true);
-                }
-
-                var changed = false;
-
                 // iterate over idepth
                 while (true)
                 {
                     // Part 1: over-approximate
-                    var failed = new HashSet<string>();
+                    var proved = ProveCandidates(prover, hvc.constantToAssertedExpr, candidates.Difference(provedTrue.Union(provedFalse)));
+                    provedTrue.UnionWith(proved);
+                    //Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
-                    while (true)
+                    if (idepth == 0 || openCallSites.Count == 0) break;
+
+                    // Part 2: under-approximate
+                    prover.Push();
+                    foreach (var cs in openCallSites)
+                        prover.Assert(cs.callSiteExpr, false);
+
+                    var remaining = candidates.Difference(provedTrue.Union(provedFalse));
+                    proved = ProveCandidates(prover, hvc.constantToAssertedExpr, remaining);
+                    provedFalse.UnionWith(remaining.Difference(proved));
+                    //Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
+
+                    prover.Pop();
+
+                    // resolved all?
+                    if (candidates.Difference(provedTrue.Union(provedFalse)).Count == 0)
+                        break;
+
+                    // Inline one level
+                    idepth--;
+                    var nextOpenCallSites = new HashSet<StratifiedCallSite>();
+                    foreach (var cs in openCallSites)
                     {
-                        var remaining = candidates.Difference(provedTrue.Union(provedFalse).Union(failed));
-                        
-                        if (remaining.Count == 0)
-                            break;
-
-                        HoudiniStats.ProverCount++;
-                        HoudiniStats.Start("ProverTime");
-
-                        prover.Push();
-
-                        // assert them all
-                        VCExpr toassert = VCExpressionGenerator.True;
-                        foreach (var k in remaining)
-                            toassert = prover.VCExprGen.And(toassert, hvc.constantToAssertedExpr[k]);
-
-                        prover.Assert(toassert, false);
-
-                        prover.Check();
-                        var outcome = prover.CheckOutcomeCore(reporter);
-
-                        // check which ones failed
-                        if (outcome == ProverInterface.Outcome.Invalid || outcome == ProverInterface.Outcome.Undetermined)
-                        {
-                            var removed = 0;
-                            foreach (var k in remaining)
-                            {
-                                var b = (bool)prover.Evaluate(hvc.constantToAssertedExpr[k]);
-                                if (!b)
-                                {
-                                    failed.Add(k);
-                                    removed++;
-                                }
-                            }
-                            Debug.Assert(removed != 0);
-                            //Console.WriteLine("Query {0}: Invalid for {1}, {2} removed", HoudiniStats.ProverCount, implName, removed);
-                        }
-
-                        HoudiniStats.Stop("ProverTime");
-                        prover.Pop();
-
-
-                        if (outcome == ProverInterface.Outcome.TimeOut || outcome == ProverInterface.Outcome.OutOfMemory)
-                        {
-                            failed.UnionWith(remaining);
-                            break;
-                        }
-
-                        if (outcome == ProverInterface.Outcome.Valid)
-                        {
-                            //Console.WriteLine("Query {0}: Valid for {1}", HoudiniStats.ProverCount, implName);
-                            break;
-                        }
-
+                        var callee = new HoudiniVC(hi.implName2StratifiedInliningInfo[cs.callSite.calleeName], impls, assignment);
+                        var calleevc = cs.Attach(callee);
+                        prover.Assert(prover.VCExprGen.Implies(cs.callSiteExpr, calleevc), true);
+                        nextOpenCallSites.UnionWith(callee.CallSites);
                     }
-
-                    if (idepth == 0) break;
-
-                    // Part 2: under
-                    
-
+                    openCallSites = nextOpenCallSites;
                 }
 
                 prover.Pop();
 
-                if (changed)
+                var failed = candidates.Difference(provedTrue);
+                assignment.ExceptWith(failed);
+
+                if (failed.Count != 0)
                 {
-                    // add dependencies back
+                    // add dependencies back into the worklist
                     foreach (var caller in callgraph.Predecessors(implName))
                         worklist.Add(Tuple.Create(impl2Priority[caller], caller));
                 }
@@ -325,6 +288,75 @@ namespace HoudiniLite
             HoudiniStats.Stop("MainLoop");
 
             return assignment;
+        }
+
+        // Prove candidates that hold (using an over-approximation, at the current inline depth).
+        // Return the set of candidates proved correct
+        static HashSet<string> ProveCandidates(ProverInterface prover, Dictionary<string, VCExpr> constantToAssertedExpr, HashSet<string> candidates)
+        {
+            var remaining = new HashSet<string>(candidates);
+            var reporter = new EmptyErrorReporter();
+            var failed = new HashSet<string>();
+
+            while (true)
+            {
+                remaining.ExceptWith(failed);
+
+                if (remaining.Count == 0)
+                    break;
+
+                HoudiniStats.ProverCount++;
+                HoudiniStats.Start("ProverTime");
+
+                prover.Push();
+
+                // assert them all
+                VCExpr toassert = VCExpressionGenerator.True;
+                foreach (var k in remaining)
+                    toassert = prover.VCExprGen.And(toassert, constantToAssertedExpr[k]);
+
+                prover.Assert(toassert, false);
+
+                prover.Check();
+                var outcome = prover.CheckOutcomeCore(reporter);
+
+                // check which ones failed
+                if (outcome == ProverInterface.Outcome.Invalid || outcome == ProverInterface.Outcome.Undetermined)
+                {
+                    var removed = 0;
+                    foreach (var k in remaining)
+                    {
+                        var b = (bool)prover.Evaluate(constantToAssertedExpr[k]);
+                        if (!b)
+                        {
+                            failed.Add(k);
+                            removed++;
+                        }
+                    }
+                    Debug.Assert(removed != 0);
+                    //Console.WriteLine("Query {0}: Invalid for {1}, {2} removed", HoudiniStats.ProverCount, implName, removed);
+                }
+
+                HoudiniStats.Stop("ProverTime");
+                prover.Pop();
+
+
+                if (outcome == ProverInterface.Outcome.TimeOut || outcome == ProverInterface.Outcome.OutOfMemory)
+                {
+                    failed.UnionWith(remaining);
+                    break;
+                }
+
+                if (outcome == ProverInterface.Outcome.Valid)
+                {
+                    //Console.WriteLine("Query {0}: Valid for {1}", HoudiniStats.ProverCount, implName);
+                    break;
+                }
+            }
+
+            remaining.ExceptWith(failed);
+
+            return remaining;
         }
 
         // Compute SCCs and determine a priority order for impls
