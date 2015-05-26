@@ -226,6 +226,8 @@ namespace cba.Util
         {
             var graph = new Graph<string>();
             var impls = new HashSet<string>(program.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+            impls.Iter(p => graph.Nodes.Add(p));
+
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 impl.Blocks
@@ -439,6 +441,33 @@ namespace cba.Util
         public static Program ReResolve(Program p, bool doTypecheck = true)
         {
             return ReResolve(p, "temp_rar.bpl", doTypecheck);
+        }
+
+        public static Program ReResolveInMem(Program p, bool doTypecheck = true)
+        {
+            Program output;
+            using (var writer = new System.IO.MemoryStream())
+            {
+                var st = new System.IO.StreamWriter(writer);
+                var tt = new TokenTextWriter(st);
+                p.Emit(tt);
+                writer.Flush();
+                st.Flush();
+                
+                writer.Seek(0, System.IO.SeekOrigin.Begin);
+                var s = ParserHelper.Fill(writer, new List<string>());
+
+                var v = Parser.Parse(s, "ReResolveInMem", out output);
+                if (ResolveProgram(output, "ReResolveInMem"))
+                {
+                    throw new InvalidProg("Cannot resolve " + "ReResolveInMem");
+                }
+                if (doTypecheck && TypecheckProgram(output, "ReResolveInMem"))
+                {
+                    throw new InvalidProg("Cannot typecheck " + "ReResolveInMem");
+                }
+            }
+            return output;
         }
 
         // Prints the program into a file, reads it back in, parses it,

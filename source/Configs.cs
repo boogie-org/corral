@@ -305,6 +305,7 @@ namespace cba
             assertsPassed = "assertsPassed";
             assertsPassedIsInt = false;
             fwdBckInRef = false;
+            useDuality = false;
 
             catchAllExceptions = false;
             specialVars = new List<string>();

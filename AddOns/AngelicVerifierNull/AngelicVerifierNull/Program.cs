@@ -35,8 +35,6 @@ namespace AngelicVerifierNull
         public static bool DeepAsserts = false;
         // Use field non-null assumption
         public static bool FieldNonNull = true;
-        // do buffer overrun detection
-        public static bool bufferDetect = false;
         // relax environment constraints
         public static bool RelaxEnvironment = false;
         // use procs tagged as {:harness} as potential entrypoints as well
@@ -155,7 +153,6 @@ namespace AngelicVerifierNull
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
-        static string mainFileName = "main_with_stubs.bpl";
         static string stubsfile = null;
 
 
@@ -225,9 +222,6 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/deadCodeDetection"))
                 deadCodeDetect = true;
-
-            if (args.Any(s => s == "/bufferDetection"))
-                Options.bufferDetect = true;
 
             if (args.Any(s => s == "/dumpTimedoutCorralQueries"))
                 dumpTimedoutCorralQueries = true;
@@ -343,15 +337,6 @@ namespace AngelicVerifierNull
                 Stats.stop("alias.analysis");
 
                 prog.writeToFile("alias.bpl");
-
-                // Do dead code detection -- deprecated!
-                if (false && deadCodeDetect)
-                {
-                    Stats.resume("dead.code");
-                    Console.WriteLine("Running dead code detection");
-                    prog = DeadCodeDetection.Detect(prog, corralConfig);
-                    Stats.stop("dead.code");
-                }
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 

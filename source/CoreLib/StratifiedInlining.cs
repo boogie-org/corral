@@ -136,7 +136,7 @@ namespace CoreLib
     * Class for statistical analysis        *
     ****************************************/
 
-    class Stats
+    public class Stats
     {
         public int numInlined = 0;
         public int vcSize = 0;
@@ -164,7 +164,7 @@ namespace CoreLib
     ****************************************/
 
     /* stratified inlining technique */
-    class StratifiedInlining : StratifiedVCGenBase
+    public class StratifiedInlining : StratifiedVCGenBase
     {
         public Stats stats;
 
@@ -239,8 +239,8 @@ namespace CoreLib
                 callGraph.PrintOut(Console.Out);
         }
 
-        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile) :
-            base(program, logFilePath, appendLogFile, new List<Checker>())
+        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
+            base(program, logFilePath, appendLogFile, new List<Checker>(), PassiveImplInstrumentation)
         {
             stats = new Stats();
 
@@ -613,7 +613,7 @@ namespace CoreLib
                 // Lets split when the tree has become big enough
                 var size = di.ComputeSize(); 
                 
-                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > 2 * treesize))
+                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > treesize + 20))
                 {
                     var st = DateTime.Now;
 
@@ -825,7 +825,7 @@ namespace CoreLib
 
             var decideToInline = new Func<bool>(() =>
                 {
-                    return rand.Next(100) != 0;
+                    return false; // rand.Next(100) != 0;
                 });
 
             while (true)
@@ -3973,12 +3973,12 @@ namespace CoreLib
     *      Counter-example Generation       *
     ****************************************/
 
-    class EmptyErrorReporter : ProverInterface.ErrorHandler
+    public class EmptyErrorReporter : ProverInterface.ErrorHandler
     {
         public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) { }
     }
 
-    class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
+    public class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
     {
         StratifiedInlining si;
         public VerifierCallback callback;

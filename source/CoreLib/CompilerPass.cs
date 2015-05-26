@@ -331,7 +331,7 @@ namespace cba
                 .Select(loop => Tuple.Create(loop, loopCallerImplCopy[loop.Name]))
                 .Iter(tup => tup.Item2.AddAttribute("LB_Mapping", tup.Item1.Name));
 
-            ret = BoogieUtil.ReResolve(ret, "loopBound.bpl");
+            ret = BoogieUtil.ReResolveInMem(ret);
 
             return ret;
         }
