@@ -1868,8 +1868,6 @@ namespace cba.Util
             var ssa = new SSA(program,encoding, typesToInstrument);
             ssa.Compute(irreducible);
 
-            //BoogieUtil.PrintProgram(program, "ssa.bpl");
-
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
 
             return program;
@@ -1996,7 +1994,7 @@ namespace cba.Util
                   if (i == 0) return v;
                   if (v is LocalVariable || v is Formal)
                   {
-                      var ret = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, v.Name + "_" + i, v.TypedIdent.Type));
+                      var ret = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, v.Name + "_ssa_" + i, v.TypedIdent.Type));
                       if (!newVars.ContainsKey(ret.Name))
                           newVars.Add(ret.Name, ret);
                       return ret;
@@ -2791,10 +2789,22 @@ namespace cba.Util
             return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.First();
         }
 
+        // Get "NULL" from assertion
+        public static string getNULLFromAssert(AssertCmd ac)
+        {
+            return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args[1].ToString();
+        }
+
         // Get expression from assume cmd, assume (expr != NULL)
         public static Expr getExprFromAssume(AssumeCmd ac)
         {
             return (((NAryExpr)ac.Expr).Args.First());
+        }
+
+        // Get "NULL" from assume cmd
+        public static string getNULLFromAssume(AssumeCmd ac)
+        {
+            return (((NAryExpr)ac.Expr).Args[1]).ToString();
         }
 
         public static string getQueryFromAssert(AssertCmd ac)
