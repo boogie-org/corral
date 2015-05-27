@@ -678,6 +678,7 @@ namespace cba
                 return (runAbsHoudiniConfig != null);
             }
         }
+        public static bool useHoudiniLite = true;
 
         // Template
         public HashSet<Variable> templateVars;
@@ -1376,7 +1377,10 @@ namespace cba
 
         private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
         {
-            Console.WriteLine("Running {0}Houdini", runAbsHoudini ? "Abstract " : "");
+            var runHoudiniLite = useHoudiniLite;
+            if (checkAsserts || fastRequiresInference || runAbsHoudini) runHoudiniLite = false;
+
+            Console.WriteLine("Running {0}Houdini{1}", runAbsHoudini ? "Abstract " : "", runHoudiniLite ? "Lite" : "");
 
             // Get rid of inline attributes
             foreach (var decl in program.TopLevelDeclarations)
@@ -1452,7 +1456,7 @@ namespace cba
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
             var cc = CommandLineOptions.Clo.ProverCCLimit;
-            CommandLineOptions.Clo.ProverCCLimit = 5;
+            CommandLineOptions.Clo.ProverCCLimit = runHoudiniLite ? 1 : 5;
             CommandLineOptions.Clo.ContractInfer = true;
             var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
             CommandLineOptions.Clo.ProverKillTime = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
@@ -1504,7 +1508,8 @@ namespace cba
                         .Iter(c => c.Attributes = BoogieUtil.removeAttr("existential", c.Attributes));
                 }
 
-                inline(program);
+                if(!runHoudiniLite)
+                    inline(program);
 
                 // TODO: what about abshoudini?
                 PruneIrrelevantImpls(program);
@@ -1525,19 +1530,30 @@ namespace cba
                 }
                 else
                 {
-                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                    Houdini houdini = new Houdini(program, houdiniStats);
-                    outcome = houdini.PerformHoudiniInference();
-                    Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
-
-                    if (!fastRequiresInference)
+                    if (runHoudiniLite)
                     {
-                        outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
-                        Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+                        cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
+                        var res = CoreLib.HoudiniInlining.RunHoudini(program);
+                        trueConstants.UnionWith(res);
                     }
+                    else
+                    {
+
+                        var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                        Houdini houdini = new Houdini(program, houdiniStats);
+                        outcome = houdini.PerformHoudiniInference();
+                        Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
+
+                        if (!fastRequiresInference)
+                        {
+                            outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });        
+                        }
+                        houdini = null; // for gc
+                    }
+                    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+
                     var time4 = DateTime.Now;
                     Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
-                    houdini = null;
                 }
                 
                 if(fastRequiresInference)
