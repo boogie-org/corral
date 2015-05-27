@@ -288,6 +288,9 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
 
+            if (args.Any(s => s == "/generateCP"))
+                AliasAnalysis.AliasAnalysis.generateCP = true;
+
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
@@ -337,6 +340,7 @@ namespace AngelicVerifierNull
                 Stats.stop("alias.analysis");
 
                 prog.writeToFile("alias.bpl");
+                if (AliasAnalysis.AliasAnalysis.generateCP) return;
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -1975,7 +1979,7 @@ namespace AngelicVerifierNull
                     AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
                 res =
-                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);   
+                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
             }
             else
             {
@@ -1997,6 +2001,8 @@ namespace AngelicVerifierNull
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
             if(pruneEP) PruneRedundantEntryPoints(origProgram);
+
+            if (AliasAnalysis.AliasAnalysis.generateCP) AliasAnalysis.AliasAnalysis.ConstructConstraintProg(origProgram);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
         }

@@ -2749,7 +2749,11 @@ namespace cba.Util
         // Check if an expression is NULL expression
         public static bool checkIfNull(Expr expr)
         {
-            return (expr as IdentifierExpr).ToString().Equals("NULL");
+            if (expr is IdentifierExpr)
+            {
+                return (expr as IdentifierExpr).ToString().Equals("NULL");
+            }
+            return false;
         }
 
         private static bool checkIfNot(IAppliable fun)
@@ -2902,6 +2906,69 @@ namespace cba.Util
         public static IdentifierExpr getVarFromAssume(AssumeCmd asc)
         {
             return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
+        }
+
+        // Returns true if ac.Expr is !(expr == NULL)
+        public static bool isNullAssertCmd(AssertCmd ac)
+        {
+            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == null) return false;
+
+            if (ac.Expr != null &&
+                ac.Expr is NAryExpr &&
+                checkIfNot((ac.Expr as NAryExpr).Fun))
+            {
+                Expr expr = (ac.Expr as NAryExpr).Args[0];
+                if (expr is NAryExpr)
+                {
+                    var nexpr = expr as NAryExpr;
+                    if (nexpr.Fun is BinaryOperator &&
+                        (nexpr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Eq &&
+                        checkIfNull(nexpr.Args[1])) 
+                            return true;
+                }
+            }
+            return false;
+        }
+
+        public static Expr getExprFromAssertCmd(AssertCmd ac)
+        {
+            var expr = (ac.Expr as NAryExpr).Args[0];
+            return (expr as NAryExpr).Args[0];
+        }
+
+        public static string getNULLFromAssertCmd(AssertCmd ac)
+        {
+            var expr = (ac.Expr as NAryExpr).Args[0];
+            return (expr as NAryExpr).Args[1].ToString();
+        }
+
+        // Returns true if ac.Expr is (expr != NULL)
+        public static bool isNullAssumeCmd(AssumeCmd ac)
+        {
+            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == null) return false;
+
+            if (ac.Expr != null &&
+                ac.Expr is NAryExpr)
+            {
+                var expr = ac.Expr as NAryExpr;
+                if (expr.Fun is BinaryOperator &&
+                    (expr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Neq &&
+                    checkIfNull(expr.Args[1])) 
+                        return true;
+            }
+            return false;
+        }
+
+        public static Expr getExprFromAssumeCmd(AssumeCmd ac)
+        {
+            return (ac.Expr as NAryExpr).Args[0];
+        }
+
+        public static string getNULLFromAssumeCmd(AssumeCmd ac)
+        {
+            return (ac.Expr as NAryExpr).Args[1].ToString();
         }
 
         // Get variable name from argument index of an implementation

@@ -34,12 +34,8 @@ namespace AliasAnalysis
                 AliasConstraintSolver.NoEmptyLoads = true;
             if (args.Any(s => s == "/warn"))
                 AliasConstraintSolver.printWarnings = true;
-            if (args.Any(s => s == "/dontEliminateCycles"))
-                AliasConstraintSolver.doCycleElimination = false;
-            if (args.Any(s => s == "/useSolver"))
-                AliasAnalysis.useSolver = true;
-            if (args.Any(s => s == "/generateCP"))
-                AliasAnalysis.generateCP = true;
+            if (args.Any(s => s == "/eliminateCycles"))
+                AliasConstraintSolver.doCycleElimination = true;
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -415,7 +411,6 @@ namespace AliasAnalysis
         public static bool dbg = false;
         CSFSAliasAnalysis csfsAnalysis;
         public static HashSet<string> non_null_vars = null;
-        public static bool useSolver = false;
         public static bool generateCP = false;
 
         // program containing constraints for AA
@@ -495,7 +490,6 @@ namespace AliasAnalysis
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
-            if (AliasAnalysis.generateCP) ConstructConstraintProg(program);
             aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
@@ -780,7 +774,7 @@ namespace AliasAnalysis
         {
             HashSet<string> entrypoints = new HashSet<string>();
             constraintProg.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).Iter(proc => entrypoints.Add(proc.Name));
-            //Debug.Assert(entrypoints.Count == 1);
+            Debug.Assert(entrypoints.Count == 1);
 
             Implementation entrypoint = constraintProg.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoints.FirstOrDefault())).FirstOrDefault();
             Console.WriteLine("Entrypoint -> {0}", entrypoint.Name);
@@ -825,46 +819,6 @@ namespace AliasAnalysis
                 cmds.Add(ac);
             }
 
-            /*
-            foreach (var map in ConstructConstraintStmts.globalMaps)
-            {
-                foreach (Constant c1 in ConstructConstraintStmts.allocSites)
-                {
-                    foreach (Constant c2 in ConstructConstraintStmts.allocSites)
-                    {
-                        List<AssignLhs> lhss = new List<AssignLhs>();
-                        List<Expr> rhss = new List<Expr>();
-
-                        MapAssignLhs mlhs = new MapAssignLhs(Token.NoToken, new SimpleAssignLhs(Token.NoToken,
-                            new IdentifierExpr(Token.NoToken, map)),
-                            new List<Expr> { new IdentifierExpr(Token.NoToken, c1), new IdentifierExpr(Token.NoToken, c2) });
-
-                        lhss.Add(mlhs);
-                        rhss.Add(Expr.False);
-
-                        AssignCmd ac = new AssignCmd(Token.NoToken, lhss, rhss);
-                        cmds.Add(ac);
-                    }
-                }
-
-                foreach (Constant c in ConstructConstraintStmts.fullAllocSites)
-                {
-                    List<AssignLhs> lhss = new List<AssignLhs>();
-                    List<Expr> rhss = new List<Expr>();
-
-                    MapAssignLhs mlhs = new MapAssignLhs(Token.NoToken, new SimpleAssignLhs(Token.NoToken,
-                            new IdentifierExpr(Token.NoToken, map)),
-                            new List<Expr> { new IdentifierExpr(Token.NoToken, c), new IdentifierExpr(Token.NoToken, c) });
-
-                    lhss.Add(mlhs);
-                    rhss.Add(Expr.True);
-
-                    AssignCmd ac = new AssignCmd(Token.NoToken, lhss, rhss);
-                    cmds.Add(ac);
-                }
-            }
-            */
-
             Block newBlock = new Block(Token.NoToken, "init", cmds, new GotoCmd(Token.NoToken, new List<Block> { entrypoint.Blocks[0] }));
             List<Block> newBlocks = new List<Block>();
             newBlocks.Add(newBlock);
@@ -874,8 +828,6 @@ namespace AliasAnalysis
 
         public static Program ConstructConstraintProg(Program program)
         {
-            BoogieUtil.PrintProgram(program, "aa.bpl");
-
             InitConstraintProg(program);
 
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -1102,8 +1054,8 @@ namespace AliasAnalysis
 
             private void ProcessAssertCmd(AssertCmd ac)
             {
-                Expr expr = CleanAssert.getExprFromAssert(ac);
-                string null_expr = CleanAssert.getNULLFromAssert(ac);
+                Expr expr = CleanAssert.getExprFromAssertCmd(ac);
+                string null_expr = CleanAssert.getNULLFromAssertCmd(ac);
 
                 var rs = ReadSet.Get(expr);
                 IdentifierExpr id = null;
@@ -1115,8 +1067,8 @@ namespace AliasAnalysis
 
             private void ProcessAssumeCmd(AssumeCmd ac)
             {
-                Expr expr = CleanAssert.getExprFromAssume(ac);
-                string null_expr = CleanAssert.getNULLFromAssume(ac);
+                Expr expr = CleanAssert.getExprFromAssumeCmd(ac);
+                string null_expr = CleanAssert.getNULLFromAssumeCmd(ac);
 
                 var rs = ReadSet.Get(expr);
                 IdentifierExpr id = null;
@@ -1143,7 +1095,7 @@ namespace AliasAnalysis
                     else if (c is AssertCmd)
                     {
                         var ac = c as AssertCmd;
-                        if (CleanAssert.validAssertCmd(ac))
+                        if (CleanAssert.isNullAssertCmd(ac))
                         {
                             ProcessAssertCmd(ac);
                         }
@@ -1151,7 +1103,7 @@ namespace AliasAnalysis
                     else if (c is AssumeCmd)
                     {
                         var ac = c as AssumeCmd;
-                        if (CleanAssert.validAssumeCmd(ac))
+                        if (CleanAssert.isNullAssumeCmd(ac))
                         {
                             ProcessAssumeCmd(ac);
                         }
