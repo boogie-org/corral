@@ -104,6 +104,9 @@ namespace cba.Util
             // Set options
             options.Set();
 
+            // Do loop extraction
+            var extractionInfo = program.ExtractLoops();
+
             #region Save program to disk
             if (shuffleProgram)
             {
@@ -117,9 +120,6 @@ namespace cba.Util
                 BoogieUtil.PrintProgram(program, options.progFileName);
             }
             #endregion
-
-            // Do loop extraction
-            var extractionInfo = program.ExtractLoops();
 
             var origBlocks = new Dictionary<string, Tuple<Block, Implementation>>();
 
