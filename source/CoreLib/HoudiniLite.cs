@@ -198,8 +198,47 @@ namespace CoreLib
 
             HoudiniStats.Stop("MainLoop");
 
+            hi.Close();
+
             return assignment;
         }
+
+        public static void InstrumentHoudiniAssignment(Program program, HashSet<string> assignment)
+        {
+            // Gather existential constants
+            var CandidateConstants = new Dictionary<string, Constant>();
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Iter(c => CandidateConstants.Add(c.Name, c));
+
+            // Instrument the ensures
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var newens = new List<Ensures>();
+                foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free))
+                {
+                    string constantName = null;
+                    Expr expr = null;
+
+                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                        ens.Condition, CandidateConstants.Keys, out constantName, out expr);
+
+                    if (!match)
+                        throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
+
+                    if (!assignment.Contains(constantName))
+                        continue;
+
+                    // ensures expr;
+                    newens.Add(new Ensures(false, expr));
+                }
+
+                impl.Proc.Ensures.RemoveAll(e => !e.Free);
+                impl.Proc.Ensures.AddRange(newens);
+            }
+
+        }
+
 
         // Prove candidates that hold (using an over-approximation, at the current inline depth).
         // Return the set of candidates proved correct
