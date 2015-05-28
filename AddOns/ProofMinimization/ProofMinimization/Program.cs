@@ -20,11 +20,17 @@ namespace ProofMinimization
             }
 
             var boogieArgs = "";
+            string dualityprooffile = null;
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "/break")
                 {
                     System.Diagnostics.Debugger.Launch();
+                    continue;
+                }
+                if (args[i].StartsWith("/duality:"))
+                {
+                    dualityprooffile = args[i].Substring("/duality:".Length);
                     continue;
                 }
 
@@ -48,6 +54,12 @@ namespace ProofMinimization
             if (ep == null)
                 throw new Exception("Entrypoint not found");
 
+            // Inject duality proof
+            if (dualityprooffile != null)
+            {
+                program = InjectDualityProof(program, BoogieUtil.ParseProgram(dualityprooffile));
+                BoogieUtil.PrintProgram(program, "hi_query.bpl");
+            }
 
             Console.WriteLine("Running HoudiniLite");
             var assignment = CoreLib.HoudiniInlining.RunHoudini(program);
@@ -98,7 +110,7 @@ namespace ProofMinimization
             var GetExistentialConstant = new Func<Constant>(() =>
                 {
                     var c = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                        "DualityProofConst" + (counter++), Microsoft.Boogie.Type.Bool));
+                        "DualityProofConst" + (counter++), Microsoft.Boogie.Type.Bool), false);
                     c.AddAttribute("existential");
                     return c;
                 });
