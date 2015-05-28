@@ -1083,6 +1083,7 @@ namespace cba
                 if (info.Count != 0)
                 {
                     (new RewriteCallDontCares()).VisitProgram(program);
+                    if(printHoudiniQuery != null) PrintProofMinQuery(program, "pm_" + printHoudiniQuery);
                     RunHoudini(program, info);
                     program = (input as PersistentCBAProgram).getCBAProgram();
                 }
@@ -1099,6 +1100,35 @@ namespace cba
             addSummaries(program);
             
             return program;
+        }
+
+        public static void PrintProofMinQuery(Program program, string outfile)
+        {
+            // Make a copy
+            program = BoogieUtil.ReResolveInMem(program);
+
+            // drop entrypoint annotation from procedures
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(p => p.Attributes = BoogieUtil.removeAttr("entrypoint", p.Attributes));
+
+            // find the entrypoint
+            var ep = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+
+            // convert assert to assume negation
+            foreach (var blk in ep.Blocks)
+            {
+                for (int i = 0; i < blk.Cmds.Count; i++)
+                {
+                    var acmd = blk.Cmds[i] as AssertCmd;
+                    if (acmd == null || BoogieUtil.isAssertTrue(acmd)) continue;
+                    blk.Cmds[i] = new AssumeCmd(acmd.tok, Expr.Not(acmd.Expr));
+                }
+            }
+
+            // Dump program
+            BoogieUtil.PrintProgram(program, outfile);                    
         }
 
         public static bool FPA = false;

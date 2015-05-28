@@ -47,6 +47,13 @@ namespace CoreLib
                 Console.WriteLine("Clock {0} = {1}", clock.Key, clock.Value.TotalSeconds.ToString("F2"));
             }
         }
+
+        public static void PrintClock(string clock)
+        {
+            Debug.Assert(timeTaken.ContainsKey(clock));
+            var v = timeTaken[clock];
+            Console.WriteLine("Clock {0} = {1}", clock, v.TotalSeconds.ToString("F2"));
+        }
     }
 
     public class HoudiniInlining : StratifiedInlining
@@ -229,8 +236,8 @@ namespace CoreLib
                     if (!assignment.Contains(constantName))
                         continue;
 
-                    // ensures expr;
-                    newens.Add(new Ensures(false, expr));
+                    // free ensures expr;
+                    newens.Add(new Ensures(true, expr));
                 }
 
                 impl.Proc.Ensures.RemoveAll(e => !e.Free);
