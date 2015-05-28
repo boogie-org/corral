@@ -340,7 +340,6 @@ namespace AngelicVerifierNull
                 Stats.stop("alias.analysis");
 
                 prog.writeToFile("alias.bpl");
-                if (AliasAnalysis.AliasAnalysis.generateCP) return;
 
                 Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
 
@@ -356,6 +355,8 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("#AssertsBeforeAA : {0}",Stats.numAssertsBeforeAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
+
+                if (AliasAnalysis.AliasAnalysis.generateCP) return;
 
                 // run Houdini pass
                 if (Options.HoudiniPass)

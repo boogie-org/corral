@@ -157,10 +157,6 @@
       <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
       <Name>ExplainError</Name>
     </ProjectReference>
-    <ProjectReference Include="source\HoudiniLite\HoudiniLite.csproj">
-      <Project>{b5007b19-6d3a-4746-b5ff-b60f679c8a01}</Project>
-      <Name>HoudiniLite</Name>
-    </ProjectReference>
     <ProjectReference Include="source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532B8A9-8CC2-4D7F-9D5E-7669841B6871}</Project>
       <Name>ProgTransformation</Name>

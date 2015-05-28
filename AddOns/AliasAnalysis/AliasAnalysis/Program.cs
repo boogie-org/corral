@@ -36,6 +36,8 @@ namespace AliasAnalysis
                 AliasConstraintSolver.printWarnings = true;
             if (args.Any(s => s == "/eliminateCycles"))
                 AliasConstraintSolver.doCycleElimination = true;
+            if (args.Any(s => s == "/generateCP"))
+                AliasAnalysis.generateCP = true;
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -48,7 +50,7 @@ namespace AliasAnalysis
 
             var program = BoogieUtil.ParseProgram(args[0]);
             Program origProgram = null;
-            if (prune != null)
+            if (true /*prune != null*/)
                 origProgram = (new FixedDuplicator(false)).VisitProgram(program);
 
             program.Resolve();
@@ -72,11 +74,12 @@ namespace AliasAnalysis
             foreach (var tup in ret.aliases)
                 Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
 
-            if (prune != null)
+            if (true /*prune != null*/)
             {
                 origProgram.Resolve();
                 PruneAliasingQueries.Prune(origProgram, ret);
-                BoogieUtil.PrintProgram(origProgram, prune);
+                if (prune != null) BoogieUtil.PrintProgram(origProgram, prune);
+                if (AliasAnalysis.generateCP) AliasAnalysis.ConstructConstraintProg(origProgram);
             }
         }
 
@@ -108,7 +111,7 @@ namespace AliasAnalysis
             var fcall = node.Fun as FunctionCall;
             if (fcall != null && result.mustbeNULL.ContainsKey(fcall.FunctionName))
             {
-                if (result.mustbeNULL[fcall.FunctionName] == true)
+                if (currCmd != null && result.mustbeNULL[fcall.FunctionName] == true)
                 {
                     currCmd.Attributes = new QKeyValue(Token.NoToken, mustNULL, new List<object>(), currCmd.Attributes);
                     countmustNULL++;
@@ -774,10 +777,9 @@ namespace AliasAnalysis
         {
             HashSet<string> entrypoints = new HashSet<string>();
             constraintProg.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).Iter(proc => entrypoints.Add(proc.Name));
-            Debug.Assert(entrypoints.Count == 1);
+            //Debug.Assert(entrypoints.Count == 1);
 
             Implementation entrypoint = constraintProg.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoints.FirstOrDefault())).FirstOrDefault();
-            Console.WriteLine("Entrypoint -> {0}", entrypoint.Name);
 
             CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
 
