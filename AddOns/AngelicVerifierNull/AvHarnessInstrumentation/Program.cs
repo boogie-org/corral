@@ -249,34 +249,49 @@ namespace AvHarnessInstrumentation
 
             var sw = new Stopwatch();
 
-            // Get the program, install the harness and do basic instrumentation
-            var inprog = GetProgram(args[0], stubsfile);
-            var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
-
-            Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
-            Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
-            Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
-            Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
-
-            // Run alias analysis
-            Stats.resume("alias.analysis");
-            Console.WriteLine("Running alias analysis");
-            program = RunAliasAnalysis(program);
-            Stats.stop("alias.analysis");
-
-            Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
-            Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
-
-            // run Houdini pass
-            if (Options.HoudiniPass)
+            try
             {
-                Utils.Print("Running Houdini Pass");
-                program = RunHoudiniPass(program);
+                // Get the program, install the harness and do basic instrumentation
+                var inprog = GetProgram(args[0], stubsfile);
+                var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
+
+                Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+                // Run alias analysis
+                Stats.resume("alias.analysis");
+                Console.WriteLine("Running alias analysis");
+                program = RunAliasAnalysis(program);
+                Stats.stop("alias.analysis");
+
                 Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
-            }
 
-            program.writeToFile(args[1]);
+                // run Houdini pass
+                if (Options.HoudiniPass)
+                {
+                    Utils.Print("Running Houdini Pass");
+                    program = RunHoudiniPass(program);
+                    Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+                }
+
+                program.writeToFile(args[1]);
+            }
+            catch (Exception e)
+            {
+                //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
+
+            }
+            finally
+            {
+                Stats.printStats();
+                Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+            }
         }
 
 
