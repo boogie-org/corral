@@ -1561,6 +1561,10 @@ namespace ExplainError
         {
             var fexps = new HashSet<Expr>(); // list of filtered exprs
             e = GetFilteredExpr(t, ref fexps); //the return expr is of no value now
+            Console.WriteLine("\n Filtered atoms before true/false = {0}", String.Join(", ", fexps));
+            fexps.RemoveWhere(p =>
+                VCVerifier.CheckIfExprFalse(currImpl, p) ||
+                VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(p))); //remove any true/false predicate
             Console.WriteLine("\n Filtered atoms = {0}", String.Join(", ", fexps));
             return fexps;
         }
