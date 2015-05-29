@@ -53,7 +53,8 @@ namespace HoudiniLite
             Console.WriteLine("HoudiniLite took: {0} seconds", sw.Elapsed.TotalSeconds.ToString("F2"));
             HoudiniStats.Print();
             Console.WriteLine("Num true = {0}", assignment.Count);
-            //Console.WriteLine("True assignment: {0}", assignment.Concat(" "));
+            if(CommandLineOptions.Clo.PrintAssignment)
+              Console.WriteLine("True assignment: {0}", assignment.Concat(" "));
 
             if (check)
             {

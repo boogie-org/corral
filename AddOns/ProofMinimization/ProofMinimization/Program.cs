@@ -67,6 +67,9 @@ namespace ProofMinimization
 
             // Read the program again, add contracts
             program = BoogieUtil.ReadAndResolve(args[0]);
+            if (dualityprooffile != null)
+                program = InjectDualityProof(program, BoogieUtil.ParseProgram(dualityprooffile));
+
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
 
             BoogieUtil.PrintProgram(program, "si_query.bpl");
