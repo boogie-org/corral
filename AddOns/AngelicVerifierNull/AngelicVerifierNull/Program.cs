@@ -166,10 +166,6 @@ namespace AngelicVerifierNull
 
                 if (AliasAnalysis.AliasAnalysis.generateCP) return;
 
-                // run Houdini pass
-                if (Options.HoudiniPass)
-                    prog = RunHoudiniPass(prog);
-
                 // hook to run the control flow slicing static analysis pre pass
                 if (Options.TraceSlicing)
                 {
