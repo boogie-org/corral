@@ -210,7 +210,7 @@ namespace CoreLib
             return assignment;
         }
 
-        public static void InstrumentHoudiniAssignment(Program program, HashSet<string> assignment)
+        public static void InstrumentHoudiniAssignment(Program program, HashSet<string> assignment, bool dropOnly = false)
         {
             // Gather existential constants
             var CandidateConstants = new Dictionary<string, Constant>();
@@ -236,8 +236,15 @@ namespace CoreLib
                     if (!assignment.Contains(constantName))
                         continue;
 
-                    // free ensures expr;
-                    newens.Add(new Ensures(true, expr));
+                    if (dropOnly)
+                    {
+                        newens.Add(ens);
+                    }
+                    else
+                    {
+                        // free ensures expr;
+                        newens.Add(new Ensures(true, expr));
+                    }
                 }
 
                 impl.Proc.Ensures.RemoveAll(e => !e.Free);
