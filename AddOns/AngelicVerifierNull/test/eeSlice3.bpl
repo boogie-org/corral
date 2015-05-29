@@ -20,7 +20,7 @@ procedure B(x:int) returns (r:int)
 {
    if (x == NULL) { //relevant
       g1 := x; 
-   }
+   } 
    r := g1;
    return; 
 }

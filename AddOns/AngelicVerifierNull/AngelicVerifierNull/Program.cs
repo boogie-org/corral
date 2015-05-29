@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,36 +10,16 @@ using btype = Microsoft.Boogie.Type;
 using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
 using SimpleHoudini = cba.SimpleHoudini;
+using AvUtil;
 
 namespace AngelicVerifierNull
 {
-    class InputProgramDoesNotMatchExn : Exception
-    {
-        public InputProgramDoesNotMatchExn(string s) : base(s) { } 
-    }
-
     class Options
     {
         // Reuse tracked variables and explored call tree across corral runs
         public static bool UsePrevCorralState = true;
-        // Don't use alias analysis
-        public static bool UseAliasAnalysisForAssertions = true;
-        // Don't use alias analysis for deadcode
-        public static bool UseAliasAnalysisForAngelicAssertions = true;
-        // Don't use context and flow sensitive alias analysis
-        public static bool UseCSFSAliasAnalysis = false;
-        // Do Houdini pass to remove some assertions
-        public static bool HoudiniPass = false;
-        // Add unsound options for NULL
-        public static bool AddMapSelectNonNullAssumptions = false;
         // Use Corral's DeepAssert instrumentation
         public static bool DeepAsserts = false;
-        // Use field non-null assumption
-        public static bool FieldNonNull = true;
-        // relax environment constraints
-        public static bool RelaxEnvironment = false;
-        // use procs tagged as {:harness} as potential entrypoints as well
-        public static bool useHarnessTag = false;
         // use EBasic?
         public static bool useEbasic = true;
         // Don't use EE to block paths
@@ -47,8 +28,6 @@ namespace AngelicVerifierNull
         public static bool TraceSlicing = false;
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
-        // property: nonnull, typestate
-        public static string propertyChecked = "";
         // ExplainError timeout (in seconds)
         public static int eeTimeout = 1000;
         // Flag for generalization
@@ -59,75 +38,6 @@ namespace AngelicVerifierNull
         public static bool reportOnMaxBlockCount = false;
     }
 
-    class Stats
-    {
-        public static int numProcs = -1;
-        
-        public static int numAssertsBeforeAliasAnalysis = -1;
-        public static int numAssertsAfterAliasAnalysis = -1;
-        public static int numAssertsAfterHoudiniPass = -1;
-
-        public static Dictionary<string, int> numAssertsPerProc = new Dictionary<string, int>();
-        public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
-        private static Dictionary<string, DateTime> clocks = new Dictionary<string, DateTime>();
-        private static Dictionary<string, long> counts = new Dictionary<string, long>();
-
-        public static void resume(string name)
-        {
-            clocks[name] = DateTime.Now;
-        }
-
-        public static void stop(string name)
-        {
-            Debug.Assert(clocks.ContainsKey(name));
-            if (!timeTaken.ContainsKey(name)) timeTaken[name] = 0; // initialize
-            timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
-        }
-
-        public static void printStats()
-        {
-            Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
-            foreach (string name in timeTaken.Keys)
-            {
-                Utils.Print(string.Format("{0}(s) : {1}", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
-            }
-            foreach (string name in counts.Keys)
-            {
-                Utils.Print(string.Format("{0} : {1}", name, counts[name]), Utils.PRINT_TAG.AV_STATS);
-            }
-            Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
-        }
-
-        public static void count(string name)
-        {
-            if (!counts.ContainsKey(name)) counts[name] = 0;
-            counts[name]++;
-        }
-    }
-
-    public class Utils
-    {
-        //TODO: merge with Log class in Corral
-        const bool SUPPRESS_DEBUG_MESSAGES = false;
-        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT, AV_STATS };
-        public static void Print(string msg, PRINT_TAG tag=PRINT_TAG.AV_DEBUG)
-        {
-            if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
-                Console.WriteLine("[TAG: {0}] {1}", tag, msg);
-        }
-    }
-
-    public static class AvnAnnotations
-    {
-        public static readonly string CORRAL_MAIN_PROC = "CorralMain";
-        public static readonly string BlockingConstraintAttr = "BlockingConstraint";
-        public static readonly string InitialializationProcAttr = "ProgramInitialization";
-        public static readonly string EnvironmentAssumptionAttr = "Ebasic";
-        public static readonly string ReachableStatesAttr = "ReachableStates";
-        public static readonly string RelaxConstraintAttr = "SoftConstraint";
-        public static int RelaxConstraintsStackDepthBound = 6;
-    }
-
     public class Driver
     {
         static cba.Configs corralConfig = null;
@@ -136,24 +46,16 @@ namespace AngelicVerifierNull
         static System.IO.TextWriter ResultsFile = null;
         public static ExplainError.ControlFlowDependency controlFlowDependencyInformation = null;
 
-        static bool useProvidedEntryPoints = false; //making default true
         static string boogieOpts = "";
         static string corralOpts = "";
-        static bool disableRoundRobinPrePass = false; //always do round robin with a timeout
-        static bool disableAssertRoundRobinPrePass = false;
         static int timeout = 0;
-        static int timeoutRoundRobin = 0;
-        static int timeoutAssertRoundRobin = 0;
         static int timeoutRelax = 100;
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
-        static bool prePassOnly = false; //only running prepass (for debugging purpose)
         static bool dumpTimedoutCorralQueries = false;
-        static bool deadCodeDetect = false; // do dead code detection
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
-        static string stubsfile = null;
 
 
         static void Main(string[] args)
@@ -176,73 +78,24 @@ namespace AngelicVerifierNull
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
             args.Where(s => s.StartsWith("/copt:"))
                 .Iter(s => corralOpts += " /" + s.Substring("/copt:".Length) + " ");
-                //.Iter(s => corralOpts += " \"/" + s.Substring("/copt:".Length) + "\" ");
-
-            if (args.Any(s => s == "/noAllocation"))
-                allocateParameters = false;
-
-            if (args.Any(s => s == "/noAA"))
-            {
-                Options.UseAliasAnalysisForAssertions = false;
-                Options.UseAliasAnalysisForAngelicAssertions = false;
-            }
-
-            if (args.Any(s => s == "/noAA:0"))
-                Options.UseAliasAnalysisForAngelicAssertions = false;
-
-            if (args.Any(s => s == "/noAA:1"))
-                Options.UseAliasAnalysisForAssertions = false;
-
-            if (args.Any(s => s == "/CSFSAA"))
-                Options.UseCSFSAliasAnalysis = true;
 
             if (args.Any(s => s == "/noReuse"))
                 Options.UsePrevCorralState = false;
 
-            if (args.Any(s => s == "/houdini"))
-                Options.HoudiniPass = true;
-
             if (args.Any(s => s == "/trackAllVars"))
                 trackAllVars = true;
-
-            if (args.Any(s => s == "/useEntryPoints"))
-                useProvidedEntryPoints = true;
 
             if (args.Any(s => s == "/deepAsserts"))
                 Options.DeepAsserts = true;
 
-            if (args.Any(s => s == "/disableRoundRobinPrePass"))
-                disableRoundRobinPrePass = true;
-
-            if (args.Any(s => s == "/prePassOnly"))
-                prePassOnly = true;
-
             if (args.Any(s => s == "/noEbasic"))
                 Options.useEbasic = false;
-
-            if (args.Any(s => s == "/deadCodeDetection"))
-                deadCodeDetect = true;
 
             if (args.Any(s => s == "/dumpTimedoutCorralQueries"))
                 dumpTimedoutCorralQueries = true;
 
-            if (args.Any(s => s == "/noFieldNonNull"))
-                Options.FieldNonNull = false;
-
-            if (args.Any(s => s == "/relax"))
-                Options.RelaxEnvironment = true;
-
-            if (args.Any(s => s == "/useHarness"))
-                Options.useHarnessTag = true;
-
             if (args.Any(s => s == "/noEE"))
                 Options.useEE = false;
-
-            if (args.Any(s => s == "/tmpF"))
-            {
-                Options.disbleDeadcodeOpt = true;
-                AvnAnnotations.RelaxConstraintsStackDepthBound = 4;
-            }
 
             if (args.Any(s => s == "/dontGeneralize"))
                 Options.generalize = false;
@@ -253,30 +106,11 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
 
-            args.Where(s => s.StartsWith("/timeoutRoundRobin:"))
-                .Iter(s => timeoutRoundRobin = int.Parse(s.Substring("/timeoutRoundRobin:".Length)));
-
-            args.Where(s => s.StartsWith("/timeoutAssertRoundRobin:"))
-                .Iter(s => timeoutAssertRoundRobin = int.Parse(s.Substring("/timeoutAssertRoundRobin:".Length)));
-
             args.Where(s => s.StartsWith("/timeoutEE:"))
                 .Iter(s => Options.eeTimeout = int.Parse(s.Substring("/timeoutEE:".Length)));
 
-
-            if (timeoutAssertRoundRobin == 0)
-                disableAssertRoundRobinPrePass = true;
-
-            if (timeoutRoundRobin == 0)
-                disableRoundRobinPrePass = true;
-
-            if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
-                Options.AddMapSelectNonNullAssumptions = true;
-
             if (args.Any(s => s == "/traceSlicing"))
                 Options.TraceSlicing = true;
-
-            args.Where(s => s.StartsWith("/property:"))
-                .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
 
             args.Where(s => s.StartsWith("/EE:"))
                 .Iter(s => Options.EEflags.Add("/" + s.Substring("/EE:".Length)));
@@ -285,42 +119,16 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
 
-            args.Where(s => s.StartsWith("/stubPath:"))
-                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
-
-            if (args.Any(s => s == "/generateCP"))
-                AliasAnalysis.AliasAnalysis.generateCP = true;
-
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
                 ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status,EntryPoint"); // result file header
                 ResultsFile.Flush();
             }
-
             
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
-
-            // Relax Environment Constraints
-            if (Options.RelaxEnvironment)
-            {
-                var program = BoogieUtil.ReadAndOnlyResolve(args[0]);
-
-                List<string> entrypoints = cba.EntrypointScanner.FindEntrypoint(program);
-                if (entrypoints.Count == 0)
-                    throw new InvalidInput("Main procedure not specified");
-
-                // deprecated
-                var outp = RelaxConstraints(program, entrypoints[0], null);
-
-                Console.Write("Output: ");
-                outp.Iter(n => Console.Write("{0} ", n));
-                Console.WriteLine();
-                return;
-            }
-
-            PersistentProgram prog = null;
+            
             try
             {
                 Stats.resume("Cpu");
@@ -328,57 +136,45 @@ namespace AngelicVerifierNull
                 // Get input program with the harness
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
 
-                prog = GetProgram(args[0]);
-                
+                var prog = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                GlobalCorralSpecificPass(prog);
+                Debug.Assert(corralConfig.mainProcName != null);
 
-                Stats.numAssertsBeforeAliasAnalysis = CountAsserts(prog);
+                // Print Stats
+                Utils.Print(string.Format("#Procs : {0}",prog.TopLevelDeclarations.OfType<Implementation>().Count()),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#Asserts : {0}",AssertCountVisitor.Count(prog)),Utils.PRINT_TAG.AV_STATS);
 
-                // Run alias analysis
-                Stats.resume("alias.analysis");
-                Console.WriteLine("Running alias analysis");
-                prog = RunAliasAnalysis(prog);
-                Stats.stop("alias.analysis");
+                // Install unknownTriggers
+                mallocInstrumentation = new Instrumentations.MallocInstrumentation(prog);
+                mallocInstrumentation.DoInstrument();
 
-                prog.writeToFile("alias.bpl");
-
-                Stats.numAssertsAfterAliasAnalysis= CountAsserts(prog);
-
-                if (Options.AddMapSelectNonNullAssumptions)
+                // remove Ebasic
+                if (!Options.useEbasic)
                 {
-                    int mapNonNullTotalAsserts, mapNonNullAssertsRemaining;
-                    mapNonNullAssertsRemaining = CountAssertsWithAttribute(prog, Instrumentations.AssertMapSelectsNonNull.attrName, out mapNonNullTotalAsserts);
-                    Utils.Print(string.Format("#MapReadsPossiblyNullAfterAA = {0}/{1}", mapNonNullAssertsRemaining, mapNonNullTotalAsserts));
+                    // strip out {:Ebasic}
+                    prog.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => impl.Blocks
+                            .Iter(blk =>
+                                blk.Cmds.RemoveAll(c => (c is AssumeCmd &&
+                                    QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
                 }
 
-                Utils.Print(string.Format("#Procs : {0}",Stats.numProcs),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#EntryPoints : {0}",IdentifiedEntryPoints.Count),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#AssertsBeforeAA : {0}",Stats.numAssertsBeforeAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#AssertsAfterAA : {0}",Stats.numAssertsAfterAliasAnalysis),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("InstrumentTime(ms) : {0}",sw.ElapsedMilliseconds),Utils.PRINT_TAG.AV_STATS);
-
-                if (AliasAnalysis.AliasAnalysis.generateCP) return;
-
-                // run Houdini pass
-                if (Options.HoudiniPass)
-                    prog = RunHoudiniPass(prog);
+                var program = new PersistentProgram(prog, corralConfig.mainProcName, 0);
 
                 // hook to run the control flow slicing static analysis pre pass
                 if (Options.TraceSlicing)
                 {
-                    var p1 = prog.getProgram();
-                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(p1);
+                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(prog);
                     controlFlowDependencyInformation.Run();
 
                     // package up the program
-                    prog = new PersistentProgram(p1, prog.mainProcName, prog.contextBound);
-                    prog.writeToFile("inst.bpl");
+                    program = new PersistentProgram(prog, program.mainProcName, program.contextBound);
+                    
                 }
+                program.writeToFile(args[0].Substring(0, args[0].Length - ".bpl".Length) + "_inst.bpl");
 
-                PrintAssertStats(prog);
-
-                if (prePassOnly) return;
                 //Analyze
-                RunCorralForAnalysis(prog);
+                RunCorralForAnalysis(program);
 
                 Stats.stop("Cpu");
             }
@@ -397,258 +193,9 @@ namespace AngelicVerifierNull
             }
         }
 
-        private static void PrintAssertStats(PersistentProgram prog)
-        {
-            Stats.numAssertsAfterHoudiniPass = CountAsserts(prog);
-            Utils.Print(string.Format("#AssertsAftHoudini : {0}", Stats.numAssertsAfterHoudiniPass),
-                Utils.PRINT_TAG.AV_STATS);
-
-            // count number of assertions per procedure after alias analysis and houdini pass
-            foreach (Implementation impl in prog.getProgram().TopLevelDeclarations
-                .Where(x => x is Implementation))
-            {
-                var assertVisitor = new Instrumentations.AssertCountVisitor();
-                assertVisitor.Visit(impl);
-                Stats.numAssertsPerProc[impl.Name] = assertVisitor.assertCount;
-            }
-            Debug.Assert(Stats.numAssertsPerProc.Values.Sum() == Stats.numAssertsAfterHoudiniPass);
-            Utils.Print(string.Format("#ImplWithAsserts : {0}",
-                Stats.numAssertsPerProc.Values.Where(c => c != 0).Count()),
-                Utils.PRINT_TAG.AV_STATS);
-        }
-
-        public static PersistentProgram RunHoudiniPass(PersistentProgram prog)
-        {
-            Stats.resume("houdini");
-            Utils.Print("Start Houdini Pass ...");
-
-            HashSet<Variable> templateVars = new HashSet<Variable>();
-            List<Requires> reqs = new List<Requires>();
-            List<Ensures> enss = new List<Ensures>();
-            SimpleHoudini houdini = new SimpleHoudini(templateVars, reqs, enss, -1, -1);
-            houdini.ExtractLoops = true;
-            SimpleHoudini.fastRequiresInference = false;
-            //SimpleHoudini.checkAsserts = true;
-            houdini.printHoudiniQuery = null; // "candidates.bpl";
-            // turnning on several switches: InImpOutNonNull + InNonNull infer most assertions
-            houdini.InImpOutNonNull = false;
-            houdini.InImpOutNull = false;
-            houdini.InNonNull = false;
-            houdini.OutNonNull = false;
-            houdini.addContracts = false;
-
-            prog.writeToFile("beforeHoudini.bpl");
-            PersistentProgram newP = houdini.run(prog);
-            newP.writeToFile("afterHoudini.bpl");
-
-            //BoogieUtil.PrintProgram(newP.getProgram(), "afterHoudini.bpl");
-            Utils.Print("End Houdini Pass ...");
-            Stats.stop("houdini");
-
-            return newP;
-        }
-
-        #region Instrumentatations
         //globals
         static Instrumentations.MallocInstrumentation mallocInstrumentation = null;
-        static Instrumentations.HarnessInstrumentation harnessInstrumentation = null;
         static Dictionary<int, HashSet<int>> DeadCodeBranchesDependencyInfo = null; // unknown -> set of affected branches
-
-        /// <summary>
-        /// TODO: Check that the input program satisfies some sanity requirements
-        /// NULL is declared as constant
-        /// malloc is declared as a procedure, with alloc
-        /// each parameter/global/map is annotated with "pointer/ref/data"
-        /// </summary>
-        /// <param name="init"></param>
-        private static void CheckInputProgramRequirements(Program init)
-        {
-            return;
-        }
-
-        public static Program GetInputProgram(string filename, string stubs)
-        {
-            Program init = BoogieUtil.ParseProgram(filename);
-            //Instrumentations.RemoveAssertNonNull ra = new Instrumentations.RemoveAssertNonNull();
-            //BoogieUtil.PrintProgram(ra.VisitProgram(init), "noassert.bpl");
-            //Sanity check (currently most of it happens inside HarnessInstrumentation)
-            CheckInputProgramRequirements(init);
-
-            // Adding impl for stubs
-            if (stubs != null)
-            {
-                try
-                {
-                    Program stubProg = BoogieUtil.ParseProgram(stubs);
-
-                    var procs = new Dictionary<string, Procedure>();
-                    init.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procs.Add(proc.Name, proc));
-
-                    var impls = new HashSet<string>();
-                    init.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impls.Add(impl.Name));
-
-                    foreach (var impl in stubProg.TopLevelDeclarations.OfType<Implementation>())
-                    {
-                        // Add the model if there is a procedure declaration but no implementation
-                        if (procs.ContainsKey(impl.Name) && !impls.Contains(impl.Name))
-                        {
-                            init.AddTopLevelDeclaration(impl);
-                            //impl.Proc = procs[impl.Name];
-                        }
-                    }
-
-                    
-                }
-                catch (System.IO.FileNotFoundException)
-                {
-                    Utils.Print(string.Format("Stub file not found : {0}", stubs));
-                }
-            }
-
-            init.Resolve();
-
-            return init;
-        }
-
-        static PersistentProgram GetProgram(string filename)
-        {
-            var init = GetInputProgram(filename, stubsfile);
-
-            // Do some instrumentation for the input program
-            if (Options.propertyChecked == "typestate")
-            {
-                // Mark all assumes as "slic" except non-null ones
-                var AddAnnotation = new Action<AssumeCmd>(ac =>
-                    {
-                        if (QKeyValue.FindBoolAttribute(ac.Attributes, "nonnull"))
-                            return;
-                        ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
-                    });
-                init.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
-                            .Iter(AddAnnotation)));
-            }
-            else if (Options.propertyChecked == "nonnull")
-            {
-                // Don't mark anything as slic -- noAssumes for EE!
-            }
-            else
-            {
-                // Mark all assumes as "slic"
-                var AddAnnotation = new Action<AssumeCmd>(ac =>
-                {
-                    ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
-                });
-                init.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
-                            .Iter(AddAnnotation)));
-            }
-
-            if (!Options.useEbasic)
-            {
-                // strip out {:Ebasic}
-                init.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk =>
-                            blk.Cmds.RemoveAll(c => (c is AssumeCmd && 
-                                QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
-            }
-
-
-            // Inline procedures supplied with {:inline} annotation
-            cba.Driver.InlineProcedures(init);
-            // Remove {:inline} impls
-            init.RemoveTopLevelDeclarations(decl => (decl is Implementation) &&
-                (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
-                 BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
-
-            // Add {:entrypoint} to procs with {:harness}
-            if (Options.useHarnessTag)
-            {
-                foreach (var decl in init.TopLevelDeclarations.OfType<NamedDeclaration>()
-                    .Where(d => QKeyValue.FindBoolAttribute(d.Attributes, "harness")))
-                    decl.AddAttribute("entrypoint");
-            }
-
-            // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
-            foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
-            {
-                impl.Blocks.Iter(blk =>
-                    blk.Cmds.RemoveAll(cmd => cmd is HavocCmd));
-            }
-
-            //Instrument to create the harness
-            corralConfig.mainProcName = AvnAnnotations.CORRAL_MAIN_PROC;
-            harnessInstrumentation = new Instrumentations.HarnessInstrumentation(init, corralConfig.mainProcName, useProvidedEntryPoints);
-            harnessInstrumentation.DoInstrument();
-            IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
-
-            //resolve+typecheck wo bothering about modSets
-            CommandLineOptions.Clo.DoModSetAnalysis = true;
-            init = BoogieUtil.ReResolve(init);
-            CommandLineOptions.Clo.DoModSetAnalysis = false;
-
-            // Update mod sets
-            BoogieUtil.DoModSetAnalysis(init);
-
-            // tag calls to the allocator with a unique ID
-            var id = 0;
-            init.TopLevelDeclarations.OfType<Implementation>()
-                .Iter(impl => impl.Blocks
-                    .Iter(block => block.Cmds.OfType<CallCmd>()
-                        .Where(cc => BoogieUtil.checkAttrExists("allocator", cc.Proc.Attributes))
-                        .Iter(cc => cc.Attributes = new QKeyValue(Token.NoToken, "allocator_call",
-                            new List<object> { Expr.Literal(id++) }, cc.Attributes)
-                            )));
-
-            
-
-            //Various instrumentations on the well-formed program
-            mallocInstrumentation = new Instrumentations.MallocInstrumentation(init);
-            mallocInstrumentation.DoInstrument();
-            //(new Instrumentations.AssertGuardInstrumentation(init)).DoInstrument(); //we don't guard asserts as we turn off the assert explicitly
-
-            if (Options.AddMapSelectNonNullAssumptions)
-                (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
-
-            BoogieUtil.pruneProcs(init, AvnAnnotations.CORRAL_MAIN_PROC);
-
-            if ( (deadCodeDetect || Options.propertyChecked == "nonnull"))
-            {
-                // Tag branches as reachable
-                var tup = InstrumentBranches.Run(init, corralConfig.mainProcName, Options.UseAliasAnalysisForAngelicAssertions, false);
-                init = tup.Item1;
-                DeadCodeBranchesDependencyInfo = tup.Item2;
-            }
-        
-            //Print the instrumented program
-            BoogieUtil.PrintProgram(init, "corralMain.bpl");
-            //Console.WriteLine("corralMain written");
-
-            //Do corral specific passes
-            GlobalCorralSpecificPass(init);
-            var inputProg = new PersistentProgram(init, corralConfig.mainProcName, 1);
-            ProgTransformation.PersistentProgram.FreeParserMemory();
-
-            return inputProg;
-        }
-        private static int CountAsserts(PersistentProgram prog)
-        {
-            var assertVisitor = new Instrumentations.AssertCountVisitor();
-            assertVisitor.Visit(prog.getProgram());
-            return assertVisitor.assertCount;
-        }
-        private static int CountAssertsWithAttribute(PersistentProgram prog, string attributeName, out int totalCount)
-        {
-            var assertVisitor = new Instrumentations.AssertWithAttributeCountVisitor(attributeName);
-            assertVisitor.Visit(prog.getProgram());
-            totalCount = assertVisitor.assertCountAll;
-            return assertVisitor.assertsNotRemovedCount;
-        }
-
-        #endregion
 
         #region Corral related
         // Set timeout for Corral
@@ -668,12 +215,13 @@ namespace AngelicVerifierNull
             CommandLineOptions.Clo.PrintInstrumented = true;
             
             // Set all defaults for corral
-            corralOpts += " doesntExist.bpl /track:alloc /useProverEvaluate /printVerify ";
+            corralOpts += " doesntExist.bpl /track:alloc /track:$Alloc /useProverEvaluate /printVerify ";
             var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
             config.boogieOpts += boogieOpts;
             cba.Driver.Initialize(config);
 
             cba.VerificationPass.usePruning = false;
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             if (!config.useProverEvaluate)
             {
@@ -686,6 +234,7 @@ namespace AngelicVerifierNull
 
             return config;
         }
+
         // Make a pass to ensure the whole program created is well formed
         private static void GlobalCorralSpecificPass(Program init)
         {
@@ -715,20 +264,18 @@ namespace AngelicVerifierNull
             public cba.ErrorTrace Trace;
             public Program TraceProgram;
             public Tuple<string, int> AssertLoc;
-            public string FailingEntryPoint;
 
-            public ErrorTraceInfo(string TraceName, cba.ErrorTrace Trace, Program TraceProgram, Tuple<string, int> AssertLoc, string FailingEntryPoint)
+            public ErrorTraceInfo(string TraceName, cba.ErrorTrace Trace, Program TraceProgram, Tuple<string, int> AssertLoc)
             {
                 this.TraceName = TraceName;
                 this.Trace = Trace;
                 this.AssertLoc = AssertLoc;
                 this.TraceProgram = TraceProgram;
-                this.FailingEntryPoint = FailingEntryPoint;
             }
         }
 
         // How many times an assertion has been blocked for an entrypoint
-        static Dictionary<Tuple<string, string>, int> AssertionBlockedCount = new Dictionary<Tuple<string, string>, int>();
+        static Dictionary<string, int> AssertionBlockedCount = new Dictionary<string, int>();
 
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
@@ -784,10 +331,6 @@ namespace AngelicVerifierNull
                     break;
                 }
 
-                // Identify the entrypoint that led to the assertion violation.
-                var failingEntryPoint =
-                    instr.GetEntryPoint(cex, IdentifiedEntryPoints);
-
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex, prog, out concretize);
@@ -805,7 +348,7 @@ namespace AngelicVerifierNull
 
                 Stats.resume("explain.error");
                 List<Tuple<string, int, string>> eeSlicedSourceLines = null;
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, failingEntryPoint, Options.EEflags, out eeSlicedSourceLines);
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, "", Options.EEflags, out eeSlicedSourceLines);
                 if (!Options.TraceSlicing) eeSlicedSourceLines = null;
                 Stats.stop("explain.error");
 
@@ -818,7 +361,7 @@ namespace AngelicVerifierNull
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
 
-                var traceInfo = new ErrorTraceInfo(traceName, cex, pprog.getProgram(), assertLoc, failingEntryPoint);
+                var traceInfo = new ErrorTraceInfo(traceName, cex, pprog.getProgram(), assertLoc);
 
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) {
                     SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
@@ -833,7 +376,7 @@ namespace AngelicVerifierNull
                     var done = false;
                     if (assertLoc != null)
                     {
-                        var key = Tuple.Create(assertLoc.ToString(), failingEntryPoint);
+                        var key = assertLoc.ToString();
                         if (!AssertionBlockedCount.ContainsKey(key))
                             AssertionBlockedCount[key] = 0;
                         AssertionBlockedCount[key]++;
@@ -856,13 +399,13 @@ namespace AngelicVerifierNull
 
                     if (!done)
                     {
-                        var constraintId = instr.SuppressInput(eeStatus.Item2, failingEntryPoint);
+                        var constraintId = instr.SuppressInput(eeStatus.Item2);
                         pendingTraces.Add(constraintId, traceInfo);
                         Stats.count("blocked.count");
 
                         // Check inconsistency
                         Console.WriteLine("Checking inconsistency"); var startTime = DateTime.Now;
-                        var inconsistent = CheckInconsistency(instr, failingEntryPoint, BranchesAffected(eeStatus.Item2));
+                        var inconsistent = CheckInconsistency(instr, BranchesAffected(eeStatus.Item2));
                         Console.WriteLine("Inconsistency check took: {0} seconds", (DateTime.Now - startTime).TotalSeconds.ToString("F2"));
 
                         if (inconsistent.Count != 0)
@@ -872,14 +415,14 @@ namespace AngelicVerifierNull
                             // drop asserts
                             PrintAndSuppressAssert(instr, pendingTraces.Where(tup => inconsistent.Contains(tup.Key)).Select(tup => tup.Value), failStatus);
                             // drop constraints
-                            inconsistent.Iter(id => instr.RemoveInputSuppression(id, failingEntryPoint));
+                            inconsistent.Iter(id => instr.RemoveInputSuppression(id));
                             // drop traces
                             inconsistent.Iter(id => pendingTraces.Remove(id));
                         }
                         else
                         {
                             // Relax env constraints
-                            RelaxEnvironmentConstraints(instr, failingEntryPoint, null, false);
+                            RelaxEnvironmentConstraints(instr, null, false);
                         }
                     }
 
@@ -918,6 +461,7 @@ namespace AngelicVerifierNull
         }
 
         // Given the EE blocking condition, find the deadcode branches that are possibly affected
+        // TODO: Populate DeadCodeBranchesDependencyInfo somehow
         static HashSet<int> BranchesAffected(Expr expr)
         {
             // null means all
@@ -942,20 +486,12 @@ namespace AngelicVerifierNull
         }
 
         // Relax environment constraints Ebasic
-        private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, string entrypoint, HashSet<int> branchesToInstrument, bool onlydeadcode)
+        private static void RelaxEnvironmentConstraints(AvnInstrumentation instr, HashSet<int> branchesToInstrument, bool onlydeadcode)
         {
             if (!Options.useEbasic)
                 return;
 
             Console.WriteLine("Relaxing environment constraints");
-
-            // only consider the given entrypoint
-            var blocked = false;
-            if (!instr.InBlockingMode() && entrypoint != null)
-            {
-                blocked = true;
-                instr.BlockAllButThis(entrypoint);
-            }
 
             // Get program
             var program = instr.GetCurrProgram().getProgram();
@@ -995,7 +531,7 @@ namespace AngelicVerifierNull
                 }
             }
 
-            var reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
+            var reach = FindReachableStatesFunc(program);
 
             // change assume Reachable(e) to assert !e
             var assertcnt = 0;
@@ -1032,11 +568,6 @@ namespace AngelicVerifierNull
 
             if (softcnt == 0 || assertcnt == 0)
             {
-                // remove side-effects
-                if (blocked)
-                {
-                    instr.RemoveBlockingConstraint();
-                }
                 return;
             }
 
@@ -1057,12 +588,24 @@ namespace AngelicVerifierNull
 
             if(ret != null)
                 ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
+        }
 
-            // remove side-effects
-            if (blocked)
-            {
-                instr.RemoveBlockingConstraint();
-            }
+        public static Function FindReachableStatesFunc(Program program)
+        {
+            var ret = program.TopLevelDeclarations.OfType<Function>()
+                .Where(f => QKeyValue.FindBoolAttribute(f.Attributes, AvnAnnotations.ReachableStatesAttr))
+                .FirstOrDefault();
+
+            if (ret != null)
+                return ret;
+
+            ret = new Function(Token.NoToken, "MustReach", new List<Variable>{
+                    BoogieAstFactory.MkFormal("x", btype.Bool, true)},
+                BoogieAstFactory.MkFormal("y", btype.Bool, false));
+            ret.AddAttribute(AvnAnnotations.ReachableStatesAttr);
+
+            program.AddTopLevelDeclaration(ret);
+            return ret;
         }
 
         private static void SuppressAssert(AvnInstrumentation instr, IEnumerable<ErrorTraceInfo> traceInfos)
@@ -1121,22 +664,22 @@ namespace AngelicVerifierNull
                 // screen output
                 if (traceInfo.AssertLoc != null)
                 {
-                    output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3} and entrypoint {4}",
-                        failingProc, traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingAssert.Expr.ToString(), traceInfo.FailingEntryPoint);
+                    output = string.Format("Assertion failed in proc {0} in file {1} line {2} with expr {3}",
+                        failingProc, traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingAssert.Expr.ToString());
 
                     // result file output
                     // format: Description, Src File, Line, Procedure, EntryPoint
                     if (ResultsFile != null)
                     {
-                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4},{5}",
-                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, failStatus, traceInfo.FailingEntryPoint);
+                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
+                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, failStatus);
                         ResultsFile.Flush();
                     }
                 }
                 else
                 {
-                    output = string.Format("Assertion failed in proc {0} with expr {1} and entrypoint {2}",
-                        failingProc, failingAssert.Expr.ToString(), traceInfo.FailingEntryPoint);
+                    output = string.Format("Assertion failed in proc {0} with expr {1}",
+                        failingProc, failingAssert.Expr.ToString());
                 }
 
                 Console.WriteLine("{0}", output);
@@ -1147,16 +690,8 @@ namespace AngelicVerifierNull
             //    Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
         }
 
-        private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, string entrypoint, HashSet<int> deadcodeBranches)
+        private static HashSet<int> CheckInconsistency(AvnInstrumentation instr, HashSet<int> deadcodeBranches)
         {
-            // only consider the given entrypoint
-            var blocked = false;
-            if (!instr.InBlockingMode())
-            {
-                blocked = true;
-                instr.BlockAllButThis(entrypoint);
-            }
-
             // Get program
             var program = instr.GetCurrProgram().getProgram();
 
@@ -1180,7 +715,7 @@ namespace AngelicVerifierNull
                 }
             }
 
-            var reach = Instrumentations.HarnessInstrumentation.FindReachableStatesFunc(program);
+            var reach = FindReachableStatesFunc(program);
 
             // change assume Reachable(e) to assert !e
             var assertcnt = 0;
@@ -1257,12 +792,6 @@ namespace AngelicVerifierNull
 
             CommandLineOptions.Clo.StackDepthBound = sd;
 
-            // remove side-effects
-            if (blocked)
-            {
-                instr.RemoveBlockingConstraint();
-            }
-
             var ret = new HashSet<int>();
             
             if(softret != null)
@@ -1271,76 +800,6 @@ namespace AngelicVerifierNull
             return ret;
         }
 
-        //Run RunCorralIterative with only one procedure enabled
-        private static void RunCorralAssertRoundRobin(AvnInstrumentation instr, string p)
-        {
-            Utils.Print("Using assert round robin exploration...", Utils.PRINT_TAG.AV_DEBUG);
-
-            foreach (var proc in instr.GetProcsWithAsserts())
-            {
-                Utils.Print(string.Format("Analyzing assertions in procedure {0} in round robin mode", proc),
-                     Utils.PRINT_TAG.AV_DEBUG);
-                Utils.Print(string.Format("number.assertions: {0}", Stats.numAssertsPerProc[proc]),
-                    Utils.PRINT_TAG.AV_DEBUG);
-
-                //enable only the procedure corresponding to proc
-                var left = instr.SuppressAllButOneProcedure(proc);
-
-                //we give less timeout for the individual procedure
-                var startTime = DateTime.Now; // Start time of round robin mode
-                var completed = RunCorralIterative(instr, timeoutAssertRoundRobin);
-                var endTime = DateTime.Now; // End time of round robin mode
-
-                Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
-                    Utils.PRINT_TAG.AV_DEBUG);
-
-                instr.Unsuppress();
-
-                // Did we prove the assertions?
-                if (completed)
-                {
-                    Utils.Print(string.Format("Suppressing {0} assertions", left.Count),
-                        Utils.PRINT_TAG.AV_DEBUG);
-                    left.Iter(t => instr.SuppressToken(t));
-                }
-
-                Stats.printStats();
-            }
-        }
-
-        //Run RunCorralIterative with only one procedure enabled
-        private static void RunCorralRoundRobin(AvnInstrumentation instr, string p)
-        {
-            var pprog = instr.GetCurrProgram();
-
-            Utils.Print("Using round robin exploration...", Utils.PRINT_TAG.AV_DEBUG);
-            var prog = pprog.getProgram();
-
-            var blockCallConsts = instr.GetRoundRobinBlockingConstants();
-            //TODO: iterate for multiple rounds removing procedures once they are verified
-            foreach (var bc in blockCallConsts)
-            {
-                Utils.Print(string.Format("Analyzing procedure {0} in round robin mode", harnessInstrumentation.blockEntryPointConstants[bc.Name]),
-                     Utils.PRINT_TAG.AV_DEBUG);
-                Utils.Print(string.Format("number.assertions: {0}", Stats.numAssertsPerProc[harnessInstrumentation.blockEntryPointConstants[bc.Name]]),
-                    Utils.PRINT_TAG.AV_DEBUG);
-
-                //enable only the procedure corresponding to kv
-                instr.BlockAllButThis(bc);
-
-                //we give less timeout for the individual procedure
-                var startTime = DateTime.Now; // Start time of round robin mode
-                RunCorralIterative(instr, timeoutRoundRobin);
-                var endTime = DateTime.Now; // End time of round robin mode
-
-                Utils.Print(string.Format("Time taken: {0} s", (endTime - startTime).TotalSeconds),
-                    Utils.PRINT_TAG.AV_DEBUG);
-                                
-                instr.RemoveBlockingConstraint();
-
-                Stats.printStats();
-            }
-        }
         //Top-level Corral call
         private static void RunCorralForAnalysis(PersistentProgram prog)
         {
@@ -1348,30 +807,16 @@ namespace AngelicVerifierNull
             // Initial stuff
             ////////////////
 
-            ProgTransformation.PersistentProgramIO.useDuplicator = true;
-
             // Rewrite program to a more convinient form
             var rc = new cba.RewriteCallCmdsPass(true);
             prog = rc.run(prog);
 
-            var instr = new AvnInstrumentation(harnessInstrumentation);
+            // TODO: populate the set of stubs
+            var instr = new AvnInstrumentation(new HashSet<string>());
             prog = instr.run(prog);
 
             // dead code
-            RelaxEnvironmentConstraints(instr, null, null, true);
-
-            Stats.resume("round.robin");
-            //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
-            if (!disableRoundRobinPrePass)
-                RunCorralRoundRobin(instr, corralConfig.mainProcName);
-            Stats.stop("round.robin");
-
-            Stats.resume("assert.round.robin");
-            //Run Corral in a round robin manner to remove simple procedures/find shallow bugs
-            if (!disableAssertRoundRobinPrePass)
-                RunCorralAssertRoundRobin(instr, corralConfig.mainProcName);
-            Stats.stop("assert.round.robin");
-
+            RelaxEnvironmentConstraints(instr, null, true);
 
             // Run Corral outer loop
             RunCorralIterative(instr, timeout);
@@ -1752,8 +1197,8 @@ namespace AngelicVerifierNull
             });
             nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
-            // Add these flags by default
-            var eeflags = new List<string>{"/onlySlicAssumes+", "/ignoreAllAssumes-"};
+            // Add these flags by default (nothing right now)
+            var eeflags = new List<string>(); // {"/onlySlicAssumes+", "/ignoreAllAssumes-"};
             eeflags.AddRange(extraEEflags);
 
             Dictionary<string, string> eeComplexExprs;
@@ -1785,18 +1230,31 @@ namespace AngelicVerifierNull
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
                         blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
-
-                        /*HACK: supress the assertion when it cannot be blocked*/
-                        if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
+                        
+                        /* HACK: We should existentially quantify demonic non-determinism, but currently we just
+                         * avoiding blocking */
+                        var vu = new VarsUsed(); vu.Visit(blockExpr);
+                        var demonicVars = vu.Vars.Where(v => concretize.allocConstants.ContainsKey(v.Name) || (!(v is BoundVariable) && !(v is Constant) && !v.TypedIdent.Type.IsMap));
+                        if (demonicVars.Any())
                         {
-                            if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
-                                throw new Exception("Repeating block expression detected. Not able to block!");
+                            // blocking expression has a scalar that is not bound by an unknownTrigger
+                            Utils.Print(String.Format("Found free variables :: {0}", demonicVars.Select(v => v.Name).Concat(" ")), Utils.PRINT_TAG.AV_OUTPUT);
+                            status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True);
                         }
                         else
-                            blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)] = 1;
-                        
-                        Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
-                        status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr); 
+                        {
+                            /*HACK: supress the assertion when it cannot be blocked*/
+                            if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
+                            {
+                                if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
+                                    throw new Exception("Repeating block expression detected. Not able to block!");
+                            }
+                            else
+                                blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)] = 1;
+
+                            Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
+                            status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr);
+                        }
                     }
                 }
             }
@@ -1828,7 +1286,10 @@ namespace AngelicVerifierNull
             Dictionary<string, Tuple<Variable, Expr>> allocToBndVarAndTrigger = new Dictionary<string, Tuple<Variable, Expr>>();
             int allocConstCount = 0;
             allocConsts.ToList()
-                .ForEach(x =>
+                // triggers for unknown are created by mallocInstrumentation, and each is tagged with ConcretizeCallIdAttr;
+                // Others should be skipped
+                .Where(x => x.Value >= 0)
+                .Iter(x =>
                     {
                         var xConst = nprog.TopLevelDeclarations.OfType<Constant>().Where(y => y.Name == x.Key).FirstOrDefault();
                         if (xConst == null)
@@ -1958,66 +1419,5 @@ namespace AngelicVerifierNull
         //}
         #endregion
 
-        #region Alias analysis
-
-        // Run Alias Analysis on a sequential Boogie program
-        // and returned the pruned program
-        public static PersistentProgram RunAliasAnalysis(PersistentProgram inp, bool pruneEP = true)
-        {
-            var program = inp.getProgram();
-
-            //AliasAnalysis.AliasAnalysis.dbg = true;
-            //AliasAnalysis.AliasConstraintSolver.dbg = true;
-            AliasAnalysis.AliasAnalysisResults res = null;
-            if (Options.UseAliasAnalysisForAssertions)
-            {
-                // Do SSA
-                program =
-                    SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
-
-                // Make sure that aliasing queries are on identifiers only
-                var af =
-                    AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
-
-                res =
-                  AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
-            }
-            else
-            {
-                // Make sure that aliasing queries are on identifiers only
-                var af =
-                    AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
-
-                res = new AliasAnalysis.AliasAnalysisResults();
-                af.Iter(s => res.aliases.Add(s, true));
-            }
-
-            var origProgram = inp.getProgram();
-            Dictionary<string, bool> csfs_ret = null;
-            if (Options.UseCSFSAliasAnalysis)
-            {
-                csfs_ret = AliasAnalysis.AliasAnalysis.DoCSFSAliasAnalysis(program);
-                AliasAnalysis.CSFSAliasAnalysis.removeAsserts(origProgram, csfs_ret);
-            }
-
-            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
-            if(pruneEP) PruneRedundantEntryPoints(origProgram);
-
-            if (AliasAnalysis.AliasAnalysis.generateCP) AliasAnalysis.AliasAnalysis.ConstructConstraintProg(origProgram);
-
-            return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);
-        }
-
-        // Prune away EntryPoints that cannot reach an assertion
-        static void PruneRedundantEntryPoints(Program program)
-        {
-            var procs = BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
-            procs = IdentifiedEntryPoints.Difference(procs);
-            Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", procs.Count);
-            harnessInstrumentation.PruneEntryPoints(program, procs);
-            IdentifiedEntryPoints = harnessInstrumentation.entrypoints;
-        }
-
-        #endregion
     }
 }

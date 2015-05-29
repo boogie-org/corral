@@ -72,26 +72,24 @@ namespace FastAVN
             }
         }
 
-        static int timeout = 0; // system timeout
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
+        static string avHarnessInstrPath = null; // path to AVN binary
         static string psexecPath = null; // path to psexec
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
-        static string avnArgs = ""; // default AVN arguments
+        static string avnArgs = ""; // AVN arguments
+        static string avHarnessInstrArgs = ""; // harness instrumentation arguments
         static string mergedBugReportName = "bugs.txt";
         static string mergedBugReportCSV = "results.csv";
         static int numThreads = 4; // default number of parallel AVN instances
         private static string CORRAL_EXTRA_INIT = "corralExtraInit";
-        static bool fieldNonNull = true; // include angelic field non-null harness
         static string angelic = "Angelic";
         static string trace_extension = ".tt";
         static string bug_folder = "Bugs";
         static string bug_filename = "Bug";
         static string angelic_stack = "stack";
         static string stack_extension = ".txt";
-        static bool prune = false;
-        static string stubsfile = null;
         static FastAvnConfig config = null;
 
         static DateTime startingTime = DateTime.Now;
@@ -112,30 +110,19 @@ namespace FastAVN
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
 
-            if (args.Any(s => s == "/prune"))
-                prune = true;
-
-            args.Where(s => s.StartsWith("/stubPath:"))
-                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
-
             args.Where(s => s.StartsWith("/aopt:"))
                 .Iter(s => avnArgs += " /" + s.Substring("/aopt:".Length) + " ");
+
+            args.Where(s => s.StartsWith("/hopt:"))
+                .Iter(s => avHarnessInstrArgs += " /" + s.Substring("/hopt:".Length) + " ");
 
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
 
-            // user defined AVN timeout
-            args.Where(s => s.StartsWith("/timeout:"))
-                .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
-
             // depth k used by implementation pruning
             args.Where(s => s.StartsWith("/depth:"))
                 .Iter(s => approximationDepth = int.Parse(s.Substring("/depth:".Length)));
-
-            // user defined path to AVN binary
-            args.Where(s => s.StartsWith("/avnPath:"))
-                .Iter(s => avnPath = s.Substring("/avnPath:".Length));
 
             args.Where(s => s.StartsWith("/numThreads:"))
                 .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
@@ -144,20 +131,20 @@ namespace FastAVN
             args.Where(s => s.StartsWith("/config:"))
                 .Iter(s => config = FastAvnConfig.DeSerialize(s.Substring("/config:".Length)));
 
-            if (args.Any(s => s == "/noFieldNonNull"))
-                fieldNonNull = false;
-
             args.Where(s => s.StartsWith("/killAfter:"))
                 .Iter(s => deadline = int.Parse(s.Substring("/killAfter:".Length)));
 
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
+            avnArgs += " /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- ";
 
             // Find AVN executable
-            findAvn();
-            Debug.Assert(avnPath != null);
+            avnPath = findExe("AngelicVerifierNull.exe");
+            avHarnessInstrPath = findExe("AvHarnessInstrumentation.exe");
+            psexecPath = findExe("psexec.exe");
 
-            Program prog = null;
+            Debug.Assert(avnPath != null && avHarnessInstrPath != null);
+
             try
             {
                 Stats.resume("fastavn");
@@ -165,30 +152,14 @@ namespace FastAVN
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
 
-                // Setup Boogie and corral
-                AngelicVerifierNull.Driver.InitializeCorral();
+                // Run harness instrumentation
+                var resultfile = args[0].Replace(".bpl", "_hinst.bpl");
+                RemoteExec.run(".", avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
 
-                prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile); // get the input program
+                if (!File.Exists(resultfile))
+                    throw new Exception("Error running harness instrumentation");
 
-                if (prune)
-                {
-                    try
-                    {
-                        prog = PruneProgram(prog);
-                    }    
-                    catch (OutOfMemoryException e)
-                    {
-                        Console.WriteLine("Exception: {0}", e.Message);
-                        // recover the program
-                        prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("Exception: {0}", e.Message);
-                        // recover the program
-                        prog = AngelicVerifierNull.Driver.GetInputProgram(args[0], stubsfile);
-                    }
-                }
+                var prog = BoogieUtil.ReadAndResolve(resultfile);                
 
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
@@ -205,126 +176,29 @@ namespace FastAVN
             }
         }
 
-        // Prune assertions (using AA) and entrypoints
-        private static Program PruneProgram(Program prog)
+        // locate binary in the system
+        private static string findExe(string exe)
         {
-            // Stats
-            var start = DateTime.Now;
-            Console.WriteLine("FastAVN: Asserts before AA: {0}", AngelicVerifierNull.Instrumentations.AssertCountVisitor.Count(prog));
-            Console.WriteLine("FastAVN: EntryPoints before AA: {0}", prog.TopLevelDeclarations
-                .OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
-                .Count());
-
-            BoogieUtil.DoModSetAnalysis(prog);
-
-            // Take snapshot in a persistent program
-            var inputProg = new PersistentProgram(prog, "", 1);
-
-            // Lets add the harness (and stub implementations). These will be used by AA.
-            var harnessName = AngelicVerifierNull.AvnAnnotations.CORRAL_MAIN_PROC;
-            var harnessInstrumentation =
-                new AngelicVerifierNull.Instrumentations.HarnessInstrumentation(prog, harnessName, true);
-            harnessInstrumentation.DoInstrument();
-
-            // Re-resolve
-            prog = (new PersistentProgram(prog, "", 1)).getProgram();
-
-            // Run AA
-            AliasAnalysis.AliasAnalysisResults res = null;
-
-            // Do SSA
-            prog =
-                SSA.Compute(prog, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
-
-            // Make sure that aliasing queries are on identifiers only
-            var af =
-                AliasAnalysis.SimplifyAliasingQueries.Simplify(prog);
-
-            // Do AA
-            res =
-              AliasAnalysis.AliasAnalysis.DoAliasAnalysis(prog);
-
-            // Get back the input program, resolve aliasing queries
-            var origProgram = inputProg.getProgram();
-            AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res, false);
-
-            // program initialization procedure
-            var initproc = origProgram.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, AngelicVerifierNull.AvnAnnotations.InitialializationProcAttr))
-                .FirstOrDefault();
-            var extraProc = new HashSet<string>();
-            if (initproc != null) extraProc.Add(initproc.Name);
-
-            // remove unreachable procedures (because of indirect call resolution)
-            BoogieUtil.pruneProcs(origProgram, harnessInstrumentation.entrypoints.Union(extraProc));
-
-            // Put inside a persistent program
-            inputProg = new PersistentProgram(origProgram, "", 1);
-
-            // Run Houdini
-            var progAfter = AngelicVerifierNull.Driver.RunHoudiniPass(inputProg).getProgram();
-
-            // prune entrypoints
-            var canReachAssert = BoogieUtil.procsThatMaySatisfyPredicate(progAfter, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
-            var epCannotReachAssert = harnessInstrumentation.entrypoints.Difference(canReachAssert);
-            Console.WriteLine("Pruning away {0} entry points as they cannot reach an assert", epCannotReachAssert.Count);
-            progAfter.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => epCannotReachAssert.Contains(impl.Name))
-                .Iter(impl =>
-                    {
-                        impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
-                        impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
-                    });
-            BoogieUtil.pruneProcs(progAfter, (harnessInstrumentation.entrypoints.Intersection(canReachAssert)).Union(extraProc));
-
-            // Set flag to stop AA
-            avnArgs += " /noAA:1 ";
-
-            // Stats
-            Console.WriteLine("FastAvn: AA took {0} seconds", (DateTime.Now - start).TotalSeconds.ToString("F2"));
-            Console.WriteLine("FastAVN: Asserts after AA: {0}", AngelicVerifierNull.Instrumentations.AssertCountVisitor.Count(progAfter));
-            Console.WriteLine("FastAVN: EntryPoints after AA: {0}", progAfter.TopLevelDeclarations
-                .OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
-                .Count());
-            Console.WriteLine("FastAVN: AA marked {0} assertions as must-fail", AliasAnalysis.MarkMustAliasQueries.countmustNULL);
-
-            return progAfter;
-        }
-
-        // locate AVN binary in the system
-        private static void findAvn()
-        {
-            if (avnPath != null)
-            {
-                if (!File.Exists(avnPath))
-                    throw new FileNotFoundException("Cannot find executable of AVN: " + avnPath + "!");
-                return;
-            }
-            var avn = "AngelicVerifierNull.exe";
+            string ret = null;
             var runDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            if (!File.Exists(Path.Combine(runDir, avn)))
+            if (!File.Exists(Path.Combine(runDir, exe)))
             {
                 var enviromentPath = System.Environment.GetEnvironmentVariable("PATH"); // look up in PATH
                 var paths = enviromentPath.Split(';');
-                avnPath = paths.Select(x => Path.Combine(x, avn))
+                ret = paths.Select(x => Path.Combine(x, exe))
                     .Where(x => File.Exists(x))
                     .FirstOrDefault();
 
                 if (string.IsNullOrWhiteSpace(avnPath))
-                    throw new FileNotFoundException("Cannot find executable of AVN!");
+                    throw new FileNotFoundException("Cannot find executable: " + exe);
             }
             else
             {
-                avnPath = Path.Combine(runDir, avn);
+                ret = Path.Combine(runDir, exe);
             }
-            Utils.Print(String.Format("Found AVN at: {0}", avnPath));
+            Utils.Print(String.Format("Found {0} at: {0}", exe, ret));
 
-            if (!File.Exists(Path.Combine(runDir, "psexec.exe"))) 
-                psexecPath = null;
-            else
-                psexecPath = Path.Combine(runDir, "psexec.exe");                
+            return ret;
         }
 
         static ConcurrentBag<string> Shuffle(ConcurrentBag<string> bag)
@@ -834,7 +708,7 @@ namespace FastAVN
                     if (impl.Name != mainProcName)
                         decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
                     if (toRemove.Contains(impl.Name) &&
-                        !(fieldNonNull && impl.Name == CORRAL_EXTRA_INIT))
+                        !(impl.Name == CORRAL_EXTRA_INIT))
                     // keep instrumentation function
                     {
                         // replace implementations to be removed by
