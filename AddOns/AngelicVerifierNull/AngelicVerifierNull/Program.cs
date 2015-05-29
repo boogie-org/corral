@@ -1239,7 +1239,7 @@ namespace AngelicVerifierNull
                         /* HACK: We should existentially quantify demonic non-determinism, but currently we just
                          * avoiding blocking */
                         var vu = new VarsUsed(); vu.Visit(blockExpr);
-                        var demonicVars = vu.Vars.Where(v => concretize.allocConstants.ContainsKey(v.Name) || (!(v is BoundVariable) && !(v is Constant) && v.TypedIdent.Type.IsBasic));
+                        var demonicVars = vu.Vars.Where(v => concretize.allocConstants.ContainsKey(v.Name) || (!(v is BoundVariable) && !(v is Constant) && !v.TypedIdent.Type.IsMap));
                         if (demonicVars.Any())
                         {
                             // blocking expression has a scalar that is not bound by an unknownTrigger
