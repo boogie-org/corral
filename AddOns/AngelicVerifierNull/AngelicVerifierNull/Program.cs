@@ -119,6 +119,9 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
 
+            if (args.Any(s => s == "/generateCP"))
+                AliasAnalysis.AliasAnalysis.generateCP = true;
+
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
@@ -160,6 +163,12 @@ namespace AngelicVerifierNull
                 }
 
                 var program = new PersistentProgram(prog, corralConfig.mainProcName, 0);
+
+                if (AliasAnalysis.AliasAnalysis.generateCP) return;
+
+                // run Houdini pass
+                if (Options.HoudiniPass)
+                    prog = RunHoudiniPass(prog);
 
                 // hook to run the control flow slicing static analysis pre pass
                 if (Options.TraceSlicing)

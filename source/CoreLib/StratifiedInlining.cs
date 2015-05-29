@@ -136,7 +136,7 @@ namespace CoreLib
     * Class for statistical analysis        *
     ****************************************/
 
-    class Stats
+    public class Stats
     {
         public int numInlined = 0;
         public int vcSize = 0;
@@ -164,7 +164,7 @@ namespace CoreLib
     ****************************************/
 
     /* stratified inlining technique */
-    class StratifiedInlining : StratifiedVCGenBase
+    public class StratifiedInlining : StratifiedVCGenBase
     {
         public Stats stats;
 
@@ -239,8 +239,8 @@ namespace CoreLib
                 callGraph.PrintOut(Console.Out);
         }
 
-        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile) :
-            base(program, logFilePath, appendLogFile, new List<Checker>())
+        public StratifiedInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
+            base(program, logFilePath, appendLogFile, new List<Checker>(), PassiveImplInstrumentation)
         {
             stats = new Stats();
 
@@ -2565,12 +2565,12 @@ namespace CoreLib
 
         public bool IsExclusive(Implementation impl, int n1, int n2)
         {
+            if (n1 < 0 || n2 < 0)
+                return false;
+
             if (exclusiveCache.ContainsKey(impl.Name))
                 return !exclusiveCache[impl.Name].Contains(Tuple.Create(n1, n2)) &&
                     !exclusiveCache[impl.Name].Contains(Tuple.Create(n2, n1));
-
-            if (n1 < 0 || n2 < 0)
-                return false;
 
             var blockToCalls = new Dictionary<Block, HashSet<int>>();
             var seen = new HashSet<int>();
@@ -2633,6 +2633,21 @@ namespace CoreLib
                 !exclusiveCache[impl.Name].Contains(Tuple.Create(n2, n1));
         }
 
+        public void DumpCFG(Implementation impl, string filename)
+        {
+            var graph = Program.GraphFromImpl(impl);
+            var str = new System.IO.StreamWriter(filename);
+            str.WriteLine("digraph DAG {");
+
+            graph.Nodes
+                .Iter(n => str.WriteLine("{0} [ label = \"{1}\" color=black shape=box];", n.UniqueId, n.Label));
+
+            foreach (var edge in graph.Edges)
+                str.WriteLine("{0} -> {1} [ label = \"{2}\"];", edge.Item1.UniqueId, edge.Item2.UniqueId, "");
+
+            str.WriteLine("}");
+            str.Close();
+        }
 
     }
 
@@ -3870,6 +3885,7 @@ namespace CoreLib
             if (Nodes.Count == 0 || Root == null)
                 return;
             Dump(filename, Nodes);
+            //Disj.DumpCFG(BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, "main"), "main.dot");
         }
 
         public void Dump(string filename, HashSet<DagNode> nodes)
@@ -3883,7 +3899,7 @@ namespace CoreLib
                 .Iter(n => str.WriteLine("{0} [ label = \"{1}\" color=black shape=box];", n.uid, n.ImplName));
 
             foreach (var edge in Edges.Where(e => nodes.Contains(e.Source) && nodes.Contains(e.Target)))
-                str.WriteLine("{0} -> {1} [ label = \"{2}\"];", edge.Source.uid, edge.Target.uid, "" /*edge.CallSite*/);
+                str.WriteLine("{0} -> {1} [ label = \"{2}\"];", edge.Source.uid, edge.Target.uid, edge.CallSite);
 
             str.WriteLine("}");
             str.Close();
@@ -3973,12 +3989,12 @@ namespace CoreLib
     *      Counter-example Generation       *
     ****************************************/
 
-    class EmptyErrorReporter : ProverInterface.ErrorHandler
+    public class EmptyErrorReporter : ProverInterface.ErrorHandler
     {
         public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) { }
     }
 
-    class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
+    public class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
     {
         StratifiedInlining si;
         public VerifierCallback callback;

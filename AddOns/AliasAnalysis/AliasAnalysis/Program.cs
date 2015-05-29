@@ -34,8 +34,10 @@ namespace AliasAnalysis
                 AliasConstraintSolver.NoEmptyLoads = true;
             if (args.Any(s => s == "/warn"))
                 AliasConstraintSolver.printWarnings = true;
-            if (args.Any(s => s == "/dontEliminateCycles"))
-                AliasConstraintSolver.doCycleElimination = false;
+            if (args.Any(s => s == "/eliminateCycles"))
+                AliasConstraintSolver.doCycleElimination = true;
+            if (args.Any(s => s == "/generateCP"))
+                AliasAnalysis.generateCP = true;
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -48,7 +50,7 @@ namespace AliasAnalysis
 
             var program = BoogieUtil.ParseProgram(args[0]);
             Program origProgram = null;
-            if (prune != null)
+            if (true /*prune != null*/)
                 origProgram = (new FixedDuplicator(false)).VisitProgram(program);
 
             program.Resolve();
@@ -72,11 +74,12 @@ namespace AliasAnalysis
             foreach (var tup in ret.aliases)
                 Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
 
-            if (prune != null)
+            if (true /*prune != null*/)
             {
                 origProgram.Resolve();
                 PruneAliasingQueries.Prune(origProgram, ret);
-                BoogieUtil.PrintProgram(origProgram, prune);
+                if (prune != null) BoogieUtil.PrintProgram(origProgram, prune);
+                if (AliasAnalysis.generateCP) AliasAnalysis.ConstructConstraintProg(origProgram);
             }
         }
 
@@ -108,7 +111,7 @@ namespace AliasAnalysis
             var fcall = node.Fun as FunctionCall;
             if (fcall != null && result.mustbeNULL.ContainsKey(fcall.FunctionName))
             {
-                if (result.mustbeNULL[fcall.FunctionName] == true)
+                if (currCmd != null && result.mustbeNULL[fcall.FunctionName] == true)
                 {
                     currCmd.Attributes = new QKeyValue(Token.NoToken, mustNULL, new List<object>(), currCmd.Attributes);
                     countmustNULL++;
@@ -411,6 +414,13 @@ namespace AliasAnalysis
         public static bool dbg = false;
         CSFSAliasAnalysis csfsAnalysis;
         public static HashSet<string> non_null_vars = null;
+        public static bool generateCP = false;
+
+        // program containing constraints for AA
+        private static Program constraintProg;
+
+        // type for allocation sites
+        private static TypeCtorDecl Type_AS = new TypeCtorDecl(Token.NoToken, "allocSite", 0);
 
         private AliasAnalysis(Program program)
         {
@@ -419,6 +429,7 @@ namespace AliasAnalysis
             solver = new AliasConstraintSolver();
             counter = 0;
             csfsAnalysis = new CSFSAliasAnalysis(program);
+            constraintProg = new Program();
         }
 
         private void getReturnAllocSites(Dictionary<string, HashSet<string>> PointsTo)
@@ -725,7 +736,463 @@ namespace AliasAnalysis
             return v.Name + "$" + procName;
         }
 
+        private static void InitConstraintProg(Program program)
+        {
+            constraintProg.AddTopLevelDeclaration(Type_AS);
+            ConstructConstraintStmts.Type_AS = Type_AS;
 
+            Constant specialConstant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "scalarAS", new CtorType(Token.NoToken, Type_AS, new List<btype>())));
+            constraintProg.AddTopLevelDeclaration(specialConstant);
+            ConstructConstraintStmts.specialConstant = specialConstant;
+
+            ConstructConstraintStmts.allocatedConstants = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "allocated"))
+                .Iter(c =>
+                {
+                    ConstructConstraintStmts.allocatedConstants.Add(c.Name);
+                });
+
+            ConstructConstraintStmts.allocators = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => BoogieUtil.checkAttrExists("allocator", proc.Attributes))
+                .Iter(proc => ConstructConstraintStmts.allocators.Add(proc.Name));
+
+            ConstructConstraintStmts.fullAllocators = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(proc => QKeyValue.FindStringAttribute(proc.Attributes, "allocator") == "full")
+                .Iter(proc => ConstructConstraintStmts.fullAllocators.Add(proc.Name));
+
+            ConstructConstraintStmts.implNames = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Implementation>().Iter(impl => ConstructConstraintStmts.implNames.Add(impl.Name));
+
+            ConstructConstraintStmts.asCounter = 0;
+
+            ConstructConstraintStmts.globalMaps = new HashSet<GlobalVariable>();
+            ConstructConstraintStmts.allocSites = new HashSet<Constant>();
+            ConstructConstraintStmts.fullAllocSites = new HashSet<Constant>();
+        }
+
+        private static void InitializeGlobals()
+        {
+            HashSet<string> entrypoints = new HashSet<string>();
+            constraintProg.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).Iter(proc => entrypoints.Add(proc.Name));
+            //Debug.Assert(entrypoints.Count == 1);
+
+            Implementation entrypoint = constraintProg.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoints.FirstOrDefault())).FirstOrDefault();
+
+            CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
+
+            Function fn = new Function(Token.NoToken, "IsFull", 
+                new List<Variable> { new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "aS", asType), true) },
+                new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "ret", btype.Bool), true));
+            constraintProg.AddTopLevelDeclaration(fn);
+
+            List<Cmd> cmds = new List<Cmd>();
+
+            foreach (Constant c in ConstructConstraintStmts.allocSites)
+            {
+                Expr expr = new NAryExpr(Token.NoToken, new FunctionCall(fn), new List<Expr>{new IdentifierExpr(Token.NoToken, c)});
+                AssumeCmd ac = null;
+                if (ConstructConstraintStmts.fullAllocSites.Contains(c))
+                {
+                    ac = new AssumeCmd(Token.NoToken, expr);
+                }
+                else
+                {
+                    ac = new AssumeCmd(Token.NoToken, Expr.Not(expr));
+                }
+                cmds.Add(ac);
+            }
+
+            foreach (var map in ConstructConstraintStmts.globalMaps)
+            {
+                IdentifierExpr x = new IdentifierExpr(Token.NoToken, new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "x", asType)));
+                IdentifierExpr y = new IdentifierExpr(Token.NoToken, new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "y", asType)));
+                Expr isfull_x = new NAryExpr(Token.NoToken, new FunctionCall(fn), new List<Expr>{x});
+                Expr isfull_y = new NAryExpr(Token.NoToken, new FunctionCall(fn), new List<Expr>{y});
+                Expr x_neq_y = Expr.Neq(x, y);
+                Expr lhs = Expr.Or(Expr.Or(Expr.Not(isfull_x), Expr.Not(isfull_y)), x_neq_y);
+                Expr rhs = new NAryExpr(Token.NoToken, new MapSelect(Token.NoToken, 2), new List<Expr> { new IdentifierExpr(Token.NoToken, map), x, y });
+                Expr not_rhs = Expr.Not(rhs);
+                Expr body = Expr.Imp(lhs, not_rhs);
+                ForallExpr expr = new ForallExpr(Token.NoToken, new List<Variable> { x.Decl, y.Decl }, new Trigger(Token.NoToken, true, new List<Expr> { rhs }), body);
+                AssumeCmd ac = new AssumeCmd(Token.NoToken, expr);
+                cmds.Add(ac);
+            }
+
+            Block newBlock = new Block(Token.NoToken, "init", cmds, new GotoCmd(Token.NoToken, new List<Block> { entrypoint.Blocks[0] }));
+            List<Block> newBlocks = new List<Block>();
+            newBlocks.Add(newBlock);
+            entrypoint.Blocks.Iter(blk => newBlocks.Add(blk));
+            entrypoint.Blocks = newBlocks;
+        }
+
+        public static Program ConstructConstraintProg(Program program)
+        {
+            InitConstraintProg(program);
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                List<Block> newBlocks = new List<Block>();
+                List<Variable> newLocVars = new List<Variable>();
+                HashSet<string> globalMaps = new HashSet<string>();
+                
+                List<Variable> input = new List<Variable>();
+                impl.InParams.Iter(v => input.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, v.Name, new CtorType(Token.NoToken, Type_AS, new List<btype>())), true)));
+
+                List<Variable> output = new List<Variable>();
+                impl.OutParams.Iter(v => output.Add(new Formal(Token.NoToken, new TypedIdent(Token.NoToken, v.Name, new CtorType(Token.NoToken, Type_AS, new List<btype>())), true)));
+
+                impl.LocVars.Iter(v => newLocVars.Add(new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, v.Name, new CtorType(Token.NoToken, Type_AS, new List<btype>())))));
+
+                ConstructConstraintStmts.varCounter = 0;
+
+                foreach (Block b in impl.Blocks)
+                {
+                    List<Variable> newLocVarsBlock = null;
+                    var block = ConstructConstraintStmts.ProcessBlock(b, out newLocVarsBlock);
+                    newBlocks.Add(block);
+                    newLocVars.AddRange(newLocVarsBlock);
+                }
+
+                Procedure constraintProc = new Procedure(Token.NoToken, impl.Name, new List<TypeVariable>(), input, output, new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                Debug.Assert(impl.Proc != null);
+                if (BoogieUtil.checkAttrExists("entrypoint", impl.Proc.Attributes)) constraintProc.AddAttribute("entrypoint");
+                constraintProg.AddTopLevelDeclaration(constraintProc);
+
+                Implementation constraintImpl = new Implementation(Token.NoToken, impl.Name, new List<TypeVariable>(), input, output, newLocVars, newBlocks);
+                constraintProg.AddTopLevelDeclaration(constraintImpl);
+            }
+
+            InitializeGlobals();
+
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
+            BoogieUtil.ReResolve(constraintProg);
+            CommandLineOptions.Clo.DoModSetAnalysis = false;
+            BoogieUtil.PrintProgram(constraintProg, "constraint_prog.bpl");
+
+            return constraintProg;
+        }
+
+        private static GlobalVariable getGlobalMap(string name)
+        {
+            CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
+
+            foreach (var map in constraintProg.TopLevelDeclarations.OfType<GlobalVariable>())
+            {
+                if (map.Name.Equals(name)) return map;
+            }
+
+            GlobalVariable newmap = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken, name, new MapType(Token.NoToken, new List<TypeVariable>(),
+                new List<btype> { asType, asType }, btype.Bool)));
+            constraintProg.AddTopLevelDeclaration(newmap);
+            ConstructConstraintStmts.globalMaps.Add(newmap);
+
+            return newmap;
+        }
+
+        private static void addGlobalVar(string name)
+        {
+            CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
+
+            foreach (GlobalVariable variable in constraintProg.TopLevelDeclarations.OfType<GlobalVariable>())
+            {
+                if (variable.Name.Equals(name)) return;
+            }
+
+            GlobalVariable newvar = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken, name, asType));
+            constraintProg.AddTopLevelDeclaration(newvar);
+            return;
+        }
+
+        private static string getASvariable(string name)
+        {
+            return name + "_allocSite";
+        }
+
+        private static Constant getConstant(string name)
+        {
+            CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
+
+            if (!ConstructConstraintStmts.allocatedConstants.Contains(name)) return ConstructConstraintStmts.specialConstant;
+
+            foreach (Constant c in constraintProg.TopLevelDeclarations.OfType<Constant>())
+            {
+                if (c.Name.Equals(getASvariable(name))) return c;
+            }
+
+            Constant newc = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, getASvariable(name), asType));
+            constraintProg.AddTopLevelDeclaration(newc);
+
+            return newc;
+        }
+
+        private static Constant getAllocationConstant(bool full)
+        {
+            CtorType asType = new CtorType(Token.NoToken, Type_AS, new List<btype>());
+
+            Constant allocConstant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "allocSite" + ConstructConstraintStmts.asCounter++.ToString(), asType));
+            ConstructConstraintStmts.allocSites.Add(allocConstant);
+
+            if (full)
+            {
+                ConstructConstraintStmts.fullAllocSites.Add(allocConstant);
+                allocConstant.AddAttribute("full");
+            }
+            constraintProg.AddTopLevelDeclaration(allocConstant);
+            
+            return allocConstant;
+        }
+
+        public class ConstructConstraintStmts
+        {
+            Block origBlock;
+            Block currBlock;
+            List<Cmd> currCmds;
+            List<Variable> locVars;
+            public static int varCounter;
+            public static TypeCtorDecl Type_AS;
+            public static Constant specialConstant;
+            public static HashSet<string> allocatedConstants;
+            public static HashSet<string> allocators;
+            public static HashSet<string> fullAllocators;
+            public static HashSet<string> implNames;
+            public static HashSet<GlobalVariable> globalMaps;
+            public static HashSet<Constant> allocSites;
+            public static HashSet<Constant> fullAllocSites;
+            public static int asCounter;
+
+            private ConstructConstraintStmts(Block b)
+            {
+                origBlock = b;
+                locVars = new List<Variable>();
+                currCmds = new List<Cmd>();
+            }
+
+            private void ProcessAssignCmd(AssignCmd ac)
+            {
+                List<Expr> newRhss = new List<Expr>();
+                List<AssignLhs> newLhss = new List<AssignLhs>();
+
+                for (int i = 0; i < ac.Rhss.Count; i++)
+                {
+                    var rs = ReadSet.Get(ac.Rhss[i]);
+                    IdentifierExpr rhs = null;
+                    var cmds = CreateCmds(rs, ReadSet.containsConsts, out rhs);
+                    newRhss.Add(rhs);
+                    currCmds.AddRange(cmds);
+                }
+                for (int i = 0; i < ac.Lhss.Count; i++)
+                {
+                    if (ac.Lhss[i] is SimpleAssignLhs)
+                    {
+                        var lhs = ac.Lhss[i] as SimpleAssignLhs;
+                        if (lhs.DeepAssignedVariable is GlobalVariable) addGlobalVar(lhs.DeepAssignedVariable.Name);
+                        newLhss.Add(ac.Lhss[i]);
+                    }
+                    else
+                    {
+                        var massign = ac.Lhss[i] as MapAssignLhs;
+
+                        var loadMap = massign.DeepAssignedVariable.Name;
+                        GlobalVariable gmap = getGlobalMap(loadMap);
+                        IdentifierExpr lhs = null;
+                        var indexRead = ReadSet.Get(massign.Indexes);
+
+                        var cmds = CreateCmds(indexRead, ReadSet.containsConsts, out lhs);
+                        newLhss.Add(new MapAssignLhs(Token.NoToken, new SimpleAssignLhs(Token.NoToken, new IdentifierExpr(Token.NoToken, gmap)), new List<Expr> { lhs, newRhss[i] }));
+                        newRhss[i] = Expr.True;
+                        currCmds.AddRange(cmds);
+                    }
+                }
+                var finalac = new AssignCmd(Token.NoToken, newLhss, newRhss);
+                currCmds.Add(finalac);
+            }
+
+            private void ProcessCallCmd(CallCmd cc)
+            {
+                if (allocators.Contains(cc.callee))
+                {
+                    Debug.Assert(cc.Ins.Count == 1 && cc.Outs.Count == 1);
+                    SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, cc.Outs[0]);
+                    var ac = new AssignCmd(Token.NoToken, new List<AssignLhs> { lhs }, new List<Expr> { new IdentifierExpr(Token.NoToken, getAllocationConstant(fullAllocators.Contains(cc.callee))) });
+                    currCmds.Add(ac);
+                    cc.Outs.Iter(id => { if (id.Decl is GlobalVariable) addGlobalVar(id.Decl.Name); });
+                    return;
+                }
+                else if (!implNames.Contains(cc.callee))
+                {
+                    List<AssignLhs> lhss = new List<AssignLhs>();
+                    List<Expr> rhss = new List<Expr>();
+                    foreach (IdentifierExpr id in cc.Outs)
+                    {
+                        SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, id);
+                        IdentifierExpr rhs = new IdentifierExpr(Token.NoToken, specialConstant);
+                        lhss.Add(lhs);
+                        rhss.Add(rhs);
+                    }
+                    if (lhss.Count > 0)
+                    {
+                        var ac = new AssignCmd(Token.NoToken, lhss, rhss);
+                        currCmds.Add(ac);
+                    }
+                    return;
+                }
+
+                List<Expr> newins = new List<Expr>();
+                foreach (var expr in cc.Ins)
+                {
+                    var rs = ReadSet.Get(expr);
+                    IdentifierExpr newin = null;
+                    var cmds = CreateCmds(rs, ReadSet.containsConsts, out newin);
+                    newins.Add(newin);
+                    currCmds.AddRange(cmds);
+                }
+                cc.Outs.Iter(id => { if (id.Decl is GlobalVariable) addGlobalVar(id.Decl.Name); });
+                var newcc = new CallCmd(Token.NoToken, cc.callee, newins, cc.Outs);
+                currCmds.Add(newcc);
+            }
+
+            private void ProcessAssertCmd(AssertCmd ac)
+            {
+                Expr expr = CleanAssert.getExprFromAssertCmd(ac);
+                string null_expr = CleanAssert.getNULLFromAssertCmd(ac);
+
+                var rs = ReadSet.Get(expr);
+                IdentifierExpr id = null;
+                var cmds = CreateCmds(rs, ReadSet.containsConsts, out id);
+                currCmds.AddRange(cmds);
+                AssertCmd newac = new AssertCmd(Token.NoToken, Expr.Neq(id, new IdentifierExpr(Token.NoToken, getConstant(null_expr))));
+                currCmds.Add(newac);
+            }
+
+            private void ProcessAssumeCmd(AssumeCmd ac)
+            {
+                Expr expr = CleanAssert.getExprFromAssumeCmd(ac);
+                string null_expr = CleanAssert.getNULLFromAssumeCmd(ac);
+
+                var rs = ReadSet.Get(expr);
+                IdentifierExpr id = null;
+                var cmds = CreateCmds(rs, ReadSet.containsConsts, out id);
+                currCmds.AddRange(cmds);
+                AssumeCmd newac = new AssumeCmd(Token.NoToken, Expr.Neq(id, new IdentifierExpr(Token.NoToken, getConstant(null_expr))));
+                currCmds.Add(newac);
+            }
+
+            private void Construct()
+            {
+                foreach (Cmd c in origBlock.Cmds)
+                {
+                    if (c is AssignCmd)
+                    {
+                        var ac = c as AssignCmd;
+                        ProcessAssignCmd(ac);
+                    }
+                    else if (c is CallCmd)
+                    {
+                        var cc = c as CallCmd;
+                        ProcessCallCmd(cc);
+                    }
+                    else if (c is AssertCmd)
+                    {
+                        var ac = c as AssertCmd;
+                        if (CleanAssert.isNullAssertCmd(ac))
+                        {
+                            ProcessAssertCmd(ac);
+                        }
+                    }
+                    else if (c is AssumeCmd)
+                    {
+                        var ac = c as AssumeCmd;
+                        if (CleanAssert.isNullAssumeCmd(ac))
+                        {
+                            ProcessAssumeCmd(ac);
+                        }
+                    }
+                }
+                currBlock = new Block(Token.NoToken, origBlock.Label, currCmds, origBlock.TransferCmd);
+            }
+
+            private List<Cmd> CreateCmds(HashSet<Tuple<Variable, List<string>>> readSet, bool containsConsts, out IdentifierExpr newRhs)
+            {
+                var cmds = new List<Cmd>();
+                newRhs = null;
+
+                Expr expr = null;
+                if (containsConsts)
+                {
+                    Variable tmpVar = ConstructLocVar();
+                    IdentifierExpr tmpId = new IdentifierExpr(Token.NoToken, tmpVar);
+                    HavocCmd hc = new HavocCmd(Token.NoToken, new List<IdentifierExpr> { tmpId });
+                    cmds.Add(hc);
+                    newRhs = tmpId;
+                    expr = Expr.Eq(tmpId, new IdentifierExpr(Token.NoToken, specialConstant.Name, specialConstant.TypedIdent.Type));
+                }
+                foreach (var tup in readSet)
+                {
+                    if (tup.Item1 is GlobalVariable) addGlobalVar(tup.Item1.Name);
+
+                    Expr currExpr = null;
+                    if (tup.Item2.Count == 0)
+                    {
+                        Variable tmpVar = ConstructLocVar();
+                        IdentifierExpr tmpId = new IdentifierExpr(Token.NoToken, tmpVar);
+                        HavocCmd hc = new HavocCmd(Token.NoToken, new List<IdentifierExpr> { tmpId });
+                        cmds.Add(hc);
+                        newRhs = tmpId;
+                        if (tup.Item1 is Constant)
+                            currExpr = Expr.Eq(tmpId, new IdentifierExpr(Token.NoToken, getConstant(tup.Item1.Name)));
+                        else
+                            currExpr = Expr.Eq(tmpId, new IdentifierExpr(Token.NoToken, tup.Item1));
+                    }
+                    else
+                    {
+                        Debug.Assert(!(tup.Item1 is Constant));
+                        Variable currTarget = null;
+                        for (int i = tup.Item2.Count - 1 ; i >= 0 ; i--)
+                        {
+                            var currSource = (i == tup.Item2.Count - 1) ? tup.Item1 : currTarget;
+                            currTarget = ConstructLocVar();
+                            IdentifierExpr currId = new IdentifierExpr(Token.NoToken, currTarget);
+                            newRhs = currId;
+                            HavocCmd hc = new HavocCmd(Token.NoToken, new List<IdentifierExpr> { currId });
+                            cmds.Add(hc);
+                            GlobalVariable map = getGlobalMap(tup.Item2[i]);
+                            currExpr = new NAryExpr(Token.NoToken, new MapSelect(Token.NoToken, 2), new List<Expr> { new IdentifierExpr(Token.NoToken, map), new IdentifierExpr(Token.NoToken, currSource), currId });
+                            if (i != 0)
+                            {
+                                var currAC = BoogieAstFactory.MkAssume(currExpr);
+                                cmds.Add(currAC);
+                            }
+                        }
+                    }
+
+                    if (expr == null) expr = currExpr;
+                    else expr = Expr.Or(expr, currExpr);
+                }
+                Debug.Assert(expr != null);
+                var ac = BoogieAstFactory.MkAssume(expr);
+                cmds.Add(ac);
+
+                return cmds;
+            }
+
+            private LocalVariable ConstructLocVar()
+            {
+                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cpTmp" + (varCounter++).ToString(), new CtorType(Token.NoToken, Type_AS, new List<btype>())));
+                locVars.Add(lv);
+                return lv;
+            }
+
+            public static Block ProcessBlock(Block b, out List<Variable> newLocVars)
+            {
+                var cc = new ConstructConstraintStmts(b);
+                cc.Construct();
+                newLocVars = cc.locVars;
+                return cc.currBlock;
+            }
+        }
     }
 
     /*
@@ -1570,11 +2037,13 @@ namespace AliasAnalysis
     {
         HashSet<Tuple<Variable, List<string>>> readSet;
         List<string> currMapSelects;
+        public static bool containsConsts;
 
         private ReadSet()
         {
             readSet = new HashSet<Tuple<Variable, List<string>>>();
             currMapSelects = new List<string>();
+            containsConsts = false;
         }
 
         public static HashSet<Tuple<Variable, List<string>>> Get(Expr expr)
@@ -1595,6 +2064,12 @@ namespace AliasAnalysis
         {
             readSet.Add(Tuple.Create(node, new List<string>(currMapSelects)));
             return base.VisitVariable(node);
+        }
+
+        public override Expr VisitLiteralExpr(LiteralExpr node)
+        {
+            containsConsts = true;
+            return base.VisitLiteralExpr(node);
         }
 
         public override Expr VisitNAryExpr(NAryExpr node)
@@ -1714,7 +2189,6 @@ namespace AliasAnalysis
         {
             return string.Format("{0}.{1} := {2}", target, map, source);
         }
-
     }
 
     public class AliasConstraintSolver

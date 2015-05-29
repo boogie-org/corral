@@ -226,6 +226,8 @@ namespace cba.Util
         {
             var graph = new Graph<string>();
             var impls = new HashSet<string>(program.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+            impls.Iter(p => graph.Nodes.Add(p));
+
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 impl.Blocks
@@ -446,18 +448,21 @@ namespace cba.Util
             Program output;
             using (var writer = new System.IO.MemoryStream())
             {
-                p.Emit(new TokenTextWriter(new System.IO.StreamWriter(writer)));
+                var st = new System.IO.StreamWriter(writer);
+                var tt = new TokenTextWriter(st);
+                p.Emit(tt);
                 writer.Flush();
-
+                st.Flush();
+                
                 writer.Seek(0, System.IO.SeekOrigin.Begin);
                 var s = ParserHelper.Fill(writer, new List<string>());
 
                 var v = Parser.Parse(s, "ReResolveInMem", out output);
-                if (ResolveProgram(p, "ReResolveInMem"))
+                if (ResolveProgram(output, "ReResolveInMem"))
                 {
                     throw new InvalidProg("Cannot resolve " + "ReResolveInMem");
                 }
-                if (doTypecheck && TypecheckProgram(p, "ReResolveInMem"))
+                if (doTypecheck && TypecheckProgram(output, "ReResolveInMem"))
                 {
                     throw new InvalidProg("Cannot typecheck " + "ReResolveInMem");
                 }
@@ -1892,8 +1897,6 @@ namespace cba.Util
             var ssa = new SSA(program,encoding, typesToInstrument);
             ssa.Compute(irreducible);
 
-            //BoogieUtil.PrintProgram(program, "ssa.bpl");
-
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
 
             return program;
@@ -2020,7 +2023,7 @@ namespace cba.Util
                   if (i == 0) return v;
                   if (v is LocalVariable || v is Formal)
                   {
-                      var ret = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, v.Name + "_" + i, v.TypedIdent.Type));
+                      var ret = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, v.Name + "_ssa_" + i, v.TypedIdent.Type));
                       if (!newVars.ContainsKey(ret.Name))
                           newVars.Add(ret.Name, ret);
                       return ret;
@@ -2746,7 +2749,11 @@ namespace cba.Util
         // Check if an expression is NULL expression
         public static bool checkIfNull(Expr expr)
         {
-            return (expr as IdentifierExpr).ToString().Equals("NULL");
+            if (expr is IdentifierExpr)
+            {
+                return (expr as IdentifierExpr).ToString().Equals("NULL");
+            }
+            return false;
         }
 
         private static bool checkIfNot(IAppliable fun)
@@ -2815,10 +2822,22 @@ namespace cba.Util
             return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args.First();
         }
 
+        // Get "NULL" from assertion
+        public static string getNULLFromAssert(AssertCmd ac)
+        {
+            return ((NAryExpr)(((NAryExpr)ac.Expr).Args).First()).Args[1].ToString();
+        }
+
         // Get expression from assume cmd, assume (expr != NULL)
         public static Expr getExprFromAssume(AssumeCmd ac)
         {
             return (((NAryExpr)ac.Expr).Args.First());
+        }
+
+        // Get "NULL" from assume cmd
+        public static string getNULLFromAssume(AssumeCmd ac)
+        {
+            return (((NAryExpr)ac.Expr).Args[1]).ToString();
         }
 
         public static string getQueryFromAssert(AssertCmd ac)
@@ -2887,6 +2906,69 @@ namespace cba.Util
         public static IdentifierExpr getVarFromAssume(AssumeCmd asc)
         {
             return (IdentifierExpr)(((NAryExpr)asc.Expr).Args.OfType<IdentifierExpr>().First());
+        }
+
+        // Returns true if ac.Expr is !(expr == NULL)
+        public static bool isNullAssertCmd(AssertCmd ac)
+        {
+            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == null) return false;
+
+            if (ac.Expr != null &&
+                ac.Expr is NAryExpr &&
+                checkIfNot((ac.Expr as NAryExpr).Fun))
+            {
+                Expr expr = (ac.Expr as NAryExpr).Args[0];
+                if (expr is NAryExpr)
+                {
+                    var nexpr = expr as NAryExpr;
+                    if (nexpr.Fun is BinaryOperator &&
+                        (nexpr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Eq &&
+                        checkIfNull(nexpr.Args[1])) 
+                            return true;
+                }
+            }
+            return false;
+        }
+
+        public static Expr getExprFromAssertCmd(AssertCmd ac)
+        {
+            var expr = (ac.Expr as NAryExpr).Args[0];
+            return (expr as NAryExpr).Args[0];
+        }
+
+        public static string getNULLFromAssertCmd(AssertCmd ac)
+        {
+            var expr = (ac.Expr as NAryExpr).Args[0];
+            return (expr as NAryExpr).Args[1].ToString();
+        }
+
+        // Returns true if ac.Expr is (expr != NULL)
+        public static bool isNullAssumeCmd(AssumeCmd ac)
+        {
+            if (ac.Expr.ToString() == Expr.True.ToString() ||
+                            ac.Expr.ToString() == null) return false;
+
+            if (ac.Expr != null &&
+                ac.Expr is NAryExpr)
+            {
+                var expr = ac.Expr as NAryExpr;
+                if (expr.Fun is BinaryOperator &&
+                    (expr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Neq &&
+                    checkIfNull(expr.Args[1])) 
+                        return true;
+            }
+            return false;
+        }
+
+        public static Expr getExprFromAssumeCmd(AssumeCmd ac)
+        {
+            return (ac.Expr as NAryExpr).Args[0];
+        }
+
+        public static string getNULLFromAssumeCmd(AssumeCmd ac)
+        {
+            return (ac.Expr as NAryExpr).Args[1].ToString();
         }
 
         // Get variable name from argument index of an implementation

@@ -104,6 +104,9 @@ namespace cba.Util
             // Set options
             options.Set();
 
+            // Do loop extraction
+            var extractionInfo = program.ExtractLoops();
+
             #region Save program to disk
             if (shuffleProgram)
             {
@@ -117,9 +120,6 @@ namespace cba.Util
                 BoogieUtil.PrintProgram(program, options.progFileName);
             }
             #endregion
-
-            // Do loop extraction
-            var extractionInfo = program.ExtractLoops();
 
             var origBlocks = new Dictionary<string, Tuple<Block, Implementation>>();
 
@@ -143,7 +143,7 @@ namespace cba.Util
                 Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
                 if (options.newStratifiedInlining) {
                   if(options.newStratifiedInliningAlgo.ToLower() == "duality") Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
-                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
                 }
                 else
                    // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
@@ -491,7 +491,7 @@ namespace cba.Util
             try
             {
                 if(options.newStratifiedInlining) 
-                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend);
+                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
                 else
                     vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
             }

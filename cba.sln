@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExplainError", "source\Expl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConcurrentHoudini", "source\ConcurrentHoudini\ConcurrentHoudini.csproj", "{529AC312-BB91-4154-8BA3-7CA8743E0434}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HoudiniLite", "source\HoudiniLite\HoudiniLite.csproj", "{B5007B19-6D3A-4746-B5FF-B60F679C8A01}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|.NET = Debug|.NET
@@ -228,6 +230,30 @@ Global
 		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|Mixed Platforms.Build.0 = Release|x86
 		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|x86.ActiveCfg = Release|x86
 		{529AC312-BB91-4154-8BA3-7CA8743E0434}.Release|x86.Build.0 = Release|x86
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|.NET.ActiveCfg = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|.NET.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|Mixed Platforms.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.HWSW|x86.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|.NET.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|Mixed Platforms.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Internal|x86.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|.NET.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{B5007B19-6D3A-4746-B5FF-B60F679C8A01}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
