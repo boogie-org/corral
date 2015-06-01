@@ -105,6 +105,10 @@
       <Project>{71e626cd-6fc4-42f0-b91d-5cc42b2875cf}</Project>
       <Name>AngelicVerifierNull</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\AngelicVerifierNull\AvHarnessInstrumentation\AvHarnessInstrumentation.csproj">
+      <Project>{e2c5b356-6d38-406d-a074-1185834634dd}</Project>
+      <Name>AvHarnessInstrumentation</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

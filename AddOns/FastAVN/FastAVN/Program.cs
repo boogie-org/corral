@@ -75,7 +75,7 @@ namespace FastAVN
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
         static string avnPath = null; // path to AVN binary
-        static string avHarnessInstrPath = null; // path to AVN binary
+        static string avHarnessInstrPath = null; // path to AVN harness instrumentation binary
         static string psexecPath = null; // path to psexec
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
         static string avnArgs = ""; // AVN arguments
@@ -141,6 +141,7 @@ namespace FastAVN
             // Find AVN executable
             avnPath = findExe("AngelicVerifierNull.exe");
             avHarnessInstrPath = findExe("AvHarnessInstrumentation.exe");
+
             psexecPath = findExe("psexec.exe");
 
             Debug.Assert(avnPath != null && avHarnessInstrPath != null);
@@ -152,18 +153,30 @@ namespace FastAVN
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
 
+                // initialize corral and boogie for fastAVN
+                InitializeCorralandBoogie();
+
+                // identify entrypoints
+                var origprog = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                var entrypoints = new HashSet<string>();
+
+                origprog.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(x => QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint"))
+                .Iter(x => entrypoints.Add(x.Name));
+
                 // Run harness instrumentation
-                var resultfile = args[0].Replace(".bpl", "_hinst.bpl");
-                RemoteExec.run(".", avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
+                var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
+                RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
 
                 if (!File.Exists(resultfile))
                     throw new Exception("Error running harness instrumentation");
 
-                var prog = BoogieUtil.ReadAndResolve(resultfile);                
+                var prog = BoogieUtil.ReadAndOnlyResolve(resultfile);
 
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
-                sliceAndRunAVN(prog, approximationDepth);
+                sliceAndRunAVN(prog, approximationDepth, entrypoints);
 
                 Stats.stop("fastavn");
                 Stats.printStats();
@@ -174,6 +187,12 @@ namespace FastAVN
                 Utils.Print(String.Format("FastAVN failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT);
                 Utils.Print(String.Format("FastAVN failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
             }
+        }
+
+        private static void InitializeCorralandBoogie()
+        {
+            CommandLineOptions.Install(new CommandLineOptions());
+            CommandLineOptions.Clo.PrintInstrumented = true;
         }
 
         // locate binary in the system
@@ -196,7 +215,7 @@ namespace FastAVN
             {
                 ret = Path.Combine(runDir, exe);
             }
-            Utils.Print(String.Format("Found {0} at: {0}", exe, ret));
+            Utils.Print(String.Format("Found {0} at: {1}", exe, ret));
 
             return ret;
         }
@@ -226,7 +245,7 @@ namespace FastAVN
         /// </summary>
         /// <param name="prog">Original program</param>
         /// <param name="approximationDepth">Depth k beyond which angelic approximation is applied</param>
-        private static void sliceAndRunAVN(Program prog, int approximationDepth)
+        private static void sliceAndRunAVN(Program prog, int approximationDepth, HashSet<string> epNames)
         {
             edges = buildCallGraph(prog);
 
@@ -260,11 +279,8 @@ namespace FastAVN
             var sem = new Semaphore(numThreads, numThreads);
 
             // entrypoints
-            var entrypoints = new ConcurrentBag<Implementation>(
-                prog.TopLevelDeclarations
-                .OfType<Implementation>()
-                .Where(x => QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint")));
-            var epNames = new HashSet<string>(entrypoints.Select(impl => impl.Name));
+            var entrypoints = new ConcurrentBag<Implementation>(prog.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => epNames.Contains(impl.Name)));
 
             // deadline
             if (deadline > 0)
@@ -344,6 +360,9 @@ namespace FastAVN
                 Implementation impl;
                 var rd = "";
 
+                HashSet<string> implNames = new HashSet<string>();
+                impls.Iter(im => implNames.Add(im.Name));
+
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
@@ -355,7 +374,7 @@ namespace FastAVN
                     var wd = Path.Combine(rd, impl.Name); // create new directory for each entrypoint
 
                     // slice the program by entrypoints
-                    Program shallowP = pruneDeepProcs(program, ref edges, impl.Name, approximationDepth);
+                    Program shallowP = pruneDeepProcs(program, ref edges, impl.Name, approximationDepth, implNames);
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
@@ -669,11 +688,12 @@ namespace FastAVN
         */
         private static Program pruneDeepProcs(Program origProgram,
             ref Dictionary<string, HashSet<string>> edges,
-            string mainProcName, int k)
+            string mainProcName, int k, HashSet<string> implNames)
         {
             if (mainProcName == null)
                 return origProgram;
 
+            mainProcName = sliceMainForProc(origProgram, mainProcName, implNames);
 
             var boundedDepth = (k >= 0); // do we have a bounded depth
 
@@ -705,8 +725,6 @@ namespace FastAVN
                 if (decl is Implementation)
                 {
                     var impl = decl as Implementation;
-                    if (impl.Name != mainProcName)
-                        decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
                     if (toRemove.Contains(impl.Name) &&
                         !(impl.Name == CORRAL_EXTRA_INIT))
                     // keep instrumentation function
@@ -719,14 +737,43 @@ namespace FastAVN
                         continue;
                     }
                 }
-                if (decl is Procedure && (decl as Procedure).Name != mainProcName)
-                    decl.Attributes = BoogieUtil.removeAttr("entrypoint", decl.Attributes);
-
                 newDecls.Add(decl);
             }
             program.TopLevelDeclarations = newDecls;
 
             return program;
+        }
+
+        private static string sliceMainForProc(Program program, string mainproc, HashSet<string> otherEPs)
+        {
+            Procedure entrypoint_proc = program.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).FirstOrDefault();
+
+            Debug.Assert(entrypoint_proc != null);
+
+            Implementation entrypoint_impl = program.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoint_proc.Name)).FirstOrDefault();
+
+            foreach (Block b in entrypoint_impl.Blocks)
+            {
+                var newCmds = new List<Cmd>();
+                foreach (Cmd c in b.Cmds)
+                {
+                    if (c is CallCmd)
+                    {
+                        var cc = c as CallCmd;
+                        if (otherEPs.Contains(cc.callee) && !cc.callee.Equals(mainproc))
+                        {
+                            AssumeCmd ac = new AssumeCmd(Token.NoToken, Expr.False);
+                            ac.Attributes = new QKeyValue(Token.NoToken, "SlicedEntryPoint", new List<object>(), ac.Attributes);
+                            newCmds.Add(ac);
+                            continue;
+                        }
+                    }
+                    newCmds.Add(c);
+                }
+                b.Cmds = newCmds;
+            }
+
+            return entrypoint_proc.Name;
         }
 
         #region Angelic Approximation
