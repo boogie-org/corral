@@ -205,26 +205,16 @@ namespace cba
 
             CorralState.AbsorbPrevState(config, ConfigManager.progVerifyOptions);
 
-            // Rewrite assert commands
-            RewriteAssertsPass apass = new RewriteAssertsPass();
-            var curr = apass.run(inputProg);
-
-            // Rewrite call commands 
-            RewriteCallCmdsPass rcalls = new RewriteCallCmdsPass(true);
-            curr = rcalls.run(curr);
-
-            // Prune
-            PruneProgramPass.RemoveUnreachable = true;
-            var prune = new PruneProgramPass(false);
-            curr = prune.run(curr);
-            PruneProgramPass.RemoveUnreachable = false;
+            /////
+            // Transformations that don't require a mapBack
+            /////
 
             // infer loop bound (assuming program is sequential)
             if (config.maxStaticLoopBound > 0)
             {
                 // abstract away globals
                 var abs = new VariableSlicePass(new VarSet());
-                var lprog = abs.run(curr);
+                var lprog = abs.run(inputProg);
 
                 // extract loops
                 var el = new ExtractLoopsPass(true);
@@ -241,6 +231,38 @@ namespace cba
                 bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
                 Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
             }
+
+            if (config.daInst != null)
+            {
+                var el = new ExtractLoopsPass();
+                var ttt = el.run(inputProg);
+                var da = new ConcurrentDeepAssertRewrite();                
+                ttt = da.run(ttt);
+                ttt.writeToFile(config.daInst);
+
+                inputProg = ttt;
+                config.mainProcName = da.newMainName;
+                config.inputFile = config.daInst;
+                config.trackedVars.UnionWith(da.newVars);
+            }
+
+            //////
+            // Other transformations
+            //////
+
+            // Rewrite assert commands
+            RewriteAssertsPass apass = new RewriteAssertsPass();
+            var curr = apass.run(inputProg);
+
+            // Rewrite call commands 
+            RewriteCallCmdsPass rcalls = new RewriteCallCmdsPass(true);
+            curr = rcalls.run(curr);
+
+            // Prune
+            PruneProgramPass.RemoveUnreachable = true;
+            var prune = new PruneProgramPass(false);
+            curr = prune.run(curr);
+            PruneProgramPass.RemoveUnreachable = false;
 
             // Sequential instrumentation
             ExtractLoopsPass elPass = null;
@@ -503,22 +525,6 @@ namespace cba
                 var ttt = urec.run(new PersistentCBAProgram(init, config.mainProcName, 0));
                 ttt.writeToFile(config.unfoldRecursion);
                 throw new NormalExit("done");
-            }
-
-            if (config.daInst != null)
-            {
-                
-                var el = new ExtractLoopsPass();
-                var ttt = el.run(new PersistentCBAProgram(init, config.mainProcName, 0));
-                var da = new ConcurrentDeepAssertRewrite();
-                ttt.writeToFile("tmp.bpl");
-                ttt = da.run(ttt);
-                ttt.writeToFile(config.daInst);
-                init = BoogieUtil.ReadAndOnlyResolve(config.daInst);
-                config.mainProcName = da.newMainName;
-                config.inputFile = config.daInst;
-                config.trackedVars.UnionWith(da.newVars);
-                //throw new NormalExit("done");
             }
 
             if (config.unifyMaps)
@@ -919,6 +925,7 @@ namespace cba
                     LBoptions.NonUniformUnfolding = false;
                     LBoptions.extraFlags = new HashSet<string>();
                     LBoptions.newStratifiedInliningAlgo = "";
+
                     var bounds = LoopBound.Compute(abs.getCBAProgram(), maxBound, GlobalConfig.annotations, LBoptions);
                     progVerifyOptions.extraRecBound = new Dictionary<string, int>();
                     bounds.Iter(kvp => progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));

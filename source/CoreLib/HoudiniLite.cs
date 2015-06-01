@@ -210,8 +210,11 @@ namespace CoreLib
             return assignment;
         }
 
-        public static void InstrumentHoudiniAssignment(Program program, HashSet<string> assignment)
+        // Returns the installed set of contracts
+        public static Dictionary<string, Expr> InstrumentHoudiniAssignment(Program program, HashSet<string> assignment, bool dropOnly = false)
         {
+            var ret = new Dictionary<string, Expr>();
+
             // Gather existential constants
             var CandidateConstants = new Dictionary<string, Constant>();
             program.TopLevelDeclarations.OfType<Constant>()
@@ -236,14 +239,26 @@ namespace CoreLib
                     if (!assignment.Contains(constantName))
                         continue;
 
-                    // free ensures expr;
-                    newens.Add(new Ensures(true, expr));
+                    if (!ret.ContainsKey(constantName))
+                        ret.Add(constantName, expr);
+                    else
+                        ret[constantName] = Expr.And(ret[constantName], expr);
+
+                    if (dropOnly)
+                    {
+                        newens.Add(ens);
+                    }
+                    else
+                    {
+                        // free ensures expr;
+                        newens.Add(new Ensures(true, expr));
+                    }
                 }
 
                 impl.Proc.Ensures.RemoveAll(e => !e.Free);
                 impl.Proc.Ensures.AddRange(newens);
             }
-
+            return ret;
         }
 
 

@@ -56,6 +56,13 @@ namespace cba.Util
             inOld = 0;
         }
 
+        public static HashSet<string> GetVarsUsed(Absy node)
+        {
+            var vu = new VarsUsed();
+            vu.Visit(node);
+            return vu.varsUsed;
+        }
+
         public void reset()
         {
             localsUsed = new HashSet<string>();
