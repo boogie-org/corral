@@ -359,6 +359,7 @@ namespace FastAVN
             {
                 Implementation impl;
                 var rd = "";
+                program = BoogieUtil.ReResolveInMem(program);
 
                 HashSet<string> implNames = new HashSet<string>();
                 impls.Iter(im => implNames.Add(im.Name));
@@ -760,15 +761,20 @@ namespace FastAVN
                     if (c is CallCmd)
                     {
                         var cc = c as CallCmd;
-                        if (otherEPs.Contains(cc.callee) && !cc.callee.Equals(mainproc))
+                        if (cc.callee.Equals(mainproc))
+                        {
+                            cc.Attributes = new QKeyValue(Token.NoToken, "CalledEntryPoint", new List<object>(), cc.Attributes);
+                            newCmds.Add(cc);
+                        }
+                        else if (otherEPs.Contains(cc.callee))
                         {
                             AssumeCmd ac = new AssumeCmd(Token.NoToken, Expr.False);
                             ac.Attributes = new QKeyValue(Token.NoToken, "SlicedEntryPoint", new List<object>(), ac.Attributes);
                             newCmds.Add(ac);
-                            continue;
                         }
+                        else newCmds.Add(cc);
                     }
-                    newCmds.Add(c);
+                    else newCmds.Add(c);
                 }
                 b.Cmds = newCmds;
             }
