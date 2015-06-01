@@ -1450,10 +1450,6 @@ namespace CoreLib
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
             // Sanity checking
-            if (cba.Util.BoogieVerify.options.procsToSkip.Count != 0)
-            {
-                Console.WriteLine("Warning: newSI doesn't support procedure skipping");
-            }
             if (cba.Util.BoogieVerify.options.NonUniformUnfolding)
             {
                 Console.WriteLine("Warning: newSI doesn't support non-uniform procedure inlining");

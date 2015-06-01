@@ -349,11 +349,6 @@ namespace cba
             refinementVerifyOptions.useDI = false;
         }
 
-        public static void AddExtraRecBound(string proc, int bound)
-        {
-            progVerifyOptions.extraRecBound.Add(proc, bound);
-        }
-
         public static void beginPathVerification(bool needPath)
         {
             Debug.Assert(!verifyingPath && !verifyingProg);

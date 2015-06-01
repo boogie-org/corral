@@ -15,6 +15,7 @@ namespace cba.Util
     public static class BoogieVerify
     {
         public enum ReturnStatus { OK, NOK, ReachedBound };
+        public static readonly string ExtraRecBoundAttr = "SIextraRecBound";
 
         // Verification options
         public static BoogieVerifyOptions options;
@@ -107,6 +108,16 @@ namespace cba.Util
             // Do loop extraction
             var extractionInfo = program.ExtractLoops();
 
+            // set bounds
+            if (options.extraRecBound != null)
+            {
+                options.extraRecBound.Iter(tup =>
+                    {
+                        var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, tup.Key);
+                        if (impl != null) impl.AddAttribute(BoogieVerify.ExtraRecBoundAttr, Expr.Literal(tup.Value));
+                    });
+            }
+
             #region Save program to disk
             if (shuffleProgram)
             {
@@ -150,7 +161,7 @@ namespace cba.Util
 
 
                     if (!useDuality || !isCBA || !needErrorTraces || options.StratifiedInlining > 1 || mains.Count > 1)
-                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
+                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
                     else
                     {
                         CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
@@ -800,7 +811,6 @@ namespace cba.Util
         public string progFileName;
 
         // Extended API
-        public HashSet<string> procsToSkip;
         public Dictionary<string, int> extraRecBound;
         public HashSet<string> extraFlags;
 
@@ -817,7 +827,6 @@ namespace cba.Util
             ModelViewFile = null;
             printProg = false;
             progFileName = null;
-            procsToSkip = new HashSet<string>();
             extraRecBound = new Dictionary<string, int>();
             useFwdBck = false;
             useDI = false;
@@ -843,7 +852,6 @@ namespace cba.Util
             ret.progFileName = progFileName;
             ret.useFwdBck = useFwdBck;
             ret.useDI = useDI;
-            ret.procsToSkip = new HashSet<string>(ret.procsToSkip);
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
             ret.extraFlags.UnionWith(extraFlags);
 

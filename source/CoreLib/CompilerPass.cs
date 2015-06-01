@@ -198,6 +198,22 @@ namespace cba
             return loopBounds;
         }
 
+        public static PersistentCBAProgram AddLoopBounds(PersistentCBAProgram program, Dictionary<string, int> extraRecBounds)
+        {
+            if (extraRecBounds.Count == 0 || extraRecBounds.All(tup => tup.Value == 0)) return program;
+
+            var prog = program.getCBAProgram();
+            AddLoopBounds(prog, extraRecBounds);
+            return new PersistentCBAProgram(prog, prog.mainProcName, prog.contextBound);
+        }
+
+        public static void AddLoopBounds(Program program, Dictionary<string, int> extraRecBounds)
+        {
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => extraRecBounds.ContainsKey(impl.Name))
+                .Iter(impl => impl.AddAttribute(BoogieVerify.ExtraRecBoundAttr, Expr.Literal(extraRecBounds[impl.Name])));
+        }
+
         private static int RecBound(string recFunc, Counterexample trace, string traceName)
         {
             var ret = 0;
