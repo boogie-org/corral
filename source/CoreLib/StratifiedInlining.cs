@@ -194,6 +194,9 @@ namespace CoreLib
         /* An extra Boolean associated with each VC */
         private Dictionary<StratifiedVC, VCExpr> controlBoolean;
 
+        /* extra Recursion bound */
+        public Dictionary<string, int> extraRecBound;
+
         private DI di;
 
         public HashSet<string> GetCallTree()
@@ -244,6 +247,14 @@ namespace CoreLib
         {
             stats = new Stats();
 
+            this.extraRecBound = new Dictionary<string, int>();
+            program.TopLevelDeclarations.OfType<Implementation>()
+                .Iter(impl =>
+                {
+                    var b = QKeyValue.FindIntAttribute(impl.Attributes, BoogieVerify.ExtraRecBoundAttr, -1);
+                    if (b != -1) extraRecBound.Add(impl.Name, b);
+                });
+
             if (cba.Util.BoogieVerify.options.useFwdBck)
             {
                 RunInitialAnalyses(program);
@@ -267,14 +278,14 @@ namespace CoreLib
                 
                 if (BoogieVerify.options.extraFlags.Contains("doslow"))
                 {
-                    dago = DagOracle.ConstructCallDag(program);
+                    dago = DagOracle.ConstructCallDag(program, extraRecBound);
                     dago.Dump("tree.dot");
                     treesize = dago.ComputeSize();
                     dago.Compress();
                 }
                 else
                 {
-                    dago = new DagOracle(program);
+                    dago = new DagOracle(program, extraRecBound);
                     treesize = dago.ConstructCallDagOnTheFly(false, DI.PickStrategy());
                 }
                 var compresstime = (DateTime.Now - sttime);
@@ -330,11 +341,11 @@ namespace CoreLib
             var i = RecursionDepth(cs);
 
             // Usual
-            if (!cba.Util.BoogieVerify.options.extraRecBound.ContainsKey(cs.callSite.calleeName))
+            if (!extraRecBound.ContainsKey(cs.callSite.calleeName))
                 return (i > bound);
 
             // Support extraRecBound
-            return i > (bound + cba.Util.BoogieVerify.options.extraRecBound[cs.callSite.calleeName]);
+            return i > (bound + extraRecBound[cs.callSite.calleeName]);
         }
 
         /* for measuring Z3 stack */
@@ -2091,13 +2102,13 @@ namespace CoreLib
                 SI.implName2StratifiedInliningInfo.Iter(tup => impls.Add(tup.Key, tup.Value.impl));
                 Disj = new ProgramDisjointness(impls);
 
-                currentDag = new DagOracle(SI.program, Disj);
+                currentDag = new DagOracle(SI.program, Disj, SI.extraRecBound);
 
                 strategy = PickStrategy();
                 
                 if (strategy == MERGING_STRATEGY.OPT && optimalDag == null)
                 {
-                    optimalDag = new DagOracle(SI.program, Disj);
+                    optimalDag = new DagOracle(SI.program, Disj, SI.extraRecBound);
                     var tsize = optimalDag.ConstructCallDagOnTheFly(true, strategy);
                     Console.WriteLine("Constructed optimal dag, with {0} nodes (max {1})", optimalDag.ComputeSize(), tsize);
                 }
@@ -2685,6 +2696,7 @@ namespace CoreLib
         }
 
         Program program;
+        Dictionary<string, int> extraRecBound;
 
         DagNode Root;
         public HashSet<DagNode> Nodes { get; private set; }
@@ -2704,12 +2716,12 @@ namespace CoreLib
         // For stats
         TimeSpan tmpTime1; //, tmpTime2;
 
-        public DagOracle(Program program)
-            :this(program, new ProgramDisjointness(program))
+        public DagOracle(Program program, Dictionary<string, int> extraRecBound)
+            :this(program, new ProgramDisjointness(program), extraRecBound)
         {
         }
 
-        public DagOracle(Program program, ProgramDisjointness disj)
+        public DagOracle(Program program, ProgramDisjointness disj, Dictionary<string, int> extraRecBound)
         {
             Nodes = new HashSet<DagNode>();
             Edges = new HashSet<DagEdge>();
@@ -2720,12 +2732,13 @@ namespace CoreLib
 
             this.Disj = disj;
             this.program = program;
+            this.extraRecBound = extraRecBound;
         }
 
         // Create a fresh copy of the Dag
         public DagOracle Copy()
         {
-            var ret = new DagOracle(program, Disj);
+            var ret = new DagOracle(program, Disj, extraRecBound);
             foreach (var n in Nodes)
                 ret.AddNode(n);
             foreach (var e in Edges)
@@ -2990,11 +3003,11 @@ namespace CoreLib
             return ret;
         }
 
-        static bool HasExceededRecBound(string impl, int bound)
+        bool HasExceededRecBound(string impl, int bound)
         {
-            if (!cba.Util.BoogieVerify.options.extraRecBound.ContainsKey(impl))
+            if (!extraRecBound.ContainsKey(impl))
                 return (bound > CommandLineOptions.Clo.RecursionBound);
-            return bound > CommandLineOptions.Clo.RecursionBound + cba.Util.BoogieVerify.options.extraRecBound[impl];
+            return bound > CommandLineOptions.Clo.RecursionBound + extraRecBound[impl];
         }
 
         // Returns the size of the fully expanded tree
@@ -3565,9 +3578,9 @@ namespace CoreLib
             Decendants(node).Iter(DeleteNode);
         }
 
-        public static DagOracle ConstructCallDag(Program program)
+        public static DagOracle ConstructCallDag(Program program, Dictionary<string, int> extraRecBound)
         {
-            var ret = new DagOracle(program);
+            var ret = new DagOracle(program, extraRecBound);
 
             var impls = new Dictionary<string, Implementation>();
             program.TopLevelDeclarations.OfType<Implementation>()
@@ -3639,7 +3652,7 @@ namespace CoreLib
 
                     rvcopy[impl2index[tup.Item2]]++;
 
-                    if (HasExceededRecBound(tup.Item2, rvcopy[impl2index[tup.Item2]]))
+                    if (ret.HasExceededRecBound(tup.Item2, rvcopy[impl2index[tup.Item2]]))
                         continue;
 
                     var s = ImplToNode(impls[tup.Item2], rvcopy);
