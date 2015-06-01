@@ -12,8 +12,16 @@ namespace ProofMinimization
 {
     class Driver
     {
+        public static readonly string MustKeepAttr = "pm_mustkeep";
+        public static readonly string DropAttr = "pm_drop";
+        static HashSet<string> mustkeep = new HashSet<string>();
+        static HashSet<string> dropped = new HashSet<string>();
+        static Program ForLogging = null;
+
         static void Main(string[] args)
         {
+            Console.CancelKeyPress += Console_CancelKeyPress;
+
             if (args.Length < 1)
             {
                 Console.WriteLine("ProofMin file.bpl [options]");
@@ -23,6 +31,7 @@ namespace ProofMinimization
             var boogieArgs = "";
             string dualityprooffile = null;
             var once = false;
+            var printcontracts = false;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -36,6 +45,11 @@ namespace ProofMinimization
                     once = true;
                     continue;
                 }
+                if (args[i] == "/printAssignment")
+                {
+                    printcontracts = true;
+                    continue;
+                }
 
                 if (args[i].StartsWith("/duality:"))
                 {
@@ -45,6 +59,8 @@ namespace ProofMinimization
 
                 boogieArgs += args[i] + " ";
             }
+
+            boogieArgs += " /typeEncoding:m /weakArrayTheory /errorLimit:1 ";
             Initalize(boogieArgs);
 
             var program = BoogieUtil.ReadAndResolve(args[0]);
@@ -65,22 +81,36 @@ namespace ProofMinimization
 
             // Inject duality proof
             if (dualityprooffile != null)
-            {
                 program = InjectDualityProof(program, BoogieUtil.ParseProgram(dualityprooffile));
-                
-            }
+
+            // Prune, according to annotations
+            var keep = new HashSet<string>(
+                program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => !QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
+                .Select(c => c.Name));
+            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, keep, true);
+            program.RemoveTopLevelDeclarations(c => c is Constant && QKeyValue.FindBoolAttribute(c.Attributes, DropAttr));
+
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, MustKeepAttr))
+                .Iter(c => mustkeep.Add(c.Name));
+
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Iter(c => c.Attributes = BoogieUtil.removeAttr(MustKeepAttr, c.Attributes));
 
             var inprog = new PersistentProgram(program);
+            ForLogging = inprog.getProgram();
 
-            
             if (once)
             {
-                RunOnce(inprog);
+                RunOnce(inprog, printcontracts);
                 return;
             }
 
             HashSet<string> assignment = null;
             HashSet<string> candidates = new HashSet<string>();
+
+
             int inlined = 0;
 
             program.TopLevelDeclarations.OfType<Constant>()
@@ -98,9 +128,9 @@ namespace ProofMinimization
             if (candidates.Count != assignment.Count)
                 Console.WriteLine("Dropping {0} candidates", (candidates.Count - assignment.Count));
 
+            dropped.UnionWith(candidates.Difference(assignment));
             candidates = assignment;
-            var mustkeep = new HashSet<string>();
-
+            
             var iter = 1;
             var sw = new Stopwatch();
             sw.Start();
@@ -122,9 +152,14 @@ namespace ProofMinimization
                 {
                     // dropping was fine
                     Console.WriteLine("  >> Dropping it and {0} others", (candidates.Count + mustkeep.Count - assignment.Count));
+
+                    Debug.Assert(mustkeep.IsSubsetOf(assignment));
+
+                    dropped.Add(c);
+                    dropped.UnionWith(candidates.Union(mustkeep).Difference(assignment));
+
                     candidates = assignment;
                     candidates.ExceptWith(mustkeep);
-                    mustkeep.IntersectWith(assignment);
 
                     Debug.Assert(!candidates.Contains(c));
                 }
@@ -133,10 +168,35 @@ namespace ProofMinimization
                     Console.WriteLine("  >> Cannot drop");
                     mustkeep.Add(c);
                 }
+                Log(iter);
                 Console.WriteLine("Time elapsed: {0} sec", sw.Elapsed.TotalSeconds.ToString("F2"));
             }
-
+            Log(0);
             Console.WriteLine("Final assignment: {0}", mustkeep.Concat(" "));
+
+        }
+
+        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            Console.WriteLine("Got Ctrl-C");
+            Log(0);
+            System.Diagnostics.Process.GetCurrentProcess()
+                .Kill();
+        }
+
+        static void Log(int i)
+        {
+            if (ForLogging == null) return;
+
+            ForLogging.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => mustkeep.Contains(c.Name))
+                .Iter(c => c.AddAttribute(MustKeepAttr));
+
+            ForLogging.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => dropped.Contains(c.Name))
+                .Iter(c => c.AddAttribute(DropAttr));
+
+            BoogieUtil.PrintProgram(ForLogging, string.Format("pmh_logged{0}.bpl", i == 0 ? "" : i.ToString()));
         }
 
         static Random rand = null;
@@ -150,11 +210,20 @@ namespace ProofMinimization
                 rand = new Random((int)DateTime.Now.Ticks);
             }
 
+            /*
+            var ret = "";
+            do
+            {
+                var ind = rand.Next(set.Count);
+                ret = set.ToList()[ind];
+            } while (!ret.StartsWith("Duality"));
+            return ret;
+             * */
             var ind = rand.Next(set.Count);
             return set.ToList()[ind];
         }
 
-        static void RunOnce(PersistentProgram inp)
+        static void RunOnce(PersistentProgram inp, bool printcontracts)
         {
             var program = inp.getProgram();
             program.Typecheck();
@@ -168,7 +237,8 @@ namespace ProofMinimization
             program = inp.getProgram();
             program.Typecheck();
 
-            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
+            var contracts =
+                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
 
             BoogieUtil.PrintProgram(program, "si_query.bpl");
 
@@ -190,6 +260,13 @@ namespace ProofMinimization
 
             Console.WriteLine(string.Format("Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
             Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+
+            if (printcontracts)
+            {
+                foreach (var tup in contracts)
+                    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+
+            }
         }
 
         static int IterCnt = 0;
@@ -225,7 +302,7 @@ namespace ProofMinimization
             //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
             inlined = BoogieVerify.CallTreeSize;
-
+            BoogieVerify.options.CallTree = new HashSet<string>();
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
@@ -301,7 +378,6 @@ namespace ProofMinimization
             CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
             CommandLineOptions.Clo.ContractInfer = true;
             BoogieUtil.InitializeBoogie(boogieOptions);
-            CommandLineOptions.Clo.ProverCCLimit = 1;
             cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
 
             BoogieVerify.removeAsserts = false;
