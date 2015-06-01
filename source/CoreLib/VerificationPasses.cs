@@ -3335,6 +3335,7 @@ namespace cba
             // add decl for newmain
             newMainImpl.Proc = newMainProc;
             program.AddTopLevelDeclaration(newMainProc);
+            program.mainProcName = newMainName;
 
             return program;
         }
