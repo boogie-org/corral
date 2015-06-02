@@ -158,12 +158,13 @@ namespace FastAVN
 
                 // identify entrypoints
                 var origprog = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                var orig_entrypoints = new HashSet<string>();
                 var entrypoints = new HashSet<string>();
 
                 origprog.TopLevelDeclarations
                 .OfType<Implementation>()
                 .Where(x => QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint"))
-                .Iter(x => entrypoints.Add(x.Name));
+                .Iter(x => orig_entrypoints.Add(x.Name));
 
                 // Run harness instrumentation
                 var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
@@ -173,6 +174,26 @@ namespace FastAVN
                     throw new Exception("Error running harness instrumentation");
 
                 var prog = BoogieUtil.ReadAndOnlyResolve(resultfile);
+
+                // Do a run on instrumented program, filter out entrypoints
+                Procedure entrypoint_proc = prog.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).FirstOrDefault();
+
+                Debug.Assert(entrypoint_proc != null);
+
+                Implementation entrypoint_impl = prog.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoint_proc.Name)).FirstOrDefault();
+
+                // other entrypoints can never reach an assertion, don't run AVN on them
+                foreach (Block b in entrypoint_impl.Blocks)
+                {
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        if (c is CallCmd)
+                        {
+                            var cc = c as CallCmd;
+                            if (orig_entrypoints.Contains(cc.callee)) entrypoints.Add(cc.callee);
+                        }
+                    }
+                }
 
                 // do reachability analysis on procedures
                 // prune deep (depth > K) implementations: treat as angelic
@@ -359,7 +380,6 @@ namespace FastAVN
             {
                 Implementation impl;
                 var rd = "";
-                program = BoogieUtil.ReResolveInMem(program);
 
                 HashSet<string> implNames = new HashSet<string>();
                 impls.Iter(im => implNames.Add(im.Name));
@@ -374,11 +394,16 @@ namespace FastAVN
 
                     var wd = Path.Combine(rd, impl.Name); // create new directory for each entrypoint
 
-                    // slice the program by entrypoints
-                    Program shallowP = pruneDeepProcs(program, ref edges, impl.Name, approximationDepth, implNames);
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
-                    var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
+                    var pruneFile = Path.Combine(wd, "pruneSlice.bpl.txt");
+                    BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
+
+                    program = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
+
+                    // slice the program by entrypoints
+                    Program shallowP = pruneDeepProcs(program, ref edges, impl.Name, approximationDepth, implNames);
+                    File.Delete(pruneFile);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
                     sem.Release();
@@ -694,6 +719,7 @@ namespace FastAVN
             if (mainProcName == null)
                 return origProgram;
 
+            // delete all calls in CorralMain other than mainProcName
             mainProcName = sliceMainForProc(origProgram, mainProcName, implNames);
 
             var boundedDepth = (k >= 0); // do we have a bounded depth
@@ -745,6 +771,7 @@ namespace FastAVN
             return program;
         }
 
+        // deletes calls to all entrypoints except mainproc, returns CorralMain since that this is the entrypoint
         private static string sliceMainForProc(Program program, string mainproc, HashSet<string> otherEPs)
         {
             Procedure entrypoint_proc = program.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).FirstOrDefault();
