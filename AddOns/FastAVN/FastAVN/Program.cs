@@ -396,7 +396,7 @@ namespace FastAVN
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
-                    var pruneFile = Path.Combine(wd, "pruneSlice.bpl.txt");
+                    var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
                     BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
 
                     program = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
