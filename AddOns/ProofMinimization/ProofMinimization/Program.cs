@@ -377,11 +377,12 @@ namespace ProofMinimization
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
             CommandLineOptions.Clo.ContractInfer = true;
+            CommandLineOptions.Clo.RecursionBound = 1;
             BoogieUtil.InitializeBoogie(boogieOptions);
             cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
 
             BoogieVerify.removeAsserts = false;
-            CommandLineOptions.Clo.RecursionBound = 1;
+            
         }
     }
 }
