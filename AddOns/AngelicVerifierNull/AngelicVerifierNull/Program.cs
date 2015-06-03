@@ -36,6 +36,9 @@ namespace AngelicVerifierNull
         public static bool disbleDeadcodeOpt = false;
         // Flag for reporting assertion when MAX_ASSERT_BLOCK_COUNT is reached
         public static bool reportOnMaxBlockCount = false;
+        // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
+        public static bool UseDuplicator
+        { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
     }
 
     public class Driver
@@ -118,6 +121,10 @@ namespace AngelicVerifierNull
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
                 .Iter(s => resultsfilename = s.Substring("/dumpResults:".Length));
+
+            Options.UseDuplicator = true;
+            if (args.Any(s => s == "/nodup"))
+                Options.UseDuplicator = false;
 
             if (resultsfilename != null)
             {
@@ -221,7 +228,6 @@ namespace AngelicVerifierNull
             cba.Driver.Initialize(config);
 
             cba.VerificationPass.usePruning = false;
-            ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             if (!config.useProverEvaluate)
             {

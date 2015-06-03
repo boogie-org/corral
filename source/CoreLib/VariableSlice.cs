@@ -635,7 +635,7 @@ namespace cba
             // Typecheck -- needed for variable abstraction
             if (node.Typecheck() != 0)
             {
-                node.Emit(new TokenTextWriter("error.bpl"));
+                BoogieUtil.PrintProgram(node, "error.bpl");
                 throw new InternalError("Type errors");
             }
 
