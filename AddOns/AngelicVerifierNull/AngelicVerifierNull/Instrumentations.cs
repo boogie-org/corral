@@ -65,8 +65,10 @@ namespace AngelicVerifierNull
                         if (callCmd != null && BoogieUtil.checkAttrExists(AvnAnnotations.AngelicUnknownCall, callCmd.Proc.Attributes))
                         {
                             var retCall = callCmd.Outs[0];
+                            btype retType = callCmd.Proc.OutParams[0].TypedIdent.Type;
+                            if (retType == null) retType = btype.Int;
                             var mallocTriggerFn = new Function(Token.NoToken, mallocTriggerFuncName + mallocTriggers.Count,
-                                new List<Variable>() { BoogieAstFactory.MkFormal("a", btype.Int, false) },
+                                new List<Variable>() { BoogieAstFactory.MkFormal("a", retType, false) },
                                 BoogieAstFactory.MkFormal("r", btype.Bool, false));
                             mallocTriggers[callCmd] = mallocTriggerFn;
                             var callId = QKeyValue.FindIntAttribute(callCmd.Attributes, cba.RestrictToTrace.ConcretizeCallIdAttr, -1);
