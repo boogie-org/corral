@@ -1310,7 +1310,7 @@ namespace AngelicVerifierNull
                             throw new Exception(String.Format("WARNING!!: Current program has no mallocTrigger with name", mallocTrigger));
                         //create a new bound variable for quantified expr later
                         var bvar =  new BoundVariable(Token.NoToken, 
-                                        new TypedIdent(Token.NoToken, "x_" +  allocConstCount, Microsoft.Boogie.Type.Int));
+                                        new TypedIdent(Token.NoToken, "x_" +  allocConstCount, mallocTriggerFn.InParams[0].TypedIdent.Type));
                         //make an expr mallocFn(x_i) for alloc_i
                         var fnApp = (Expr) new NAryExpr(Token.NoToken,
                                 new FunctionCall(mallocTriggerFn),

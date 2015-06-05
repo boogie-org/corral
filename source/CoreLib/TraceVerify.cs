@@ -35,6 +35,8 @@ namespace cba
         public static readonly string ConcretizeConstantNameAttr = "ConcretizeConstantName";
         public static readonly string ConcretizeCallIdAttr = "ConcretizeCallId";
         public Dictionary<string, int> concretizeConstantToCall;
+        // For concretizing values of an uninterpreted sort: value -> constants with that value
+        private Dictionary<string, HashSet<Constant>> uvalueToConstants; 
         // Convert non-failing asserts to assumes
         public static bool convertNonFailingAssertsToAssumes = false;
 
@@ -51,6 +53,7 @@ namespace cba
             newFixedContextProcs = new HashSet<int>();
             addRaiseExceptionProcDecl = false;
             concretizeConstantToCall = new Dictionary<string, int>();
+            uvalueToConstants = new Dictionary<string, HashSet<Constant>>();
         }
 
         private string addIntToString(string s, int i)
@@ -64,7 +67,40 @@ namespace cba
         // Adds resultant declarations to output program
         public string addTrace(ErrorTrace trace)
         {
-            return addTraceRec(trace);
+            var ret = addTraceRec(trace);
+
+            // uninterpreted constants
+
+            // Gather the uninterpreted sorts
+            var sorts = new Dictionary<string, Microsoft.Boogie.Type>(); 
+            uvalueToConstants.Values
+                .Iter(s => s
+                    .Iter(c => sorts[c.TypedIdent.Type.AsCtor.Decl.Name] = c.TypedIdent.Type));
+
+            foreach (var sort in sorts.Values)
+            {
+                var uvalueToUniqueConst = new Dictionary<string, Constant>();
+                var cnt = 0;
+                foreach (var v in uvalueToConstants.Keys)
+                {
+                    var uconst = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                        "uc__" + sort.ToString() + "__" + (cnt++), sort), true);
+                    uvalueToUniqueConst.Add(v, uconst);
+                }
+                output.AddTopLevelDeclarations(uvalueToUniqueConst.Values);
+                foreach (var tup in uvalueToConstants)
+                {
+                    Expr expr = Expr.True;
+                    var uconst = uvalueToUniqueConst[tup.Key];
+                    tup.Value.Where(c => c.TypedIdent.Type.AsCtor.Decl.Name == sort.AsCtor.Decl.Name)
+                        .Iter(c => expr = Expr.And(expr, Expr.Eq(Expr.Ident(c), Expr.Ident(uconst))));
+                    if (expr != Expr.True)
+                        output.AddTopLevelDeclaration(new Axiom(Token.NoToken, expr));
+                }
+            }
+
+            return ret;
+
         }
 
         private static int const_counter = 0;
@@ -206,18 +242,19 @@ namespace cba
                         calledProcsNoImpl.Add(cc.Proc.Name);
                         traceBlock.Cmds.Add(c);
                         Debug.Assert(!call_instr.hasCalledTrace);
-                        if (addConcretization && cc.Outs.Count == 1 &&
-                            (call_instr.info.hasIntVar("si_arg") || call_instr.info.hasBoolVar("si_arg")))
+                        if (addConcretization && cc.Outs.Count == 1 && call_instr.info.hasVar("si_arg"))
                         {
                             if (!addConcretizationAsConstants)
                             {
-                                if(call_instr.info.hasBoolVar("si_arg"))
+                                if (call_instr.info.hasBoolVar("si_arg"))
                                     traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getBoolVal("si_arg")));
-                                else
+                                else if (call_instr.info.hasIntVar("si_arg"))
                                     traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqConst(cc.Outs[0].Decl, call_instr.info.getIntVal("si_arg")));
+                                else
+                                    Debug.Assert(false);
 
                             }
-                            else if(call_instr.info.hasIntVar("si_arg"))
+                            else 
                             {
                                 // create a constant that is equal to this literal, then use the constant
                                 // for concretization
@@ -226,14 +263,17 @@ namespace cba
                                 var constantName = QKeyValue.FindStringAttribute(cc.Attributes, ConcretizeConstantNameAttr);
                                 if (constantName == null) constantName = "";
 
-                                var val = call_instr.info.getIntVal("si_arg");
                                 var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                                    string.Format("alloc_{0}__{1}", constantName, const_counter), Microsoft.Boogie.Type.Int), false);
+                                    string.Format("alloc_{0}__{1}", constantName, const_counter), cc.Outs[0].Decl.TypedIdent.Type), false);
                                 const_counter++;
 
                                 traceBlock.Cmds.Add(BoogieAstFactory.MkVarEqVar(cc.Outs[0].Decl, constant));
                                 output.AddTopLevelDeclaration(constant);
-                                output.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(val))));
+
+                                if (call_instr.info.hasIntVar("si_arg"))
+                                    output.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(constant), Expr.Literal(call_instr.info.getIntVal("si_arg")))));
+                                else if (call_instr.info.hasVar("si_arg") && cc.Outs[0].Decl.TypedIdent.Type.IsCtor)
+                                    uvalueToConstants.InitAndAdd(call_instr.info.getVal("si_arg").ToString(), constant);
 
                                 var id = QKeyValue.FindIntAttribute(cc.Attributes, ConcretizeCallIdAttr, -1);
                                 concretizeConstantToCall.Add(constant.Name, id);

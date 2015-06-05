@@ -17,17 +17,20 @@ namespace CoreLib
         public bool success;
         readonly string recordProcNameInt = "boogie_si_record_sdvcp_int";
         readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
+        readonly string recordProcNameCtor = "boogie_si_record_sdvcp_ctor_";
         readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
         readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
         public Dictionary<string, int> allocConstants;
 
         private HashSet<string> procsWithoutBody;
+        private Dictionary<string, Procedure> typeToRecordProc;
 
         public SDVConcretizePathPass()
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
             allocConstants = new Dictionary<string, int>();
+            typeToRecordProc = new Dictionary<string, Procedure>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram p)
@@ -97,9 +100,13 @@ namespace CoreLib
             // Name clash if this assert fails
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameBool) == null);
+            foreach (var rp in typeToRecordProc.Values)
+                Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, rp.Name) == null);
 
             p.AddTopLevelDeclaration(reProcInt);
             p.AddTopLevelDeclaration(reProcBool);
+            p.AddTopLevelDeclarations(typeToRecordProc.Values);
+
             var tmainimpl = BoogieUtil.findProcedureImpl(p.TopLevelDeclarations, p.mainProcName);
             if (!QKeyValue.FindBoolAttribute(tmainimpl.Attributes, "entrypoint"))
                 tmainimpl.AddAttribute("entrypoint");
@@ -204,11 +211,6 @@ namespace CoreLib
 
                 if (retVal == null) continue;
 
-                if (!retVal.Type.IsInt && !retVal.Type.IsBool)
-                {
-                    continue;
-                }
-
                 newCmds.Add(makeRecordCall(retVal));
             }
             block.Cmds = newCmds;
@@ -223,6 +225,17 @@ namespace CoreLib
                 return new CallCmd(Token.NoToken, recordProcNameInt, ins, new List<IdentifierExpr>());
             else if (v.Type.IsBool)
                 return new CallCmd(Token.NoToken, recordProcNameBool, ins, new List<IdentifierExpr>());
+            else if (v.Type.IsCtor)
+            {
+                var t = (v.Type as CtorType).Decl.Name;
+                if (!typeToRecordProc.ContainsKey(t))
+                {
+                    var inpVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", v.Type), true);
+                    var reProc = new Procedure(Token.NoToken, recordProcNameCtor + t, new List<TypeVariable>(), new List<Variable> { inpVar }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                    typeToRecordProc.Add(t, reProc);
+                }
+                return new CallCmd(Token.NoToken, typeToRecordProc[t].Name, ins, new List<IdentifierExpr>());
+            }
             else
             {
                 Debug.Assert(false);
@@ -243,7 +256,7 @@ namespace CoreLib
                     if (cmd is CallInstr)
                     {
                         var ccmd = cmd as CallInstr;
-                        if (ccmd.callee == recordProcNameInt || ccmd.callee == recordProcNameBool)
+                        if (ccmd.callee == recordProcNameInt || ccmd.callee == recordProcNameBool || ccmd.callee.StartsWith(recordProcNameCtor))
                         {
                             Debug.Assert(nb.Cmds.Count != 0);
                             nb.Cmds.Last().info = ccmd.info;
