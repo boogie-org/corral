@@ -117,14 +117,14 @@ namespace cba
                 .Iter(proc => proc.Ensures = proc.Ensures.Filter(en => en.Free));
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Iter(proc => proc.Requires = proc.Requires.Filter(en => en.Free));
-            // convert assertions to assumes
+            // remove assertions
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impl.Blocks
                     .Iter(blk => blk.Cmds = blk.Cmds.Map(c =>
                         {
                             var ac = c as AssertCmd;
                             if (ac == null) return c;
-                            return new AssumeCmd(ac.tok, ac.Expr, ac.Attributes);
+                            return new AssumeCmd(ac.tok, /*ac.Expr*/ Expr.True, ac.Attributes);
                         })));
             // delete yield
             program.TopLevelDeclarations.OfType<Implementation>()
