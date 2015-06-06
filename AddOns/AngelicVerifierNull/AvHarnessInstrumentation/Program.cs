@@ -160,21 +160,7 @@ namespace AvHarnessInstrumentation
 
                 foreach (AssignLhs lhs in acmd.Lhss)
                 {
-                    if (lhs is SimpleAssignLhs)
-                    {
-                        var slhs = lhs as SimpleAssignLhs;
-                        if (slhs.DeepAssignedVariable is LocalVariable) ret.Add(slhs.DeepAssignedVariable.Name);
-                    }
-                    else
-                    {
-                        var mlhs = lhs as MapAssignLhs;
-
-                        foreach (var expr in mlhs.Indexes)
-                        {
-                            var vu = new VarsUsed();
-                            vu.localsUsed.Iter(v => ret.Add(v));
-                        }
-                    }
+                    ret.Add(lhs.DeepAssignedVariable.Name);
                 }
 
                 return ret;
