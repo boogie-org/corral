@@ -1233,7 +1233,13 @@ namespace CoreLib
                 if (reporter.callSitesToExpand.Count == 0)
                     return Outcome.Inconclusive;
 
-                foreach (var scs in reporter.callSitesToExpand)
+                var toExpand = reporter.callSitesToExpand;
+                if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
+                {
+                    var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
+                    toExpand = toExpand.Where(cs => RecursionDepth(cs) == min).ToList();
+                }
+                foreach (var scs in toExpand)
                 {
                     openCallSites.Remove(scs);
                     var svc = Expand(scs);

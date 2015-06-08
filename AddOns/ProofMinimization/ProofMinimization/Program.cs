@@ -380,6 +380,9 @@ namespace ProofMinimization
             CommandLineOptions.Clo.RecursionBound = 1;
             BoogieUtil.InitializeBoogie(boogieOptions);
             cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
+            cba.Util.BoogieVerify.options.newStratifiedInlining = true;
+            cba.Util.BoogieVerify.options.newStratifiedInliningAlgo = "";
+            cba.Util.BoogieVerify.options.extraFlags.Add("SiStingy");
 
             BoogieVerify.removeAsserts = false;
             
