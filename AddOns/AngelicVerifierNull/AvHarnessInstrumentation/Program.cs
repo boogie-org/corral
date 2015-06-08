@@ -124,6 +124,21 @@ namespace AvHarnessInstrumentation
                     vu.localsUsed.Iter(v => ret.Add(v));
                 }
 
+                foreach (var lhs in acmd.Lhss)
+                {
+                    if (lhs is MapAssignLhs)
+                    {
+                        var mlhs = lhs as MapAssignLhs;
+
+                        foreach (var expr in mlhs.Indexes)
+                        {
+                            var vu = new VarsUsed();
+                            vu.VisitExpr(expr);
+                            vu.localsUsed.Iter(v => ret.Add(v));
+                        }
+                    }
+                }
+
                 return ret;
             }
             else if (cmd is CallCmd)
@@ -160,7 +175,7 @@ namespace AvHarnessInstrumentation
 
                 foreach (AssignLhs lhs in acmd.Lhss)
                 {
-                    ret.Add(lhs.DeepAssignedVariable.Name);
+                    if (lhs.DeepAssignedVariable is LocalVariable) ret.Add(lhs.DeepAssignedVariable.Name);
                 }
 
                 return ret;
@@ -198,11 +213,13 @@ namespace AvHarnessInstrumentation
                 // we will initialize these variables in the end
                 HashSet<string> uninitializedVars = new HashSet<string>();
 
-                // will be used to perform BFS on blocks
-                HashSet<string> visitedBlocks = new HashSet<string>();
+                // will be used to perform fixed point iteration on blocks, CFG traversal is DFS
+                Dictionary<string, bool> changedBlocks = new Dictionary<string, bool>();
+                impl.Blocks.Iter(b => changedBlocks[b.Label] = false);
 
-                // blk -> live vars at end of blk
+                // blk -> variables uninitialized at the end of blk
                 Dictionary<string, HashSet<string>> LIVE_out = new Dictionary<string, HashSet<string>>();
+                impl.Blocks.Iter(b => LIVE_out[b.Label] = new HashSet<string>());
 
                 Block entry = impl.Blocks[0];
 
@@ -230,14 +247,17 @@ namespace AvHarnessInstrumentation
                     {
                         locVars.Iter(v => live_vars.Add(v));
                     }
-                    else b.Predecessors.Iter(block => live_vars.UnionWith(LIVE_out.ContainsKey(block.Label)? LIVE_out[block.Label] : new HashSet<string>()));
+                    else b.Predecessors.Iter(block => live_vars.UnionWith(LIVE_out[block.Label]));
 
                     foreach (Cmd c in b.Cmds)
                     {
                         live_vars = ProcessCmd(c, live_vars);
                     }
 
-                    LIVE_out[b.Label] = new HashSet<string>(live_vars);
+                    if (!live_vars.SetEquals(LIVE_out[b.Label])) changedBlocks[b.Label] = true;
+                    else changedBlocks[b.Label] = false;
+
+                    LIVE_out[b.Label] = live_vars;
                 });
 
                 Stack<Block> blockList = new Stack<Block>();
@@ -248,14 +268,13 @@ namespace AvHarnessInstrumentation
                     var blk = blockList.Pop();
                     
                     ProcessBlock(blk);
-                    visitedBlocks.Add(blk.Label);
 
-                    if (blk.TransferCmd is GotoCmd)
+                    if (blk.TransferCmd is GotoCmd && changedBlocks[blk.Label])
                     {
                         var gtc = blk.TransferCmd as GotoCmd;
                         foreach (Block succ in gtc.labelTargets)
                         {
-                            if (!visitedBlocks.Contains(succ.Label)) blockList.Push(succ);
+                            blockList.Push(succ);
                         }
                     }
                 }
