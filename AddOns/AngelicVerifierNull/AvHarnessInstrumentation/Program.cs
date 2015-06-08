@@ -44,6 +44,8 @@ namespace AvHarnessInstrumentation
         // Globals
         static Dictionary<int, HashSet<int>> DeadCodeBranchesDependencyInfo = null; // unknown -> set of affected branches
         static Instrumentations.HarnessInstrumentation harnessInstrumentation = null;
+        static string local_initialization = "LocalInitialization"; // attribute for initialization of local variables
+        static string out_initialization = "OutParamInitialization"; // attribute for initialization of output parameters
 
         /// <summary>
         /// TODO: Check that the input program satisfies some sanity requirements
@@ -101,9 +103,221 @@ namespace AvHarnessInstrumentation
             return init;
         }
 
+        static HashSet<string> GetReadVars(Cmd cmd)
+        {
+            if (cmd is PredicateCmd)
+            {
+                var expr = (cmd as PredicateCmd).Expr;
+                var vu = new VarsUsed();
+                vu.VisitExpr(expr);
+                return vu.localsUsed;
+            }
+            else if (cmd is AssignCmd)
+            {
+                var ret = new HashSet<string>();
+                var acmd = cmd as AssignCmd;
+
+                foreach (var expr in acmd.Rhss)
+                {
+                    var vu = new VarsUsed();
+                    vu.VisitExpr(expr);
+                    vu.localsUsed.Iter(v => ret.Add(v));
+                }
+
+                return ret;
+            }
+            else if (cmd is CallCmd)
+            {
+                var ret = new HashSet<string>();
+                var ccmd = cmd as CallCmd;
+
+                foreach (var expr in ccmd.Ins)
+                {
+                    var vu = new VarsUsed();
+                    vu.VisitExpr(expr);
+                    vu.localsUsed.Iter(v => ret.Add(v));
+                }
+
+                return ret;
+            }
+            else
+            {
+                Console.WriteLine("Unable to process cmd - neither predicate, nor assign or call");
+                throw new NotImplementedException();
+            }
+        }
+
+        static HashSet<string> GetWriteVars(Cmd cmd)
+        {
+            if (cmd is PredicateCmd)
+            {
+                return new HashSet<string>();
+            }
+            else if (cmd is AssignCmd)
+            {
+                var ret = new HashSet<string>();
+                var acmd = cmd as AssignCmd;
+
+                foreach (AssignLhs lhs in acmd.Lhss)
+                {
+                    ret.Add(lhs.DeepAssignedVariable.Name);
+                }
+
+                return ret;
+            }
+            else if (cmd is CallCmd)
+            {
+                var ret = new HashSet<string>();
+                var ccmd = cmd as CallCmd;
+
+                foreach (var expr in ccmd.Outs)
+                {
+                    if (expr.Decl is LocalVariable) ret.Add(expr.Decl.Name);
+                }
+
+                return ret;
+            }
+            else
+            {
+                Console.WriteLine("Unable to process cmd - neither predicate, nor assign or call");
+                throw new NotImplementedException();
+            }
+        }
+
+        static void ComputeandInitializeUninitializedLocals(Program program)
+        {
+            var mallocFull = FindMalloc(program);
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                impl.ComputePredecessorsForBlocks(); // will be used for uninitialized variable analysis
+
+                // set of local variables in implementation
+                HashSet<string> locVars = new HashSet<string>(impl.LocVars.Where(v => !v.TypedIdent.Type.IsMap).Select(v => v.Name));
+                
+                // we will initialize these variables in the end
+                HashSet<string> uninitializedVars = new HashSet<string>();
+
+                // will be used to perform BFS on blocks
+                HashSet<string> visitedBlocks = new HashSet<string>();
+
+                // blk -> live vars at end of blk
+                Dictionary<string, HashSet<string>> LIVE_out = new Dictionary<string, HashSet<string>>();
+
+                Block entry = impl.Blocks[0];
+
+                Func<Cmd, HashSet<string>, HashSet<string>> ProcessCmd = new Func<Cmd, HashSet<string>, HashSet<string>>((cmd, variables) =>
+                {
+                    HashSet<string> readVars = GetReadVars(cmd);
+                    HashSet<string> writeVars = GetWriteVars(cmd);
+
+                    // variable being read before written
+                    readVars.IntersectWith(variables);
+                    uninitializedVars.UnionWith(readVars);
+
+                    // remove written variables from variables
+                    variables.ExceptWith(writeVars);
+
+                    return variables;
+                });
+
+                Action<Block> ProcessBlock = new Action<Block>(b =>
+                {
+                    var live_vars = new HashSet<string>();
+
+                    // taking union of all predecessors
+                    if (b.Label.Equals(entry.Label))
+                    {
+                        locVars.Iter(v => live_vars.Add(v));
+                    }
+                    else b.Predecessors.Iter(block => live_vars.UnionWith(LIVE_out.ContainsKey(block.Label)? LIVE_out[block.Label] : new HashSet<string>()));
+
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        live_vars = ProcessCmd(c, live_vars);
+                    }
+
+                    LIVE_out[b.Label] = new HashSet<string>(live_vars);
+                });
+
+                Stack<Block> blockList = new Stack<Block>();
+                blockList.Push(entry);
+
+                while (blockList.Count > 0)
+                {
+                    var blk = blockList.Pop();
+                    
+                    ProcessBlock(blk);
+                    visitedBlocks.Add(blk.Label);
+
+                    if (blk.TransferCmd is GotoCmd)
+                    {
+                        var gtc = blk.TransferCmd as GotoCmd;
+                        foreach (Block succ in gtc.labelTargets)
+                        {
+                            if (!visitedBlocks.Contains(succ.Label)) blockList.Push(succ);
+                        }
+                    }
+                }
+
+                // list of variables to be initialized completed
+                IEnumerable<Variable> tobeInitialized = impl.LocVars.Where(v => uninitializedVars.Contains(v.Name));
+                tobeInitialized = tobeInitialized.Union(impl.OutParams);
+
+                // now initializing
+                List<Cmd> cmds = new List<Cmd>();
+
+                foreach (Variable v in tobeInitialized)
+                {
+                    Cmd cmd = AllocatePointerAsUnknown(mallocFull, v);
+                    cmds.Add(cmd);
+                }
+
+                Block init = new Block(Token.NoToken, "init", cmds, new GotoCmd(Token.NoToken, new List<Block> { entry }));
+
+                List<Block> newblocks = new List<Block>();
+                newblocks.Add(init);
+                impl.Blocks.Iter(blk => newblocks.Add(blk));
+
+                impl.Blocks = newblocks;
+            }
+        }
+
+        private static Cmd AllocatePointerAsUnknown(Procedure mallocProcedureFull, Variable x)
+        {
+            var cc = BoogieAstFactory.MkCall(mallocProcedureFull,
+                    new List<Expr>() { new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE) },
+                    new List<Variable>() { x }) as CallCmd;
+            cc.Attributes = new QKeyValue(Token.NoToken, x is LocalVariable? local_initialization : out_initialization, new List<object> { x.Name }, cc.Attributes);
+            return cc;
+        }
+
+        private static Procedure FindMalloc(Program prog)
+        {
+            Procedure mallocProcedure = null, mallocProcedureFull = null;
+
+            //find the malloc and malloc-full procedures
+            foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+            {
+                var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
+                if (attr == null) mallocProcedure = proc;
+                else if (attr == "full") mallocProcedureFull = proc;
+            }
+
+            if (mallocProcedureFull == null)
+            {
+                throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
+            }
+
+            return mallocProcedureFull;
+        }
+
         static Program GetProgram(string filename, string stubsfile)
         {
             var init = GetInputProgram(filename, stubsfile);
+
+            ComputeandInitializeUninitializedLocals(init);
 
             // Do some instrumentation for the input program
             if (Options.propertyChecked == "typestate")
