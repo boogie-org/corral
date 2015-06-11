@@ -7,6 +7,7 @@ using Microsoft.Boogie;
 using System.Diagnostics;
 using cba.Util;
 using PersistentProgram = ProgTransformation.PersistentProgram;
+using System.Text.RegularExpressions;
 
 namespace ProofMinimization
 {
@@ -32,6 +33,8 @@ namespace ProofMinimization
             string dualityprooffile = null;
             var once = false;
             var printcontracts = false;
+            var keepPatterns = new HashSet<string>();
+            var usePerf = false;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -54,6 +57,18 @@ namespace ProofMinimization
                 if (args[i].StartsWith("/duality:"))
                 {
                     dualityprooffile = args[i].Substring("/duality:".Length);
+                    continue;
+                }
+
+                if (args[i].StartsWith("/keep:"))
+                {
+                    keepPatterns.Add(args[i].Substring("/keep:".Length));
+                    continue;
+                }
+
+                if (args[i].StartsWith("/perf"))
+                {
+                    usePerf = true;
                     continue;
                 }
 
@@ -83,6 +98,16 @@ namespace ProofMinimization
             if (dualityprooffile != null)
                 program = InjectDualityProof(program, BoogieUtil.ParseProgram(dualityprooffile));
 
+            // Add annotations
+            foreach (var p in keepPatterns)
+            {
+                var re = new Regex(p);
+                program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => re.IsMatch(c.Name))
+                .Iter(c => c.AddAttribute(MustKeepAttr));
+            }
+
+
             // Prune, according to annotations
             var keep = new HashSet<string>(
                 program.TopLevelDeclarations.OfType<Constant>()
@@ -99,7 +124,9 @@ namespace ProofMinimization
                 .Iter(c => c.Attributes = BoogieUtil.removeAttr(MustKeepAttr, c.Attributes));
 
             var inprog = new PersistentProgram(program);
+
             ForLogging = inprog.getProgram();
+            var contracts = GetContracts(inprog);
 
             if (once)
             {
@@ -111,13 +138,13 @@ namespace ProofMinimization
             HashSet<string> candidates = new HashSet<string>();
 
 
-            int inlined = 0;
+            int perf = 0;
 
             program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Iter(c => candidates.Add(c.Name));
 
-            var rt = PruneAndRun(inprog, candidates, out assignment, out inlined);
+            var rt = PruneAndRun(inprog, candidates, out assignment, out perf);
 
             if (rt != BoogieVerify.ReturnStatus.OK)
             {
@@ -129,9 +156,12 @@ namespace ProofMinimization
                 Console.WriteLine("Dropping {0} candidates", (candidates.Count - assignment.Count));
 
             dropped.UnionWith(candidates.Difference(assignment));
-            candidates = assignment;
-            
+            mustkeep.IntersectWith(assignment);
+            candidates = assignment.Difference(mustkeep);
+
             var iter = 1;
+            var additional = new HashSet<string>();
+            var constantToPerfDelta = new Dictionary<string, int>(); 
             var sw = new Stopwatch();
             sw.Start();
 
@@ -146,14 +176,19 @@ namespace ProofMinimization
 
                 Console.WriteLine("  >> Trying {0}", c);
 
+                int inlined;
                 rt = PruneAndRun(inprog, candidates.Union(mustkeep), out assignment, out inlined);
 
-                if (rt == BoogieVerify.ReturnStatus.OK)
+                if (rt == BoogieVerify.ReturnStatus.OK && (!usePerf || inlined < 50 || inlined < 2 * perf))
                 {
                     // dropping was fine
                     Console.WriteLine("  >> Dropping it and {0} others", (candidates.Count + mustkeep.Count - assignment.Count));
-
-                    Debug.Assert(mustkeep.IsSubsetOf(assignment));
+                    constantToPerfDelta.Add(c, (inlined - perf));
+                    
+                    // MustKeep is a subset of assignment, if no user annotation is given.
+                    // Under user annotations, mustkeep is really "should keep"
+                    //Debug.Assert(mustkeep.IsSubsetOf(assignment));
+                    mustkeep.IntersectWith(assignment);
 
                     dropped.Add(c);
                     dropped.UnionWith(candidates.Union(mustkeep).Difference(assignment));
@@ -161,19 +196,32 @@ namespace ProofMinimization
                     candidates = assignment;
                     candidates.ExceptWith(mustkeep);
 
+                    perf = inlined;
+
                     Debug.Assert(!candidates.Contains(c));
                 }
                 else
                 {
                     Console.WriteLine("  >> Cannot drop");
                     mustkeep.Add(c);
+                    additional.Add(c);
                 }
-                Log(iter);
+                
+                //Log(iter);
                 Console.WriteLine("Time elapsed: {0} sec", sw.Elapsed.TotalSeconds.ToString("F2"));
             }
             Log(0);
             Console.WriteLine("Final assignment: {0}", mustkeep.Concat(" "));
 
+            foreach (var c in additional)
+            {
+                Console.WriteLine("Additional contract required: {0}", contracts[c]);
+            }
+            foreach (var tup in constantToPerfDelta)
+            {
+                if (tup.Value <= 2) continue;
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
+            }
         }
 
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
@@ -221,6 +269,17 @@ namespace ProofMinimization
              * */
             var ind = rand.Next(set.Count);
             return set.ToList()[ind];
+        }
+
+        static Dictionary<string, Expr> GetContracts(PersistentProgram inp)
+        {
+            var program = inp.getProgram();
+            var constants = new HashSet<string>(program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Select(c => c.Name));
+
+            return
+                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, constants);
         }
 
         static void RunOnce(PersistentProgram inp, bool printcontracts)
@@ -377,11 +436,12 @@ namespace ProofMinimization
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
             CommandLineOptions.Clo.ContractInfer = true;
-            CommandLineOptions.Clo.RecursionBound = 1;
+            CommandLineOptions.Clo.RecursionBound = 2;
             BoogieUtil.InitializeBoogie(boogieOptions);
             cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
             cba.Util.BoogieVerify.options.newStratifiedInlining = true;
             cba.Util.BoogieVerify.options.newStratifiedInliningAlgo = "";
+            //cba.Util.BoogieVerify.options.useDI = true;
             cba.Util.BoogieVerify.options.extraFlags.Add("SiStingy");
 
             BoogieVerify.removeAsserts = false;
