@@ -38,6 +38,8 @@ namespace AliasAnalysis
                 AliasConstraintSolver.doCycleElimination = true;
             if (args.Any(s => s == "/generateCP"))
                 AliasAnalysis.generateCP = true;
+            if (args.Any(s => s == "/demand-driven"))
+                AliasAnalysis.demandDrivenAA = true;
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -415,6 +417,8 @@ namespace AliasAnalysis
         CSFSAliasAnalysis csfsAnalysis;
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
+        public static bool demandDrivenAA = false;
+        Dictionary<string, HashSet<Edge>> AAGraph;
 
         // program containing constraints for AA
         private static Program constraintProg;
@@ -430,6 +434,7 @@ namespace AliasAnalysis
             counter = 0;
             csfsAnalysis = new CSFSAliasAnalysis(program);
             constraintProg = new Program();
+            AAGraph = new Dictionary<string, HashSet<Edge>>();
         }
 
         private void getReturnAllocSites(Dictionary<string, HashSet<string>> PointsTo)
@@ -624,6 +629,44 @@ namespace AliasAnalysis
             }
         }
 
+        abstract class Edge
+        {
+            protected string source;
+            protected string target;
+        }
+
+        class AllocEdge : Edge
+        {
+            bool isFull;
+            static int counter = 0;
+
+            public AllocEdge(string t, bool full)
+            {
+                if (full) source = "allocSiteSpecial";
+                else source = "allocSite" + (counter++).ToString();
+                target = t;
+                isFull = full;
+            }
+        }
+
+        class MatchEdge : Edge
+        {
+            public MatchEdge(string s, string t)
+            {
+                source = s;
+                target = t;
+            }
+        }
+
+        class AssignEdge : Edge
+        {
+            public AssignEdge(string s, string t)
+            {
+                source = s;
+                target = t;
+            }
+        }
+
         private void Process()
         {
             // Find the allocators
@@ -646,7 +689,16 @@ namespace AliasAnalysis
                 .Iter(c =>
                 {
                     allocatedConstants.Add(c.Name);
-                    solver.Add(new AllocationConstraint(ConstructVariableName(c, null), false));
+                    if (AliasAnalysis.demandDrivenAA)
+                    {
+                        var name = ConstructVariableName(c, null);
+                        if (!AAGraph.ContainsKey(name)) AAGraph[name] = new HashSet<Edge>();
+                        AAGraph[name].Add(new AllocEdge(name, false));
+                    }
+                    else
+                    {
+                        solver.Add(new AllocationConstraint(ConstructVariableName(c, null), false));
+                    }
                 });
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
@@ -665,7 +717,16 @@ namespace AliasAnalysis
                             if (allocators.Contains(ccmd.callee) && ccmd.Outs.Count == 1)
                             {
                                 cmd2AllocationConstraint.Add(new Tuple<Implementation, Block, Cmd>(impl, block, ccmd), AllocationConstraint.getSite());
-                                solver.Add(new AllocationConstraint(ConstructVariableName(ccmd.Outs[0].Decl, impl.Name), funkyAllocators.Contains(ccmd.callee)));
+                                if (AliasAnalysis.demandDrivenAA)
+                                {
+                                    var name = ConstructVariableName(ccmd.Outs[0].Decl, impl.Name);
+                                    if (!AAGraph.ContainsKey(name)) AAGraph[name] = new HashSet<Edge>();
+                                    AAGraph[name].Add(new AllocEdge(name, funkyAllocators.Contains(ccmd.callee)));
+                                }
+                                else
+                                {
+                                    solver.Add(new AllocationConstraint(ConstructVariableName(ccmd.Outs[0].Decl, impl.Name), funkyAllocators.Contains(ccmd.callee)));
+                                }
                             }
                             else if (nameToImpl.ContainsKey(ccmd.callee))
                             {
