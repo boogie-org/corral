@@ -15,8 +15,10 @@ namespace ProofMinimization
     {
         public static readonly string MustKeepAttr = "pm_mustkeep";
         public static readonly string DropAttr = "pm_drop";
-        static HashSet<string> mustkeep = new HashSet<string>();
+        static HashSet<string> keep = new HashSet<string>();
         static HashSet<string> dropped = new HashSet<string>();
+        static Dictionary<string, int> constantToPerfDelta = new Dictionary<string, int>();
+        static Stopwatch sw = null;
         static Program ForLogging = null;
         static bool usePerf = false;
 
@@ -118,7 +120,7 @@ namespace ProofMinimization
 
             program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, MustKeepAttr))
-                .Iter(c => mustkeep.Add(c.Name));
+                .Iter(c => keep.Add(c.Name));
 
             program.TopLevelDeclarations.OfType<Constant>()
                 .Iter(c => c.Attributes = BoogieUtil.removeAttr(MustKeepAttr, c.Attributes));
@@ -155,16 +157,53 @@ namespace ProofMinimization
                 Console.WriteLine("Dropping {0} candidates", (candidates.Count - assignment.Count));
 
             dropped.UnionWith(candidates.Difference(assignment));
-            mustkeep.IntersectWith(assignment);
-            candidates = assignment.Difference(mustkeep);
-
-            var iter = 1;
-            var additional = new HashSet<string>();
-            var constantToPerfDelta = new Dictionary<string, int>(); 
-            var sw = new Stopwatch();
+            keep.IntersectWith(assignment);
+            candidates = assignment.Difference(keep);
+            
+            sw = new Stopwatch();
             sw.Start();
 
             // Prune
+            var inlineDepthBound = Math.Max(0, CommandLineOptions.Clo.InlineDepth);
+            for (int id = 0; id <= inlineDepthBound; id++)
+            {
+                CommandLineOptions.Clo.InlineDepth = id;
+                Console.WriteLine("------ Inline Depth {0} -------", id);
+                var additional = FindMin(inprog, candidates, ref perf);
+
+                // re-test the additional ones with higher inline depth
+                keep = keep.Difference(additional);
+                candidates = new HashSet<string>(additional);
+
+                if (id != inlineDepthBound)
+                {
+                    foreach (var c in candidates)
+                        Console.WriteLine("Potential at InDt {0}: {1}", id, contracts[c]);
+                }
+            }
+
+            Log(0);
+            Console.WriteLine("Final assignment: {0}", keep.Concat(" "));
+
+            foreach (var c in candidates)
+            {
+                Console.WriteLine("Additional contract required: {0}", contracts[c]);
+            }
+            foreach (var tup in constantToPerfDelta)
+            {
+                if (tup.Value <= 2) continue;
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
+            }
+        }
+
+        // Return the additional set of constants to keep
+        static HashSet<string> FindMin(PersistentProgram inprog, HashSet<string> candidates, ref int perf)
+        {
+            var iter = 1;
+            var assignment = new HashSet<string>();
+            var additional = new HashSet<string>();
+            candidates = new HashSet<string>(candidates);
+
             while (candidates.Count != 0)
             {
                 Console.WriteLine("------ ITER {0} -------", iter++);
@@ -176,24 +215,24 @@ namespace ProofMinimization
                 Console.WriteLine("  >> Trying {0}", c);
 
                 int inlined = perf;
-                rt = PruneAndRun(inprog, candidates.Union(mustkeep), out assignment, ref inlined);
+                var rt = PruneAndRun(inprog, candidates.Union(keep), out assignment, ref inlined);
 
                 if (rt == BoogieVerify.ReturnStatus.OK)
                 {
                     // dropping was fine
-                    Console.WriteLine("  >> Dropping it and {0} others", (candidates.Count + mustkeep.Count - assignment.Count));
+                    Console.WriteLine("  >> Dropping it and {0} others", (candidates.Count + keep.Count - assignment.Count));
                     constantToPerfDelta.Add(c, (inlined - perf));
-                    
+
                     // MustKeep is a subset of assignment, if no user annotation is given.
                     // Under user annotations, mustkeep is really "should keep"
                     //Debug.Assert(mustkeep.IsSubsetOf(assignment));
-                    mustkeep.IntersectWith(assignment);
+                    keep.IntersectWith(assignment);
 
                     dropped.Add(c);
-                    dropped.UnionWith(candidates.Union(mustkeep).Difference(assignment));
+                    dropped.UnionWith(candidates.Union(keep).Difference(assignment));
 
                     candidates = assignment;
-                    candidates.ExceptWith(mustkeep);
+                    candidates.ExceptWith(keep);
 
                     perf = inlined;
 
@@ -202,26 +241,17 @@ namespace ProofMinimization
                 else
                 {
                     Console.WriteLine("  >> Cannot drop");
-                    mustkeep.Add(c);
+                    keep.Add(c);
                     additional.Add(c);
                 }
-                
+
                 //Log(iter);
                 Console.WriteLine("Time elapsed: {0} sec", sw.Elapsed.TotalSeconds.ToString("F2"));
             }
-            Log(0);
-            Console.WriteLine("Final assignment: {0}", mustkeep.Concat(" "));
 
-            foreach (var c in additional.Intersection(mustkeep))
-            {
-                Console.WriteLine("Additional contract required: {0}", contracts[c]);
-            }
-            foreach (var tup in constantToPerfDelta)
-            {
-                if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
-            }
+            return additional.Intersection(keep);
         }
+
 
         static int PerfMetric(int n)
         {
@@ -243,7 +273,7 @@ namespace ProofMinimization
             if (ForLogging == null) return;
 
             ForLogging.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => mustkeep.Contains(c.Name))
+                .Where(c => keep.Contains(c.Name))
                 .Iter(c => c.AddAttribute(MustKeepAttr));
 
             ForLogging.TopLevelDeclarations.OfType<Constant>()
