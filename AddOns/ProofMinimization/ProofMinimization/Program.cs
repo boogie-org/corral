@@ -18,6 +18,7 @@ namespace ProofMinimization
         static HashSet<string> mustkeep = new HashSet<string>();
         static HashSet<string> dropped = new HashSet<string>();
         static Program ForLogging = null;
+        static bool usePerf = false;
 
         static void Main(string[] args)
         {
@@ -34,7 +35,6 @@ namespace ProofMinimization
             var once = false;
             var printcontracts = false;
             var keepPatterns = new HashSet<string>();
-            var usePerf = false;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -137,14 +137,13 @@ namespace ProofMinimization
             HashSet<string> assignment = null;
             HashSet<string> candidates = new HashSet<string>();
 
-
             int perf = 0;
 
             program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Iter(c => candidates.Add(c.Name));
 
-            var rt = PruneAndRun(inprog, candidates, out assignment, out perf);
+            var rt = PruneAndRun(inprog, candidates, out assignment, ref perf);
 
             if (rt != BoogieVerify.ReturnStatus.OK)
             {
@@ -176,10 +175,10 @@ namespace ProofMinimization
 
                 Console.WriteLine("  >> Trying {0}", c);
 
-                int inlined;
-                rt = PruneAndRun(inprog, candidates.Union(mustkeep), out assignment, out inlined);
+                int inlined = perf;
+                rt = PruneAndRun(inprog, candidates.Union(mustkeep), out assignment, ref inlined);
 
-                if (rt == BoogieVerify.ReturnStatus.OK && (!usePerf || inlined < 50 || inlined < 2 * perf))
+                if (rt == BoogieVerify.ReturnStatus.OK)
                 {
                     // dropping was fine
                     Console.WriteLine("  >> Dropping it and {0} others", (candidates.Count + mustkeep.Count - assignment.Count));
@@ -213,7 +212,7 @@ namespace ProofMinimization
             Log(0);
             Console.WriteLine("Final assignment: {0}", mustkeep.Concat(" "));
 
-            foreach (var c in additional)
+            foreach (var c in additional.Intersection(mustkeep))
             {
                 Console.WriteLine("Additional contract required: {0}", contracts[c]);
             }
@@ -222,6 +221,13 @@ namespace ProofMinimization
                 if (tup.Value <= 2) continue;
                 Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
             }
+        }
+
+        static int PerfMetric(int n)
+        {
+            if (!usePerf) return Int32.MaxValue;
+            if (n < 50) return (n + 100);
+            return 2 * n;
         }
 
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
@@ -330,7 +336,7 @@ namespace ProofMinimization
 
         static int IterCnt = 0;
 
-        static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, out int inlined)
+        static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
         {
             IterCnt++;
 
@@ -355,6 +361,11 @@ namespace ProofMinimization
 
             // Run SI
             var err = new List<BoogieErrorTrace>();
+            
+            // Set bound
+            BoogieVerify.options.maxInlinedBound = 0;
+            if (inlined != 0)
+                BoogieVerify.options.maxInlinedBound = PerfMetric(inlined);
 
             var rstatus = BoogieVerify.Verify(program, out err, true);
             Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));

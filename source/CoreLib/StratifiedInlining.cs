@@ -140,7 +140,6 @@ namespace CoreLib
     {
         public int numInlined = 0;
         public int vcSize = 0;
-        public int stratNumInlined = 0;
         public int bck = 0;
         public int stacksize = 0;
         public int calls = 0;
@@ -1182,6 +1181,13 @@ namespace CoreLib
             var boundHit = false;
             while (true)
             {
+                // Bound on max procs inlined
+                if (BoogieVerify.options.maxInlinedBound != 0 &&
+                    stats.numInlined > BoogieVerify.options.maxInlinedBound)
+                {
+                    return Outcome.ReachedBound;
+                }
+
                 MacroSI.PRINT_DEBUG("  - underapprox");
                 boundHit = false;
 
@@ -1682,7 +1688,6 @@ namespace CoreLib
             if (candidate == null)
             {
                 stats.numInlined++;
-                stats.stratNumInlined++;
                 var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
 
                 foreach (var newCallSite in svc.CallSites)

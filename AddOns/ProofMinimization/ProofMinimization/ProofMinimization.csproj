@@ -93,9 +93,21 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\cba.csproj">
+      <Project>{b05d046d-a620-4233-9d52-0255c7a69760}</Project>
+      <Name>cba</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\source\CoreLib\CoreLib.csproj">
       <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
       <Name>CoreLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
+      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
+      <Name>ExplainError</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\HoudiniLite\HoudiniLite.csproj">
+      <Project>{b5007b19-6d3a-4746-b5ff-b60f679c8a01}</Project>
+      <Name>HoudiniLite</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
