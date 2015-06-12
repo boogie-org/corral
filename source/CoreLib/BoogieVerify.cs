@@ -806,6 +806,9 @@ namespace cba.Util
         public bool useFwdBck;
         public bool useDI;
 
+        // Bound on maximum procs that can be inlined (0 = no bound)
+        public int maxInlinedBound;
+
         // Printing the program setnt to Boogie
         public bool printProg;
         public string progFileName;
@@ -831,6 +834,7 @@ namespace cba.Util
             useFwdBck = false;
             useDI = false;
             extraFlags = new HashSet<string>();
+            maxInlinedBound = 0;
         }
 
         public BoogieVerifyOptions Copy()
@@ -852,6 +856,7 @@ namespace cba.Util
             ret.progFileName = progFileName;
             ret.useFwdBck = useFwdBck;
             ret.useDI = useDI;
+            ret.maxInlinedBound = maxInlinedBound;
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
             ret.extraFlags.UnionWith(extraFlags);
 
