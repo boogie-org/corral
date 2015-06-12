@@ -37,6 +37,8 @@ namespace AvHarnessInstrumentation
         public static bool deadCodeDetect = false;
         // allocate parameters for procedures
         public static bool allocateParameters = true; 
+        // add initializations for uninitialized local variables and output parameters
+        public static bool addInitialization = false;
     }
 
     class Driver
@@ -336,7 +338,7 @@ namespace AvHarnessInstrumentation
         {
             var init = GetInputProgram(filename, stubsfile);
 
-            ComputeandInitializeUninitializedLocals(init);
+            if (Options.addInitialization) ComputeandInitializeUninitializedLocals(init);
 
             // Do some instrumentation for the input program
             if (Options.propertyChecked == "typestate")
@@ -468,6 +470,9 @@ namespace AvHarnessInstrumentation
 
             if (args.Any(s => s == "/UseUnsoundMapSelectNonNull"))
                 Options.AddMapSelectNonNullAssumptions = true;
+
+            if (args.Any(s => s == "/addInitialization"))
+                Options.addInitialization = true;
 
             args.Where(s => s.StartsWith("/property:"))
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
