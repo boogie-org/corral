@@ -3,8 +3,8 @@ references/*.pdb
 references/*.exe
 obj
 bin
-cba.v11.suo
-cba.v12.suo
+*.suo
+*.suo
 AddOns/FastAVN/FastAVN/bin
 AddOns/FastAVN/FastAVN/obj
 AddOns/AliasAnalysis/AliasAnalysis.v11.suo
