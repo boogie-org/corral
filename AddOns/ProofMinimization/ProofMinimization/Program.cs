@@ -111,13 +111,14 @@ namespace ProofMinimization
 
 
             // Prune, according to annotations
-            var keep = new HashSet<string>(
+            var dontdrop = new HashSet<string>(
                 program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => !QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
                 .Select(c => c.Name));
-            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, keep, true);
+            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, dontdrop, true);
             program.RemoveTopLevelDeclarations(c => c is Constant && QKeyValue.FindBoolAttribute(c.Attributes, DropAttr));
 
+            keep = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, MustKeepAttr))
                 .Iter(c => keep.Add(c.Name));
@@ -401,7 +402,7 @@ namespace ProofMinimization
             Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
             //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
-            inlined = BoogieVerify.CallTreeSize;
+            inlined = BoogieVerify.CallTreeSize + 1;
             BoogieVerify.options.CallTree = new HashSet<string>();
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
