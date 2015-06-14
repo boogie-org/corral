@@ -46,7 +46,7 @@ namespace HoudiniLite
             var sw = new Stopwatch();
             sw.Start();
 
-            var assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file));
+            var assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), true);
 
             sw.Stop();
 

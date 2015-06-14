@@ -60,15 +60,17 @@ namespace CoreLib
     {
         public static readonly string CandidateFuncPrefix = "HoudiniLiteFunc$";
         public static readonly string CandidateFuncAssertedPrefix = "HoudiniLiteFuncAsserted$";
+        static bool RobustAgainstEvaluate = false; // usually this is not needed
 
         public HoudiniInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
             base(program, logFilePath, appendLogFile, PassiveImplInstrumentation)
         {
         }
 
-        public static HashSet<string> RunHoudini(Program program)
+        public static HashSet<string> RunHoudini(Program program, bool RobustAgainstEvaluate = false)
         {
             HoudiniStats.Reset();
+            HoudiniInlining.RobustAgainstEvaluate = RobustAgainstEvaluate;
 
             // Gather existential constants
             var CandidateConstants = new Dictionary<string, Constant>();
@@ -92,8 +94,8 @@ namespace CoreLib
 
 
             // Tag the ensures so we can keep track of them
-            program.TopLevelDeclarations.OfType<Implementation>()
-                .Iter(impl => InstrumentEnsures(impl, CandidateFuncsAssumed[impl.Name], CandidateConstants));
+            var iterimpls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
+            iterimpls.Iter(impl => InstrumentEnsures(program, impl, CandidateFuncsAssumed[impl.Name], CandidateConstants));
 
             // Rewrite functions that are asserted
             var RewriteAssumedToAssertedAction = new Action<Implementation>(impl =>
@@ -302,6 +304,7 @@ namespace CoreLib
                         if (!b)
                         {
                             failed.Add(k);
+                            //Console.WriteLine("Failed: {0}", k);
                             removed++;
                         }
                     }
@@ -377,10 +380,44 @@ namespace CoreLib
             return null;
         }
 
-        static void InstrumentEnsures(Implementation impl, Function CandidateFunc, Dictionary<string, Constant> CandidateConstants)
+        static int InstrumentEnsuresCounter = 0;
+        static void InstrumentEnsures(Program program, Implementation impl, Function CandidateFunc, Dictionary<string, Constant> CandidateConstants)
         {
             if (impl.Proc.Requires.Any(r => !r.Free))
                 throw new Exception("HoudiniLite: Non-free requires not yet supported");
+
+            // quantified expr support
+            Predicate<Expr> hasQE = expr => VarsUsed.GetVariables(expr).Any(v => v is BoundVariable);
+
+            var subst = new Dictionary<Variable, Variable>();
+            for (int i = 0; i < impl.Proc.InParams.Count; i++)
+                subst.Add(impl.Proc.InParams[i], impl.InParams[i]);
+            for (int i = 0; i < impl.Proc.OutParams.Count; i++)
+                subst.Add(impl.Proc.OutParams[i], impl.OutParams[i]);
+
+            Func<Expr, Expr> changeVocab = expr => 
+                Substituter.Apply(new Substitution(v => subst.ContainsKey(v) ? Expr.Ident(subst[v]) : Expr.Ident(v)), expr);
+
+            foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free && (HoudiniInlining.RobustAgainstEvaluate || hasQE(e.Condition))))
+            {
+                string constantName = null;
+                Expr expr = null;
+
+                var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                    ens.Condition, CandidateConstants.Keys, out constantName, out expr);
+
+                if (!match)
+                    throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
+
+                var constant = Expr.Ident(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "hl_qe_" + (InstrumentEnsuresCounter++),
+                    Microsoft.Boogie.Type.Bool), false));                
+
+                impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
+                    .Iter(blk => blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.Eq(constant, changeVocab(expr)))));
+
+                ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), constant);
+                program.AddTopLevelDeclaration(constant.Decl);
+            }
 
             // non-free ensures
             var newens = new List<Ensures>();
@@ -450,7 +487,7 @@ namespace CoreLib
             var gen = siInfo.vcgen.prover.VCExprGen;
             // Remove CandiateFunc
             var fsp = new FindSummaryPred(gen);
-            vcexpr = fsp.Mutate(vcexpr, true);
+            vcexpr = fsp.Apply(vcexpr);
             this.calleeToConstantToAssumedExpr = fsp.calleeToConstantToAssumedExpr;
             this.constantToAssertedExpr = fsp.constantToAssertedExpr;
 
@@ -480,6 +517,11 @@ namespace CoreLib
             {
                 calleeToConstantToAssumedExpr = new Dictionary<string, Dictionary<string, VCExpr>>();
                 constantToAssertedExpr = new Dictionary<string, VCExpr>();
+            }
+
+            public VCExpr Apply(VCExpr expr)
+            {
+                return Mutate(expr, true);
             }
 
             protected override VCExpr UpdateModifiedNode(VCExprNAry originalNode,

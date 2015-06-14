@@ -98,17 +98,16 @@ namespace ProofMinimization
 
             // Inject duality proof
             if (dualityprooffile != null)
-                program = InjectDualityProof(program, BoogieUtil.ParseProgram(dualityprooffile));
+                program = InjectDualityProof(program, dualityprooffile);
 
             // Add annotations
             foreach (var p in keepPatterns)
             {
                 var re = new Regex(p);
                 program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => re.IsMatch(c.Name))
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential") && re.IsMatch(c.Name))
                 .Iter(c => c.AddAttribute(MustKeepAttr));
             }
-
 
             // Prune, according to annotations
             var dontdrop = new HashSet<string>(
@@ -127,6 +126,7 @@ namespace ProofMinimization
                 .Iter(c => c.Attributes = BoogieUtil.removeAttr(MustKeepAttr, c.Attributes));
 
             var inprog = new PersistentProgram(program);
+            //inprog.writeToFile("inprog.bpl");
 
             ForLogging = inprog.getProgram();
             var contracts = GetContracts(inprog);
@@ -150,7 +150,7 @@ namespace ProofMinimization
 
             if (rt != BoogieVerify.ReturnStatus.OK)
             {
-                Console.WriteLine("Cannot minimize a non-correct program");
+                Console.WriteLine("Cannot minimize a non-correct program ({0})", rt);
                 return;
             }
 
@@ -326,7 +326,7 @@ namespace ProofMinimization
             BoogieUtil.PrintProgram(program, "hi_query.bpl");
 
             Console.WriteLine("Running HoudiniLite");
-            var assignment = CoreLib.HoudiniInlining.RunHoudini(program);
+            var assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
             Console.WriteLine("Inferred {0} contracts", assignment.Count);
 
             // Read the program again, add contracts
@@ -376,10 +376,13 @@ namespace ProofMinimization
 
             // Remove non-candidates
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, candidates, true);
-            program.RemoveTopLevelDeclarations(decl => (decl is Constant) && !candidates.Contains((decl as Constant).Name));
+            program.RemoveTopLevelDeclarations(decl => (decl is Constant) && QKeyValue.FindBoolAttribute(decl.Attributes, "existential") && 
+                !candidates.Contains((decl as Constant).Name));
+
+            BoogieUtil.PrintProgram(program, "hi_query" + IterCnt + ".bpl");
 
             // Run Houdini
-            assignment = CoreLib.HoudiniInlining.RunHoudini(program);
+            assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
             Console.WriteLine("  >> Contracts: {0}", assignment.Count);
 
             // Read the program again, add contracts
@@ -388,7 +391,7 @@ namespace ProofMinimization
 
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
 
-            //BoogieUtil.PrintProgram(program, "si_query" + IterCnt + ".bpl");
+            BoogieUtil.PrintProgram(program, "si_query" + IterCnt + ".bpl");
 
             // Run SI
             var err = new List<BoogieErrorTrace>();
@@ -411,8 +414,23 @@ namespace ProofMinimization
             return rstatus;
         }
 
-        static Program InjectDualityProof(Program program, Program DualityProof)
+        static Program InjectDualityProof(Program program, string DualityProofFile)
         {
+            Program DualityProof;
+
+            using (var st = new System.IO.StreamReader(DualityProofFile))
+            {
+                var s = ParserHelper.Fill(st, new List<string>());
+                // replace %i by bound_var_i
+                for (int i = 1; i <= 9; i++)
+                {
+                    s = s.Replace(string.Format("%{0}", i), string.Format("pm_bv_{0}", i));
+                }
+                var v = Parser.Parse(s, DualityProofFile, out DualityProof);
+                if (v != 0) throw new Exception("Failed to parse " + DualityProofFile);
+            }
+
+
             var implToContracts = new Dictionary<string, List<Expr>>();
             foreach (var proc in DualityProof.TopLevelDeclarations.OfType<Procedure>())
             {
