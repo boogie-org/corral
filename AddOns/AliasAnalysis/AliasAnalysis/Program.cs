@@ -393,6 +393,183 @@ namespace AliasAnalysis
     }
     */
 
+    public class DemandDrivenAASolver
+    {
+        Dictionary<string, HashSet<Edge>> AAGraph;
+        Dictionary<string, HashSet<string>> map2stores;
+        Dictionary<string, HashSet<string>> map2loads;
+
+        Dictionary<string, HashSet<string>> pointsTo;
+        HashSet<string> marked;
+        List<string> worklist;
+        public static string nullAS;
+        bool dbg = false;
+
+        abstract class Edge
+        {
+            public string source;
+            public string target;
+        }
+
+        class AllocEdge : Edge
+        {
+            public bool isFull;
+            static int counter = 0;
+
+            public AllocEdge(string t, bool full)
+            {
+                if (full) source = "allocSiteSpecial";
+                else source = "allocSite" + (counter++).ToString();
+                target = t;
+                isFull = full;
+            }
+        }
+
+        class MatchEdge : Edge
+        {
+            public MatchEdge(string s, string t)
+            {
+                source = s;
+                target = t;
+            }
+        }
+
+        class AssignEdge : Edge
+        {
+            public AssignEdge(string s, string t)
+            {
+                source = s;
+                target = t;
+            }
+        }
+
+        public DemandDrivenAASolver()
+        {
+            AAGraph = new Dictionary<string, HashSet<Edge>>();
+            map2stores = new Dictionary<string, HashSet<string>>();
+            map2loads = new Dictionary<string, HashSet<string>>();
+
+            pointsTo = new Dictionary<string, HashSet<string>>();
+            marked = new HashSet<string>();
+            worklist = new List<string>();
+            nullAS = null;
+            AliasConstraintSolver.solved = false;
+        }
+
+        public void AddAllocEdge(string name, bool full)
+        {
+            AllocEdge ae = new AllocEdge(name, full);
+            string source = ae.source;
+            if (!AAGraph.ContainsKey(source)) AAGraph[source] = new HashSet<Edge>();
+            AAGraph[source].Add(ae);
+            if (dbg) Console.WriteLine("Adding alloc edge => {0} -> {1}", source, name);
+        }
+
+        public void AddAssignEdge(string y, string x)
+        {
+            if (!AAGraph.ContainsKey(y)) AAGraph[y] = new HashSet<Edge>();
+            AAGraph[y].Add(new AssignEdge(y, x));
+            if (dbg) Console.WriteLine("Adding assign edge => {0} -> {1}", y, x);
+        }
+
+        public void AddStore(string loadMap, string storeTarget)
+        {
+            if (!map2stores.ContainsKey(loadMap)) map2stores[loadMap] = new HashSet<string>();
+            map2stores[loadMap].Add(storeTarget);
+        }
+
+        public void AddLoad(string loadMap, string loadTarget)
+        {
+            if (!map2loads.ContainsKey(loadMap)) map2loads[loadMap] = new HashSet<string>();
+            map2loads[loadMap].Add(loadTarget);
+        }
+
+        public void AddMatchEdges()
+        {
+            foreach (string map in map2stores.Keys)
+            {
+                foreach (string source in map2stores[map])
+                {
+                    if (map2loads.ContainsKey(map))
+                    {
+                        foreach (string target in map2loads[map])
+                        {
+                            if (!AAGraph.ContainsKey(source)) AAGraph[source] = new HashSet<Edge>();
+                            AAGraph[source].Add(new MatchEdge(source, target));
+                            if (dbg) Console.WriteLine("Adding match edge => {0} -> {1}", source, target);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void FindNULL()
+        {
+            string NULL = "NULL";
+            Debug.Assert(AAGraph.ContainsKey(NULL));
+            
+            foreach (string node in AAGraph.Keys)
+            {
+                foreach (Edge e in AAGraph[node])
+                {
+                    if (e is AllocEdge)
+                    {
+                        var ae = e as AllocEdge;
+                        if (ae.target.Equals(NULL))
+                        {
+                            nullAS = node;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        public void Solve()
+        {
+            FindNULL();
+            RegularPT();
+            AliasConstraintSolver.solved = true;
+        }
+
+        private void RegularPT()
+        {
+            string source = nullAS;
+            propagate(source);
+            
+            while (worklist.Count != 0)
+            {
+                string w = worklist.First();
+                worklist.Remove(w);
+
+                if (AAGraph.ContainsKey(w))
+                {
+                    foreach (Edge e in AAGraph[w])
+                    {
+                        if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
+                        {
+                            if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void propagate(string source)
+        {
+            if (!marked.Contains(source))
+            {
+                worklist.Add(source);
+                marked.Add(source);
+            }
+        }
+
+        public HashSet<string> GetResults()
+        {
+            return marked;
+        }
+    }
+
     public class AliasAnalysisResults
     {
         public Dictionary<string, bool> aliases;
@@ -414,11 +591,11 @@ namespace AliasAnalysis
         AliasConstraintSolver solver;
         int counter;
         public static bool dbg = false;
-        CSFSAliasAnalysis csfsAnalysis;
+        //CSFSAliasAnalysis csfsAnalysis = null;
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
-        Dictionary<string, HashSet<Edge>> AAGraph;
+        DemandDrivenAASolver ddsolver;
 
         // program containing constraints for AA
         private static Program constraintProg;
@@ -432,9 +609,9 @@ namespace AliasAnalysis
             this.allocatedConstants = new HashSet<string>();
             solver = new AliasConstraintSolver();
             counter = 0;
-            csfsAnalysis = new CSFSAliasAnalysis(program);
+            //csfsAnalysis = new CSFSAliasAnalysis(program);
             constraintProg = new Program();
-            AAGraph = new Dictionary<string, HashSet<Edge>>();
+            ddsolver = new DemandDrivenAASolver();
         }
 
         private void getReturnAllocSites(Dictionary<string, HashSet<string>> PointsTo)
@@ -452,7 +629,7 @@ namespace AliasAnalysis
                 }
                 impl2aS[impl] = out2aS;
             }
-            csfsAnalysis.getReturnAllocSites(impl2aS, PointsTo);
+            //csfsAnalysis.getReturnAllocSites(impl2aS, PointsTo);
 
             /*
             foreach (string s in PointsTo.Keys)
@@ -501,11 +678,19 @@ namespace AliasAnalysis
             aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
-            aa.solver.Solve();
-            aa.getReturnAllocSites(aa.solver.GetPointsToSet());
+            if (AliasAnalysis.demandDrivenAA)
+            {
+                aa.ddsolver.Solve();
+                aa.solver.SetResults(aa.ddsolver.GetResults());
+            }
+            else
+            {
+                aa.solver.Solve();
+                //aa.getReturnAllocSites(aa.solver.GetPointsToSet());
+                Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
+                // Solve the queries
+            }
             if (dbg) Console.WriteLine("Done");
-            Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
-            // Solve the queries
             return
                 AliasQuerySolver.Solve(program, new Func<Variable, Variable, Implementation, bool>((v1, v2, impl) => aa.solver.IsAlias(
                     aa.ConstructVariableName(v1, impl.Name),
@@ -629,48 +814,12 @@ namespace AliasAnalysis
             }
         }
 
-        abstract class Edge
-        {
-            protected string source;
-            protected string target;
-        }
-
-        class AllocEdge : Edge
-        {
-            bool isFull;
-            static int counter = 0;
-
-            public AllocEdge(string t, bool full)
-            {
-                if (full) source = "allocSiteSpecial";
-                else source = "allocSite" + (counter++).ToString();
-                target = t;
-                isFull = full;
-            }
-        }
-
-        class MatchEdge : Edge
-        {
-            public MatchEdge(string s, string t)
-            {
-                source = s;
-                target = t;
-            }
-        }
-
-        class AssignEdge : Edge
-        {
-            public AssignEdge(string s, string t)
-            {
-                source = s;
-                target = t;
-            }
-        }
+        
 
         private void Process()
         {
             // Find the allocators
-            var cmd2AllocationConstraint = new Dictionary<Tuple<Implementation, Block, Cmd>, string>();
+            //var cmd2AllocationConstraint = new Dictionary<Tuple<Implementation, Block, Cmd>, string>();
             var allocators = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Where(proc => BoogieUtil.checkAttrExists("allocator", proc.Attributes))
@@ -692,8 +841,7 @@ namespace AliasAnalysis
                     if (AliasAnalysis.demandDrivenAA)
                     {
                         var name = ConstructVariableName(c, null);
-                        if (!AAGraph.ContainsKey(name)) AAGraph[name] = new HashSet<Edge>();
-                        AAGraph[name].Add(new AllocEdge(name, false));
+                        ddsolver.AddAllocEdge(name, false);
                     }
                     else
                     {
@@ -716,12 +864,11 @@ namespace AliasAnalysis
                         {
                             if (allocators.Contains(ccmd.callee) && ccmd.Outs.Count == 1)
                             {
-                                cmd2AllocationConstraint.Add(new Tuple<Implementation, Block, Cmd>(impl, block, ccmd), AllocationConstraint.getSite());
+                                //cmd2AllocationConstraint.Add(new Tuple<Implementation, Block, Cmd>(impl, block, ccmd), AllocationConstraint.getSite());
                                 if (AliasAnalysis.demandDrivenAA)
                                 {
                                     var name = ConstructVariableName(ccmd.Outs[0].Decl, impl.Name);
-                                    if (!AAGraph.ContainsKey(name)) AAGraph[name] = new HashSet<Edge>();
-                                    AAGraph[name].Add(new AllocEdge(name, funkyAllocators.Contains(ccmd.callee)));
+                                    ddsolver.AddAllocEdge(name, funkyAllocators.Contains(ccmd.callee));
                                 }
                                 else
                                 {
@@ -744,7 +891,14 @@ namespace AliasAnalysis
                     }
                 }
             }
-            csfsAnalysis.getcmd2AllocMapping(cmd2AllocationConstraint);
+            //csfsAnalysis.getcmd2AllocMapping(cmd2AllocationConstraint);
+
+            // add 'match' edges from source of each map to store to the target of each load
+            if (AliasAnalysis.demandDrivenAA)
+            {
+                ddsolver.AddMatchEdges();
+                
+            }
         }
 
         private void ProcessAssignment(AssignLhs target, string targetProcName, Expr source, string sourceProcName)
@@ -764,7 +918,14 @@ namespace AliasAnalysis
 
             ProcessAssignment(loadTargetTmp, indexRead, sourceProcName);
             ProcessAssignment(storeTargetTmp, rs, sourceProcName);
-            solver.Add(new StoreConstraint(storeTargetTmp, loadTargetTmp, loadMap));
+            if (AliasAnalysis.demandDrivenAA)
+            {
+                ddsolver.AddStore(loadMap, storeTargetTmp);
+            }
+            else
+            {
+                solver.Add(new StoreConstraint(storeTargetTmp, loadTargetTmp, loadMap));
+            }
         }
 
         private void ProcessAssignment(string target, HashSet<Tuple<Variable, List<string>>> sourceReadSet, string sourceProcName)
@@ -775,7 +936,14 @@ namespace AliasAnalysis
                 var y = ConstructVariableName(tup.Item1, sourceProcName);
                 if (tup.Item2.Count == 0)
                 {
-                    solver.Add(new AssignConstraint(y, x));
+                    if (AliasAnalysis.demandDrivenAA)
+                    {
+                        ddsolver.AddAssignEdge(y, x);
+                    }
+                    else
+                    {
+                        solver.Add(new AssignConstraint(y, x));
+                    }
                 }
                 else
                 {
@@ -783,7 +951,15 @@ namespace AliasAnalysis
                     for (int i = 0; i < tup.Item2.Count; i++)
                     {
                         var currSource = (i == tup.Item2.Count - 1) ? y : ("tmpVar" + (counter++).ToString());
-                        solver.Add(new LoadConstraint(currSource, currTarget, tup.Item2[i]));
+                        if (AliasAnalysis.demandDrivenAA)
+                        {
+                            var loadMap = tup.Item2[i];
+                            ddsolver.AddLoad(loadMap, currTarget);
+                        }
+                        else
+                        {
+                            solver.Add(new LoadConstraint(currSource, currTarget, tup.Item2[i]));
+                        }
                         currTarget = currSource;
                     }
                 }
@@ -2259,7 +2435,7 @@ namespace AliasAnalysis
         Dictionary<string, HashSet<string>> PointsToDelta;
         HashSet<string> maps;
         HashSet<string> worklist;
-        bool solved;
+        public static bool solved;
         public static int environmentPointersUnroll = 0;
         public static bool dbg = false;
         public static bool NoEmptyLoads = false;
@@ -2812,6 +2988,15 @@ namespace AliasAnalysis
                 FakePointsToDelta[n] = new HashSet<string>();
             }
 
+        }
+
+        public void SetResults(HashSet<string> marked)
+        {
+            foreach (string s in marked)
+            {
+                if (!PointsTo.ContainsKey(s)) PointsTo[s] = new HashSet<string>();
+                PointsTo[s].Add(DemandDrivenAASolver.nullAS);
+            }
         }
 
         public Dictionary<string, HashSet<string>> GetPointsToSet()

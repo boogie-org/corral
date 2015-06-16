@@ -600,7 +600,7 @@ namespace AvHarnessInstrumentation
 
             var origProgram = inp.getProgram();
             Dictionary<string, bool> csfs_ret = null;
-            if (Options.UseCSFSAliasAnalysis)
+            if (false /*Options.UseCSFSAliasAnalysis*/) // deprecated flag
             {
                 csfs_ret = AliasAnalysis.AliasAnalysis.DoCSFSAliasAnalysis(program);
                 AliasAnalysis.CSFSAliasAnalysis.removeAsserts(origProgram, csfs_ret);
