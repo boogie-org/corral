@@ -474,6 +474,9 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/addInitialization"))
                 Options.addInitialization = true;
 
+            if (args.Any(s => s == "/demand-driven-AA"))
+                AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
+
             args.Where(s => s.StartsWith("/property:"))
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
 
@@ -495,7 +498,7 @@ namespace AvHarnessInstrumentation
 
                 Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsBeforeAA : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
 
                 // Run alias analysis
@@ -504,7 +507,7 @@ namespace AvHarnessInstrumentation
                 program = RunAliasAnalysis(program);
                 Stats.stop("alias.analysis");
 
-                Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
 
                 // run Houdini pass
