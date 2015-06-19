@@ -7,8 +7,7 @@ class Test
     {
         int s = 0, t = 0;
         string str = "Hello";
-        str = str + " World";
-        if (str == "Hello World")
+        if (str == "Hello")
         {
             s++;
         }
