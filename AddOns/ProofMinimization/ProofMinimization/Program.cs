@@ -15,12 +15,8 @@ namespace ProofMinimization
     {
         public static readonly string MustKeepAttr = "pm_mustkeep";
         public static readonly string DropAttr = "pm_drop";
-        static HashSet<string> keep = new HashSet<string>();
-        static HashSet<string> dropped = new HashSet<string>();
-        static Dictionary<string, int> constantToPerfDelta = new Dictionary<string, int>();
-        static Stopwatch sw = null;
-        static Program ForLogging = null;
-        static bool usePerf = false;
+        public static readonly string CostAttr = "pm_cost";
+        //static Program ForLogging = null;
 
         static void Main(string[] args)
         {
@@ -35,6 +31,7 @@ namespace ProofMinimization
             var boogieArgs = "";
             string dualityprooffile = null;
             var once = false;
+            var usePerf = false;
             var printcontracts = false;
             var keepPatterns = new HashSet<string>();
 
@@ -110,35 +107,327 @@ namespace ProofMinimization
             }
 
             // Prune, according to annotations
-            var dontdrop = new HashSet<string>(
+            DropConstants(program, new HashSet<string>(
                 program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => !QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
-                .Select(c => c.Name));
-            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, dontdrop, true);
-            program.RemoveTopLevelDeclarations(c => c is Constant && QKeyValue.FindBoolAttribute(c.Attributes, DropAttr));
-
-            keep = new HashSet<string>();
-            program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, MustKeepAttr))
-                .Iter(c => keep.Add(c.Name));
-
-            program.TopLevelDeclarations.OfType<Constant>()
-                .Iter(c => c.Attributes = BoogieUtil.removeAttr(MustKeepAttr, c.Attributes));
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
+                .Select(c => c.Name)));
 
             var inprog = new PersistentProgram(program);
-            //inprog.writeToFile("inprog.bpl");
 
-            ForLogging = inprog.getProgram();
-            var contracts = GetContracts(inprog);
+            var proofmin = new ProofMin(inprog, usePerf);
 
             if (once)
             {
-                RunOnce(inprog, printcontracts);
+                proofmin.RunOnce(printcontracts);
                 return;
             }
 
+            HashSet<string> candidates;
+            Dictionary<string, int> constantToPerfDelta;
+            HashSet<string> dropped;
+            var contracts = proofmin.GetContracts();
+            
+            var ret = proofmin.Run(out candidates, out dropped, out constantToPerfDelta);
+
+            if (!ret)
+                return;
+
+            Console.WriteLine("Done with the first run");
+            foreach (var c in candidates)
+            {
+                Console.WriteLine("First run: {0}", contracts[c]);
+            }
+            foreach (var tup in constantToPerfDelta)
+            {
+                if (tup.Value <= 2) continue;
+                Console.WriteLine("First run pref: {0} {1}", tup.Value, contracts[tup.Key]);
+            }
+
+            // Lets see if we can break down things further
+            program = inprog.getProgram();
+            // drop ones that we don't need anymore
+            DropConstants(program, dropped);
+            // break the rest into smaller parts
+            var kept = BreakDownInvariants(program, candidates);
+            if (kept.Count != candidates.Count)
+            {
+                inprog = new PersistentProgram(program);
+                proofmin = new ProofMin(inprog, usePerf);
+
+                HashSet<string> candidates2;
+                Dictionary<string, int> constantToPerfDelta2;
+                HashSet<string> dropped2;
+                var contracts2 = proofmin.GetContracts();
+
+                ret = proofmin.Run(out candidates2, out dropped2, out constantToPerfDelta2);
+                Debug.Assert(ret, "This cannot happen because we just started from a proof");
+
+                // merge results
+                candidates = candidates2.Union(kept);
+                constantToPerfDelta2.Iter(tup => constantToPerfDelta.Add(tup.Key, tup.Value));
+                contracts2.Where(tup => !contracts.ContainsKey(tup.Key)).Iter(tup => contracts.Add(tup.Key, tup.Value));
+            }
+            
+            //Log(0);
+            foreach (var c in candidates)
+            {
+                Console.WriteLine("Additional contract required: {0}", NormalizeExpr(contracts[c]));
+            }
+            foreach (var tup in constantToPerfDelta)
+            {
+                if (tup.Value <= 2) continue;
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, NormalizeExpr(contracts[tup.Key]));
+            }
+        }
+
+        static Expr NormalizeExpr(Expr expr)
+        {
+            var disj = ProofMin.GetExprDisjuncts(expr);
+            if (disj.Count == 1)
+            {
+                var conj = ProofMin.GetExprConjunctions(expr);
+                if (conj.Count == 1)
+                    return expr;
+                conj = conj.Map(e => NormalizeExpr(e));
+                conj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
+
+                return Expr.And(conj);
+            }
+            else
+            {
+                disj = disj.Map(e => NormalizeExpr(e));
+                disj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
+                var ret = disj[0];
+                for (int i = 1; i < disj.Count; i++)
+                    ret = Expr.Or(ret, disj[i]);
+                return ret;
+            }
+        }
+
+        static HashSet<string> BreakDownInvariants(Program program, HashSet<string> candidates)
+        {
+            var markkeep = new HashSet<string>();
+            var added = new HashSet<Constant>();
+
+            var counter = 0;
+            var GetExistentialConstant = new Func<Constant>(() =>
+            {
+                var c = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                    "DualityProofConstBrokenDown" + (counter++), Microsoft.Boogie.Type.Bool), false);
+                c.AddAttribute("existential");
+                return c;
+            });
+
+            var constants = new Dictionary<string, Constant>();
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Iter(c => constants.Add(c.Name, c));
+
+            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+            {
+                var newens = new List<Ensures>();
+
+                foreach (var ens in proc.Ensures.Where(e => !e.Free))
+                {
+                    string constantName = null;
+                    Expr expr = null;
+
+                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                        ens.Condition, candidates, out constantName, out expr);
+
+                    if (!match) continue;
+
+                    var elements = ProofMin.BreakDownExpr(expr);
+                    if (elements.Count == 1)
+                    {
+                        markkeep.Add(constantName);
+                        continue;
+                    }
+
+                    // add cost
+                    constants[constantName].AddAttribute(Driver.CostAttr, Expr.Literal(1));
+
+                    // add the constituents
+                    foreach (var elem in elements)
+                    {
+                        var c = GetExistentialConstant();
+                        added.Add(c);
+                        newens.Add(new Ensures(false, Expr.Imp(Expr.Ident(c), elem)));
+                    }
+                    
+                }
+
+                proc.Ensures.AddRange(newens);
+            }
+
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => markkeep.Contains(c.Name))
+                .Iter(c => c.AddAttribute(Driver.MustKeepAttr));
+
+            program.AddTopLevelDeclarations(added);
+
+            return markkeep;
+        }
+
+        static void DropConstants(Program program, HashSet<string> drop)
+        {
+            // Prune, according to annotations
+            var constants = new HashSet<string>(
+                program.TopLevelDeclarations.OfType<Constant>()
+                .Select(c => c.Name));
+
+            var dontdrop = constants.Difference(drop);
+
+            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, dontdrop, true);
+            program.RemoveTopLevelDeclarations(c => c is Constant && drop.Contains((c as Constant).Name));
+        }
+
+        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            Console.WriteLine("Got Ctrl-C");
+            //Log(0);
+            System.Diagnostics.Process.GetCurrentProcess()
+                .Kill();
+        }
+
+        static void Log(int i)
+        {
+            /*
+            if (ForLogging == null) return;
+
+            ForLogging.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => keep.Contains(c.Name))
+                .Iter(c => c.AddAttribute(MustKeepAttr));
+
+            ForLogging.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => dropped.Contains(c.Name))
+                .Iter(c => c.AddAttribute(DropAttr));
+
+            BoogieUtil.PrintProgram(ForLogging, string.Format("pmh_logged{0}.bpl", i == 0 ? "" : i.ToString()));
+             */
+        }
+
+        static Program InjectDualityProof(Program program, string DualityProofFile)
+        {
+            Program DualityProof;
+
+            using (var st = new System.IO.StreamReader(DualityProofFile))
+            {
+                var s = ParserHelper.Fill(st, new List<string>());
+                // replace %i by bound_var_i
+                for (int i = 1; i <= 9; i++)
+                {
+                    s = s.Replace(string.Format("%{0}", i), string.Format("pm_bv_{0}", i));
+                }
+                var v = Parser.Parse(s, DualityProofFile, out DualityProof);
+                if (v != 0) throw new Exception("Failed to parse " + DualityProofFile);
+            }
+
+
+            var implToContracts = new Dictionary<string, List<Expr>>();
+            foreach (var proc in DualityProof.TopLevelDeclarations.OfType<Procedure>())
+            {
+                implToContracts.Add(proc.Name, new List<Expr>());
+                foreach (var ens in proc.Ensures)
+                {
+                    implToContracts[proc.Name].AddRange(ProofMin.GetExprConjunctions(ens.Condition));
+                }
+            }
+
+            var counter = 0;
+            var GetExistentialConstant = new Func<Constant>(() =>
+                {
+                    var c = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                        "DualityProofConst" + (counter++), Microsoft.Boogie.Type.Bool), false);
+                    c.AddAttribute("existential");
+                    return c;
+                });
+
+            var constsToAdd = new List<Declaration>();
+            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
+            {
+                if (!implToContracts.ContainsKey(proc.Name))
+                    continue;
+                if (QKeyValue.FindBoolAttribute(proc.Attributes, "nohoudini"))
+                    continue;
+
+                foreach (var expr in implToContracts[proc.Name])
+                {
+                    var c = GetExistentialConstant();
+                    constsToAdd.Add(c);
+                    proc.Ensures.Add(new Ensures(false,
+                        Expr.Imp(Expr.Ident(c), expr)));
+                }
+            }
+
+            program.AddTopLevelDeclarations(constsToAdd);
+
+            return BoogieUtil.ReResolveInMem(program);
+        }
+
+        static void Initalize(string boogieOptions)
+        {
+            CommandLineOptions.Install(new CommandLineOptions());
+            CommandLineOptions.Clo.PrintInstrumented = true;
+            CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
+            CommandLineOptions.Clo.ContractInfer = true;
+            CommandLineOptions.Clo.RecursionBound = 2;
+            BoogieUtil.InitializeBoogie(boogieOptions);
+            cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
+            cba.Util.BoogieVerify.options.newStratifiedInlining = true;
+            cba.Util.BoogieVerify.options.newStratifiedInliningAlgo = "";
+            //cba.Util.BoogieVerify.options.useDI = true;
+            cba.Util.BoogieVerify.options.extraFlags.Add("SiStingy");
+
+            BoogieVerify.removeAsserts = false;
+            
+        }
+    }
+
+    class ProofMin
+    {
+        HashSet<string> keep;
+        HashSet<string> dropped;
+
+        Stopwatch sw;
+        bool usePerf;
+        Random rand;
+        PersistentProgram inprog;
+        Dictionary<string, int> candidateToCost;
+
+        static int InvocationCounter = 0;
+
+        public ProofMin(PersistentProgram program, bool usePerf)
+        {
+            keep = new HashSet<string>();
+            dropped = null;
+            sw = new Stopwatch();
+            this.usePerf = usePerf;
+            rand = new Random((int)DateTime.Now.Ticks);
+            this.inprog = program;
+
+            // logging
+            program.writeToFile("pm_query" + (InvocationCounter++) + ".bpl");
+
+            // gather keep vars
+            var prog = inprog.getProgram();
+            prog.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, Driver.MustKeepAttr))
+                .Iter(c => keep.Add(c.Name));
+        }
+
+        public bool Run(out HashSet<string> constantsToKeep, out HashSet<string> constantsToDrop, out Dictionary<string, int> constantToPerf)
+        {
+            constantsToKeep = new HashSet<string>();
+            constantToPerf = new Dictionary<string, int>();
+            constantsToDrop = new HashSet<string>();
+            dropped = new HashSet<string>();
+
+            var program = inprog.getProgram();
+
             HashSet<string> assignment = null;
             HashSet<string> candidates = new HashSet<string>();
+            candidateToCost = new Dictionary<string, int>();
 
             int perf = 0;
 
@@ -146,12 +435,16 @@ namespace ProofMinimization
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Iter(c => candidates.Add(c.Name));
 
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => candidates.Contains(c.Name))
+                .Iter(c => candidateToCost.Add(c.Name, QKeyValue.FindIntAttribute(c.Attributes, Driver.CostAttr, 0)));
+
             var rt = PruneAndRun(inprog, candidates, out assignment, ref perf);
 
             if (rt != BoogieVerify.ReturnStatus.OK)
             {
                 Console.WriteLine("Cannot minimize a non-correct program ({0})", rt);
-                return;
+                return false;
             }
 
             if (candidates.Count != assignment.Count)
@@ -160,17 +453,17 @@ namespace ProofMinimization
             dropped.UnionWith(candidates.Difference(assignment));
             keep.IntersectWith(assignment);
             candidates = assignment.Difference(keep);
-            
+
             sw = new Stopwatch();
             sw.Start();
 
             // Prune
             var inlineDepthBound = Math.Max(0, CommandLineOptions.Clo.InlineDepth);
-            for (int id = 0; id <= inlineDepthBound; id++)
+            for (int id = inlineDepthBound; id <= inlineDepthBound; id++)
             {
                 CommandLineOptions.Clo.InlineDepth = id;
                 Console.WriteLine("------ Inline Depth {0} -------", id);
-                var additional = FindMin(inprog, candidates, ref perf);
+                var additional = FindMin(inprog, candidates, constantToPerf, ref perf);
 
                 // re-test the additional ones with higher inline depth
                 keep = keep.Difference(additional);
@@ -178,27 +471,18 @@ namespace ProofMinimization
 
                 if (id != inlineDepthBound)
                 {
+                    var contracts = GetContracts();
                     foreach (var c in candidates)
                         Console.WriteLine("Potential at InDt {0}: {1}", id, contracts[c]);
                 }
             }
-
-            Log(0);
-            Console.WriteLine("Final assignment: {0}", keep.Concat(" "));
-
-            foreach (var c in candidates)
-            {
-                Console.WriteLine("Additional contract required: {0}", contracts[c]);
-            }
-            foreach (var tup in constantToPerfDelta)
-            {
-                if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
-            }
+            constantsToKeep = candidates;
+            constantsToDrop = dropped;
+            return true;
         }
 
         // Return the additional set of constants to keep
-        static HashSet<string> FindMin(PersistentProgram inprog, HashSet<string> candidates, ref int perf)
+        HashSet<string> FindMin(PersistentProgram inprog, HashSet<string> candidates, Dictionary<string, int> constantToPerfDelta, ref int perf)
         {
             var iter = 1;
             var assignment = new HashSet<string>();
@@ -254,39 +538,15 @@ namespace ProofMinimization
         }
 
 
-        static int PerfMetric(int n)
+        int PerfMetric(int n)
         {
             if (!usePerf) return Int32.MaxValue;
             if (n < 50) return (n + 100);
             return 2 * n;
         }
 
-        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
-        {
-            Console.WriteLine("Got Ctrl-C");
-            Log(0);
-            System.Diagnostics.Process.GetCurrentProcess()
-                .Kill();
-        }
-
-        static void Log(int i)
-        {
-            if (ForLogging == null) return;
-
-            ForLogging.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => keep.Contains(c.Name))
-                .Iter(c => c.AddAttribute(MustKeepAttr));
-
-            ForLogging.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => dropped.Contains(c.Name))
-                .Iter(c => c.AddAttribute(DropAttr));
-
-            BoogieUtil.PrintProgram(ForLogging, string.Format("pmh_logged{0}.bpl", i == 0 ? "" : i.ToString()));
-        }
-
-        static Random rand = null;
-
-        static string PickRandom(HashSet<string> set)
+        // pick one with max cost randomly
+        string PickRandom(HashSet<string> set)
         {
             Debug.Assert(set.Count != 0);
 
@@ -295,22 +555,16 @@ namespace ProofMinimization
                 rand = new Random((int)DateTime.Now.Ticks);
             }
 
-            /*
-            var ret = "";
-            do
-            {
-                var ind = rand.Next(set.Count);
-                ret = set.ToList()[ind];
-            } while (!ret.StartsWith("Duality"));
-            return ret;
-             * */
-            var ind = rand.Next(set.Count);
-            return set.ToList()[ind];
+            var max = set.Select(c => candidateToCost[c]).Max();
+            var selected = set.Where(s => candidateToCost[s] == max);
+
+            var ind = rand.Next(selected.Count());
+            return selected.ToList()[ind];
         }
 
-        static Dictionary<string, Expr> GetContracts(PersistentProgram inp)
+        public Dictionary<string, Expr> GetContracts()
         {
-            var program = inp.getProgram();
+            var program = inprog.getProgram();
             var constants = new HashSet<string>(program.TopLevelDeclarations.OfType<Constant>()
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Select(c => c.Name));
@@ -319,9 +573,9 @@ namespace ProofMinimization
                 CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, constants);
         }
 
-        static void RunOnce(PersistentProgram inp, bool printcontracts)
+        public void RunOnce(bool printcontracts)
         {
-            var program = inp.getProgram();
+            var program = inprog.getProgram();
             program.Typecheck();
             BoogieUtil.PrintProgram(program, "hi_query.bpl");
 
@@ -330,7 +584,7 @@ namespace ProofMinimization
             Console.WriteLine("Inferred {0} contracts", assignment.Count);
 
             // Read the program again, add contracts
-            program = inp.getProgram();
+            program = inprog.getProgram();
             program.Typecheck();
 
             var contracts =
@@ -367,7 +621,7 @@ namespace ProofMinimization
 
         static int IterCnt = 0;
 
-        static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
+        BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
         {
             IterCnt++;
 
@@ -376,7 +630,7 @@ namespace ProofMinimization
 
             // Remove non-candidates
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, candidates, true);
-            program.RemoveTopLevelDeclarations(decl => (decl is Constant) && QKeyValue.FindBoolAttribute(decl.Attributes, "existential") && 
+            program.RemoveTopLevelDeclarations(decl => (decl is Constant) && QKeyValue.FindBoolAttribute(decl.Attributes, "existential") &&
                 !candidates.Contains((decl as Constant).Name));
 
             BoogieUtil.PrintProgram(program, "hi_query" + IterCnt + ".bpl");
@@ -395,7 +649,7 @@ namespace ProofMinimization
 
             // Run SI
             var err = new List<BoogieErrorTrace>();
-            
+
             // Set bound
             BoogieVerify.options.maxInlinedBound = 0;
             if (inlined != 0)
@@ -410,74 +664,29 @@ namespace ProofMinimization
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
-            
+
             return rstatus;
         }
 
-        static Program InjectDualityProof(Program program, string DualityProofFile)
+        public static List<Expr> GetExprConjunctions(Expr expr)
         {
-            Program DualityProof;
+            return GetSubExprs(expr, BinaryOperator.Opcode.And);
+        }
 
-            using (var st = new System.IO.StreamReader(DualityProofFile))
-            {
-                var s = ParserHelper.Fill(st, new List<string>());
-                // replace %i by bound_var_i
-                for (int i = 1; i <= 9; i++)
-                {
-                    s = s.Replace(string.Format("%{0}", i), string.Format("pm_bv_{0}", i));
-                }
-                var v = Parser.Parse(s, DualityProofFile, out DualityProof);
-                if (v != 0) throw new Exception("Failed to parse " + DualityProofFile);
-            }
-
-
-            var implToContracts = new Dictionary<string, List<Expr>>();
-            foreach (var proc in DualityProof.TopLevelDeclarations.OfType<Procedure>())
-            {
-                implToContracts.Add(proc.Name, new List<Expr>());
-                foreach (var ens in proc.Ensures)
-                {
-                    implToContracts[proc.Name].AddRange(GetExprConjunctions(ens.Condition));
-                }
-            }
-
-            var counter = 0;
-            var GetExistentialConstant = new Func<Constant>(() =>
-                {
-                    var c = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                        "DualityProofConst" + (counter++), Microsoft.Boogie.Type.Bool), false);
-                    c.AddAttribute("existential");
-                    return c;
-                });
-
-            var constsToAdd = new List<Declaration>();
-            foreach (var proc in program.TopLevelDeclarations.OfType<Procedure>())
-            {
-                if (!implToContracts.ContainsKey(proc.Name))
-                    continue;
-                foreach (var expr in implToContracts[proc.Name])
-                {
-                    var c = GetExistentialConstant();
-                    constsToAdd.Add(c);
-                    proc.Ensures.Add(new Ensures(false,
-                        Expr.Imp(Expr.Ident(c), expr)));
-                }
-            }
-
-            program.AddTopLevelDeclarations(constsToAdd);
-
-            return BoogieUtil.ReResolveInMem(program);
+        public static List<Expr> GetExprDisjuncts(Expr expr)
+        {
+            return GetSubExprs(expr, BinaryOperator.Opcode.Or);
         }
 
         // Return the set of conjuncts of the expr
-        static List<Expr> GetExprConjunctions(Expr expr)
+        public static List<Expr> GetSubExprs(Expr expr, BinaryOperator.Opcode op)
         {
             var conjuncts = new List<Expr>();
             if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
-                ((expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
+                ((expr as NAryExpr).Fun as BinaryOperator).Op == op)
             {
-                var c0 = GetExprConjunctions((expr as NAryExpr).Args[0]);
-                var c1 = GetExprConjunctions((expr as NAryExpr).Args[1]);
+                var c0 = GetSubExprs((expr as NAryExpr).Args[0], op);
+                var c1 = GetSubExprs((expr as NAryExpr).Args[1], op);
                 conjuncts.AddRange(c0);
                 conjuncts.AddRange(c1);
             }
@@ -489,23 +698,14 @@ namespace ProofMinimization
             return conjuncts;
         }
 
-
-        static void Initalize(string boogieOptions)
+        // Break (a && b) || (c && d) to {a, b, c, d}
+        public static List<Expr> BreakDownExpr(Expr expr)
         {
-            CommandLineOptions.Install(new CommandLineOptions());
-            CommandLineOptions.Clo.PrintInstrumented = true;
-            CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
-            CommandLineOptions.Clo.ContractInfer = true;
-            CommandLineOptions.Clo.RecursionBound = 2;
-            BoogieUtil.InitializeBoogie(boogieOptions);
-            cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
-            cba.Util.BoogieVerify.options.newStratifiedInlining = true;
-            cba.Util.BoogieVerify.options.newStratifiedInliningAlgo = "";
-            //cba.Util.BoogieVerify.options.useDI = true;
-            cba.Util.BoogieVerify.options.extraFlags.Add("SiStingy");
-
-            BoogieVerify.removeAsserts = false;
-            
+            var ret = new List<Expr>();
+            var disj = GetExprDisjuncts(expr);
+            disj.Iter(d => ret.AddRange(GetExprConjunctions(d)));
+            return ret;
         }
+
     }
 }

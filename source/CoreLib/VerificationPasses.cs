@@ -893,9 +893,13 @@ namespace cba
             var cnt = 0;
             var constants = new List<Constant>();
 
+            var templateCounter = 0;
+
             // Iterate over templates
             foreach (var template in templates)
             {
+                templateCounter++;
+
                 foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 {
                     var proc = impl.Proc;
@@ -953,12 +957,14 @@ namespace cba
                         {
                             var ens = new Ensures(false, e);
                             ens.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), template.annotations);
+                            ens.Attributes = new QKeyValue(Token.NoToken, "template", new List<object> { Expr.Literal(templateCounter) }, ens.Attributes);
                             proc.Ensures.Add(ens);
                         }
                         else
                         {
                             var req = new Requires(false, e);
                             req.Attributes = new QKeyValue(Token.NoToken, "candidate", new List<object>(), template.annotations);
+                            req.Attributes = new QKeyValue(Token.NoToken, "template", new List<object> { Expr.Literal(templateCounter) }, req.Attributes);
                             proc.Requires.Add(req);
                         }
                     }
@@ -1130,6 +1136,7 @@ namespace cba
             // Dump program
             BoogieUtil.PrintProgram(program, outfile);                    
         }
+
 
         public static bool FPA = false;
 
