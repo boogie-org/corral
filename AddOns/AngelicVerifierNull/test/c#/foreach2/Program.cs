@@ -17,6 +17,6 @@ class PoirotMain {
         sum += x;
         product *= x;
     }
-    Contract.Assert(sum == 9);
+    Contract.Assert(sum != 9);
   }
 }
