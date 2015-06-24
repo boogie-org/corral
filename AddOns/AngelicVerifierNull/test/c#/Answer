@@ -1,0 +1,58 @@
+As 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: inline$Alloc_trace_1_trace_1$0$x
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Test.Foo$System.Object with expr !(v_Ref == null)
+As2 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+As3 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: inline$Alloc_trace_1_trace_1$0$x
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Test.bar$AbsClass with expr !(v_Ref == null)
+ex1 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc cMain.Main with expr F$cMain.s == 3
+ex1 
+[TAG: AV_OUTPUT] ----- Analyzing TestProgram.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> 0 + 1 + 1 == x_1)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> 0 + 1 + 1 + 0 + 1 + 1 + 0 + 1 + 0 + 1 + 0 == x_1)
+ex2 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc cMain.Main with expr s_int == 5
+ex2 
+[TAG: AV_OUTPUT] ----- Analyzing TestProgram.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> Union2Int(Int2Union(2 * Union2Int(Int2Union(3)))) == x_1)
+listsum 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+listsum2 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: alloc___19
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc PoirotMain.Main with expr !(sum_int == 9)
+foreach 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+foreach2 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: alloc___31 alloc___44 alloc___57
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc PoirotMain.Main with expr !(sum_int == 9)
+doublequestion 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc PoirotMain.F$IntContainer with expr !(ic_Ref == null)
+ComplexExpr 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc PoirotMain.Main with expr y_bool
+Set 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: inline$Alloc_trace_1_trace_1$0$x inline$Alloc_trace_3_trace_1$0$x inline$Alloc_trace_2_trace_1$0$x inline$Alloc_trace_4_trace_1$0$x inline$Alloc_trace_5_trace_1$0$x alloc___45
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc PoirotMain.Main with expr $tmp12
+String 
+[TAG: AV_OUTPUT] ----- Analyzing testClean.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Test.Main with expr s_int == 0
