@@ -588,8 +588,11 @@ namespace AvHarnessInstrumentation
                 var af =
                     AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
+                Stopwatch sw = new Stopwatch();
+                sw.Start();
                 res =
                   AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+                sw.Stop(); Console.WriteLine("AA Time : {0}s", sw.ElapsedMilliseconds / 1000);
             }
             else
             {
