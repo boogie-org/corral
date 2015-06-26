@@ -398,6 +398,7 @@ namespace AliasAnalysis
         Dictionary<string, HashSet<Edge>> AAGraph;
         Dictionary<string, HashSet<string>> map2stores;
         Dictionary<string, HashSet<string>> map2loads;
+        HashSet<string> fullAllocSites;
 
         Dictionary<string, HashSet<string>> pointsTo;
         HashSet<string> marked;
@@ -418,8 +419,16 @@ namespace AliasAnalysis
 
             public AllocEdge(string t, bool full)
             {
-                if (full) source = "allocSiteSpecial";
-                else source = "allocSite" + (counter++).ToString();
+                if (AliasAnalysis.mergeFull)
+                {
+                    if (full)
+                        source = "allocSiteSpecial";
+                    else
+                        source = "allocSite" + (counter++).ToString();
+                }
+                else
+                    source = "allocSite" + (counter++).ToString();
+
                 target = t;
                 isFull = full;
             }
@@ -448,12 +457,14 @@ namespace AliasAnalysis
             AAGraph = new Dictionary<string, HashSet<Edge>>();
             map2stores = new Dictionary<string, HashSet<string>>();
             map2loads = new Dictionary<string, HashSet<string>>();
+            fullAllocSites = new HashSet<string>();
 
             pointsTo = new Dictionary<string, HashSet<string>>();
             marked = new HashSet<string>();
             worklist = new List<string>();
             nullAS = null;
             AliasConstraintSolver.solved = false;
+
         }
 
         public void AddAllocEdge(string name, bool full)
@@ -461,6 +472,7 @@ namespace AliasAnalysis
             AllocEdge ae = new AllocEdge(name, full);
             string source = ae.source;
             if (!AAGraph.ContainsKey(source)) AAGraph[source] = new HashSet<Edge>();
+            if (full) fullAllocSites.Add(source);
             AAGraph[source].Add(ae);
             if (dbg) Console.WriteLine("Adding alloc edge => {0} -> {1}", source, name);
         }
@@ -499,6 +511,20 @@ namespace AliasAnalysis
                             if (dbg) Console.WriteLine("Adding match edge => {0} -> {1}", source, target);
                         }
                     }
+                }
+            }
+
+            //InitFullAllocators();
+        }
+
+        // TODO: add appropriate edges
+        private void InitFullAllocators()
+        {
+            foreach (var map in map2loads.Keys)
+            {
+                foreach (var aSite in fullAllocSites)
+                {
+                    if (!AAGraph.ContainsKey(aSite)) AAGraph[aSite] = new HashSet<Edge>();
                 }
             }
         }
@@ -548,7 +574,11 @@ namespace AliasAnalysis
                     {
                         if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
                         {
-                            if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                            if (AliasAnalysis.useGVN)
+                            {
+                                if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                            }
+                            else propagate(e.target);
                         }
                     }
                 }
@@ -595,6 +625,8 @@ namespace AliasAnalysis
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
+        public static bool useGVN = false;
+        public static bool mergeFull = false;
         DemandDrivenAASolver ddsolver;
 
         // program containing constraints for AA
@@ -675,16 +707,21 @@ namespace AliasAnalysis
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
-            aa.Process_Assumes_Asserts();
+            //aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             if (AliasAnalysis.demandDrivenAA)
             {
+                // HACK: will work only for non-null aliasing queries
+                // TODO: make it general
+                Console.WriteLine("Running demand driven alias analysis");
+                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
                 aa.ddsolver.Solve();
                 aa.solver.SetResults(aa.ddsolver.GetResults());
             }
             else
             {
+                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
                 aa.solver.Solve();
                 //aa.getReturnAllocSites(aa.solver.GetPointsToSet());
                 Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
@@ -2357,8 +2394,13 @@ namespace AliasAnalysis
 
         public AllocationConstraint(string target, bool full)
         {
-            if (full) this.allocSite = "allocSiteSpecial";
-            else this.allocSite = "allocSite" + (counter++).ToString();
+            if (AliasAnalysis.mergeFull)
+            {
+                if (full) this.allocSite = "allocSiteSpecial";
+                else this.allocSite = "allocSite" + (counter++).ToString();
+            }
+            else
+                this.allocSite = "allocSite" + (counter++).ToString();
             this.target = target;
             this.full = full;
         }
@@ -3099,7 +3141,10 @@ namespace AliasAnalysis
             if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
             {
                 null_allocSite = PointsTo["NULL"].First();
-                if (AliasAnalysis.non_null_vars.Contains(n)) change.Remove(null_allocSite);
+                if (AliasAnalysis.useGVN)
+                {
+                    if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
+                }
             }
             
             if (!change.IsSubsetOf(PointsToDelta[n]))

@@ -477,6 +477,12 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/demand-driven-AA"))
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
+            if (args.Any(s => s == "/use-GVN"))
+                AliasAnalysis.AliasAnalysis.useGVN = true;
+
+            if (args.Any(s => s == "/merge-full"))
+                AliasAnalysis.AliasAnalysis.mergeFull = true;
+
             args.Where(s => s.StartsWith("/property:"))
                 .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
 
@@ -588,8 +594,10 @@ namespace AvHarnessInstrumentation
                 var af =
                     AliasAnalysis.SimplifyAliasingQueries.Simplify(program);
 
+                Stats.resume("fixpoint");
                 res =
                   AliasAnalysis.AliasAnalysis.DoAliasAnalysis(program);
+                Stats.stop("fixpoint");
             }
             else
             {

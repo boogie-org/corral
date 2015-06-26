@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Boogie;
 using Microsoft.Boogie.GraphUtil;
 using System.Diagnostics;
+using AvUtil;
 
 namespace cba.Util
 {
@@ -1471,6 +1472,7 @@ namespace cba.Util
         }
     }
 
+    /*
     public class CSEVisitor : StandardVisitor
     {
         Dictionary<string, Variable> exprs;
@@ -1485,10 +1487,6 @@ namespace cba.Util
                 exprs.Add(CSE.expr2key(var2expr[v]), v);
             }
         }
-
-        /*
-         * Perform CSE on given_expr w.r.t. non_null_expr, replacing it with variable v
-         */
         public static Expr getExpr(Expr given_expr, HashSet<Variable> vars, Dictionary<Variable, Expr> var2expr)
         {
             if (given_expr == null) return null;
@@ -1503,31 +1501,94 @@ namespace cba.Util
             else return base.VisitExpr(node);
         }
     }
+    */
 
-    public class CSE
+    public class NonnullInstrumentation
     {
         Program program;
         bool dbg = false;
+        public static Dictionary<string, Dictionary<string, Expr>> cseTmpVar2Expr = new Dictionary<string, Dictionary<string, Expr>>();
 
-        CSE(Program prog)
+        NonnullInstrumentation(Program prog)
         {
             program = prog;
         }
 
         public static Program Do(Program prog)
         {
-            CSE cse = new CSE(prog);
-            cse.DoCSE();
-            return cse.program;
+            NonnullInstrumentation nni = new NonnullInstrumentation(prog);
+            nni.Instrument();
+            return nni.program;
         }
 
+        // assert (expr != NULL); --> cseTmp := expr;
+        // assume (expr != NULL); --> cseTmp := expr;
+        private void Instrument()
+        {
+            // name -> implementation required for getVarsModified
+            HashSet<string> impl_names = new HashSet<string>();
+            program.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impl_names.Add(impl.Name));
+
+            // FixedDuplicator to keep a copy of the old expressions in the dictionaries built in each implementation
+            FixedDuplicator dup = new FixedDuplicator();
+
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                int counter = 0;
+                cseTmpVar2Expr.Add(impl.Name, new Dictionary<string, Expr>());
+
+                foreach (Block b in impl.Blocks)
+                {
+                    List<Cmd> newCmds = new List<Cmd>();
+
+                    foreach (Cmd c in b.Cmds)
+                    {
+                        newCmds.Add(c);
+
+                        if (c is AssertCmd)
+                        {
+                            var ac = c as AssertCmd;
+                            if (CleanAssert.validAssertCmd(ac))
+                            {
+                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                                impl.LocVars.Add(lv);
+
+                                Expr expr = CleanAssert.getExprFromAssertCmd(ac);
+                                cseTmpVar2Expr[impl.Name].Add(lv.Name, expr);
+                                AssignCmd asc = BoogieAstFactory.MkVarEqExpr(lv, expr);
+                                newCmds.Add(asc);
+                            }
+                        }
+                        else if (c is AssumeCmd)
+                        {
+                            var ac = c as AssumeCmd;
+                            if (CleanAssert.validAssumeCmd(ac))
+                            {
+                                LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                                impl.LocVars.Add(lv);
+
+                                Expr expr = CleanAssert.getExprFromAssumeCmd(ac);
+                                cseTmpVar2Expr[impl.Name].Add(lv.Name, expr);
+                                AssignCmd asc = BoogieAstFactory.MkVarEqExpr(lv, expr);
+                                newCmds.Add(asc);
+                            }
+                        }
+                    }
+
+                    b.Cmds = newCmds;
+                }
+            }
+        }
+
+        /*
         private void DoCSE()
         {
             // name -> implementation required for getVarsModified
             HashSet<string> impl_names = new HashSet<string>();
             program.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impl_names.Add(impl.Name));
 
-            // CodeCopier to keep a copy of the old expressions in the dictionaries built in each implementation
+            // FixedDuplicator to keep a copy of the old expressions in the dictionaries built in each implementation
             FixedDuplicator dup = new FixedDuplicator();
 
             int counter = 0;
@@ -1796,6 +1857,7 @@ namespace cba.Util
                 }
             }
         }
+        */
 
         // TODO: Better key
         public static string expr2key(Expr expr)
@@ -1884,18 +1946,24 @@ namespace cba.Util
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
 
-            // Common Subexpression Elimination
-            program = CSE.Do(program);
+            // Non null instrumentation
+            program = NonnullInstrumentation.Do(program);
 
             // Global Value Numbering
+            Stats.resume("gvn");
             program = GVN.Do(program);
+            Stats.stop("gvn");
 
             // Writing and reading back
+            Stats.resume("read.write");
             program = BoogieUtil.ReResolve(program, false);
+            Stats.stop("read.write");
 
             // Static Single Assignment
+            Stats.resume("ssa");
             var ssa = new SSA(program,encoding, typesToInstrument);
             ssa.Compute(irreducible);
+            Stats.stop("ssa");
 
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
 
@@ -2369,8 +2437,9 @@ namespace cba.Util
         // operator -> (t1, t2) -> t3
         public static Dictionary<string, Dictionary<Terms, Term>> hash_function;
         
-        // default variable for a term cseTemp:= expr default_var(t_expr) = cseTmp
-        public static Dictionary<Term, Variable> default_var;
+        // default variable for a term cseTemp:= expr --> default_var(t_expr) = cseTmp
+        // block -> term -> cseTmp variable
+        public static Dictionary<string, Dictionary<Term, Variable>> default_var;
 
         // block -> var -> term
         public static Dictionary<string, Dictionary<string, Term>> hash_value;
@@ -2498,7 +2567,7 @@ namespace cba.Util
             public override Expr VisitExpr(Expr node)
             {
                 Term t = ComputeHash(node);
-                if (non_null_exprs[currBlock].Contains(t)) return Expr.Ident(default_var[t]);
+                if (non_null_exprs[currBlock].Contains(t)) return Expr.Ident(default_var[currBlock][t]);
                 else return base.VisitExpr(node);
             }
 
@@ -2542,6 +2611,10 @@ namespace cba.Util
                 {
                     return new Term();
                 }
+                else if (expr is QuantifierExpr)
+                {
+                    return new Term();
+                }
                 else
                 {
                     Debug.Assert(false);
@@ -2555,7 +2628,7 @@ namespace cba.Util
             this.program = program;
             non_null_exprs = new Dictionary<string, HashSet<Term>>();
             hash_function = new Dictionary<string, Dictionary<Terms, Term>>();
-            default_var = new Dictionary<Term, Variable>();
+            default_var = new Dictionary<string, Dictionary<Term, Variable>>();
             hash_value = new Dictionary<string, Dictionary<string, Term>>();
         }
 
@@ -2564,11 +2637,13 @@ namespace cba.Util
         {
             program.TopLevelDeclarations.OfType<Implementation>().Iter(impl => impl_names.Add(impl.Name));
 
+
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
                 IEnumerable<Block> sortedBlocks;
                 if (dbg) Console.WriteLine("Impl : {0} =>", impl.Name);
                 Term.resetVal();
+                int counter = 0;
 
                 // Computing predecessors, constructing CFG and topological sorting of blocks
                 impl.ComputePredecessorsForBlocks();
@@ -2582,9 +2657,16 @@ namespace cba.Util
 
                 foreach (Block blk in sortedBlocks)
                 {
-                    Dictionary<Term, int> pred_count = new Dictionary<Term, int>();
+                    // nonnull terms available from all predecessors
+                    Dictionary<Term, int> nonnull_pred_count = new Dictionary<Term, int>();
+                    // terms available from all predecessors
+                    Dictionary<string, Tuple<int, Term>> var_pred_count = new Dictionary<string, Tuple<int, Term>>();
+
+                    // initializations for the current block
                     non_null_exprs.Add(blk.Label, new HashSet<Term>());
                     hash_value.Add(blk.Label, new Dictionary<string, Term>());
+                    default_var.Add(blk.Label, new Dictionary<Term, Variable>());
+
                     if (dbg) Console.WriteLine("Block : {0}", blk.Label);
 
                     // expr available from all predecessors
@@ -2592,24 +2674,92 @@ namespace cba.Util
                     {
                         foreach (Term t in non_null_exprs[b.Label])
                         {
-                            if (!pred_count.ContainsKey(t)) pred_count.Add(t, 0);
-                            pred_count[t]++;
+                            if (!nonnull_pred_count.ContainsKey(t)) nonnull_pred_count.Add(t, 0);
+                            nonnull_pred_count[t]++;
                         }
 
+                        // if same variable available from multiple predecessors via different terms, add a new term for variable
+                        // else carry over the same term
                         foreach (string var in hash_value[b.Label].Keys)
                         {
-                            if (hash_value[blk.Label].ContainsKey(var) && !hash_value[blk.Label][var].Equals(hash_value[b.Label][var]))
+                            if (!var_pred_count.ContainsKey(var))
                             {
-                                hash_value[blk.Label][var] = new Term();
+                                var_pred_count[var] = new Tuple<int, Term>(1, hash_value[b.Label][var]);
                             }
-                            else if (!hash_value[blk.Label].ContainsKey(var)) hash_value[blk.Label].Add(var, hash_value[b.Label][var]);
+                            else if (var_pred_count.ContainsKey(var) && var_pred_count[var].Item2 == null)
+                            {
+                                var_pred_count[var] = new Tuple<int, Term>(var_pred_count[var].Item1 + 1, null);
+                            }
+                            else if (var_pred_count.ContainsKey(var) && !var_pred_count[var].Item2.Equals(hash_value[b.Label][var]))
+                            {
+                                var_pred_count[var] = new Tuple<int, Term>(var_pred_count[var].Item1 + 1, null);
+                            }
+                            else
+                            {
+                                var_pred_count[var] = new Tuple<int, Term>(var_pred_count[var].Item1 + 1, var_pred_count[var].Item2);
+                            }
                         }
                     }
                     currBlock = blk.Label;
 
-                    foreach (Term t in pred_count.Keys)
+                    foreach (Term t in nonnull_pred_count.Keys)
                     {
-                        if (pred_count[t] == blk.Predecessors.Count) non_null_exprs[blk.Label].Add(t);
+                        if (nonnull_pred_count[t] == blk.Predecessors.Count) non_null_exprs[blk.Label].Add(t);
+                    }
+
+                    // bool denotes multiple occurences
+                    Dictionary<Term, Tuple<Variable, bool>> default_var_preds = new Dictionary<Term, Tuple<Variable, bool>>();
+
+                    foreach (Term t in non_null_exprs[blk.Label])
+                    {
+                        foreach (Block b in blk.Predecessors)
+                        {
+                            if (!default_var_preds.ContainsKey(t))
+                            {
+                                default_var_preds.Add(t, new Tuple<Variable, bool>(default_var[b.Label][t], false));
+                            }
+                            else if (default_var_preds[t] != null)
+                            {
+                                if (!default_var[b.Label][t].Name.Equals(default_var_preds[t].Item1.Name))
+                                {
+                                    default_var_preds[t] = new Tuple<Variable, bool>(default_var_preds[t].Item1, true);
+                                }
+                            }
+                        }
+                    }
+
+                    List<Cmd> newCmds = new List<Cmd>();
+
+                    foreach (Term t in default_var_preds.Keys)
+                    {
+                        if (default_var_preds[t].Item2 == false)
+                        {
+                            default_var[blk.Label].Add(t, default_var_preds[t].Item1);
+                        }
+                        else
+                        {
+                            LocalVariable lv = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "cseTmpGVN" + (counter++).ToString(), Microsoft.Boogie.Type.Int));
+                            impl.LocVars.Add(lv);
+                            default_var[blk.Label].Add(t, lv);
+
+                            AssignCmd asc = BoogieAstFactory.MkVarEqExpr(lv, NonnullInstrumentation.cseTmpVar2Expr[impl.Name][default_var_preds[t].Item1.Name]);
+                            NonnullInstrumentation.cseTmpVar2Expr[impl.Name].Add(lv.Name, NonnullInstrumentation.cseTmpVar2Expr[impl.Name][default_var_preds[t].Item1.Name]);
+
+                            newCmds.Add(asc);
+                        }
+                    }
+
+                    foreach (string var in var_pred_count.Keys)
+                    {
+                        if (var_pred_count[var].Item1 == blk.Predecessors.Count)
+                        {
+                            // carrying over same term
+                            if (var_pred_count[var].Item2 != null)
+                                hash_value[blk.Label].Add(var, var_pred_count[var].Item2);
+                            // introducing a new term
+                            else
+                                hash_value[blk.Label].Add(var, new Term());
+                        }
                     }
 
                     if (dbg)
@@ -2619,7 +2769,6 @@ namespace cba.Util
                     }
 
                     // ProcessCmd
-                    List<Cmd> newCmds = new List<Cmd>();
                     foreach (Cmd cmd in blk.Cmds)
                     {
                         if (dbg) Console.WriteLine(cmd.ToString());
@@ -2634,7 +2783,7 @@ namespace cba.Util
                             {
                                 Term t = GVNVisitor.ComputeHash(acmd.Rhss[0]);
                                 non_null_exprs[blk.Label].Add(t);
-                                if (!default_var.ContainsKey(t)) default_var.Add(t, (acmd.Lhss[0] as SimpleAssignLhs).DeepAssignedVariable);
+                                if (!default_var[blk.Label].ContainsKey(t)) default_var[blk.Label].Add(t, (acmd.Lhss[0] as SimpleAssignLhs).DeepAssignedVariable);
                                 if (dbg) Console.WriteLine("Non-NULL {0} -> {1}", acmd.Rhss[0], t.ToString());
                             }
                         }
@@ -2650,19 +2799,13 @@ namespace cba.Util
             if (c is AssumeCmd)
             {
                 var ac = c as AssumeCmd;
-                if (CleanAssert.validAssumeCmd(ac))
-                {
-                    ac.Expr = GVNVisitor.getExpr(ac.Expr);
-                }
+                ac.Expr = GVNVisitor.getExpr(ac.Expr);
                 return c;
             }
             else if (c is AssertCmd)
             {
                 var ac = c as AssertCmd;
-                if (CleanAssert.validAssertCmd(ac))
-                {
-                    ac.Expr = GVNVisitor.getExpr(ac.Expr);
-                }
+                ac.Expr = GVNVisitor.getExpr(ac.Expr);
                 return c;
             }
             else if (c is CallCmd)
@@ -2708,6 +2851,15 @@ namespace cba.Util
                             hash_value[currBlock][s] = new Term();
                             if (dbg) Console.WriteLine("{0} -> {1}", s, hash_value[currBlock][s]);
                         }
+
+                        var mlhs = lhs as MapAssignLhs;
+                        List<Expr> newlhs = new List<Expr>();
+                        foreach (Expr expr in mlhs.Indexes)
+                        {
+                            Expr newExpr = GVNVisitor.getExpr(expr);
+                            newlhs.Add(newExpr);
+                        }
+                        mlhs.Indexes = newlhs;
                     }
                 }
                 return c;
