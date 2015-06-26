@@ -419,7 +419,15 @@ namespace AliasAnalysis
 
             public AllocEdge(string t, bool full)
             {
-                source = "allocSite" + (counter++).ToString();
+                if (AliasAnalysis.mergeFull)
+                {
+                    if (full)
+                        source = "allocSiteSpecial";
+                    else
+                        source = "allocSite" + (counter++).ToString();
+                }
+                else
+                    source = "allocSite" + (counter++).ToString();
                 target = t;
                 isFull = full;
             }
@@ -565,7 +573,11 @@ namespace AliasAnalysis
                     {
                         if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
                         {
-                            if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                            if (AliasAnalysis.useGVN)
+                            {
+                                if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                            }
+                            else propagate(e.target);
                         }
                     }
                 }
@@ -612,6 +624,8 @@ namespace AliasAnalysis
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
+        public static bool useGVN = false;
+        public static bool mergeFull = false;
         DemandDrivenAASolver ddsolver;
 
         // program containing constraints for AA
@@ -699,11 +713,14 @@ namespace AliasAnalysis
             {
                 // HACK: will work only for non-null aliasing queries
                 // TODO: make it general
+                Console.WriteLine("Running demand driven alias analysis");
+                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
                 aa.ddsolver.Solve();
                 aa.solver.SetResults(aa.ddsolver.GetResults());
             }
             else
             {
+                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
                 aa.solver.Solve();
                 //aa.getReturnAllocSites(aa.solver.GetPointsToSet());
                 Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
@@ -2376,8 +2393,13 @@ namespace AliasAnalysis
 
         public AllocationConstraint(string target, bool full)
         {
-            if (full) this.allocSite = "allocSiteSpecial";
-            else this.allocSite = "allocSite" + (counter++).ToString();
+            if (AliasAnalysis.mergeFull)
+            {
+                if (full) this.allocSite = "allocSiteSpecial";
+                else this.allocSite = "allocSite" + (counter++).ToString();
+            }
+            else
+                this.allocSite = "allocSite" + (counter++).ToString();
             this.target = target;
             this.full = full;
         }
@@ -3118,7 +3140,10 @@ namespace AliasAnalysis
             if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
             {
                 null_allocSite = PointsTo["NULL"].First();
-                if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
+                if (AliasAnalysis.useGVN)
+                {
+                    if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
+                }
             }
             
             if (!change.IsSubsetOf(PointsToDelta[n]))

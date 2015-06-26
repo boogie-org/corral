@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Boogie;
 using Microsoft.Boogie.GraphUtil;
 using System.Diagnostics;
+using AvUtil;
 
 namespace cba.Util
 {
@@ -1938,38 +1939,31 @@ namespace cba.Util
         public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
         {
             var irreducible = new HashSet<string>();
-            Stopwatch sw = new Stopwatch();
 
             var op = CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible;
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = false;
 
-            sw.Restart();
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
-            sw.Stop(); Console.WriteLine("Extract loops time : {0}s", sw.ElapsedMilliseconds / 1000);
 
-            sw.Restart();
             // Non null instrumentation
             program = NonnullInstrumentation.Do(program);
-            sw.Stop(); Console.WriteLine("Instrumentation time : {0}s", sw.ElapsedMilliseconds / 1000);
-            //BoogieUtil.PrintProgram(program, "cse.bpl");
 
-            sw.Restart();
             // Global Value Numbering
+            Stats.resume("gvn");
             program = GVN.Do(program);
-            sw.Stop(); Console.WriteLine("GVN time : {0}s", sw.ElapsedMilliseconds / 1000);
-            //BoogieUtil.PrintProgram(program, "gvn.bpl");
+            Stats.stop("gvn");
 
-            sw.Restart();
             // Writing and reading back
+            Stats.resume("read.write");
             program = BoogieUtil.ReResolve(program, false);
-            sw.Stop(); Console.WriteLine("Read/Write time : {0}s", sw.ElapsedMilliseconds / 1000);
+            Stats.stop("read.write");
 
-            sw.Restart();
             // Static Single Assignment
+            Stats.resume("ssa");
             var ssa = new SSA(program,encoding, typesToInstrument);
             ssa.Compute(irreducible);
-            sw.Stop(); Console.WriteLine("SSA time : {0}s", sw.ElapsedMilliseconds / 1000);
+            Stats.stop("ssa");
 
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = op;
 
