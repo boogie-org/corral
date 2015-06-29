@@ -399,10 +399,10 @@ namespace FastAVN
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
                     BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
 
-                    program = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
+                    var newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
 
                     // slice the program by entrypoints
-                    Program shallowP = pruneDeepProcs(program, ref edges, impl.Name, approximationDepth, implNames);
+                    Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
                     File.Delete(pruneFile);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
