@@ -434,7 +434,7 @@ namespace cba
                     {
                         var extra = (tcmd.info is RequiresFailInstrInfo) ? ": Requires" :
                             (tcmd.info is EnsuresFailInstrInfo) ? ": Ensures" : "";
-                        assertFails = "ASSERTION FAILS" + extra;
+                        assertFails = "ASSERTION FAILS " + (pblk.Cmds[pcnt].ToString()) + " " + extra;
                     }
 
                     if (tcmd.info is ModelInstrInfo)
