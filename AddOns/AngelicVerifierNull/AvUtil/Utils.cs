@@ -38,47 +38,6 @@ namespace AvUtil
         }
     }
 
-    public class Stats
-    {
-        public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
-        private static Dictionary<string, DateTime> clocks = new Dictionary<string, DateTime>();
-        private static Dictionary<string, long> counts = new Dictionary<string, long>();
-
-        public static void resume(string name)
-        {
-            clocks[name] = DateTime.Now;
-        }
-
-        public static void stop(string name)
-        {
-            Debug.Assert(clocks.ContainsKey(name));
-            if (!timeTaken.ContainsKey(name)) timeTaken[name] = 0; // initialize
-            timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
-        }
-
-        public static void printStats()
-        {
-            Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
-            foreach (string name in timeTaken.Keys)
-            {
-                Utils.Print(string.Format("{0}(s) : {1}", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
-            }
-            foreach (string name in counts.Keys)
-            {
-                Utils.Print(string.Format("{0} : {1}", name, counts[name]), Utils.PRINT_TAG.AV_STATS);
-            }
-            Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
-        }
-
-        public static void count(string name)
-        {
-            if (!counts.ContainsKey(name)) counts[name] = 0;
-            counts[name]++;
-        }
-    }
-
-
-
     public class AssertCountVisitor : StandardVisitor
     {
         public int assertCount = 0;

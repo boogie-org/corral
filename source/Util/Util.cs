@@ -46,6 +46,45 @@ namespace cba.Util
         }
     }
 
+    public class Stats
+    {
+        public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
+        private static Dictionary<string, DateTime> clocks = new Dictionary<string, DateTime>();
+        private static Dictionary<string, long> counts = new Dictionary<string, long>();
+
+        public static void resume(string name)
+        {
+            clocks[name] = DateTime.Now;
+        }
+
+        public static void stop(string name)
+        {
+            System.Diagnostics.Debug.Assert(clocks.ContainsKey(name));
+            if (!timeTaken.ContainsKey(name)) timeTaken[name] = 0; // initialize
+            timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
+        }
+
+        public static void printStats(string tag)
+        {
+            Console.WriteLine("{0}*************** STATS ***************", tag);
+            foreach (string name in timeTaken.Keys)
+            {
+                Console.WriteLine("{0}{1}(s) : {2}", tag, name, timeTaken[name]);
+            }
+            foreach (string name in counts.Keys)
+            {
+                Console.WriteLine("{0}{1} : {2}", tag, name, counts[name]);
+            }
+            Console.WriteLine("{0}*************************************", tag);
+        }
+
+        public static void count(string name)
+        {
+            if (!counts.ContainsKey(name)) counts[name] = 0;
+            counts[name]++;
+        }
+    }
+
     public static class Log
     {
         //public static bool AlwaysFlush = true;
