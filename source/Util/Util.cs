@@ -81,11 +81,11 @@ namespace cba.Util
             Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
             foreach (string name in timeTaken.Keys)
             {
-                Console.WriteLine("{0}(s) : {1}", name, timeTaken[name]);
+                Utils.Print(string.Format("{0}(s) : {1}", name, timeTaken[name]), Utils.PRINT_TAG.AV_STATS);
             }
             foreach (string name in counts.Keys)
             {
-                Console.WriteLine("{0} : {1}", name, counts[name]);
+                Utils.Print(string.Format("{0} : {1}", name, counts[name]), Utils.PRINT_TAG.AV_STATS);
             }
             Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
         }
