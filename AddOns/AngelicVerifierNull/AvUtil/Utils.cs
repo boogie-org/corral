@@ -26,18 +26,6 @@ namespace AvUtil
         public static int RelaxConstraintsStackDepthBound = 6;
     }
 
-    public class Utils
-    {
-        //TODO: merge with Log class in Corral
-        const bool SUPPRESS_DEBUG_MESSAGES = false;
-        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT, AV_STATS };
-        public static void Print(string msg, PRINT_TAG tag = PRINT_TAG.AV_DEBUG)
-        {
-            if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
-                Console.WriteLine("[TAG: {0}] {1}", tag, msg);
-        }
-    }
-
     public class AssertCountVisitor : StandardVisitor
     {
         public int assertCount = 0;

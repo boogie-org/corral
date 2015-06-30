@@ -46,6 +46,18 @@ namespace cba.Util
         }
     }
 
+    public class Utils
+    {
+        //TODO: merge with Log class in Corral
+        const bool SUPPRESS_DEBUG_MESSAGES = false;
+        public enum PRINT_TAG { AV_WARNING, AV_DEBUG, AV_OUTPUT, AV_STATS };
+        public static void Print(string msg, PRINT_TAG tag = PRINT_TAG.AV_DEBUG)
+        {
+            if (tag != PRINT_TAG.AV_DEBUG || !SUPPRESS_DEBUG_MESSAGES)
+                Console.WriteLine("[TAG: {0}] {1}", tag, msg);
+        }
+    }
+
     public class Stats
     {
         public static Dictionary<string, double> timeTaken = new Dictionary<string, double>();
@@ -64,18 +76,18 @@ namespace cba.Util
             timeTaken[name] += (DateTime.Now - clocks[name]).TotalSeconds;
         }
 
-        public static void printStats(string tag)
+        public static void printStats()
         {
-            Console.WriteLine("{0}*************** STATS ***************", tag);
+            Utils.Print("*************** STATS ***************", Utils.PRINT_TAG.AV_STATS);
             foreach (string name in timeTaken.Keys)
             {
-                Console.WriteLine("{0}{1}(s) : {2}", tag, name, timeTaken[name]);
+                Console.WriteLine("{0}(s) : {1}", name, timeTaken[name]);
             }
             foreach (string name in counts.Keys)
             {
-                Console.WriteLine("{0}{1} : {2}", tag, name, counts[name]);
+                Console.WriteLine("{0} : {1}", name, counts[name]);
             }
-            Console.WriteLine("{0}*************************************", tag);
+            Utils.Print("*************************************", Utils.PRINT_TAG.AV_STATS);
         }
 
         public static void count(string name)

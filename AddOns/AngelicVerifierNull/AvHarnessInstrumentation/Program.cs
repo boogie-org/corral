@@ -9,7 +9,6 @@ using btype = Microsoft.Boogie.Type;
 using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
 using SimpleHoudini = cba.SimpleHoudini;
-using Stats = cba.Util.Stats;
 using AvUtil;
 
 namespace AvHarnessInstrumentation
@@ -537,7 +536,7 @@ namespace AvHarnessInstrumentation
             }
             finally
             {
-                Stats.printStats(Utils.PRINT_TAG.AV_STATS.ToString());
+                Stats.printStats();
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
             }
         }
