@@ -31,8 +31,7 @@ namespace AvHarnessInstrumentation
         {
             Program prog;
             string mainName;
-            Procedure mallocProcedure = null;
-            Procedure mallocProcedureFull = null;
+            Dictionary<string, Procedure> unknownGenProcs = new Dictionary<string, Procedure>();
             bool useProvidedEntryPoints = false;
             public Dictionary<string, string> blockEntryPointConstants; //they guard assume false before calling e_i in the harness 
             public Dictionary<string, Constant> impl2BlockingConstant; //inverse of the above map
@@ -52,7 +51,7 @@ namespace AvHarnessInstrumentation
             }
             public void DoInstrument()
             {
-                FindMalloc();
+                FindUnknown();
                 FindNULL();
                 var reach = FindReachableStatesFunc(prog);
 
@@ -323,8 +322,8 @@ namespace AvHarnessInstrumentation
             }
             private Cmd AllocatePointerAsUnknown(Variable x)
             {
-                var cc = BoogieAstFactory.MkCall(mallocProcedureFull,
-                    new List<Expr>() { new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ONE) },
+                var cc = BoogieAstFactory.MkCall(unknownGenProcs[x.TypedIdent.Type.ToString()],
+                    new List<Expr>(),
                     new List<Variable>() { x }) as CallCmd;
                 cc.Attributes = new QKeyValue(Token.NoToken, cba.RestrictToTrace.ConcretizeConstantNameAttr, new List<object> { x.Name }, cc.Attributes);
                 return cc;
@@ -353,41 +352,62 @@ namespace AvHarnessInstrumentation
                 program.AddTopLevelDeclaration(ret);
                 return ret;
             }
-            private void FindMalloc()
+            private void FindUnknown()
             {
-                //find the malloc and malloc-full procedures
+                // Which {:unknown} already exist?
                 foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
-                    .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
+                    .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, AvnAnnotations.AngelicUnknownCall)))
                 {
+                    if (proc.OutParams.Count != 1 || proc.InParams.Count != 0)
+                        throw new InputProgramDoesNotMatchExn(string.Format("Unknown-generating procs should have exactly one out parameter and no input parameters: {0}", proc.Name));
+                    unknownGenProcs.Add(proc.OutParams[0].TypedIdent.Type.ToString(), proc);
+                }
+
+
+                foreach (var ty in Options.unknownTypes)
+                {
+                    if (unknownGenProcs.ContainsKey(ty)) continue;
+                    
+                    // Find the type
+                    btype type = null;
+                    if(ty == "int") type = btype.Int;
+                    else if(ty == "bool") type = btype.Bool;
+                    else {
+                        // lookup user types
+                        type = prog.TopLevelDeclarations.OfType<TypeCtorDecl>()
+                            .Where(t => t.Name == ty)
+                            .Select(t => new CtorType(Token.NoToken, t, new List<btype>()))
+                            .FirstOrDefault();
+                    }
+
+                    // create a new procedure
+                    var proc = new Procedure(Token.NoToken, "unknown_" + ty, new List<TypeVariable>(), new List<Variable>(),
+                        new List<Variable> { new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", type), false) },
+                        new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                    proc.AddAttribute(AvnAnnotations.AngelicUnknownCall);
+                    unknownGenProcs.Add(ty, proc);
+                    prog.AddTopLevelDeclaration(proc);
+                }
+
+                // Remove extra ones
+                var extra = new HashSet<string>(unknownGenProcs.Keys);
+                extra.ExceptWith(Options.unknownTypes);
+                extra.Iter(s => unknownGenProcs.Remove(s));
+                
+                foreach (var proc in unknownGenProcs.Values)
+                {
+                    // Add {:allocator "full"} annotation
                     var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
-                    if (attr == null) mallocProcedure = proc;
-                    else if (attr == "full") mallocProcedureFull = proc;
-                }
+                    if (attr != null && attr == "full") continue;
+                    proc.AddAttribute("allocator", "full");
 
-                if (mallocProcedure == null)
-                {
-                    throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator} declared in the input program");
+                    // Drop Requires/Ensures
+                    proc.Requires = new List<Requires>();
+                    proc.Ensures = new List<Ensures>();
+                    proc.Modifies = new List<IdentifierExpr>();
                 }
-
-                if (mallocProcedureFull == null)
-                {
-                    throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
-                }
-
-                if (mallocProcedure.InParams.Count != 1 || mallocProcedureFull.InParams.Count != 1)
-                {
-                    throw new InputProgramDoesNotMatchExn(String.Format("ABORT: malloc procedure {0} should have exactly 1 argument, found {1}",
-                        mallocProcedure.Name, mallocProcedure.InParams.Count));
-                }
-
-                // Drop annotations on mallocProcedureFull. We will use it 
-                // as our "unknown" theory
-                mallocProcedureFull.Requires = new List<Requires>();
-                mallocProcedureFull.Ensures = new List<Ensures>();
-                mallocProcedureFull.Modifies = new List<IdentifierExpr>();
-                // unknown
-                mallocProcedureFull.AddAttribute(AvnAnnotations.AngelicUnknownCall);
             }
+
             private void FindNULL()
             {
                 //find the malloc procedure
@@ -444,7 +464,7 @@ namespace AvHarnessInstrumentation
             /// <returns></returns>
             private bool IsPointerVariable(Variable x)
             {
-                return x.TypedIdent.Type.IsInt &&
+                return unknownGenProcs.ContainsKey(x.TypedIdent.Type.ToString()) &&
                     !BoogieUtil.checkAttrExists("scalar", x.Attributes); //we will err on the side of treating variables as references
             }
         }

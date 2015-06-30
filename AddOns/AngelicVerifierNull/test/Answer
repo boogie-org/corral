@@ -6,7 +6,10 @@
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
 
 -------------------- t2_err.bpl --------------------
-[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no malloc procedure with {:allocator} declared in the input program
+[TAG: AV_OUTPUT] ----- Analyzing t2_err_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
 
 -------------------- t3_err.bpl --------------------
 [TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no NULL constant declared in the input program

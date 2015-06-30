@@ -40,6 +40,8 @@ namespace AvHarnessInstrumentation
         public static bool allocateParameters = true; 
         // add initializations for uninitialized local variables and output parameters
         public static bool addInitialization = false;
+        // "unknown" types
+        public static HashSet<string> unknownTypes = new HashSet<string>();
     }
 
     class Driver
@@ -205,6 +207,11 @@ namespace AvHarnessInstrumentation
         static void ComputeandInitializeUninitializedLocals(Program program)
         {
             var mallocFull = FindMalloc(program);
+            if (mallocFull == null)
+            {
+                Console.WriteLine("No malloc procedure found -- cannot initialize uninitialized locals");
+                return;
+            }
 
             foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -316,20 +323,14 @@ namespace AvHarnessInstrumentation
 
         private static Procedure FindMalloc(Program prog)
         {
-            Procedure mallocProcedure = null, mallocProcedureFull = null;
+            Procedure mallocProcedureFull = null;
 
             //find the malloc and malloc-full procedures
             foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>()
                 .Where(p => BoogieUtil.checkAttrExists("allocator", p.Attributes)))
             {
                 var attr = QKeyValue.FindStringAttribute(proc.Attributes, "allocator");
-                if (attr == null) mallocProcedure = proc;
-                else if (attr == "full") mallocProcedureFull = proc;
-            }
-
-            if (mallocProcedureFull == null)
-            {
-                throw new InputProgramDoesNotMatchExn("ABORT: no malloc procedure with {:allocator \"full\"} declared in the input program");
+                if (attr == "full") mallocProcedureFull = proc;
             }
 
             return mallocProcedureFull;
@@ -489,6 +490,12 @@ namespace AvHarnessInstrumentation
 
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
+
+            args.Where(s => s.StartsWith("/unknownType:"))
+                .Iter(s => Options.unknownTypes.Add(s.Substring("/unknownType:".Length)));
+
+            if (Options.unknownTypes.Count == 0)
+                Options.unknownTypes.Add("int");
 
             // Initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
