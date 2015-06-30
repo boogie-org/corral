@@ -147,14 +147,17 @@ namespace BctCleanup
             if (mainProcName == "") {
               List<string> entrypoints = EntrypointScanner.FindEntrypoint(prog);
               if (entrypoints.Count == 0) {
-                throw new InternalError("Main procedure not found");
+                //throw new InternalError("Main procedure not found");
+                Console.WriteLine("Main procedure not found");
+                return;
               }
               mainProcName = entrypoints[0];
             }
             var mainProc = cba.Util.BoogieUtil.findProcedureImpl(prog.TopLevelDeclarations, mainProcName);
             if (mainProc == null)
             {
-                throw new InternalError("Implementation of main procedure " + mainProcName + " not found");
+                Console.WriteLine("Implementation of main procedure " + mainProcName + " not found");
+                return;
             }
 
             // Find all initializers
