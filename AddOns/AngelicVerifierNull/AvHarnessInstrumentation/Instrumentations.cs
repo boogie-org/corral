@@ -174,15 +174,10 @@ namespace AvHarnessInstrumentation
                     globalCmds.Add(BoogieAstFactory.MkCall(init.Proc, new List<Expr>(), new List<Variable>()));
 
                 // initialize globals
+                prog.GlobalVariables
+                    .Where(g => g.Name != "alloc")
+                    .Iter(g => g.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "scalar", "pointer" }, g.Attributes));
 
-                // HACK: we want to allocate globals in the non-null case (needed to compute angelic assertion dependencies)
-                // and in the type-state case, we don't (because it messes with type-state variable lookup inside EE)
-                if (Options.propertyChecked != "typestate")
-                {
-                    prog.GlobalVariables
-                        .Where(g => g.Name != "alloc")
-                        .Iter(g => g.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "scalar", "pointer" }, g.Attributes));
-                }
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
 
                 // globals for parameters

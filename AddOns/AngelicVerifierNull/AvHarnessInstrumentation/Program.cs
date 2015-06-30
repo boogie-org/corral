@@ -29,8 +29,8 @@ namespace AvHarnessInstrumentation
         public static bool FieldNonNull = true;
         // use procs tagged as {:harness} as potential entrypoints as well
         public static bool useHarnessTag = false;
-        // property: nonnull, typestate
-        public static string propertyChecked = "";
+        // mark all assumes as slic
+        public static bool markAssumesAsSlic = false;
         // Use only provided entrypoints
         public static bool useProvidedEntryPoints = false;
         // do deadcode detection
@@ -342,25 +342,7 @@ namespace AvHarnessInstrumentation
             if (Options.addInitialization) ComputeandInitializeUninitializedLocals(init);
 
             // Do some instrumentation for the input program
-            if (Options.propertyChecked == "typestate")
-            {
-                // Mark all assumes as "slic" except non-null ones
-                var AddAnnotation = new Action<AssumeCmd>(ac =>
-                {
-                    if (QKeyValue.FindBoolAttribute(ac.Attributes, "nonnull"))
-                        return;
-                    ac.Attributes = new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
-                });
-                init.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Blocks
-                        .Iter(blk => blk.Cmds.OfType<AssumeCmd>()
-                            .Iter(AddAnnotation)));
-            }
-            else if (Options.propertyChecked == "nonnull")
-            {
-                // Don't mark anything as slic -- noAssumes for EE!
-            }
-            else
+            if (Options.markAssumesAsSlic)
             {
                 // Mark all assumes as "slic"
                 var AddAnnotation = new Action<AssumeCmd>(ac =>
@@ -413,7 +395,7 @@ namespace AvHarnessInstrumentation
 
             BoogieUtil.pruneProcs(init, AvnAnnotations.CORRAL_MAIN_PROC);
 
-            if (Options.deadCodeDetect || Options.propertyChecked == "nonnull")
+            if (Options.deadCodeDetect)
             {
                 // Tag branches as reachable
                 var tup = InstrumentBranches.Run(init, AvnAnnotations.CORRAL_MAIN_PROC, Options.UseAliasAnalysisForAngelicAssertions, false);
@@ -484,8 +466,8 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = true;
 
-            args.Where(s => s.StartsWith("/property:"))
-                .Iter(s => Options.propertyChecked = s.Substring("/property:".Length));
+            if(args.Any(s => s == "/markAssumesAsSlic"))
+                Options.markAssumesAsSlic = true;
 
             args.Where(s => s.StartsWith("/stubPath:"))
                 .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
