@@ -412,7 +412,7 @@ namespace AvHarnessInstrumentation
             {
                 //find the malloc procedure
                 var nulls = prog.TopLevelDeclarations
-                    .Where(x => x is Constant && x.ToString().Equals("NULL"));
+                    .Where(x => x is Constant && x.ToString().ToLower().Equals("null"));
                 if (!nulls.Any())
                     throw new InputProgramDoesNotMatchExn("ABORT: no NULL constant declared in the input program");
 
