@@ -471,6 +471,8 @@ namespace FastAVN
             {
                 if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), impl))) continue;
 
+                Stats.count("#EntryPoints");
+
                 string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
                 if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
                 int traceNum = 0;
@@ -538,6 +540,7 @@ namespace FastAVN
                 bugReportWriter.WriteLine("Description,Src File,Line,Procedure,Fail Status");
                 foreach (string bug in shortest_trace.Keys)
                 {
+                    Stats.count("#Bugs");
                     bugReportWriter.WriteLine(bug);
                 }
             }
