@@ -10,6 +10,10 @@ As3
 [TAG: AV_OUTPUT] Found free variables :: inline$Test.Main$System.Stringarray_trace_1_trace_1$0$inline$Alloc$0$x
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Test.bar$AbsClass with expr !(v_Ref == null)
+Args 
+[TAG: AV_OUTPUT] ----- Analyzing testInst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: Ref :: unknownTrigger_1(x_2) ==> $ArrayContents[x_2][0] != null)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: Ref :: unknownTrigger_1(x_2) ==> $ArrayContents[x_2][0] == $string_literal__0)
 ex1 
 [TAG: AV_OUTPUT] ----- Analyzing testInst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
