@@ -462,8 +462,8 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/demand-driven-AA"))
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
-            if (args.Any(s => s == "/use-GVN"))
-                AliasAnalysis.AliasAnalysis.useGVN = true;
+            if (args.Any(s => s == "/no-GVN"))
+                AliasAnalysis.AliasAnalysis.useGVN = false;
 
             if (args.Any(s => s == "/merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = true;
