@@ -625,7 +625,7 @@ namespace AliasAnalysis
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
-        public static bool useGVN = false;
+        public static bool useGVN = true;
         public static bool mergeFull = false;
         DemandDrivenAASolver ddsolver;
 
