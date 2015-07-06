@@ -463,8 +463,8 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/no-GVN"))
                 AliasAnalysis.AliasAnalysis.useGVN = false;
 
-            if (args.Any(s => s == "/merge-full"))
-                AliasAnalysis.AliasAnalysis.mergeFull = true;
+            if (args.Any(s => s == "/dont-merge-full"))
+                AliasAnalysis.AliasAnalysis.mergeFull = false;
 
             if(args.Any(s => s == "/markAssumesAsSlic"))
                 Options.markAssumesAsSlic = true;
