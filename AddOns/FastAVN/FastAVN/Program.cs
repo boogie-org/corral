@@ -112,7 +112,9 @@ namespace FastAVN
 
                 // Run harness instrumentation
                 var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
-                RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
+                var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
+
+                hinstOut.Iter(s => Console.WriteLine("[hinst] {0}", s));
 
                 if (!File.Exists(resultfile))
                     throw new Exception("Error running harness instrumentation");

@@ -410,6 +410,8 @@ namespace AvHarnessInstrumentation
 
         static void Main(string[] args)
         {
+            System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Batch;
+
             if (args.Length < 2 || !args[0].EndsWith(".bpl") || !args[1].EndsWith(".bpl"))
             {
                 Console.WriteLine("Usage: AvHarnessInstrumentation infile.bpl outfile.bpl [options]");
@@ -481,6 +483,7 @@ namespace AvHarnessInstrumentation
             // Initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
+            BoogieUtil.InitializeBoogie("");
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             var sw = new Stopwatch();
