@@ -1627,7 +1627,7 @@ namespace CoreLib
                     // reached bound?
                     if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
                     {
-                        Console.WriteLine("Exhausted recursion bound of {0}", currRecursionBound);
+                        //Console.WriteLine("Exhausted recursion bound of {0}", currRecursionBound);
                         currRecursionBound++;
                         continue;
                     }
