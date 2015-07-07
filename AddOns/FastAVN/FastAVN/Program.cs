@@ -483,6 +483,8 @@ namespace FastAVN
                     {
                         if (line.StartsWith("Description"))
                             continue;
+                        if (line.Contains("mustFail") && !line.Contains("notmustFail"))
+                            continue;
                         // extract line from bug report but ignore the entrypoint info
                         string bug_info = line.Substring(0, line.LastIndexOf(","));
                         string file_name = angelic + traceNum.ToString() + trace_extension;
@@ -605,8 +607,8 @@ namespace FastAVN
                 bugReport.WriteLine("Description,Src File,Line,Procedure,Fail Status");
                 foreach (string bug in mergedBugs.Keys)
                 {
+                    if (bug.Contains("mustFail") && !bug.Contains("notmustFail")) continue;
                     Utils.Print(string.Format("Bug: {0} Count: {1}", bug, mergedBugs[bug]), Utils.PRINT_TAG.AV_OUTPUT);
-                    if (bug.Contains("mustFail") && !bug.Contains("notmustFail")) Stats.count("mustfail.report.count");
                     bugReport.WriteLine(bug);
                 }
             }
@@ -622,8 +624,8 @@ namespace FastAVN
                 {
                     if (line.StartsWith("Description"))
                         continue;
-                    // extract line from bug report but ignore the entrypoint info
-                    ret.Add(line.Substring(0, line.LastIndexOf(",")));
+                    // extract line from bug report
+                    ret.Add(line);
                 }
             }
             catch (FileNotFoundException)

@@ -129,7 +129,7 @@ namespace AngelicVerifierNull
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
-                ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status,EntryPoint"); // result file header
+                ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status"); // result file header
                 ResultsFile.Flush();
             }
             
