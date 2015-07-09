@@ -40,6 +40,8 @@ namespace AliasAnalysis
                 AliasAnalysis.generateCP = true;
             if (args.Any(s => s == "/demand-driven"))
                 AliasAnalysis.demandDrivenAA = true;
+
+            AliasAnalysis.mergeFull = false; // don't merge by default
             
             args.Where(s => s.StartsWith("/prune:"))
                 .Iter(s => prune = s.Split(':')[1]);
@@ -625,8 +627,8 @@ namespace AliasAnalysis
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
-        public static bool useGVN = false;
-        public static bool mergeFull = false;
+        public static bool useGVN = true;
+        public static bool mergeFull = true;
         DemandDrivenAASolver ddsolver;
 
         // program containing constraints for AA
