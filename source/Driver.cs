@@ -192,7 +192,6 @@ namespace cba
             Initialize(config);
 
             var startTime = DateTime.Now;
-            
 
             ////////////////////////////////////
             // Initial program rewriting

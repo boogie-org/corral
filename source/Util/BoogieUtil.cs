@@ -1935,7 +1935,7 @@ namespace cba.Util
          */
         
 
-        public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
+        public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument, bool useAssumeNonNull = true)
         {
             var irreducible = new HashSet<string>();
 
@@ -1945,18 +1945,21 @@ namespace cba.Util
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
 
-            // Non null instrumentation
-            program = NonnullInstrumentation.Do(program);
+            if (useAssumeNonNull)
+            {
+                // Non null instrumentation
+                program = NonnullInstrumentation.Do(program);
 
-            // Global Value Numbering
-            Stats.resume("gvn");
-            program = GVN.Do(program);
-            Stats.stop("gvn");
+                // Global Value Numbering
+                Stats.resume("gvn");
+                program = GVN.Do(program);
+                Stats.stop("gvn");
 
-            // Writing and reading back
-            Stats.resume("read.write");
-            program = BoogieUtil.ReResolve(program, false);
-            Stats.stop("read.write");
+                // Writing and reading back
+                Stats.resume("read.write");
+                program = BoogieUtil.ReResolve(program, false);
+                Stats.stop("read.write");
+            }
 
             // Static Single Assignment
             Stats.resume("ssa");

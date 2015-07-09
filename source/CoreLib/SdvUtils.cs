@@ -20,6 +20,7 @@ namespace CoreLib
         readonly string recordProcNameCtor = "boogie_si_record_sdvcp_ctor_";
         readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
         readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
+        public static readonly string LocalVarInitValueAttr = "InitLocalVar";
         public Dictionary<string, int> allocConstants;
 
         private HashSet<string> procsWithoutBody;
@@ -74,12 +75,14 @@ namespace CoreLib
                 foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsInt))
                 {
                     var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Attributes = new QKeyValue(Token.NoToken, RestrictToTrace.ConcretizeConstantNameAttr, new List<object> { LocalVarInitValueAttr }, cc.Attributes);
                     cc.Proc = reLocProcInt;
                     ncmds.Add(cc);
                 }
                 foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsBool))
                 {
                     var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    cc.Attributes = new QKeyValue(Token.NoToken, RestrictToTrace.ConcretizeConstantNameAttr, new List<object> { LocalVarInitValueAttr }, cc.Attributes);
                     cc.Proc = reLocProcBool;
                     ncmds.Add(cc);
                 }

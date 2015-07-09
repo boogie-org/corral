@@ -349,6 +349,12 @@ namespace FastAVN
 
                     // slice the program by entrypoints
                     Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
+                    BoogieUtil.pruneProcs(shallowP, 
+                        shallowP.TopLevelDeclarations.OfType<Procedure>()
+                        .Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
+                        .Select(proc => proc.Name)
+                        .FirstOrDefault());
+
                     File.Delete(pruneFile);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 

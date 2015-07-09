@@ -1126,6 +1126,10 @@ namespace cba
             var procsWithIrreducibleLoops = new HashSet<string>();
             var passInfo = p.ExtractLoops(out procsWithIrreducibleLoops);
 
+            // no loops found, then this transformation is identity
+            if (passInfo.Count == 0 && procsWithIrreducibleLoops.Count == 0)
+                return null;
+
             if (addUniqueCallLabels)
             {
                 // annotate calls with a unique number

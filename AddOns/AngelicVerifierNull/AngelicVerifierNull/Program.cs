@@ -1245,7 +1245,15 @@ namespace AngelicVerifierNull
                         {
                             // blocking expression has a scalar that is not bound by an unknownTrigger
                             Utils.Print(String.Format("Found free variables :: {0}", demonicVars.Select(v => v.Name).Concat(" ")), Utils.PRINT_TAG.AV_OUTPUT);
-                            status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True);
+                            if (demonicVars.Any(v => v.Name.StartsWith(string.Format("alloc_{0}_", CoreLib.SDVConcretizePathPass.LocalVarInitValueAttr))))
+                            {
+                                Utils.Print(String.Format("Some free variable is an initial value of a local; cannot block or treat demonic"), Utils.PRINT_TAG.AV_OUTPUT);
+                                status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
+                            }
+                            else
+                            {
+                                status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True);
+                            }
                         }
                         else
                         {
