@@ -401,6 +401,11 @@ namespace AvHarnessInstrumentation
                     proc.Ensures = new List<Ensures>();
                     proc.Modifies = new List<IdentifierExpr>();
                 }
+
+                // Extra annotations for user-defined unknowns
+                prog.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(p => Options.unknownProcs.Contains(p.Name))
+                    .Iter(p => p.AddAttribute(AvnAnnotations.AngelicUnknownCall));
             }
 
             private void FindNULL()

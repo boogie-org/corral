@@ -41,6 +41,8 @@ namespace AvHarnessInstrumentation
         public static bool addInitialization = false;
         // "unknown" types
         public static HashSet<string> unknownTypes = new HashSet<string>();
+        // procs to be treated as "unknown" 
+        public static HashSet<string> unknownProcs = new HashSet<string>();
         // inline depth for providing context sensitivity
         public static int inlineDepth = -1;
         // unroll depth for bounding fixpoint depth
@@ -486,6 +488,9 @@ namespace AvHarnessInstrumentation
 
             args.Where(s => s.StartsWith("/unknownType:"))
                 .Iter(s => Options.unknownTypes.Add(s.Substring("/unknownType:".Length)));
+
+            args.Where(s => s.StartsWith("/unknownProc:"))
+                .Iter(s => Options.unknownProcs.Add(s.Substring("/unknownProc:".Length)));
 
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");

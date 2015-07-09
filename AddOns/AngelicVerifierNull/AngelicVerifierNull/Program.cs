@@ -283,6 +283,8 @@ namespace AngelicVerifierNull
         // How many times an assertion has been blocked for an entrypoint
         static Dictionary<string, int> AssertionBlockedCount = new Dictionary<string, int>();
 
+        static int eecnt = 0;
+
         //Run Corral over different assertions (modulo errorLimit)
         // Returns true if the call finishes conclusively
         private static bool RunCorralIterative(AvnInstrumentation instr, int corralTimeout)
@@ -350,7 +352,7 @@ namespace AngelicVerifierNull
                 var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
                 //call ExplainError 
-                BoogieUtil.PrintProgram(ppprog, "ee.bpl");
+                BoogieUtil.PrintProgram(ppprog, string.Format("ee{0}.bpl", eecnt++));
 
                 Stats.resume("explain.error");
                 List<Tuple<string, int, string>> eeSlicedSourceLines = null;
