@@ -1935,7 +1935,7 @@ namespace cba.Util
          */
         
 
-        public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument, bool useAssumeNonNull = true)
+        public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
         {
             var irreducible = new HashSet<string>();
 
@@ -1945,7 +1945,7 @@ namespace cba.Util
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
 
-            if (useAssumeNonNull)
+            if (GVN.doGVN)
             {
                 // Non null instrumentation
                 program = NonnullInstrumentation.Do(program);
@@ -2432,6 +2432,7 @@ namespace cba.Util
     public class GVN
     {
         Program program;
+        public static bool doGVN = true;
 
         // Track the non-null exprs in each block
         public static Dictionary<string, HashSet<Term>> non_null_exprs;
