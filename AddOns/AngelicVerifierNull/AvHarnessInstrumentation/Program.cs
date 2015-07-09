@@ -41,6 +41,10 @@ namespace AvHarnessInstrumentation
         public static bool addInitialization = false;
         // "unknown" types
         public static HashSet<string> unknownTypes = new HashSet<string>();
+        // inline depth for providing context sensitivity
+        public static int inlineDepth = -1;
+        // unroll depth for bounding fixpoint depth
+        public static int unrollDepth = -1;
     }
 
     class Driver
@@ -461,10 +465,16 @@ namespace AvHarnessInstrumentation
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
             if (args.Any(s => s == "/no-GVN"))
-                AliasAnalysis.AliasAnalysis.useGVN = false;
+                cba.Util.GVN.doGVN = false;
 
             if (args.Any(s => s == "/dont-merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = false;
+
+            args.Where(s => s.StartsWith("/inlineDepth:"))
+                .Iter(s => Options.inlineDepth = int.Parse(s.Substring("/inlineDepth:".Length)));
+
+            args.Where(s => s.StartsWith("/unrollDepth:"))
+                .Iter(s => Options.unrollDepth = int.Parse(s.Substring("/unrollDepth:".Length)));
 
             if(args.Any(s => s == "/markAssumesAsSlic"))
                 Options.markAssumesAsSlic = true;
@@ -484,6 +494,7 @@ namespace AvHarnessInstrumentation
             ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             var sw = new Stopwatch();
+            sw.Start();
 
             try
             {
@@ -494,7 +505,6 @@ namespace AvHarnessInstrumentation
                 Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsBeforeAA : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
 
                 // Run alias analysis
                 Stats.resume("alias.analysis");
@@ -503,7 +513,6 @@ namespace AvHarnessInstrumentation
                 Stats.stop("alias.analysis");
 
                 Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
 
                 // run Houdini pass
                 if (Options.HoudiniPass)
@@ -511,7 +520,6 @@ namespace AvHarnessInstrumentation
                     Utils.Print("Running Houdini Pass");
                     program = RunHoudiniPass(program);
                     Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
-                    Utils.Print(string.Format("InstrumentTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 }
 
                 program.writeToFile(args[1]);
@@ -563,12 +571,51 @@ namespace AvHarnessInstrumentation
 
 
         #region Alias analysis
+        // remove havoc statements from the program
+        // this is unsound but not for purposes of alias analysis
+        public static void RemoveHavocs(Program program)
+        {
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block blk in impl.Blocks)
+                {
+                    var newCmds = new List<Cmd>();
+                    
+                    foreach (Cmd cmd in blk.Cmds)
+                    {
+                        if (!(cmd is HavocCmd)) newCmds.Add(cmd);
+                    }
+
+                    blk.Cmds = newCmds;
+                }
+            }
+        }
 
         // Run Alias Analysis on a sequential Boogie program
         // and returned the pruned program
         public static PersistentProgram RunAliasAnalysis(PersistentProgram inp, bool pruneEP = true)
         {
-            var program = inp.getProgram();
+            var newinp = inp;
+
+            if (Options.unrollDepth > 0)
+            {
+                var unrp = new cba.LoopUnrollingPass(Options.unrollDepth);
+                newinp = unrp.run(newinp);
+            }
+
+            var program = newinp.getProgram();
+
+            if (Options.inlineDepth > 0)
+            {
+                var op = CommandLineOptions.Clo.InlineDepth;
+                CommandLineOptions.Clo.InlineDepth = Options.inlineDepth;
+
+                cba.InliningPass.InlineToDepth(program);
+
+                CommandLineOptions.Clo.InlineDepth = op;
+            }
+
+            RemoveHavocs(program);
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;

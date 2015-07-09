@@ -576,11 +576,7 @@ namespace AliasAnalysis
                     {
                         if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
                         {
-                            if (AliasAnalysis.useGVN)
-                            {
-                                if (!e.target.StartsWith("cseTmp")) propagate(e.target);
-                            }
-                            else propagate(e.target);
+                            if (!e.target.StartsWith("cseTmp")) propagate(e.target);
                         }
                     }
                 }
@@ -627,7 +623,6 @@ namespace AliasAnalysis
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
-        public static bool useGVN = true;
         public static bool mergeFull = true;
         DemandDrivenAASolver ddsolver;
 
@@ -717,13 +712,13 @@ namespace AliasAnalysis
                 // HACK: will work only for non-null aliasing queries
                 // TODO: make it general
                 Console.WriteLine("Running demand driven alias analysis");
-                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
+                if (cba.Util.GVN.doGVN) Console.WriteLine("Using global value numbering");
                 aa.ddsolver.Solve();
                 aa.solver.SetResults(aa.ddsolver.GetResults());
             }
             else
             {
-                if (AliasAnalysis.useGVN) Console.WriteLine("Using global value numbering");
+                if (cba.Util.GVN.doGVN) Console.WriteLine("Using global value numbering");
                 aa.solver.Solve();
                 //aa.getReturnAllocSites(aa.solver.GetPointsToSet());
                 Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
@@ -3143,10 +3138,7 @@ namespace AliasAnalysis
             if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
             {
                 null_allocSite = PointsTo["NULL"].First();
-                if (AliasAnalysis.useGVN)
-                {
-                    if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
-                }
+                if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
             }
             
             if (!change.IsSubsetOf(PointsToDelta[n]))

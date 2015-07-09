@@ -1945,18 +1945,21 @@ namespace cba.Util
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
 
-            // Non null instrumentation
-            program = NonnullInstrumentation.Do(program);
+            if (GVN.doGVN)
+            {
+                // Non null instrumentation
+                program = NonnullInstrumentation.Do(program);
 
-            // Global Value Numbering
-            Stats.resume("gvn");
-            program = GVN.Do(program);
-            Stats.stop("gvn");
+                // Global Value Numbering
+                Stats.resume("gvn");
+                program = GVN.Do(program);
+                Stats.stop("gvn");
 
-            // Writing and reading back
-            Stats.resume("read.write");
-            program = BoogieUtil.ReResolve(program, false);
-            Stats.stop("read.write");
+                // Writing and reading back
+                Stats.resume("read.write");
+                program = BoogieUtil.ReResolve(program, false);
+                Stats.stop("read.write");
+            }
 
             // Static Single Assignment
             Stats.resume("ssa");
@@ -2429,6 +2432,7 @@ namespace cba.Util
     public class GVN
     {
         Program program;
+        public static bool doGVN = true;
 
         // Track the non-null exprs in each block
         public static Dictionary<string, HashSet<Term>> non_null_exprs;
