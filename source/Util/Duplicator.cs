@@ -424,7 +424,17 @@ namespace cba.Util
             }
             return node; // base.VisitNAryExpr(node);
         }
-        
+
+        public override List<Variable> VisitVariableSeq(List<Variable> variableSeq)
+        {
+            return base.VisitVariableSeq(new List<Variable>(variableSeq));
+        }
+
+        public override IList<Expr> VisitExprSeq(IList<Expr> list)
+        {
+            return base.VisitExprSeq(new List<Expr>(list));
+        }
+
         public override GotoCmd VisitGotoCmd(GotoCmd node)
         {
             var gc = (GotoCmd)node.Clone();
