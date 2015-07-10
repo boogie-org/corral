@@ -333,7 +333,6 @@ namespace FastAVN
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
-                    if (impl.Name != "GpioHubpDeleteGpioEntry") continue;
 
                     while (!resources.TryTake(out rd)) { Thread.Sleep(100); }
 
@@ -373,9 +372,9 @@ namespace FastAVN
                         lock (fslock)
                         {
                             // delete temp files
-                            //var files = System.IO.Directory.GetFiles(wd, "*.bpl");
-                            //foreach (var f in files)
-                            //    System.IO.File.Delete(f);
+                            var files = System.IO.Directory.GetFiles(wd, "*.bpl");
+                            foreach (var f in files)
+                                System.IO.File.Delete(f);
 
                             using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
                                 output.Iter(s => sw.WriteLine("{0}", s));
