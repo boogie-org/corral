@@ -758,19 +758,15 @@ namespace AngelicVerifierNull
             var main = BoogieUtil.findProcedureImpl(currProg.TopLevelDeclarations,
                 origMainName);
 
-            // Assume has the right id?
-            var Mutate = new Func<Cmd, Cmd>(cmd =>
+            // Requires has the right id?
+            var Mutate = new Func<Requires, Requires>(req =>
                 {
-                    var acmd = cmd as AssumeCmd;
-                    if (acmd == null) return cmd;
-                    if (QKeyValue.FindIntAttribute(acmd.Attributes, AvnAnnotations.BlockingConstraintAttr, -1) == id)
-                        return new AssumeCmd(acmd.tok, Expr.True);
-                    return cmd;
+                    if (QKeyValue.FindIntAttribute(req.Attributes, AvnAnnotations.BlockingConstraintAttr, -1) == id)
+                        return new Requires(true, Expr.True);
+                    return req;
                 });
 
-            // find the call to the entrypoint and put the assume there
-            foreach (var block in main.Blocks)
-                block.Cmds = new List<Cmd>(block.Cmds.Map(c => Mutate(c)));
+            main.Proc.Requires = main.Proc.Requires.Map(r => Mutate(r));
         }
 
         // Adds a new main:

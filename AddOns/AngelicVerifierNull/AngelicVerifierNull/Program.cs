@@ -761,7 +761,7 @@ namespace AngelicVerifierNull
             // name the soft constraints
             var softcnt = 0;
             var soft2actual = new Dictionary<int, int>();
-            var AddAttr = new Action<Cmd>(cmd =>
+            var AddAttrAssume = new Action<Cmd>(cmd =>
                 {
                     var acmd = cmd as AssumeCmd;
                     if(acmd == null) return;
@@ -772,13 +772,22 @@ namespace AngelicVerifierNull
                     softcnt++;
                 });
 
-            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            var AddAttrRequires = new Action<Requires>(req =>
             {
+                var id = QKeyValue.FindIntAttribute(req.Attributes, AvnAnnotations.BlockingConstraintAttr, -1);
+                if (id == -1) return;
+                req.Attributes = new QKeyValue(Token.NoToken, AvnAnnotations.RelaxConstraintAttr, new List<object> { Expr.Literal(softcnt) }, req.Attributes);
+                soft2actual.Add(softcnt, id);
+                softcnt++;
+            });
+
+
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 foreach (var block in impl.Blocks)
-                {
-                    block.Cmds.Iter(AddAttr);
-                }
-            }
+                    block.Cmds.Iter(AddAttrAssume);
+
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Iter(p => p.Requires.Iter(AddAttrRequires));
 
             // Now, move assertions to the end of main
             var main = program.TopLevelDeclarations.OfType<Implementation>()
@@ -1031,6 +1040,20 @@ namespace AngelicVerifierNull
             bool conclusive = true;
             var ret = new HashSet<int>();
 
+            // move requires to assumes
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var newcmds = new List<Cmd>();
+                foreach (var req in impl.Proc.Requires)
+                    newcmds.Add(new AssumeCmd(req.tok, req.Condition, req.Attributes));
+
+                impl.Proc.Requires = new List<Requires>();
+
+                newcmds.AddRange(impl.Blocks[0].Cmds);
+                impl.Blocks[0].Cmds = newcmds;
+            }
+
+
             // Add Boolean Vars for environment constraints
             var boolVarMap = AddBooleanVariables(program);
 
@@ -1090,7 +1113,7 @@ namespace AngelicVerifierNull
         {
             var map = new Dictionary<string, int>();
 
-            var GetConstraintNum = new Func<AssumeCmd, int>(ac => QKeyValue.FindIntAttribute(ac.Attributes, AvnAnnotations.RelaxConstraintAttr, -1));
+            var GetConstraintNum = new Func<QKeyValue, int>(ac => QKeyValue.FindIntAttribute(ac, AvnAnnotations.RelaxConstraintAttr, -1));
             var counter = 0;
 
             var newDecls = new List<Declaration>();
@@ -1106,7 +1129,7 @@ namespace AngelicVerifierNull
 
                         var acmd = cmd as AssumeCmd;
                         if (acmd == null) continue;
-                        var n = GetConstraintNum(acmd);
+                        var n = GetConstraintNum(acmd.Attributes);
                         if (n >= 0)
                         {
                             var lv = new GlobalVariable(Token.NoToken, new TypedIdent(Token.NoToken, "envTmp" + (counter++).ToString(), Microsoft.Boogie.Type.Bool));

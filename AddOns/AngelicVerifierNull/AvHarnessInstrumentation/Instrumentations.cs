@@ -55,26 +55,11 @@ namespace AvHarnessInstrumentation
                 FindNULL();
                 var reach = FindReachableStatesFunc(prog);
 
-                CreateMainProcedure();
+                CreateMainProcedure(reach);
                 ChangeStubsIntoUnkowns();
-                EntryPointsReachable(reach);
             }
 
-            // The beginning of an entry point must be reachable
-            private void EntryPointsReachable(Function reach)
-            {
-                foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
-                {
-                    if (!entrypoints.Contains(impl.Name))
-                        continue;
-                    // assume reach(true);
-                    impl.Blocks[0].Cmds.Insert(0,
-                        new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken,
-                            new FunctionCall(reach), new List<Expr> { Expr.True })));
-                }
-            }
-
-            private void CreateMainProcedure()
+            private void CreateMainProcedure(Function reach)
             {
                 //blocks 
                 List<Block> mainBlocks = new List<Block>();
@@ -145,6 +130,10 @@ namespace AvHarnessInstrumentation
                         cmds.AddRange(argMallocCmds);
                     }
 
+                    // The beginning of an entry point must be reachable: assume reach(true);
+                    cmds.Add(new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken,
+                            new FunctionCall(reach), new List<Expr> { Expr.True })));
+
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
                         rets.ConvertAll(x => IdentifierExpr.Ident(x)));
 
@@ -201,25 +190,8 @@ namespace AvHarnessInstrumentation
                 var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, AvnAnnotations.CORRAL_MAIN_PROC);
                 foreach (var block in mainImpl.Blocks)
                 {
-                    var ncmds = new List<Cmd>();
-                    foreach (var cmd in block.Cmds)
-                    {
-                        var ccmd = cmd as CallCmd;
-                        if (ccmd == null)
-                        {
-                            ncmds.Add(cmd);
-                            continue;
-                        }
-                        if (procs.Contains(ccmd.callee))
-                        {
-                            ncmds.Add(new AssumeCmd(Token.NoToken, Expr.False, new QKeyValue(Token.NoToken, "PrunedEntryPoint", new List<object>(), null)));
-                        }
-                        else
-                        {
-                            ncmds.Add(cmd);
-                        }
-                    }
-                    block.Cmds = ncmds;
+                    if (block.Cmds.OfType<CallCmd>().Any(cc => procs.Contains(cc.callee)))
+                        block.Cmds.Clear();
                 }
                 BoogieUtil.pruneProcs(program, mainImpl.Name);
             }

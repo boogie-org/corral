@@ -333,6 +333,7 @@ namespace FastAVN
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
+                    if (impl.Name != "GpioHubpDeleteGpioEntry") continue;
 
                     while (!resources.TryTake(out rd)) { Thread.Sleep(100); }
 
@@ -372,9 +373,9 @@ namespace FastAVN
                         lock (fslock)
                         {
                             // delete temp files
-                            var files = System.IO.Directory.GetFiles(wd, "*.bpl");
-                            foreach (var f in files)
-                                System.IO.File.Delete(f);
+                            //var files = System.IO.Directory.GetFiles(wd, "*.bpl");
+                            //foreach (var f in files)
+                            //    System.IO.File.Delete(f);
 
                             using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
                                 output.Iter(s => sw.WriteLine("{0}", s));
@@ -729,6 +730,7 @@ namespace FastAVN
         }
 
         // deletes calls to all entrypoints except mainproc, returns CorralMain since that this is the entrypoint
+        // clears out all commands from the blocks with deleted calls
         private static string sliceMainForProc(Program program, string mainproc, HashSet<string> otherEPs)
         {
             Procedure entrypoint_proc = program.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).FirstOrDefault();
@@ -739,29 +741,11 @@ namespace FastAVN
 
             foreach (Block b in entrypoint_impl.Blocks)
             {
-                var newCmds = new List<Cmd>();
-                foreach (Cmd c in b.Cmds)
-                {
-                    if (c is CallCmd)
-                    {
-                        var cc = c as CallCmd;
-                        if (cc.callee.Equals(mainproc))
-                        {
-                            cc.Attributes = new QKeyValue(Token.NoToken, "CalledEntryPoint", new List<object>(), cc.Attributes);
-                            newCmds.Add(cc);
-                        }
-                        else if (otherEPs.Contains(cc.callee))
-                        {
-                            AssumeCmd ac = new AssumeCmd(Token.NoToken, Expr.False);
-                            ac.Attributes = new QKeyValue(Token.NoToken, "SlicedEntryPoint", new List<object>(), ac.Attributes);
-                            newCmds.Add(ac);
-                        }
-                        else newCmds.Add(cc);
-                    }
-                    else newCmds.Add(c);
-                }
-                b.Cmds = newCmds;
+                if (b.Cmds.OfType<CallCmd>().Any(cc => cc.callee != mainproc && otherEPs.Contains(cc.callee)))
+                    b.Cmds.Clear();
             }
+
+            UnusedVarEliminator.Eliminate(program);
 
             return entrypoint_proc.Name;
         }
