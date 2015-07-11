@@ -310,6 +310,7 @@ namespace FastAVN
         class Worker
         {
             ConcurrentBag<Implementation> impls;
+            HashSet<string> implNames;
             ConcurrentBag<string> resources;
             Semaphore sem;
             Program program;
@@ -320,15 +321,14 @@ namespace FastAVN
                 this.impls = impls;
                 this.resources = resources;
                 this.sem = sem;
+                this.implNames = new HashSet<string>();
+                impls.Iter(im => implNames.Add(im.Name));
             }
 
             public void Run()
             {
                 Implementation impl;
                 var rd = "";
-
-                HashSet<string> implNames = new HashSet<string>();
-                impls.Iter(im => implNames.Add(im.Name));
 
                 while (true)
                 {
@@ -343,9 +343,14 @@ namespace FastAVN
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
-                    BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
+                    Program newprogram;
 
-                    var newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
+                    // lock because Parsing a program is not thread-safe
+                    lock (fslock)
+                    {
+                        BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
+                        newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
+                    }
 
                     // slice the program by entrypoints
                     Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
@@ -356,7 +361,10 @@ namespace FastAVN
                         .FirstOrDefault());
 
                     File.Delete(pruneFile);
-                    BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
+                    lock (fslock)
+                    {
+                        BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
+                    }
 
                     sem.Release();
 
