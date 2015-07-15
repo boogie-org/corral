@@ -624,6 +624,10 @@ namespace AvHarnessInstrumentation
                 program =
                     SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
+                Stats.resume("read.write");
+                program = BoogieUtil.ReResolve(program);
+                Stats.stop("read.write");
+
                 Stats.resume("inlining");
                 if (Options.inlineDepth > 0)
                 {
@@ -637,6 +641,10 @@ namespace AvHarnessInstrumentation
 
                 RemoveHavocs(program);
                 Stats.stop("inlining");
+
+                Stats.resume("read.write");
+                program = BoogieUtil.ReResolve(program);
+                Stats.stop("read.write");
 
                 // Make sure that aliasing queries are on identifiers only
                 var af =
