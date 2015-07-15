@@ -605,25 +605,15 @@ namespace AvHarnessInstrumentation
         {
             var newinp = inp;
 
+            Stats.resume("unroll");
             if (Options.unrollDepth > 0)
             {
                 var unrp = new cba.LoopUnrollingPass(Options.unrollDepth);
                 newinp = unrp.run(newinp);
             }
+            Stats.stop("unroll");
 
             var program = newinp.getProgram();
-
-            if (Options.inlineDepth > 0)
-            {
-                var op = CommandLineOptions.Clo.InlineDepth;
-                CommandLineOptions.Clo.InlineDepth = Options.inlineDepth;
-
-                cba.InliningPass.InlineToDepth(program);
-
-                CommandLineOptions.Clo.InlineDepth = op;
-            }
-
-            RemoveHavocs(program);
 
             //AliasAnalysis.AliasAnalysis.dbg = true;
             //AliasAnalysis.AliasConstraintSolver.dbg = true;
@@ -633,6 +623,20 @@ namespace AvHarnessInstrumentation
                 // Do SSA
                 program =
                     SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
+
+                Stats.resume("inlining");
+                if (Options.inlineDepth > 0)
+                {
+                    var op = CommandLineOptions.Clo.InlineDepth;
+                    CommandLineOptions.Clo.InlineDepth = Options.inlineDepth;
+
+                    cba.InliningPass.InlineToDepth(program);
+
+                    CommandLineOptions.Clo.InlineDepth = op;
+                }
+
+                RemoveHavocs(program);
+                Stats.stop("inlining");
 
                 // Make sure that aliasing queries are on identifiers only
                 var af =
