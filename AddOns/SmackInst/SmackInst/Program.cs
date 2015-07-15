@@ -142,7 +142,7 @@ namespace SmackInst
             var b = BoogieAstFactory.MkFormal("b", btype.Int, true);
             var f = new Function(Token.NoToken, "aliasQ" + (counter++),
                 new List<Variable> { a, b },
-                BoogieAstFactory.MkFormal("x", btype.Int, false));
+                BoogieAstFactory.MkFormal("c", btype.Bool, false));
             f.AddAttribute("aliasingQuery");
             f.AddAttribute("inline");
             f.Body = Expr.Eq(Expr.Ident(a), Expr.Ident(b));
