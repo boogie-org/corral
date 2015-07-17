@@ -604,14 +604,16 @@ namespace AvHarnessInstrumentation
         public static PersistentProgram RunAliasAnalysis(PersistentProgram inp, bool pruneEP = true)
         {
             var newinp = inp;
-
-            Stats.resume("unroll");
+            
             if (Options.unrollDepth > 0)
             {
+                Stats.resume("unroll");
+
                 var unrp = new cba.LoopUnrollingPass(Options.unrollDepth);
                 newinp = unrp.run(newinp);
+
+                Stats.stop("unroll");
             }
-            Stats.stop("unroll");
 
             var program = newinp.getProgram();
 
@@ -624,23 +626,25 @@ namespace AvHarnessInstrumentation
                 program =
                     SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
-                Stats.resume("read.write");
-                program = BoogieUtil.ReResolve(program);
-                Stats.stop("read.write");
-
-                Stats.resume("inlining");
                 if (Options.inlineDepth > 0)
                 {
+                    Stats.resume("inlining");
+
+                    Stats.resume("read.write");
+                    program = BoogieUtil.ReResolve(program);
+                    Stats.stop("read.write");
+
                     var op = CommandLineOptions.Clo.InlineDepth;
                     CommandLineOptions.Clo.InlineDepth = Options.inlineDepth;
 
                     cba.InliningPass.InlineToDepth(program);
 
                     CommandLineOptions.Clo.InlineDepth = op;
-                }
 
-                RemoveHavocs(program);
-                Stats.stop("inlining");
+                    RemoveHavocs(program);
+
+                    Stats.stop("inlining");
+                }
 
                 Stats.resume("read.write");
                 program = BoogieUtil.ReResolve(program);

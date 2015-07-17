@@ -397,15 +397,23 @@ namespace AliasAnalysis
 
     public class DemandDrivenAASolver
     {
+        // AAGraph[w] denotes incoming edges to w
         Dictionary<string, HashSet<Edge>> AAGraph;
+        // stores target of each store
         Dictionary<string, HashSet<string>> map2stores;
+        // stores target of each load
         Dictionary<string, HashSet<string>> map2loads;
+        // full allocation sites, currently unused
         HashSet<string> fullAllocSites;
-
+        // list of aliasing queries
+        HashSet<Tuple<string, string>> queries;
+        // demand driven PointsTo set generated
         Dictionary<string, HashSet<string>> pointsTo;
+
+        // used for every aliasing query
         HashSet<string> marked;
         List<string> worklist;
-        public static string nullAS;
+        //public static string nullAS;
         bool dbg = false;
 
         abstract class Edge
@@ -419,19 +427,20 @@ namespace AliasAnalysis
             public bool isFull;
             static int counter = 0;
 
-            public AllocEdge(string t, bool full)
+            public AllocEdge(string s, bool full)
             {
+                // reversing the edge due to the algorithm of RegularPT
                 if (AliasAnalysis.mergeFull)
                 {
                     if (full)
-                        source = "allocSiteSpecial";
+                        target = "allocSiteSpecial";
                     else
-                        source = "allocSite" + (counter++).ToString();
+                        target = "allocSite" + (counter++).ToString();
                 }
                 else
-                    source = "allocSite" + (counter++).ToString();
+                    target = "allocSite" + (counter++).ToString();
 
-                target = t;
+                source = s;
                 isFull = full;
             }
         }
@@ -460,21 +469,22 @@ namespace AliasAnalysis
             map2stores = new Dictionary<string, HashSet<string>>();
             map2loads = new Dictionary<string, HashSet<string>>();
             fullAllocSites = new HashSet<string>();
+            queries = new HashSet<Tuple<string, string>>();
 
             pointsTo = new Dictionary<string, HashSet<string>>();
             marked = new HashSet<string>();
             worklist = new List<string>();
-            nullAS = null;
-            AliasConstraintSolver.solved = false;
+            //nullAS = null;
 
         }
 
         public void AddAllocEdge(string name, bool full)
         {
+            // reversing the edge, goes from var -> allocSite
             AllocEdge ae = new AllocEdge(name, full);
             string source = ae.source;
             if (!AAGraph.ContainsKey(source)) AAGraph[source] = new HashSet<Edge>();
-            if (full) fullAllocSites.Add(source);
+            if (full) fullAllocSites.Add(ae.target);
             AAGraph[source].Add(ae);
             if (dbg) Console.WriteLine("Adding alloc edge => {0} -> {1}", source, name);
         }
@@ -500,13 +510,14 @@ namespace AliasAnalysis
 
         public void AddMatchEdges()
         {
+            // reversing the edges due to RegularPT algorithm
             foreach (string map in map2stores.Keys)
             {
-                foreach (string source in map2stores[map])
+                foreach (string target in map2stores[map])
                 {
                     if (map2loads.ContainsKey(map))
                     {
-                        foreach (string target in map2loads[map])
+                        foreach (string source in map2loads[map])
                         {
                             if (!AAGraph.ContainsKey(source)) AAGraph[source] = new HashSet<Edge>();
                             AAGraph[source].Add(new MatchEdge(source, target));
@@ -517,6 +528,12 @@ namespace AliasAnalysis
             }
 
             //InitFullAllocators();
+        }
+
+        public void GetQuery(string item1, string item2)
+        {
+            var query = Tuple.Create(item1, item2);
+            queries.Add(query);
         }
 
         // TODO: add appropriate edges
@@ -531,6 +548,7 @@ namespace AliasAnalysis
             }
         }
 
+        /*
         private void FindNULL()
         {
             string NULL = "NULL";
@@ -552,17 +570,34 @@ namespace AliasAnalysis
                 }
             }
         }
+        */
 
         public void Solve()
         {
-            FindNULL();
-            RegularPT();
-            AliasConstraintSolver.solved = true;
+            foreach (var query in queries)
+            {
+                worklist = new List<string>();
+                marked = new HashSet<string>();
+
+                if (!pointsTo.ContainsKey(query.Item1))
+                {
+                    var pt1 = RegularPT(query.Item1);
+                    pointsTo.Add(query.Item1, pt1);
+                }
+
+                if (!pointsTo.ContainsKey(query.Item2))
+                {
+                    var pt2 = RegularPT(query.Item2);
+                    pointsTo.Add(query.Item2, pt2);
+                }
+
+            }
         }
 
-        private void RegularPT()
+        private HashSet<string> RegularPT(string source)
         {
-            string source = nullAS;
+            var PointsTo = new HashSet<string>();
+
             propagate(source);
             
             while (worklist.Count != 0)
@@ -572,6 +607,7 @@ namespace AliasAnalysis
 
                 if (AAGraph.ContainsKey(w))
                 {
+                    /*
                     foreach (Edge e in AAGraph[w])
                     {
                         if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
@@ -579,8 +615,24 @@ namespace AliasAnalysis
                             if (!e.target.StartsWith("cseTmp")) propagate(e.target);
                         }
                     }
+                    */
+                    
+                    // foreach NEW edge o -> w
+                    foreach (AllocEdge ae in AAGraph[w].OfType<AllocEdge>())
+                        PointsTo.Add(ae.source);
+
+                    // foreach ASSIGN and MATCH edge y -> w
+                    foreach (Edge e in AAGraph[w])
+                    {
+                        if (e is AssignEdge || e is MatchEdge)
+                        {
+                            propagate(e.target);
+                        }
+                    }
                 }
             }
+
+            return PointsTo;
         }
 
         private void propagate(string source)
@@ -592,9 +644,66 @@ namespace AliasAnalysis
             }
         }
 
-        public HashSet<string> GetResults()
+        public Dictionary<string, HashSet<string>> GetResults()
         {
-            return marked;
+            return pointsTo;
+        }
+    }
+
+    public class GatherAliasingQueries : FixedVisitor
+    {
+        Implementation currImpl;
+        HashSet<string> aliasingQueryFuncs;
+        HashSet<Tuple<Variable, Variable, Implementation>> aliasingQueries;
+
+        private GatherAliasingQueries()
+        {
+            currImpl = null;
+            aliasingQueryFuncs = new HashSet<string>();
+            aliasingQueries = new HashSet<Tuple<Variable, Variable, Implementation>>();
+        }
+
+        public static HashSet<Tuple<Variable, Variable, Implementation>> Gather(Program program)
+        {
+            var gaq = new GatherAliasingQueries();
+            gaq.VisitProgram(program);
+            return gaq.aliasingQueries;
+        }
+
+        public override Program VisitProgram(Program node)
+        {
+            node.TopLevelDeclarations.OfType<Function>()
+                .Where(func => BoogieUtil.checkAttrExists("aliasingQuery", func.Attributes))
+                .Iter(func => aliasingQueryFuncs.Add(func.Name));
+
+            return base.VisitProgram(node);
+        }
+
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            currImpl = node;
+            var ret = base.VisitImplementation(node);
+            currImpl = null;
+            return ret;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            if (node.Fun is FunctionCall)
+            {
+                var func = (node.Fun as FunctionCall).FunctionName;
+                if (aliasingQueryFuncs.Contains(func))
+                {
+                    Debug.Assert(node.Args.Count == 2);
+                    var arg1 = node.Args[0] as IdentifierExpr;
+                    var arg2 = node.Args[1] as IdentifierExpr;
+                    Debug.Assert(arg1 != null && arg2 != null && currImpl != null);
+
+                    aliasingQueries.Add(Tuple.Create(arg1.Decl, arg2.Decl, currImpl));
+                }
+
+            }
+            return base.VisitNAryExpr(node);
         }
     }
 
@@ -619,7 +728,6 @@ namespace AliasAnalysis
         AliasConstraintSolver solver;
         int counter;
         public static bool dbg = false;
-        //CSFSAliasAnalysis csfsAnalysis = null;
         public static HashSet<string> non_null_vars = null;
         public static bool generateCP = false;
         public static bool demandDrivenAA = false;
@@ -699,12 +807,19 @@ namespace AliasAnalysis
             }
         }
 
+        private void SetQueries()
+        {
+            var queries = GatherAliasingQueries.Gather(program);
+            
+            foreach (var tuple in queries)
+                ddsolver.GetQuery(ConstructVariableName(tuple.Item1, tuple.Item3.Name), ConstructVariableName(tuple.Item2, tuple.Item3.Name));
+        }
+
         public static AliasAnalysisResults DoAliasAnalysis(Program program)
         {
             var aa = new AliasAnalysis(program);
             if (dbg) Console.WriteLine("Creating Points-to constraints ... ");
             aa.Process();
-            //aa.Process_Assumes_Asserts();
             if (dbg) Console.WriteLine("Done");
             if (dbg) Console.WriteLine("Solving Points-to constraints ... ");
             if (AliasAnalysis.demandDrivenAA)
@@ -712,13 +827,14 @@ namespace AliasAnalysis
                 // HACK: will work only for non-null aliasing queries
                 // TODO: make it general
                 Console.WriteLine("Running demand driven alias analysis");
-                if (cba.Util.GVN.doGVN) Console.WriteLine("Using global value numbering");
+                if (GVN.doGVN) Console.WriteLine("Using global value numbering");
+                aa.SetQueries();
                 aa.ddsolver.Solve();
                 aa.solver.SetResults(aa.ddsolver.GetResults());
             }
             else
             {
-                if (cba.Util.GVN.doGVN) Console.WriteLine("Using global value numbering");
+                if (GVN.doGVN) Console.WriteLine("Using global value numbering");
                 aa.solver.Solve();
                 //aa.getReturnAllocSites(aa.solver.GetPointsToSet());
                 Console.WriteLine("AA: Cycle elimination found {0} cycles", AliasConstraintSolver.numCycles);
@@ -972,7 +1088,8 @@ namespace AliasAnalysis
                 {
                     if (AliasAnalysis.demandDrivenAA)
                     {
-                        ddsolver.AddAssignEdge(y, x);
+                        // reversing the edge due to RegularPT algorithm
+                        ddsolver.AddAssignEdge(x, y);
                     }
                     else
                     {
@@ -3029,13 +3146,10 @@ namespace AliasAnalysis
 
         }
 
-        public void SetResults(HashSet<string> marked)
+        public void SetResults(Dictionary<string, HashSet<string>> pts)
         {
-            foreach (string s in marked)
-            {
-                if (!PointsTo.ContainsKey(s)) PointsTo[s] = new HashSet<string>();
-                PointsTo[s].Add(DemandDrivenAASolver.nullAS);
-            }
+            PointsTo = pts;
+            solved = true;
         }
 
         public Dictionary<string, HashSet<string>> GetPointsToSet()
