@@ -469,7 +469,7 @@ namespace AvHarnessInstrumentation
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
             if (args.Any(s => s == "/no-GVN"))
-                cba.Util.GVN.doGVN = false;
+                GVN.doGVN = false;
 
             if (args.Any(s => s == "/dont-merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = false;

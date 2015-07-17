@@ -576,9 +576,6 @@ namespace AliasAnalysis
         {
             foreach (var query in queries)
             {
-                worklist = new List<string>();
-                marked = new HashSet<string>();
-
                 if (!pointsTo.ContainsKey(query.Item1))
                 {
                     var pt1 = RegularPT(query.Item1);
@@ -598,6 +595,9 @@ namespace AliasAnalysis
         {
             var PointsTo = new HashSet<string>();
 
+            worklist = new List<string>();
+            marked = new HashSet<string>();
+
             propagate(source);
             
             while (worklist.Count != 0)
@@ -607,19 +607,9 @@ namespace AliasAnalysis
 
                 if (AAGraph.ContainsKey(w))
                 {
-                    /*
-                    foreach (Edge e in AAGraph[w])
-                    {
-                        if (e is AssignEdge || e is MatchEdge || e is AllocEdge)
-                        {
-                            if (!e.target.StartsWith("cseTmp")) propagate(e.target);
-                        }
-                    }
-                    */
-                    
                     // foreach NEW edge o -> w
                     foreach (AllocEdge ae in AAGraph[w].OfType<AllocEdge>())
-                        PointsTo.Add(ae.source);
+                        PointsTo.Add(ae.target);
 
                     // foreach ASSIGN and MATCH edge y -> w
                     foreach (Edge e in AAGraph[w])
@@ -630,6 +620,48 @@ namespace AliasAnalysis
                         }
                     }
                 }
+            }
+
+            if (GVN.doGVN)
+            {
+                // checking whether NULL \in PointsTo or not
+                HashSet<string> nullPointsTo = new HashSet<string>();
+
+                string NULL = "NULL";
+                string nullAS = null;
+                Debug.Assert(AAGraph.ContainsKey(NULL));
+
+                foreach (AllocEdge ae in AAGraph[NULL].OfType<AllocEdge>())
+                    nullAS = ae.target;
+
+                worklist = new List<string>();
+                marked = new HashSet<string>();
+
+                propagate(source);
+
+                while (worklist.Count != 0)
+                {
+                    string w = worklist.First();
+                    worklist.Remove(w);
+
+                    if (AAGraph.ContainsKey(w))
+                    {
+                        // foreach NEW edge o -> w
+                        foreach (AllocEdge ae in AAGraph[w].OfType<AllocEdge>())
+                            nullPointsTo.Add(ae.target);
+
+                        // foreach ASSIGN and MATCH edge y -> w
+                        foreach (Edge e in AAGraph[w])
+                        {
+                            if (e is AssignEdge || e is MatchEdge)
+                            {
+                                if (!e.target.StartsWith("cseTmp")) propagate(e.target);
+                            }
+                        }
+                    }
+                }
+
+                if (!nullPointsTo.Contains(nullAS) || source.StartsWith("cseTmp")) PointsTo.Remove(nullAS);
             }
 
             return PointsTo;
@@ -3252,7 +3284,7 @@ namespace AliasAnalysis
             if (PointsTo.ContainsKey("NULL") && PointsTo["NULL"].Count > 0)
             {
                 null_allocSite = PointsTo["NULL"].First();
-                if (/*AliasAnalysis.non_null_vars.Contains(n)*/n.StartsWith("cseTmp")) change.Remove(null_allocSite);
+                if (n.StartsWith("cseTmp") && GVN.doGVN) change.Remove(null_allocSite);
             }
             
             if (!change.IsSubsetOf(PointsToDelta[n]))
