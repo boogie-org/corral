@@ -36,6 +36,8 @@ namespace AngelicVerifierNull
         public static bool disbleDeadcodeOpt = false;
         // Flag for reporting assertion when MAX_ASSERT_BLOCK_COUNT is reached
         public static bool reportOnMaxBlockCount = false;
+        // Suppress when blocking on free variables?
+        public static bool blockOnFreeVars = false;
         // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
         public static bool UseDuplicator
         { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
@@ -105,6 +107,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/reportOnMaxBlock"))
                 Options.reportOnMaxBlockCount = true;
+
+            if (args.Any(s => s == "/blockOnFreeVars"))
+                Options.blockOnFreeVars = true;
 
             args.Where(s => s.StartsWith("/timeout:"))
                 .Iter(s => timeout = int.Parse(s.Substring("/timeout:".Length)));
@@ -1273,6 +1278,11 @@ namespace AngelicVerifierNull
                             if (demonicVars.Any(v => v.Name.StartsWith(string.Format("alloc_{0}_", CoreLib.SDVConcretizePathPass.LocalVarInitValueAttr))))
                             {
                                 Utils.Print(String.Format("Some free variable is an initial value of a local; cannot block or treat demonic"), Utils.PRINT_TAG.AV_OUTPUT);
+                                status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
+                            }
+                            else if (Options.blockOnFreeVars)
+                            {
+                                Utils.Print(String.Format("User option blockOnFreeVars set, thus blocking"), Utils.PRINT_TAG.AV_OUTPUT);
                                 status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True);
                             }
                             else
