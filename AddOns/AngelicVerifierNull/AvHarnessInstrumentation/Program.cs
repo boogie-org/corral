@@ -19,8 +19,6 @@ namespace AvHarnessInstrumentation
         public static bool UseAliasAnalysisForAssertions = true;
         // Don't use alias analysis for deadcode
         public static bool UseAliasAnalysisForAngelicAssertions = true;
-        // Don't use context and flow sensitive alias analysis
-        public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
         // Add unsound options for NULL
@@ -444,9 +442,6 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/noAA:1"))
                 Options.UseAliasAnalysisForAssertions = false;
 
-            if (args.Any(s => s == "/CSFSAA"))
-                Options.UseCSFSAliasAnalysis = true;
-
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;
 
@@ -469,7 +464,7 @@ namespace AvHarnessInstrumentation
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
             if (args.Any(s => s == "/no-GVN"))
-                cba.Util.GVN.doGVN = false;
+                GVN.doGVN = false;
 
             if (args.Any(s => s == "/dont-merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = false;
@@ -670,12 +665,6 @@ namespace AvHarnessInstrumentation
             }
 
             var origProgram = inp.getProgram();
-            Dictionary<string, bool> csfs_ret = null;
-            if (false /*Options.UseCSFSAliasAnalysis*/) // deprecated flag
-            {
-                csfs_ret = AliasAnalysis.AliasAnalysis.DoCSFSAliasAnalysis(program);
-                AliasAnalysis.CSFSAliasAnalysis.removeAsserts(origProgram, csfs_ret);
-            }
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
             if (pruneEP) PruneRedundantEntryPoints(origProgram);
