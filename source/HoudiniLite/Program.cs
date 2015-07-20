@@ -109,7 +109,7 @@ namespace HoudiniLite
             var sw = new Stopwatch();
             sw.Start();
 
-            var assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), false);
+            var assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), true);
 
             sw.Stop();
 
@@ -268,7 +268,7 @@ namespace HoudiniLite
         static bool Check(string file, string boogieArgs)
         {
             Initalize(boogieArgs);
-            var assign1 = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), false);
+            var assign1 = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file));
 
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
