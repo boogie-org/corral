@@ -678,7 +678,7 @@ namespace cba
                 return (runAbsHoudiniConfig != null);
             }
         }
-        public static bool useHoudiniLite = true;
+        public static bool useHoudiniLite = false;
 
         // Template
         public HashSet<Variable> templateVars;
@@ -1572,6 +1572,11 @@ namespace cba
                         cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
                         var res = CoreLib.HoudiniInlining.RunHoudini(program);
                         trueConstants.UnionWith(res);
+                        //CoreLib.HoudiniStats.Print();
+                        //Console.WriteLine("Num true = {0}", res.Count);
+                        //Console.WriteLine("True assignment: {0}", res.Concat(" "));
+                        //trueConstants.UnionWith(res);
+                        //throw new NormalExit("Done");
                     }
                     else
                     {

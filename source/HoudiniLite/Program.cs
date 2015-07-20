@@ -51,8 +51,14 @@ namespace HoudiniLite
 
             if (iter)
             {
+                var currfile = "curr.bpl";
                 var program = BoogieUtil.ReadAndResolve(file);
                 var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, "Av_FDO_Pnp");
+
+                //SimplifyImpl(impl);
+                RemoveEmptyBlock(impl);
+                BoogieUtil.PrintProgram(program, currfile);
+                return;
 
                 // Find reachable procedures
                 //BoogieUtil.pruneProcs(program, impl.Name);
@@ -61,7 +67,7 @@ namespace HoudiniLite
                 //impl.Blocks
                 //    .Iter(blk => blk.Cmds.RemoveAll(cmd => BoogieUtil.isAssertTrue(cmd)));
 
-                var currfile = "curr.bpl";
+                
 
                 //BoogieUtil.PrintProgram(program, currfile);
 
@@ -113,6 +119,10 @@ namespace HoudiniLite
             if(CommandLineOptions.Clo.PrintAssignment)
               Console.WriteLine("True assignment: {0}", assignment.Concat(" "));
 
+            //var outp = BoogieUtil.ReadAndResolve(file);
+            //HoudiniInlining.InstrumentHoudiniAssignment(outp, assignment);
+            //BoogieUtil.PrintProgram(outp, file.Replace(".bpl", "_out.bpl"));
+
             if (check)
             {
                 sw.Restart();
@@ -137,22 +147,88 @@ namespace HoudiniLite
             }
         }
 
+        static void SimplifyImpl(Implementation impl)
+        {
+            var seen = new HashSet<string>();
+            var paths = new List<List<Cmd>>();
+            var Process = new Action<IEnumerable<Block>>(ls =>
+                {
+                    var cmds = ls.Select(b => b.Cmds).Select(l => l.AsEnumerable())
+                        .Aggregate((new List<Cmd>()).AsEnumerable(), (a, b) => a.Concat(b))
+                        .ToList();
+                    var str = cmds.Select(c => c.ToString()).Concat(" ");
+                    if (seen.Contains(str)) return;
+                    seen.Add(str);
+                    paths.Add(cmds);
+                });
+
+            EnumeratePaths(impl.Blocks[0], new Stack<Block>(), Process);
+
+            Console.WriteLine("Found {0} paths", paths.Count);
+
+            var nlabs = new List<string>();
+            var nblocks = new List<Block>();
+            var cnt = 0;
+
+            paths.Iter(l =>
+            {
+                var lab = "l" + (cnt++);
+                nblocks.Add(new Block(Token.NoToken, lab, l, new ReturnCmd(Token.NoToken)));
+                nlabs.Add(lab);
+            });
+
+            var bs = new Block(Token.NoToken, "start", new List<Cmd>(), new GotoCmd(Token.NoToken,
+                nlabs));
+
+            impl.Blocks.Clear();
+            impl.Blocks.Add(bs);
+            impl.Blocks.AddRange(nblocks);
+
+        }
+
+        static void EnumeratePaths(Block block, Stack<Block> currPath, Action<IEnumerable<Block>> act)
+        {
+            currPath.Push(block);
+            if (block.TransferCmd is ReturnCmd)
+            {
+                act(currPath);
+                currPath.Pop();
+                return;
+            }
+            var gc = block.TransferCmd as GotoCmd;
+            foreach (var succ in gc.labelTargets)
+            {
+                EnumeratePaths(succ, currPath, act);
+            }
+            currPath.Pop();
+        }
+
         static void RemoveEmptyBlock(Implementation impl)
         {
             var pred = new Dictionary<Block, HashSet<Block>>();
             var succ = new Dictionary<Block, HashSet<Block>>();
+            var b2l = BoogieUtil.labelBlockMapping(impl);
 
             impl.Blocks.Iter(blk => pred.Add(blk, new HashSet<Block>()));
             impl.Blocks.Iter(blk => succ.Add(blk, new HashSet<Block>()));
+
+            // Remove duplicates
+            foreach (var b in impl.Blocks)
+            {
+                var gc = b.TransferCmd as GotoCmd;
+                if (gc == null) continue;
+                gc.labelNames = new HashSet<string>(gc.labelNames).ToList();
+                gc.labelTargets = new List<Block>();
+            }
 
             foreach (var blk in impl.Blocks)
             {
                 var gc = blk.TransferCmd as GotoCmd;
                 if (gc == null) continue;
-                foreach (var s in gc.labelTargets)
+                foreach (var s in gc.labelNames)
                 {
-                    pred[s].Add(blk);
-                    succ[blk].Add(s);
+                    pred[b2l[s]].Add(blk);
+                    succ[blk].Add(b2l[s]);
                 }
             }
 
@@ -164,12 +240,10 @@ namespace HoudiniLite
                 foreach (var p in pred[b])
                 {
                     var gc = p.TransferCmd as GotoCmd;
-                    
-                    gc.labelTargets.Remove(b);
-                    gc.labelNames.Remove(b.Label);
 
-                    gc.labelTargets.AddRange(succ[b]);
+                    gc.labelNames.Remove(b.Label);
                     gc.labelNames.AddRange(succ[b].Select(a => a.Label));
+                    gc.labelNames = new HashSet<string>(gc.labelNames).ToList();
                 }
 
                 var preds = new HashSet<Block>(pred[b]);
@@ -177,6 +251,14 @@ namespace HoudiniLite
 
                 preds.Iter(p => { succ[p].Remove(b); succ[p].UnionWith(succs); });
                 succs.Iter(s => { pred[s].Remove(b); pred[s].UnionWith(preds); });
+            }
+
+            foreach (var b in impl.Blocks)
+            {
+                var gc = b.TransferCmd as GotoCmd;
+                if (gc == null) continue;
+                gc.labelNames = new HashSet<string>(gc.labelNames).ToList();
+                gc.labelTargets = new List<Block>(gc.labelNames.Select(l => b2l[l]));
             }
 
             impl.Blocks.RemoveAll(b => emptyBlocks.Contains(b));

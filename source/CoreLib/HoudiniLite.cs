@@ -61,10 +61,50 @@ namespace CoreLib
         public static readonly string CandidateFuncPrefix = "HoudiniLiteFunc$";
         public static readonly string CandidateFuncAssertedPrefix = "HoudiniLiteFuncAsserted$";
         static bool RobustAgainstEvaluate = false; // usually this is not needed
+        public static bool dbg = false;
 
         public HoudiniInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
             base(program, logFilePath, appendLogFile, PassiveImplInstrumentation)
         {
+        }
+
+        public static Program RewriteEnsuresToConstants(Program program)
+        {
+            var CandidateConstants = new Dictionary<string, Constant>();
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Iter(c => CandidateConstants.Add(c.Name, c));
+
+
+            var impls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
+            foreach (var impl in impls)
+            {
+                var newens = new List<Ensures>();
+                foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free ))
+                {
+                    string constantName = null;
+                    Expr expr = null;
+
+                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                        ens.Condition, CandidateConstants.Keys, out constantName, out expr);
+
+                    if (!match)
+                        throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
+
+                    var constant = Expr.Ident(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "hl_rw_" + (InstrumentEnsuresCounter++),
+                        Microsoft.Boogie.Type.Bool), false));
+
+                    impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
+                        .Iter(blk => blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.Imp(expr, constant))));
+
+                    ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), constant);
+                    newens.Add(new Ensures(true, Expr.Imp(constant, expr)));
+                    program.AddTopLevelDeclaration(constant.Decl);
+                }
+                impl.Proc.Ensures.AddRange(newens);
+            }
+
+            return BoogieUtil.ReResolveInMem(program);
         }
 
         public static HashSet<string> RunHoudini(Program program, bool RobustAgainstEvaluate = false)
@@ -96,6 +136,8 @@ namespace CoreLib
             // Tag the ensures so we can keep track of them
             var iterimpls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
             iterimpls.Iter(impl => InstrumentEnsures(program, impl, CandidateFuncsAssumed[impl.Name], CandidateConstants));
+
+            //BoogieUtil.PrintProgram(program, "h2.bpl");
 
             // Rewrite functions that are asserted
             var RewriteAssumedToAssertedAction = new Action<Implementation>(impl =>
@@ -141,7 +183,9 @@ namespace CoreLib
                 var implName = worklist.First().Item2;
                 worklist.Remove(worklist.First());
 
+                if (dbg) Console.WriteLine("Processing " + implName);
                 prover.LogComment("Processing " + implName);
+
                 prover.Push();
 
                 var hvc = new HoudiniVC(hi.implName2StratifiedInliningInfo[implName], impls, assignment);
@@ -159,7 +203,7 @@ namespace CoreLib
                     // Part 1: over-approximate
                     var proved = ProveCandidates(prover, hvc.constantToAssertedExpr, candidates.Difference(provedTrue.Union(provedFalse)));
                     provedTrue.UnionWith(proved);
-                    //Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
+                    if(dbg) Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
                     if (idepth == 0 || openCallSites.Count == 0) break;
 
@@ -171,7 +215,7 @@ namespace CoreLib
                     var remaining = candidates.Difference(provedTrue.Union(provedFalse));
                     proved = ProveCandidates(prover, hvc.constantToAssertedExpr, remaining);
                     provedFalse.UnionWith(remaining.Difference(proved));
-                    //Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
+                    if(dbg) Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
                     prover.Pop();
 
@@ -304,12 +348,12 @@ namespace CoreLib
                         if (!b)
                         {
                             failed.Add(k);
-                            //Console.WriteLine("Failed: {0}", k);
+                            if(dbg) Console.WriteLine("Failed: {0}", k);
                             removed++;
                         }
                     }
                     Debug.Assert(removed != 0);
-                    //Console.WriteLine("Query {0}: Invalid for {1}, {2} removed", HoudiniStats.ProverCount, implName, removed);
+                    //if(dbg) Console.WriteLine("Query {0}: Invalid, {1} removed", HoudiniStats.ProverCount, removed);
                 }
 
                 HoudiniStats.Stop("ProverTime");
@@ -324,7 +368,7 @@ namespace CoreLib
 
                 if (outcome == ProverInterface.Outcome.Valid)
                 {
-                    //Console.WriteLine("Query {0}: Valid for {1}", HoudiniStats.ProverCount, implName);
+                    //if(dbg) Console.WriteLine("Query {0}: Valid", HoudiniStats.ProverCount);
                     break;
                 }
             }
