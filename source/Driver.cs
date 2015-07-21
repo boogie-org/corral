@@ -104,6 +104,7 @@ namespace cba
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
+            ContractInfer.useHoudiniLite = config.runHoudiniLite;
             if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
                 config.printData = 1;

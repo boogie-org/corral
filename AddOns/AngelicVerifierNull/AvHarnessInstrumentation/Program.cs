@@ -19,8 +19,6 @@ namespace AvHarnessInstrumentation
         public static bool UseAliasAnalysisForAssertions = true;
         // Don't use alias analysis for deadcode
         public static bool UseAliasAnalysisForAngelicAssertions = true;
-        // Don't use context and flow sensitive alias analysis
-        public static bool UseCSFSAliasAnalysis = false;
         // Do Houdini pass to remove some assertions
         public static bool HoudiniPass = false;
         // Add unsound options for NULL
@@ -444,9 +442,6 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/noAA:1"))
                 Options.UseAliasAnalysisForAssertions = false;
 
-            if (args.Any(s => s == "/CSFSAA"))
-                Options.UseCSFSAliasAnalysis = true;
-
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;
 
@@ -469,7 +464,7 @@ namespace AvHarnessInstrumentation
                 AliasAnalysis.AliasAnalysis.demandDrivenAA = true;
 
             if (args.Any(s => s == "/no-GVN"))
-                cba.Util.GVN.doGVN = false;
+                GVN.doGVN = false;
 
             if (args.Any(s => s == "/dont-merge-full"))
                 AliasAnalysis.AliasAnalysis.mergeFull = false;
@@ -604,14 +599,16 @@ namespace AvHarnessInstrumentation
         public static PersistentProgram RunAliasAnalysis(PersistentProgram inp, bool pruneEP = true)
         {
             var newinp = inp;
-
-            Stats.resume("unroll");
+            
             if (Options.unrollDepth > 0)
             {
+                Stats.resume("unroll");
+
                 var unrp = new cba.LoopUnrollingPass(Options.unrollDepth);
                 newinp = unrp.run(newinp);
+
+                Stats.stop("unroll");
             }
-            Stats.stop("unroll");
 
             var program = newinp.getProgram();
 
@@ -624,19 +621,29 @@ namespace AvHarnessInstrumentation
                 program =
                     SSA.Compute(program, PhiFunctionEncoding.Verifiable, new HashSet<string> { "int" });
 
-                Stats.resume("inlining");
                 if (Options.inlineDepth > 0)
                 {
+                    Stats.resume("inlining");
+
+                    Stats.resume("read.write");
+                    program = BoogieUtil.ReResolve(program);
+                    Stats.stop("read.write");
+
                     var op = CommandLineOptions.Clo.InlineDepth;
                     CommandLineOptions.Clo.InlineDepth = Options.inlineDepth;
 
                     cba.InliningPass.InlineToDepth(program);
 
                     CommandLineOptions.Clo.InlineDepth = op;
+
+                    RemoveHavocs(program);
+
+                    Stats.stop("inlining");
                 }
 
-                RemoveHavocs(program);
-                Stats.stop("inlining");
+                Stats.resume("read.write");
+                program = BoogieUtil.ReResolve(program);
+                Stats.stop("read.write");
 
                 // Make sure that aliasing queries are on identifiers only
                 var af =
@@ -658,12 +665,6 @@ namespace AvHarnessInstrumentation
             }
 
             var origProgram = inp.getProgram();
-            Dictionary<string, bool> csfs_ret = null;
-            if (false /*Options.UseCSFSAliasAnalysis*/) // deprecated flag
-            {
-                csfs_ret = AliasAnalysis.AliasAnalysis.DoCSFSAliasAnalysis(program);
-                AliasAnalysis.CSFSAliasAnalysis.removeAsserts(origProgram, csfs_ret);
-            }
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
             if (pruneEP) PruneRedundantEntryPoints(origProgram);

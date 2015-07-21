@@ -61,10 +61,50 @@ namespace CoreLib
         public static readonly string CandidateFuncPrefix = "HoudiniLiteFunc$";
         public static readonly string CandidateFuncAssertedPrefix = "HoudiniLiteFuncAsserted$";
         static bool RobustAgainstEvaluate = false; // usually this is not needed
+        public static bool dbg = false;
 
         public HoudiniInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
             base(program, logFilePath, appendLogFile, PassiveImplInstrumentation)
         {
+        }
+
+        public static Program RewriteEnsuresToConstants(Program program)
+        {
+            var CandidateConstants = new Dictionary<string, Constant>();
+            program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Iter(c => CandidateConstants.Add(c.Name, c));
+
+
+            var impls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
+            foreach (var impl in impls)
+            {
+                var newens = new List<Ensures>();
+                foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free ))
+                {
+                    string constantName = null;
+                    Expr expr = null;
+
+                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                        ens.Condition, CandidateConstants.Keys, out constantName, out expr);
+
+                    if (!match)
+                        throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
+
+                    var constant = Expr.Ident(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "hl_rw_" + (InstrumentEnsuresCounter++),
+                        Microsoft.Boogie.Type.Bool), false));
+
+                    impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
+                        .Iter(blk => blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.Imp(expr, constant))));
+
+                    ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), constant);
+                    newens.Add(new Ensures(true, Expr.Imp(constant, expr)));
+                    program.AddTopLevelDeclaration(constant.Decl);
+                }
+                impl.Proc.Ensures.AddRange(newens);
+            }
+
+            return BoogieUtil.ReResolveInMem(program);
         }
 
         public static HashSet<string> RunHoudini(Program program, bool RobustAgainstEvaluate = false)
@@ -97,13 +137,38 @@ namespace CoreLib
             var iterimpls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
             iterimpls.Iter(impl => InstrumentEnsures(program, impl, CandidateFuncsAssumed[impl.Name], CandidateConstants));
 
-            // Rewrite functions that are asserted
+            //BoogieUtil.PrintProgram(program, "h2.bpl");
+
             var RewriteAssumedToAssertedAction = new Action<Implementation>(impl =>
             {
+                // Rewrite functions that are asserted
                 var rewrite = new RewriteFuncs(AssumeToAssert);
                 foreach (var blk in impl.Blocks)
                     foreach (var acmd in blk.Cmds.OfType<AssertCmd>())
                         acmd.Expr = rewrite.VisitExpr(acmd.Expr);
+
+                var funcs = new HashSet<Function>(CandidateFuncsAssumed.Values);
+                // Move call-site constant to the first argument of CandidateFuncs
+                foreach (var blk in impl.Blocks)
+                {
+                    Expr cv = null;
+                    // walk backwards
+                    for (int i = blk.Cmds.Count - 1; i >= 0; i--)
+                    {
+                        var acmd = blk.Cmds[i] as AssumeCmd;
+                        if (acmd == null) continue;
+
+                        if (QKeyValue.FindBoolAttribute(acmd.Attributes, StratifiedVCGenBase.callSiteVarAttr))
+                        {
+                            cv = acmd.Expr;
+                            continue;
+                        }
+
+                        InsertControlVar.Apply(acmd.Expr, funcs, cv);
+                    }
+                }
+
+                //impl.Emit(new TokenTextWriter(Console.Out), 0);
             });
 
             program.AddTopLevelDeclarations(CandidateFuncsAssumed.Values);
@@ -141,7 +206,9 @@ namespace CoreLib
                 var implName = worklist.First().Item2;
                 worklist.Remove(worklist.First());
 
+                if (dbg) Console.WriteLine("Processing " + implName);
                 prover.LogComment("Processing " + implName);
+
                 prover.Push();
 
                 var hvc = new HoudiniVC(hi.implName2StratifiedInliningInfo[implName], impls, assignment);
@@ -159,7 +226,7 @@ namespace CoreLib
                     // Part 1: over-approximate
                     var proved = ProveCandidates(prover, hvc.constantToAssertedExpr, candidates.Difference(provedTrue.Union(provedFalse)));
                     provedTrue.UnionWith(proved);
-                    //Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
+                    if(dbg) Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
                     if (idepth == 0 || openCallSites.Count == 0) break;
 
@@ -171,7 +238,7 @@ namespace CoreLib
                     var remaining = candidates.Difference(provedTrue.Union(provedFalse));
                     proved = ProveCandidates(prover, hvc.constantToAssertedExpr, remaining);
                     provedFalse.UnionWith(remaining.Difference(proved));
-                    //Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
+                    if(dbg) Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
                     prover.Pop();
 
@@ -291,6 +358,20 @@ namespace CoreLib
 
                 prover.Assert(toassert, false);
 
+                Dictionary<string, VCExprVar> recordingBool = null;
+                if (RobustAgainstEvaluate)
+                {
+                    recordingBool = new Dictionary<string, VCExprVar>();
+                    VCExpr torecord = VCExpressionGenerator.True;
+                    foreach (var k in remaining)
+                    {
+                        var b = prover.VCExprGen.Variable("recordingVar_" + k, Microsoft.Boogie.Type.Bool);
+                        recordingBool.Add(k, b);
+                        torecord = prover.VCExprGen.And(torecord, prover.VCExprGen.Eq(b, constantToAssertedExpr[k]));
+                    }
+                    prover.Assert(torecord, true);
+                }
+
                 prover.Check();
                 var outcome = prover.CheckOutcomeCore(reporter);
 
@@ -300,16 +381,18 @@ namespace CoreLib
                     var removed = 0;
                     foreach (var k in remaining)
                     {
-                        var b = (bool)prover.Evaluate(constantToAssertedExpr[k]);
+                        var b = recordingBool == null ? (bool)prover.Evaluate(constantToAssertedExpr[k])
+                            : (bool)prover.Evaluate(recordingBool[k]);
+
                         if (!b)
                         {
                             failed.Add(k);
-                            //Console.WriteLine("Failed: {0}", k);
+                            if(dbg) Console.WriteLine("Failed: {0}", k);
                             removed++;
                         }
                     }
                     Debug.Assert(removed != 0);
-                    //Console.WriteLine("Query {0}: Invalid for {1}, {2} removed", HoudiniStats.ProverCount, implName, removed);
+                    //if(dbg) Console.WriteLine("Query {0}: Invalid, {1} removed", HoudiniStats.ProverCount, removed);
                 }
 
                 HoudiniStats.Stop("ProverTime");
@@ -324,7 +407,7 @@ namespace CoreLib
 
                 if (outcome == ProverInterface.Outcome.Valid)
                 {
-                    //Console.WriteLine("Query {0}: Valid for {1}", HoudiniStats.ProverCount, implName);
+                    //if(dbg) Console.WriteLine("Query {0}: Valid", HoudiniStats.ProverCount);
                     break;
                 }
             }
@@ -364,8 +447,9 @@ namespace CoreLib
         static Function GetCandidateFunc(string prefix, string implname)
         {
             return new Function(Token.NoToken, prefix + implname,
-                new List<Variable> { BoogieAstFactory.MkFormal("a", Microsoft.Boogie.Type.Bool, true), BoogieAstFactory.MkFormal("b", Microsoft.Boogie.Type.Bool, true) },
-                BoogieAstFactory.MkFormal("c", Microsoft.Boogie.Type.Bool, false));
+                new List<Variable> { BoogieAstFactory.MkFormal("a", Microsoft.Boogie.Type.Bool, true), 
+                    BoogieAstFactory.MkFormal("b", Microsoft.Boogie.Type.Bool, true), BoogieAstFactory.MkFormal("c", Microsoft.Boogie.Type.Bool, true) },
+                BoogieAstFactory.MkFormal("d", Microsoft.Boogie.Type.Bool, false));
         }
 
         static string GetImplName(string candidateFunc)
@@ -386,39 +470,6 @@ namespace CoreLib
             if (impl.Proc.Requires.Any(r => !r.Free))
                 throw new Exception("HoudiniLite: Non-free requires not yet supported");
 
-            // quantified expr support
-            Predicate<Expr> hasQE = expr => VarsUsed.GetVariables(expr).Any(v => v is BoundVariable);
-
-            var subst = new Dictionary<Variable, Variable>();
-            for (int i = 0; i < impl.Proc.InParams.Count; i++)
-                subst.Add(impl.Proc.InParams[i], impl.InParams[i]);
-            for (int i = 0; i < impl.Proc.OutParams.Count; i++)
-                subst.Add(impl.Proc.OutParams[i], impl.OutParams[i]);
-
-            Func<Expr, Expr> changeVocab = expr => 
-                Substituter.Apply(new Substitution(v => subst.ContainsKey(v) ? Expr.Ident(subst[v]) : Expr.Ident(v)), expr);
-
-            foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free && (HoudiniInlining.RobustAgainstEvaluate || hasQE(e.Condition))))
-            {
-                string constantName = null;
-                Expr expr = null;
-
-                var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
-                    ens.Condition, CandidateConstants.Keys, out constantName, out expr);
-
-                if (!match)
-                    throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
-
-                var constant = Expr.Ident(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "hl_qe_" + (InstrumentEnsuresCounter++),
-                    Microsoft.Boogie.Type.Bool), false));                
-
-                impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
-                    .Iter(blk => blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.Eq(constant, changeVocab(expr)))));
-
-                ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), constant);
-                program.AddTopLevelDeclaration(constant.Decl);
-            }
-
             // non-free ensures
             var newens = new List<Ensures>();
             foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free))
@@ -434,10 +485,10 @@ namespace CoreLib
 
                 var constant = CandidateConstants[constantName];
 
-                // ensures f(constant, expr);
+                // ensures f(true, constant, expr);
                 newens.Add(new Ensures(false,
                     new NAryExpr(Token.NoToken, new FunctionCall(CandidateFunc),
-                        new List<Expr> { Expr.Ident(constant), expr })));
+                        new List<Expr> { Expr.True, Expr.Ident(constant), expr })));
             }
 
             impl.Proc.Ensures.RemoveAll(e => !e.Free);
@@ -476,9 +527,39 @@ namespace CoreLib
         }
     }
 
+    class InsertControlVar : StandardVisitor
+    {
+        HashSet<Function> insertControlVar;
+        Expr controlVar;
+
+        public InsertControlVar(HashSet<Function> insertControlVar, Expr controlVar)
+        {
+            this.insertControlVar = insertControlVar;
+            this.controlVar = controlVar;
+        }
+
+        public static void Apply(Expr expr, HashSet<Function> insertControlVar, Expr controlVar)
+        {
+            var iv = new InsertControlVar(insertControlVar, controlVar);
+            iv.VisitExpr(expr);
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var ret = base.VisitNAryExpr(node) as NAryExpr;
+            if (ret.Fun is FunctionCall && insertControlVar.Contains((ret.Fun as FunctionCall).Func))
+            {
+                Debug.Assert(ret.Args[0] is LiteralExpr && (ret.Args[0] as LiteralExpr).Val is bool &&
+                    (bool)(ret.Args[0] as LiteralExpr).Val == true);
+                ret.Args[0] = controlVar;
+            }
+            return ret;
+        }
+    }
+
     class HoudiniVC : StratifiedVC
     {
-        public Dictionary<string, Dictionary<string, VCExpr>> calleeToConstantToAssumedExpr;
+        List<Tuple<string, VCExpr>> constantToAssumedExpr;
         public Dictionary<string, VCExpr> constantToAssertedExpr;
 
         public HoudiniVC(StratifiedInliningInfo siInfo, HashSet<string> procCalls, HashSet<string> currentAssignment)
@@ -488,34 +569,26 @@ namespace CoreLib
             // Remove CandiateFunc
             var fsp = new FindSummaryPred(gen);
             vcexpr = fsp.Apply(vcexpr);
-            this.calleeToConstantToAssumedExpr = fsp.calleeToConstantToAssumedExpr;
+            this.constantToAssumedExpr = fsp.constantToAssumedExpr;
             this.constantToAssertedExpr = fsp.constantToAssertedExpr;
 
             // Assume current summaries of callees
-            foreach (var cs in CallSites)
+            foreach(var tup in constantToAssumedExpr)
             {
-                if (!calleeToConstantToAssumedExpr.ContainsKey(cs.callSite.calleeName))
-                    continue;
-
-                foreach (var tup in calleeToConstantToAssumedExpr[cs.callSite.calleeName])
-                {
-                    if (!currentAssignment.Contains(tup.Key)) continue;
-
-                    vcexpr = gen.And(vcexpr,
-                        gen.Implies(cs.callSiteExpr, tup.Value));
-                }
+                if (!currentAssignment.Contains(tup.Item1)) continue;
+                vcexpr = gen.And(vcexpr, tup.Item2);
             }
         }
 
         class FindSummaryPred : MutatingVCExprVisitor<bool>
         {
-            public Dictionary<string, Dictionary<string, VCExpr>> calleeToConstantToAssumedExpr;
+            public List<Tuple<string, VCExpr>> constantToAssumedExpr;
             public Dictionary<string, VCExpr> constantToAssertedExpr;
 
             public FindSummaryPred(VCExpressionGenerator gen)
                 : base(gen)
             {
-                calleeToConstantToAssumedExpr = new Dictionary<string, Dictionary<string, VCExpr>>();
+                constantToAssumedExpr = new List<Tuple<string, VCExpr>>();
                 constantToAssertedExpr = new Dictionary<string, VCExpr>();
             }
 
@@ -546,25 +619,17 @@ namespace CoreLib
 
                 if (calleeName.StartsWith(HoudiniInlining.CandidateFuncAssertedPrefix))
                 {
-                    var lt = retnary[0] as VCExprConstant;
+                    var lt = retnary[1] as VCExprConstant;
                     Debug.Assert(lt != null);
-                    constantToAssertedExpr.Add(lt.Name, retnary[1]);
+                    constantToAssertedExpr.Add(lt.Name, retnary[2]);
                     return VCExpressionGenerator.True;
                 }
 
                 if (calleeName.StartsWith(HoudiniInlining.CandidateFuncPrefix))
                 {
-                    var calleeProc = calleeName.Substring(HoudiniInlining.CandidateFuncPrefix.Length);
-                    var lt = retnary[0] as VCExprConstant;
+                    var lt = retnary[1] as VCExprConstant;
                     Debug.Assert(lt != null);
-                    if (!calleeToConstantToAssumedExpr.ContainsKey(calleeProc))
-                        calleeToConstantToAssumedExpr.Add(calleeProc, new Dictionary<string, VCExpr>());
-
-                    if (calleeToConstantToAssumedExpr[calleeProc].ContainsKey(lt.Name))
-                        calleeToConstantToAssumedExpr[calleeProc][lt.Name] = Gen.And(calleeToConstantToAssumedExpr[calleeProc][lt.Name], retnary[1]);
-                    else
-                        calleeToConstantToAssumedExpr[calleeProc].Add(lt.Name, retnary[1]);
-
+                    constantToAssumedExpr.Add(Tuple.Create(lt.Name, Gen.Implies(retnary[0], retnary[2])));
                     return VCExpressionGenerator.True;
                 }
 

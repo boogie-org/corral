@@ -99,6 +99,8 @@ namespace cba
 
         public int runHoudini { get; private set; }
         public string runAbsHoudini { get; private set; }
+        public bool runHoudiniLite { get; private set; }
+
         public bool summaryComputation { get; private set; }
         public bool printBoogieFlags { get; private set; }
 
@@ -286,6 +288,7 @@ namespace cba
 
             runHoudini = -2;
             runAbsHoudini = null;
+            runHoudiniLite = false;
             summaryComputation = false;
 
             printBoogieFlags = false;
@@ -554,10 +557,14 @@ namespace cba
                 runHoudini = Int32.Parse(split[1]);
                 summaryComputation = false;
             }
-            else if (flag.StartsWith("/runHoudini"))
+            else if (flag == "/runHoudini")
             {
                 runHoudini = -1;
                 summaryComputation = false;
+            }
+            else if (flag == "/useHoudiniLite")
+            {
+                runHoudiniLite = true;
             }
             else if (flag.StartsWith("/runAbsHoudini:"))
             {
