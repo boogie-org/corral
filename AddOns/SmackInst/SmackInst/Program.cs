@@ -14,11 +14,14 @@ namespace SmackInst
     {
         static void Main(string[] args)
         {
-            if (args.Length != 2)
+            if (args.Length < 2)
             {
-                Console.WriteLine("usage: SmackInst.exe infile.bpl outfile.bpl");
+                Console.WriteLine("usage: SmackInst.exe infile.bpl outfile.bpl [options]");
                 return;
             }
+
+            if (args.Any(a => a == "/break"))
+                System.Diagnostics.Debugger.Launch();
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -29,18 +32,23 @@ namespace SmackInst
             var program = BoogieUtil.ReadAndResolve(args[0]);
 
             // Process it
-            Process(program);
+            program = Process(program);
 
             // write the output
             BoogieUtil.PrintProgram(program, args[1]);
         }
 
         
-        static void Process(Program program)
+        static Program Process(Program program)
         {
+            // Get rid of Synonyms
+            RemoveTypeSynonyms.Remove(program);
+            //BoogieUtil.PrintProgram(program, "tt.bpl");
+            program = BoogieUtil.ReResolve(program);
+
             // add "allocator" to malloc
             var malloc = program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => p.Name == "malloc")
+                .Where(p => p.Name == "$malloc")
                 .FirstOrDefault();
             if (malloc != null)
             {
@@ -62,8 +70,46 @@ namespace SmackInst
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
+
+            return program;
+        }
+    }
+
+    // Remove type synonyms of int
+    class RemoveTypeSynonyms : StandardVisitor
+    {
+        HashSet<string> syns;
+
+        private RemoveTypeSynonyms(HashSet<string> syns)
+        {
+            this.syns = syns;
         }
 
+        public static void Remove(Program program)
+        {
+            var syns = FindSyn(program);
+            var vs = new RemoveTypeSynonyms(syns);
+            vs.VisitProgram(program);
+        }
+
+        static HashSet<string> FindSyn(Program program)
+        {
+            var syn = new HashSet<string>();
+            foreach (var ty in program.TopLevelDeclarations.OfType<TypeSynonymDecl>())
+            {
+                if (ty.Body.IsInt)
+                    syn.Add(ty.Name);
+            }
+            return syn;
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            if (syns.Contains(node.TypedIdent.Type.ToString()))
+                node.TypedIdent.Type = btype.Int;
+
+            return base.VisitVariable(node);
+        }
 
     }
 
@@ -71,21 +117,50 @@ namespace SmackInst
     class ConvertToNull : StandardVisitor
     {
         Expr nil;
+        HashSet<string> Zeros;
 
-        public ConvertToNull(Constant nil)
+        public ConvertToNull(Constant nil, HashSet<string> Zeros)
         {
             this.nil = Expr.Ident(nil);
+            this.Zeros = Zeros;
         }
 
         public static void Convert(Program program, Constant nil)
         {
-            var cn = new ConvertToNull(nil);
+            var cn = new ConvertToNull(nil, new HashSet<string>(FindZeros(program).Select(c => c.Name)));
             cn.VisitProgram(program);
+        }
+
+        static HashSet<Constant> FindZeros(Program program)
+        {
+            var ret = new HashSet<Constant>();
+            var constants = program.TopLevelDeclarations.OfType<Constant>().ToList();
+            foreach (var c in constants)
+            {
+                if (!c.Name.StartsWith("$0")) continue;
+                var e = Expr.Eq(Expr.Ident(c), Expr.Literal(0));
+                if (program.TopLevelDeclarations.OfType<Axiom>()
+                    .Any(a => a.Expr.ToString() == e.ToString()))
+                    ret.Add(c);
+            }
+            return ret;
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            if (node.Decl is Constant && Zeros.Contains((node.Decl as Constant).Name))
+            {
+                return nil;
+            }
+
+            return base.VisitIdentifierExpr(node);
         }
 
         public override Expr VisitLiteralExpr(LiteralExpr node)
         {
             if (node.Val is int && (int)node.Val == 0)
+                return nil;
+            if (node.Val is Microsoft.Basetypes.BigNum && ((Microsoft.Basetypes.BigNum)(node.Val)).IsZero)
                 return nil;
             return base.VisitLiteralExpr(node);
         }
