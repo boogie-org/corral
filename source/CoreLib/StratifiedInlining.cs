@@ -165,6 +165,8 @@ namespace CoreLib
     /* stratified inlining technique */
     public class StratifiedInlining : StratifiedVCGenBase
     {
+        public static readonly string ForceInlineAttr = "ForceInline";
+
         public Stats stats;
 
         /* call-site to VC map -- used for trace construction */
@@ -197,6 +199,9 @@ namespace CoreLib
         public Dictionary<string, int> extraRecBound;
 
         private DI di;
+
+        /* Forced inline procs */
+        HashSet<string> forceInlineProcs;
 
         public HashSet<string> GetCallTree()
         {
@@ -263,6 +268,8 @@ namespace CoreLib
             attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
+
+            forceInlineProcs = new HashSet<string>();
 
             controlBoolean = new Dictionary<StratifiedVC, VCExpr>();
             di = new DI(this, true);
@@ -1178,6 +1185,8 @@ namespace CoreLib
         {
             Outcome outcome = Outcome.Inconclusive;
 
+            ForceInline(openCallSites, recBound);
+
             var boundHit = false;
             while (true)
             {
@@ -1255,8 +1264,36 @@ namespace CoreLib
                         if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
                     }
                 }
+
+                ForceInline(openCallSites, recBound);
             }
             return outcome;
+        }
+
+        void ForceInline(HashSet<StratifiedCallSite> openCallSites, int recBound)
+        {
+            do
+            {
+                // force inline
+                var toExpand = new HashSet<StratifiedCallSite>(openCallSites.Where(cs => forceInlineProcs.Contains(cs.callSite.calleeName)));
+                // filter away ones that have reached the bound
+                toExpand.RemoveWhere(cs => HasExceededRecursionDepth(cs, recBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound));
+                if (toExpand.Count == 0) break;
+
+                foreach (var scs in toExpand)
+                {
+                    openCallSites.Remove(scs);
+                    var svc = Expand(scs);
+                    if (svc != null)
+                    {
+                        openCallSites.UnionWith(svc.CallSites);
+                        if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
+                    }
+                }
+
+            } while (true);
         }
 
         // Assert that we must reach this VC; returns the list of call sites asserted
@@ -1478,6 +1515,11 @@ namespace CoreLib
                 Console.WriteLine("Warning: newSI doesn't support non-uniform procedure inlining");
             }
 
+            // Find all procedures that are "forced inline"
+            forceInlineProcs.UnionWith(program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(p => BoogieUtil.checkAttrExists(ForceInlineAttr, p.Attributes) || BoogieUtil.checkAttrExists(ForceInlineAttr, p.Proc.Attributes))
+                .Select(p => p.Name));
+
             // assert true to flush all one-time axioms, decls, etc
             prover.Assert(VCExpressionGenerator.True, true);
 
@@ -1504,7 +1546,7 @@ namespace CoreLib
             di.RegisterMain(svc);
             HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
             prover.Assert(svc.vcexpr, true);
-
+            
             Outcome outcome;
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 

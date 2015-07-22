@@ -637,19 +637,12 @@ namespace cba
 
             #endregion
 
-            // inline procedures that have that annotation
-            if (config.noTrace || config.genCTrace)
+            // force inline
+            foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
             {
-                // TODO: We can only do the inlining if we don't have to
-                // proceduce a trace in the Boogie file. This can be fixed, but
-                // requires some refactoring
-                InlineProcedures(init);
-            }
-            else
-            {
-                // remove the inline attributes from procedures and their impls
-                foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
+                if (BoogieUtil.checkAttrExists("inline", impl.Attributes) || BoogieUtil.checkAttrExists("inline", impl.Proc.Attributes))
                 {
+                    impl.AddAttribute(CoreLib.StratifiedInlining.ForceInlineAttr);
                     impl.Attributes = BoogieUtil.removeAttr("inline", impl.Attributes);
                     impl.Proc.Attributes = BoogieUtil.removeAttr("inline", impl.Proc.Attributes);
                 }
