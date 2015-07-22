@@ -28,5 +28,5 @@ smack.bc: $(INSTALL_SHARE)/smack/lib/smack.c $(INC)/smack.h
 	$(SMACK) $< -o $@
 
 clean:
-	rm -f *.bc *.bpl
+	rm -f *.bc *.bpl *.d
 

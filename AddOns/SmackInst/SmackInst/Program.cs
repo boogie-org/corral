@@ -263,7 +263,8 @@ namespace SmackInst
 
             var reads = new GatherMemAccesses();
 
-            cmd.Rhss.Iter(e => reads.VisitExpr(e));
+			cmd.Lhss.Iter(e => reads.VisitExpr(e.AsExpr));
+			cmd.Rhss.Iter(e => reads.VisitExpr(e));
             foreach (var tup in reads.accesses)
             {
                 ret.Add(MkAssert(tup.Item2));
