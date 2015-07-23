@@ -9,7 +9,6 @@ struct str {
 
 struct str* foo(int b, int* a) {
 	if (b == 0) {
-		assert (a != 0);
 		return NULL;
 	}
 	struct str* s = malloc (sizeof(struct str));
@@ -19,10 +18,7 @@ struct str* foo(int b, int* a) {
 }
 
 void func(int* w) {
-	assert (w != 0);
 	struct str * s = foo(*w, w);
-	assert (s != 0);
-	assert ((*s).y != 0);
 }
 
 int main() {

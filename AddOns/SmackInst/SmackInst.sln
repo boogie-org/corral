@@ -5,6 +5,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmackInst", "SmackInst\Smac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorralUtil", "..\..\source\Util\CorralUtil.csproj", "{186DE4BD-014D-47C7-A914-831EA98116A9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvUtil", "..\AngelicVerifierNull\AvUtil\AvUtil.csproj", "{04D1EBFE-F934-44D2-86C6-407BC99AE00A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,14 @@ Global
 		{186DE4BD-014D-47C7-A914-831EA98116A9}.Internal|Any CPU.Build.0 = Internal|Any CPU
 		{186DE4BD-014D-47C7-A914-831EA98116A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{186DE4BD-014D-47C7-A914-831EA98116A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

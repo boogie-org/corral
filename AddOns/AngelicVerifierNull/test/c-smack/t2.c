@@ -11,5 +11,5 @@ void func(int* x) {
 	int* z = incr(x);
 	int* a = A[*z];
 	a = malloc(sizeof(int));
-	assert (a != 0);
+	*a = 1;
 }

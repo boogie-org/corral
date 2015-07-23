@@ -1,9 +1,8 @@
 // BEGIN SMACK-GENERATED CODE
 
-// Memory region declarations: 3
+// Memory region declarations: 2
 var $M.0: [ref] int;
 var $M.1: [ref] int;
-var $M.2: [ref] int;
 
 // Type declarations
 type i1 = int;
@@ -17,7 +16,7 @@ type ref = int;
 type size = int;
 
 axiom $0.ref == 0;
-axiom $GLOBALS_BOTTOM == -152;
+axiom $GLOBALS_BOTTOM == -64;
 axiom $EXTERNS_BOTTOM == -32768;
 axiom $MALLOC_TOP == 2136997887;
 axiom $1.ref == 1;
@@ -38,39 +37,27 @@ function {:inline}$i2p.i32(p: i32) returns (ref) {$zext.i32.i64(p)}
 function {:inline}$p2i.i64(p: ref) returns (i64) {p}
 function {:inline}$i2p.i64(p: i64) returns (ref) {p}
 
-const {:count 10} A: ref;
 const __SMACK_code: ref;
 const __SMACK_decls: ref;
 const __SMACK_dummy: ref;
 const __SMACK_top_decl: ref;
-const func: ref;
-const incr: ref;
+const foo: ref;
 const llvm.dbg.declare: ref;
 const llvm.dbg.value: ref;
 const malloc: ref;
 procedure $init_funcs()
-  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1, $M.2;
+  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1;
 {
   return;
 }
 procedure $static_init()
-  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1, $M.2;
+  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1;
 {
   $CurrAddr := 1024;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(0, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(1, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(2, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(3, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(4, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(5, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(6, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(7, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(8, 8)))] := 0;
-  $M.1[$add.ref(A, $zext.i32.ref($mul.i32(9, 8)))] := 0;
   return;
 }
 procedure __SMACK_dummy(v: i32)
-  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1, $M.2;
+  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1;
 {
 $bb0:
   call {:cexpr "v"} boogie_si_record_i32(v);
@@ -80,82 +67,34 @@ $bb0:
   $exn := false;
   return;
 }
-procedure func(x: ref)
-  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1, $M.2;
+procedure foo(a: ref)
+  returns ($r: ref)
+  modifies $Alloc, $CurrAddr, $exn, $exnv, $M.0, $M.1;
 {
-  var $p0: i1;
-  var $p1: i32;
-  var $p10: ref;
-  var $p11: i1;
-  var $p12: i32;
-  var $p13: i1;
-  var $p14: i32;
-  var $p2: i1;
-  var $p3: i32;
-  var $p4: ref;
-  var $p5: i32;
-  var $p6: i64;
-  var $p7: ref;
-  var $p8: ref;
-  var $p9: ref;
+  var $p0: ref;
+  var $p1: ref;
 $bb0:
-  call {:cexpr "x"} boogie_si_record_ref(x);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  $p0 := $ne.i64(x, 0);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  $p1 := $zext.i1.i32($p0);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  call __SMACK_dummy($p1);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  $p2 := $ne.i64(x, 0);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  $p3 := $zext.i1.i32($p2);
-  assume {:sourceloc "t2.c", 10, 2} true;
-  assert $p3 != $0.i32;
-  assume {:sourceloc "t2.c", 11, 11} true;
-  call $p4 := incr(x);
-  assume $isExternal($p4);
-  call {:cexpr "z"} boogie_si_record_ref($p4);
-  assume {:sourceloc "t2.c", 12, 2} true;
-  $p5 := $M.0[$p4];
-  assume {:sourceloc "t2.c", 12, 2} true;
-  $p6 := $sext.i32.i64($p5);
-  assume {:sourceloc "t2.c", 12, 2} true;
-  $p7 := $add.ref($add.ref(A, $zext.i32.ref($mul.i32(0, 80))), $mul.ref($p6, $zext.i32.ref(8)));
-  assume {:sourceloc "t2.c", 12, 2} true;
-  $p8 := $M.1[$p7];
-  call {:cexpr "a"} boogie_si_record_ref($p8);
-  assume {:sourceloc "t2.c", 13, 6} true;
-  call $p9 := $malloc(4);
-  assume {:sourceloc "t2.c", 13, 6} true;
-  $p10 := $p9;
-  call {:cexpr "a"} boogie_si_record_ref($p10);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  $p11 := $ne.i64($p10, 0);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  $p12 := $zext.i1.i32($p11);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  call __SMACK_dummy($p12);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  $p13 := $ne.i64($p10, 0);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  $p14 := $zext.i1.i32($p13);
-  assume {:sourceloc "t2.c", 14, 2} true;
-  assert $p14 != $0.i32;
-  assume {:sourceloc "t2.c", 15, 1} true;
+  call {:cexpr "a"} boogie_si_record_ref(a);
+  assume {:sourceloc "t5.c", 5, 6} true;
+  call $p0 := $malloc(4);
+  assume {:sourceloc "t5.c", 5, 6} true;
+  $p1 := $p0;
+  call {:cexpr "a"} boogie_si_record_ref($p1);
+  assume {:sourceloc "t5.c", 6, 2} true;
+  $M.1[$p1] := 1;
+  assume {:sourceloc "t5.c", 7, 2} true;
+  $r := $p1;
   $exn := false;
   return;
 }
-axiom (A == -80);
-axiom (func == -88);
-axiom (llvm.dbg.declare == -96);
-axiom (__SMACK_code == -104);
-axiom (incr == -112);
-axiom (malloc == -120);
-axiom (__SMACK_dummy == -128);
-axiom (__SMACK_decls == -136);
-axiom (__SMACK_top_decl == -144);
-axiom (llvm.dbg.value == -152);
+axiom (foo == -8);
+axiom (llvm.dbg.declare == -16);
+axiom (malloc == -24);
+axiom (__SMACK_dummy == -32);
+axiom (__SMACK_code == -40);
+axiom (__SMACK_decls == -48);
+axiom (__SMACK_top_decl == -56);
+axiom (llvm.dbg.value == -64);
 axiom $0.i1 == 0;
 axiom $0.i32 == 0;
 axiom $1.i1 == 1;
@@ -475,7 +414,6 @@ ensures $Alloc[p];
 ensures (forall q: ref :: {$Alloc[q]} q != p ==> $Alloc[q] == old($Alloc[q]));
 ensures $sge.ref(n, $0.ref) == $1.i1 ==> (forall q: ref :: {$base(q)} $sle.ref(p, q) == $1.i1 && $slt.ref(q, $add.ref(p, n)) == $1.i1 ==> $base(q) == p);
 procedure __SMACK_code.ref(p0:ref);
-procedure __SMACK_code.ref.i32(p0:ref, p1:i32);
 procedure __SMACK_top_decl.ref(p0:ref);
 procedure boogie_si_record_bool(b: bool);
 procedure boogie_si_record_float(f: float);
@@ -486,7 +424,6 @@ procedure boogie_si_record_i64(i: i64);
 procedure boogie_si_record_i8(i: i8);
 procedure boogie_si_record_mop(m: $mop);
 procedure boogie_si_record_ref(i: ref);
-procedure incr(p0:ref) returns (r: ref);
 procedure llvm.dbg.value(p0:ref, p1:i64, p2:ref);
 procedure malloc(p0:i64) returns (r: ref);
 type $mop;

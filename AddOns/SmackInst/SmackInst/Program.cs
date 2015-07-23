@@ -12,6 +12,11 @@ namespace SmackInst
 {
     class Driver
     {
+        public static readonly string MallocName = "$malloc";
+        public static readonly string allocVar = "$CurrAddr";
+
+        public static bool initMem = false;
+
         static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -22,6 +27,10 @@ namespace SmackInst
 
             if (args.Any(a => a == "/break"))
                 System.Diagnostics.Debugger.Launch();
+
+            if (args.Any(a => a == "/initMem"))
+                initMem = true;
+
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -48,7 +57,7 @@ namespace SmackInst
 
             // add "allocator" to malloc
             var malloc = program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => p.Name == "$malloc")
+                .Where(p => p.Name == MallocName)
                 .FirstOrDefault();
             if (malloc != null)
             {
@@ -62,16 +71,89 @@ namespace SmackInst
             // axiom NULL == 0;
             var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
 
-            program.AddTopLevelDeclaration(nil);
-            program.AddTopLevelDeclaration(ax);
-
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
+
+            program.AddTopLevelDeclaration(nil);
+            program.AddTopLevelDeclaration(ax);
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
 
+            // Put {:scalar} {:AllocatorVar}  on $CurrAddr
+            var alloc = program.TopLevelDeclarations.OfType<GlobalVariable>().Where(g => g.Name == allocVar)
+                .FirstOrDefault();
+            if (alloc != null)
+            {
+                alloc.AddAttribute("scalar");
+                alloc.AddAttribute(AvUtil.AvnAnnotations.AllocatorVarAttr);
+            }
+            else
+            {
+                Console.WriteLine("Warning: Global variable $CurrAddr not found");
+            }
+
+            if (initMem)
+                InitMemory(program);
+
             return program;
+        }
+
+        static void InitMemory(Program program)
+        {
+            // find malloc
+            var malloc = program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => p.Name == MallocName)
+                .FirstOrDefault();
+            if (malloc == null) return;
+            
+            // find curraddr
+            var alloc = program.TopLevelDeclarations.OfType<GlobalVariable>().Where(g => g.Name == allocVar)
+                .FirstOrDefault();
+            if (alloc == null) return;
+
+            // create alloc_init
+            var allocinit = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                alloc.Name + "_init", alloc.TypedIdent.Type));
+
+            // malloc ensures ret > alloc_init
+            malloc.Ensures.Add(new Ensures(false, Expr.Gt(Expr.Ident(malloc.OutParams[0]), Expr.Ident(allocinit))));
+
+            // forall x : int :: { M[x] } M[x] >= 0 && M[x] < alloc_init
+            var initM = new Func<Variable, Expr>(M =>
+                { 
+                    var x = new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "x", btype.Int));
+                    var mx = BoogieAstFactory.MkMapAccessExpr(M, Expr.Ident(x));
+
+                    return new ForallExpr(Token.NoToken, new List<TypeVariable>(),
+                        new List<Variable> { x }, null, new Trigger(Token.NoToken, true, new List<Expr> { mx }),
+                        Expr.And(Expr.Ge(mx, Expr.Literal(0)), Expr.Lt(mx, Expr.Ident(allocinit))));
+                });
+
+            var cmds = new List<Cmd>(
+                program.TopLevelDeclarations.OfType<GlobalVariable>()
+                .Where(g => g.Name.StartsWith("$M"))
+                .Where(g => g.TypedIdent.Type.IsMap && (g.TypedIdent.Type as MapType).Result.IsInt)
+                .Select(g => initM(g))
+                .Select(e => new AssumeCmd(Token.NoToken, e)));
+
+            // alloc_init > 0 && alloc > alloc_init
+            cmds.Insert(0, new AssumeCmd(Token.NoToken,
+                Expr.And(Expr.Gt(Expr.Ident(allocinit), Expr.Literal(0)), Expr.Gt(Expr.Ident(alloc), Expr.Ident(allocinit)))));
+
+            var blk = new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken));
+                    
+            // create init proc
+            var initproc = new Procedure(Token.NoToken, "SmackExtraInit", new List<TypeVariable>(), new List<Variable>(),
+                new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+            initproc.AddAttribute(AvUtil.AvnAnnotations.InitialializationProcAttr);
+
+            var initimpl = new Implementation(Token.NoToken, initproc.Name, new List<TypeVariable>(), new List<Variable>(),
+                new List<Variable>(), new List<Variable>(), new List<Block>{ blk });
+
+            program.AddTopLevelDeclaration(initproc);
+            program.AddTopLevelDeclaration(initimpl);
+            program.AddTopLevelDeclaration(allocinit);
         }
     }
 
@@ -263,24 +345,9 @@ namespace SmackInst
 
             var reads = new GatherMemAccesses();
 
-            cmd.Rhss.Iter(e => reads.VisitExpr(e));
+			cmd.Lhss.Iter(e => reads.VisitExpr(e.AsExpr));
+			cmd.Rhss.Iter(e => reads.VisitExpr(e));
             foreach (var tup in reads.accesses)
-            {
-                ret.Add(MkAssert(tup.Item2));
-            }
-
-            var gm = new GatherMemAccesses();
-            foreach (var lhs in cmd.Lhss)
-            {
-                if (lhs is MapAssignLhs)
-                {
-                    var ma = lhs as MapAssignLhs;
-                    ma.Indexes.Iter(e => gm.VisitExpr(e));
-                }
-
-            }
-
-            foreach (var tup in gm.accesses)
             {
                 ret.Add(MkAssert(tup.Item2));
             }

@@ -23,6 +23,7 @@ namespace AvUtil
         public static readonly string ReachableStatesAttr = "ReachableStates";
         public static readonly string RelaxConstraintAttr = "SoftConstraint";
         public static readonly string AngelicUnknownCall = "AngelicUnknown";
+        public static readonly string AllocatorVarAttr = "AllocatorVar";
         public static int RelaxConstraintsStackDepthBound = 6;
     }
 

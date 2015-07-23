@@ -164,7 +164,7 @@ namespace AvHarnessInstrumentation
 
                 // initialize globals
                 prog.GlobalVariables
-                    .Where(g => g.Name != "alloc")
+                    .Where(g => g.Name != "alloc" && !BoogieUtil.checkAttrExists(AvnAnnotations.AllocatorVarAttr, g.Attributes))
                     .Iter(g => g.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "scalar", "pointer" }, g.Attributes));
 
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
