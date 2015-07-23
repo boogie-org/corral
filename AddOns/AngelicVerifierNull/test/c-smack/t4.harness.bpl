@@ -2,6 +2,8 @@ var $M.0: [ref]int;
 
 var $M.1: [ref]int;
 
+var $M.2: [ref]int;
+
 type i1 = int;
 
 type i2 = int;
@@ -22,7 +24,7 @@ type size = int;
 
 axiom NULL == NULL;
 
-axiom $GLOBALS_BOTTOM == -64;
+axiom $GLOBALS_BOTTOM == -80;
 
 axiom $EXTERNS_BOTTOM == -32768;
 
@@ -97,11 +99,15 @@ const __SMACK_top_decl: int;
 
 const foo: int;
 
+const func: int;
+
 const llvm.dbg.declare: int;
 
 const llvm.dbg.value: int;
 
 const main: int;
+
+const malloc: int;
 
 procedure $init_funcs();
 
@@ -131,21 +137,83 @@ implementation $static_init()
 
 
 
-procedure foo(a: int) returns ($r: int);
-  modifies $M.1, $exn;
+procedure foo(b: int, a: int) returns ($r: int);
+  modifies $CurrAddr, $Alloc, $M.1, $exn;
 
 
 
-implementation foo(a: int) returns ($r: int)
+implementation foo(b: int, a: int) returns ($r: int)
 {
+  var $p0: int;
+  var $p1: int;
+  var $p2: int;
+  var $p3: int;
+  var $p4: int;
+  var $p5: int;
 
   $bb0:
+    call {:cexpr "b"} boogie_si_record_i32(b);
     call {:cexpr "a"} boogie_si_record_ref(a);
-    assume {:sourceloc "t5.c", 5, 2} true;
-    assert !(a == NULL);
-    $M.1[a] := 1;
-    assume {:sourceloc "t5.c", 6, 2} true;
-    $r := a;
+    assume {:sourceloc "t4.c", 11, 6} true;
+    $p0 := $eq.i32(b, NULL);
+    assume {:sourceloc "t4.c", 11, 6} true;
+    goto $bb1, $bb2;
+
+  $bb2:
+    assume !($p0 == 1);
+    assume {:sourceloc "t4.c", 14, 18} true;
+    call $p2 := $malloc(16);
+    assume {:sourceloc "t4.c", 14, 18} true;
+    $p3 := $p2;
+    call {:cexpr "s"} boogie_si_record_ref($p3);
+    assume {:sourceloc "t4.c", 15, 2} true;
+    $p4 := $add.ref($add.ref($p3, $zext.i32.ref($mul.i32(NULL, 16))), $zext.i32.ref($mul.i32(NULL, 1)));
+    assume {:sourceloc "t4.c", 15, 2} true;
+    assert !($p4 == NULL);
+    $M.1[$p4] := b;
+    assume {:sourceloc "t4.c", 16, 2} true;
+    $p5 := $add.ref($add.ref($p3, $zext.i32.ref($mul.i32(NULL, 16))), $zext.i32.ref($mul.i32(8, 1)));
+    assume {:sourceloc "t4.c", 16, 2} true;
+    assert !($p5 == NULL);
+    $M.1[$p5] := a;
+    assume {:sourceloc "t4.c", 17, 2} true;
+    $p1 := $p3;
+    goto $bb3;
+
+  $bb3:
+    assume {:sourceloc "t4.c", 18, 1} true;
+    $r := $p1;
+    $exn := false;
+    return;
+
+  $bb1:
+    assume $p0 == 1;
+    assume {:sourceloc "t4.c", 12, 3} true;
+    $p1 := NULL;
+    goto $bb3;
+}
+
+
+
+procedure func(w: int);
+  modifies $CurrAddr, $Alloc, $M.1, $exn;
+
+
+
+implementation func(w: int)
+{
+  var $p0: int;
+  var $p1: int;
+
+  $bb0:
+    call {:cexpr "w"} boogie_si_record_ref(w);
+    assume {:sourceloc "t4.c", 21, 19} true;
+    assert !(w == NULL);
+    $p0 := $M.2[w];
+    assume {:sourceloc "t4.c", 21, 19} true;
+    call $p1 := foo($p0, w);
+    call {:cexpr "s"} boogie_si_record_ref($p1);
+    assume {:sourceloc "t4.c", 22, 1} true;
     $exn := false;
     return;
 }
@@ -153,21 +221,44 @@ implementation foo(a: int) returns ($r: int)
 
 
 procedure main() returns ($r: int);
-  modifies $CurrAddr, $M.1, $exn;
+  modifies $CurrAddr, $Alloc, $M.2, $M.1, $exn;
 
 
 
 implementation main() returns ($r: int)
 {
   var $p0: int;
+  var $p1: int;
+  var $p2: int;
+  var $p3: int;
 
   $bb0:
     call $static_init();
     call $init_funcs();
-    call {:cexpr "x"} boogie_si_record_ref(NULL);
-    assume {:sourceloc "t5.c", 11, 2} true;
-    call $p0 := foo(NULL);
-    assume {:sourceloc "t5.c", 12, 2} true;
+    call {:cexpr "m"} boogie_si_record_ref(NULL);
+    assume {:sourceloc "t4.c", 27, 6} true;
+    call $p0 := $malloc(4);
+    assume {:sourceloc "t4.c", 27, 6} true;
+    $p1 := $p0;
+    call {:cexpr "n"} boogie_si_record_ref($p1);
+    assume {:sourceloc "t4.c", 28, 6} true;
+    call $p2 := $malloc(4);
+    assume {:sourceloc "t4.c", 28, 6} true;
+    $p3 := $p2;
+    call {:cexpr "p"} boogie_si_record_ref($p3);
+    assume {:sourceloc "t4.c", 29, 2} true;
+    assert !($p1 == NULL);
+    $M.2[$p1] := NULL;
+    assume {:sourceloc "t4.c", 29, 10} true;
+    assert !($p3 == NULL);
+    $M.2[$p3] := 1;
+    assume {:sourceloc "t4.c", 30, 2} true;
+    call func(NULL);
+    assume {:sourceloc "t4.c", 31, 2} true;
+    call func($p1);
+    assume {:sourceloc "t4.c", 32, 2} true;
+    call func($p3);
+    assume {:sourceloc "t4.c", 33, 2} true;
     $r := NULL;
     $exn := false;
     return;
@@ -179,17 +270,21 @@ axiom foo == -8;
 
 axiom llvm.dbg.declare == -16;
 
-axiom main == -24;
+axiom malloc == -24;
 
-axiom __SMACK_dummy == -32;
+axiom func == -32;
 
-axiom __SMACK_code == -40;
+axiom main == -40;
 
-axiom __SMACK_decls == -48;
+axiom __SMACK_dummy == -48;
 
-axiom __SMACK_top_decl == -56;
+axiom __SMACK_code == -56;
 
-axiom llvm.dbg.value == -64;
+axiom __SMACK_decls == -64;
+
+axiom __SMACK_top_decl == -72;
+
+axiom llvm.dbg.value == -80;
 
 axiom NULL == NULL;
 
@@ -1313,37 +1408,49 @@ const __block_call___SMACK_dummy: bool;
 
 const __block_call_foo: bool;
 
+const __block_call_func: bool;
+
 const __block_call_main: bool;
 
 procedure {:entrypoint} CorralMain();
-  modifies $CurrAddr, $exnv, $exn, $M.1;
+  modifies $CurrAddr, $exnv, $exn, $Alloc, $M.1, $M.2;
 
 
 
 implementation CorralMain()
 {
   var v___SMACK_dummy: int;
+  var b_foo: int;
   var a_foo: int;
   var $r_foo: int;
+  var w_func: int;
   var $r_main: int;
 
   CorralMainStart:
     assume true;
     call {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
     call {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
-    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4;
+    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4, L_BAF_5;
 
-  L_BAF_4:
+  L_BAF_5:
     assume __block_call_main;
     assume MustReach(true);
     call $r_main := main();
     return;
 
+  L_BAF_4:
+    assume __block_call_func;
+    call {:ConcretizeConstantName "w_func"} w_func := unknown_int();
+    assume MustReach(true);
+    call func(w_func);
+    return;
+
   L_BAF_3:
     assume __block_call_foo;
+    call {:ConcretizeConstantName "b_foo"} b_foo := unknown_int();
     call {:ConcretizeConstantName "a_foo"} a_foo := unknown_int();
     assume MustReach(true);
-    call $r_foo := foo(a_foo);
+    call $r_foo := foo(b_foo, a_foo);
     return;
 
   L_BAF_2:

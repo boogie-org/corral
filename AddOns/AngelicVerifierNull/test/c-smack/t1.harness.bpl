@@ -2,6 +2,8 @@ var $M.0: [ref]int;
 
 var $M.1: [ref]int;
 
+var $M.2: [ref]int;
+
 type i1 = int;
 
 type i2 = int;
@@ -22,7 +24,7 @@ type size = int;
 
 axiom NULL == NULL;
 
-axiom $GLOBALS_BOTTOM == -64;
+axiom $GLOBALS_BOTTOM == -144;
 
 axiom $EXTERNS_BOTTOM == -32768;
 
@@ -87,6 +89,8 @@ function {:inline} $i2p.i64(p: int) : int
   p
 }
 
+const {:count 10} A: int;
+
 const __SMACK_code: int;
 
 const __SMACK_decls: int;
@@ -95,29 +99,16 @@ const __SMACK_dummy: int;
 
 const __SMACK_top_decl: int;
 
-const foo: int;
+const func: int;
+
+const incr: int;
 
 const llvm.dbg.declare: int;
 
 const llvm.dbg.value: int;
 
-const main: int;
-
-procedure $init_funcs();
-
-
-
-implementation $init_funcs()
-{
-
-  anon0:
-    return;
-}
-
-
-
 procedure $static_init();
-  modifies $CurrAddr;
+  modifies $CurrAddr, $M.0;
 
 
 
@@ -126,70 +117,88 @@ implementation $static_init()
 
   anon0:
     $CurrAddr := 1024;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(NULL, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(NULL, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(1, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(1, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(2, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(2, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(3, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(3, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(4, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(4, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(5, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(5, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(6, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(6, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(7, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(7, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(8, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(8, 8)))] := NULL;
+    assert !($add.ref(A, $zext.i32.ref($mul.i32(9, 8))) == NULL);
+    $M.0[$add.ref(A, $zext.i32.ref($mul.i32(9, 8)))] := NULL;
     return;
 }
 
 
 
-procedure foo(a: int) returns ($r: int);
-  modifies $M.1, $exn;
+procedure func(x: int);
+  modifies $M.2, $exn;
 
 
 
-implementation foo(a: int) returns ($r: int)
-{
-
-  $bb0:
-    call {:cexpr "a"} boogie_si_record_ref(a);
-    assume {:sourceloc "t5.c", 5, 2} true;
-    assert !(a == NULL);
-    $M.1[a] := 1;
-    assume {:sourceloc "t5.c", 6, 2} true;
-    $r := a;
-    $exn := false;
-    return;
-}
-
-
-
-procedure main() returns ($r: int);
-  modifies $CurrAddr, $M.1, $exn;
-
-
-
-implementation main() returns ($r: int)
+implementation func(x: int)
 {
   var $p0: int;
+  var $p1: int;
+  var $p2: int;
+  var $p3: int;
+  var $p4: int;
 
   $bb0:
-    call $static_init();
-    call $init_funcs();
-    call {:cexpr "x"} boogie_si_record_ref(NULL);
-    assume {:sourceloc "t5.c", 11, 2} true;
-    call $p0 := foo(NULL);
-    assume {:sourceloc "t5.c", 12, 2} true;
-    $r := NULL;
+    call {:cexpr "x"} boogie_si_record_ref(x);
+    assume {:sourceloc "t1.c", 9, 11} true;
+    call $p0 := incr(x);
+    assume $isExternal($p0);
+    call {:cexpr "z"} boogie_si_record_ref($p0);
+    assume {:sourceloc "t1.c", 10, 2} true;
+    assert !($p0 == NULL);
+    $p1 := $M.1[$p0];
+    assume {:sourceloc "t1.c", 10, 2} true;
+    $p2 := $sext.i32.i64($p1);
+    assume {:sourceloc "t1.c", 10, 2} true;
+    $p3 := $add.ref($add.ref(A, $zext.i32.ref($mul.i32(NULL, 80))), $mul.ref($p2, $zext.i32.ref(8)));
+    assume {:sourceloc "t1.c", 10, 2} true;
+    assert !($p3 == NULL);
+    $p4 := $M.0[$p3];
+    call {:cexpr "a"} boogie_si_record_ref($p4);
+    assume {:sourceloc "t1.c", 11, 2} true;
+    assert !($p4 == NULL);
+    $M.2[$p4] := NULL;
+    assume {:sourceloc "t1.c", 12, 1} true;
     $exn := false;
     return;
 }
 
 
 
-axiom foo == -8;
+axiom A == -80;
 
-axiom llvm.dbg.declare == -16;
+axiom func == -88;
 
-axiom main == -24;
+axiom llvm.dbg.declare == -96;
 
-axiom __SMACK_dummy == -32;
+axiom incr == -104;
 
-axiom __SMACK_code == -40;
+axiom __SMACK_dummy == -112;
 
-axiom __SMACK_decls == -48;
+axiom __SMACK_code == -120;
 
-axiom __SMACK_top_decl == -56;
+axiom __SMACK_decls == -128;
 
-axiom llvm.dbg.value == -64;
+axiom __SMACK_top_decl == -136;
+
+axiom llvm.dbg.value == -144;
 
 axiom NULL == NULL;
 
@@ -1279,6 +1288,10 @@ procedure boogie_si_record_ref(i: int);
 
 
 
+procedure incr(p0: int) returns (r: int);
+
+
+
 procedure llvm.dbg.value(p0: int, p1: int, p2: int);
 
 
@@ -1311,48 +1324,51 @@ const __block_call_$static_init: bool;
 
 const __block_call___SMACK_dummy: bool;
 
-const __block_call_foo: bool;
-
-const __block_call_main: bool;
+const __block_call_func: bool;
 
 procedure {:entrypoint} CorralMain();
-  modifies $CurrAddr, $exnv, $exn, $M.1;
+  modifies $CurrAddr, $exnv, $M.0, $exn, $M.2;
 
 
 
 implementation CorralMain()
 {
   var v___SMACK_dummy: int;
-  var a_foo: int;
-  var $r_foo: int;
-  var $r_main: int;
+  var x_func: int;
 
   CorralMainStart:
     assume true;
     call {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
     call {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
-    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4;
-
-  L_BAF_4:
-    assume __block_call_main;
-    assume MustReach(true);
-    call $r_main := main();
-    return;
+    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3;
 
   L_BAF_3:
-    assume __block_call_foo;
-    call {:ConcretizeConstantName "a_foo"} a_foo := unknown_int();
+    assume __block_call_func;
+    call {:ConcretizeConstantName "x_func"} x_func := unknown_int();
     assume MustReach(true);
-    call $r_foo := foo(a_foo);
+    call func(x_func);
     return;
 
   L_BAF_2:
     return;
 
   L_BAF_1:
+    assume __block_call_$static_init;
+    assume MustReach(true);
+    call $static_init();
     return;
 
   L_BAF_0:
+    return;
+}
+
+
+
+implementation incr(p0: int) returns (r: int)
+{
+
+  L_BAF_5:
+    call {:ConcretizeConstantName "r"} r := unknown_int();
     return;
 }
 

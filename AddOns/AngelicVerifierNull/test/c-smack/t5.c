@@ -2,8 +2,12 @@
 #include <smack.h>
 
 int* foo(int* a) {
-	a = malloc(sizeof(int));
 	*a = 1;
 	return a;
 }
 
+int main() {
+	int * x = NULL;
+	foo(x);
+	return 0;
+}

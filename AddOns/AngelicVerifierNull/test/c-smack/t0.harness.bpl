@@ -22,7 +22,7 @@ type size = int;
 
 axiom NULL == NULL;
 
-axiom $GLOBALS_BOTTOM == -64;
+axiom $GLOBALS_BOTTOM == -56;
 
 axiom $EXTERNS_BOTTOM == -32768;
 
@@ -95,101 +95,57 @@ const __SMACK_dummy: int;
 
 const __SMACK_top_decl: int;
 
-const foo: int;
+const incr: int;
 
 const llvm.dbg.declare: int;
 
 const llvm.dbg.value: int;
 
-const main: int;
-
-procedure $init_funcs();
-
-
-
-implementation $init_funcs()
-{
-
-  anon0:
-    return;
-}
-
-
-
-procedure $static_init();
-  modifies $CurrAddr;
-
-
-
-implementation $static_init()
-{
-
-  anon0:
-    $CurrAddr := 1024;
-    return;
-}
-
-
-
-procedure foo(a: int) returns ($r: int);
+procedure incr(a: int) returns ($r: int);
   modifies $M.1, $exn;
 
 
 
-implementation foo(a: int) returns ($r: int)
+implementation incr(a: int) returns ($r: int)
 {
+  var $p0: int;
+  var $p1: int;
+  var $p2: int;
 
   $bb0:
     call {:cexpr "a"} boogie_si_record_ref(a);
-    assume {:sourceloc "t5.c", 5, 2} true;
+    assume {:sourceloc "t0.c", 5, 2} true;
     assert !(a == NULL);
-    $M.1[a] := 1;
-    assume {:sourceloc "t5.c", 6, 2} true;
-    $r := a;
+    $p0 := $M.1[a];
+    assume {:sourceloc "t0.c", 5, 2} true;
+    $p1 := $add.i32($p0, 1);
+    assume {:sourceloc "t0.c", 5, 2} true;
+    assert !(a == NULL);
+    $M.1[a] := $p1;
+    assume {:sourceloc "t0.c", 6, 2} true;
+    assert !(a == NULL);
+    $p2 := $M.1[a];
+    assume {:sourceloc "t0.c", 6, 2} true;
+    $r := $p2;
     $exn := false;
     return;
 }
 
 
 
-procedure main() returns ($r: int);
-  modifies $CurrAddr, $M.1, $exn;
-
-
-
-implementation main() returns ($r: int)
-{
-  var $p0: int;
-
-  $bb0:
-    call $static_init();
-    call $init_funcs();
-    call {:cexpr "x"} boogie_si_record_ref(NULL);
-    assume {:sourceloc "t5.c", 11, 2} true;
-    call $p0 := foo(NULL);
-    assume {:sourceloc "t5.c", 12, 2} true;
-    $r := NULL;
-    $exn := false;
-    return;
-}
-
-
-
-axiom foo == -8;
+axiom incr == -8;
 
 axiom llvm.dbg.declare == -16;
 
-axiom main == -24;
+axiom __SMACK_dummy == -24;
 
-axiom __SMACK_dummy == -32;
+axiom __SMACK_code == -32;
 
-axiom __SMACK_code == -40;
+axiom __SMACK_decls == -40;
 
-axiom __SMACK_decls == -48;
+axiom __SMACK_top_decl == -48;
 
-axiom __SMACK_top_decl == -56;
-
-axiom llvm.dbg.value == -64;
+axiom llvm.dbg.value == -56;
 
 axiom NULL == NULL;
 
@@ -1311,9 +1267,7 @@ const __block_call_$static_init: bool;
 
 const __block_call___SMACK_dummy: bool;
 
-const __block_call_foo: bool;
-
-const __block_call_main: bool;
+const __block_call_incr: bool;
 
 procedure {:entrypoint} CorralMain();
   modifies $CurrAddr, $exnv, $exn, $M.1;
@@ -1323,27 +1277,20 @@ procedure {:entrypoint} CorralMain();
 implementation CorralMain()
 {
   var v___SMACK_dummy: int;
-  var a_foo: int;
-  var $r_foo: int;
-  var $r_main: int;
+  var a_incr: int;
+  var $r_incr: int;
 
   CorralMainStart:
     assume true;
     call {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
     call {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
-    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4;
-
-  L_BAF_4:
-    assume __block_call_main;
-    assume MustReach(true);
-    call $r_main := main();
-    return;
+    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3;
 
   L_BAF_3:
-    assume __block_call_foo;
-    call {:ConcretizeConstantName "a_foo"} a_foo := unknown_int();
+    assume __block_call_incr;
+    call {:ConcretizeConstantName "a_incr"} a_incr := unknown_int();
     assume MustReach(true);
-    call $r_foo := foo(a_foo);
+    call $r_incr := incr(a_incr);
     return;
 
   L_BAF_2:

@@ -1,12 +1,4 @@
-function unknownTrigger_0(a: int) : bool;
-
-function unknownTrigger_1(a: int) : bool;
-
-function unknownTrigger_2(a: int) : bool;
-
 var $M.0: [ref]int;
-
-var $M.1: [ref]int;
 
 type i1 = int;
 
@@ -28,7 +20,7 @@ type size = int;
 
 axiom NULL == NULL;
 
-axiom $GLOBALS_BOTTOM == -64;
+axiom $GLOBALS_BOTTOM == -80;
 
 axiom $EXTERNS_BOTTOM == -32768;
 
@@ -99,6 +91,8 @@ const __SMACK_decls: int;
 
 const __SMACK_dummy: int;
 
+const __SMACK_nondet: int;
+
 const __SMACK_top_decl: int;
 
 const foo: int;
@@ -107,34 +101,163 @@ const llvm.dbg.declare: int;
 
 const llvm.dbg.value: int;
 
+const main: int;
+
 const malloc: int;
 
-procedure foo(a: int) returns ({:originallocal "foo", "$r"} $r: int);
-  modifies $CurrAddr, $Alloc, $M.1, $exn;
+procedure $init_funcs();
 
 
 
-implementation foo(a: int) returns ($r: int)
+implementation $init_funcs()
 {
-  var {:originallocal "foo", "$p0"} $p0: int;
-  var {:originallocal "foo", "$p1"} $p1: int;
+
+  anon0:
+    return;
+}
+
+
+
+procedure $static_init();
+  modifies $CurrAddr;
+
+
+
+implementation $static_init()
+{
+
+  anon0:
+    $CurrAddr := 1024;
+    return;
+}
+
+
+
+procedure foo(x: int);
+  modifies $CurrAddr, $Alloc, $M.0, $exn;
+
+
+
+implementation foo(x: int)
+{
+  var $p0: int;
+  var $p1: int;
+  var $p10: int;
+  var $p11: int;
+  var $p12: int;
+  var $p2: int;
+  var $p3: int;
+  var $p4: int;
+  var $p5: int;
+  var $p6: int;
+  var $p7: int;
+  var $p8: int;
+  var $p9: int;
 
   $bb0:
-    assume {:beginproc "foo"} true;
-    assume {:basicblock "foo", "$bb0"} true;
-    call {:si_unique_call 0} {:cexpr "a"} boogie_si_record_ref(a);
-    assume {:sourceloc "t5.c", 5, 6} true;
-    call {:si_unique_call 1} $p0 := $malloc(4);
-    assume {:sourceloc "t5.c", 5, 6} true;
-    $p1 := $p0;
-    call {:si_unique_call 2} {:cexpr "a"} boogie_si_record_ref($p1);
-    assume {:sourceloc "t5.c", 6, 2} true;
-    assert !($p1 == NULL);
-    $M.1[$p1] := 1;
-    assume {:sourceloc "t5.c", 7, 2} true;
-    $r := $p1;
+    call $p0 := $alloca($mul.ref(8, 1));
+    call {:cexpr "x"} boogie_si_record_ref(x);
+    assume true;
+    assume {:sourceloc "t7.c", 6, 18} true;
+    call $p1 := $malloc(4);
+    assume {:sourceloc "t7.c", 6, 18} true;
+    $p2 := $p1;
+    assume {:sourceloc "t7.c", 6, 18} true;
+    assert !($p0 == NULL);
+    $M.0[$p0] := $p2;
+    assume {:sourceloc "t7.c", 7, 3} true;
+    assert !($p0 == NULL);
+    $p3 := $M.0[$p0];
+    assume {:sourceloc "t7.c", 7, 3} true;
+    assert !($p3 == NULL);
+    $M.0[$p3] := NULL;
+    assume {:sourceloc "t7.c", 10, 3} true;
+    assert !(x == NULL);
+    $p4 := $M.0[x];
+    assume {:sourceloc "t7.c", 10, 3} true;
+    assert !($p4 == NULL);
+    $p5 := $M.0[$p4];
+    call {:cexpr "t"} boogie_si_record_i32($p5);
+    assume {:sourceloc "t7.c", 11, 3} true;
+    $p6 := $add.i32($p5, 1);
+    call {:cexpr "t"} boogie_si_record_i32($p6);
+    assume {:sourceloc "t7.c", 13, 6} true;
+    call $p7 := __SMACK_nondet();
+    assume {:sourceloc "t7.c", 13, 6} true;
+    $p8 := $eq.i32($p7, NULL);
+    assume {:sourceloc "t7.c", 13, 6} true;
+    goto $bb1, $bb2;
+
+  $bb2:
+    assume {:sourceloc "t7.c", 13, 6} true;
+    assume !($p8 == 1);
+    goto $bb3;
+
+  $bb3:
+    assume {:sourceloc "t7.c", 15, 6} true;
+    call $p11 := __SMACK_nondet();
+    assume {:sourceloc "t7.c", 15, 6} true;
+    $p12 := $eq.i32($p11, NULL);
+    assume {:sourceloc "t7.c", 15, 6} true;
+    goto $bb4, $bb5;
+
+  $bb5:
+    assume {:sourceloc "t7.c", 15, 6} true;
+    assume !($p12 == 1);
+    goto $bb6;
+
+  $bb6:
+    assume {:sourceloc "t7.c", 17, 1} true;
     $exn := false;
-    assume {:endproc "foo"} true;
+    return;
+
+  $bb4:
+    assume $p12 == 1;
+    assume {:sourceloc "t7.c", 16, 5} true;
+    call foo($p0);
+    assume {:sourceloc "t7.c", 16, 5} true;
+    goto $bb6;
+
+  $bb1:
+    assume $p8 == 1;
+    assume {:sourceloc "t7.c", 14, 5} true;
+    assert !($p0 == NULL);
+    $p9 := $M.0[$p0];
+    assume {:sourceloc "t7.c", 14, 5} true;
+    $p10 := $p9;
+    assume {:sourceloc "t7.c", 14, 5} true;
+    call foo($p10);
+    assume {:sourceloc "t7.c", 14, 5} true;
+    goto $bb3;
+}
+
+
+
+procedure main() returns ($r: int);
+  modifies $CurrAddr, $Alloc, $M.0, $exn;
+
+
+
+implementation main() returns ($r: int)
+{
+  var $p0: int;
+  var $p1: int;
+  var $p2: int;
+
+  $bb0:
+    call $static_init();
+    call $init_funcs();
+    assume {:sourceloc "t7.c", 20, 14} true;
+    call $p0 := __SMACK_nondet();
+    assume {:sourceloc "t7.c", 20, 14} true;
+    $p1 := $sext.i32.i64($p0);
+    assume {:sourceloc "t7.c", 20, 14} true;
+    $p2 := $i2p.i64($p1);
+    assume {:sourceloc "t7.c", 20, 3} true;
+    call foo($p2);
+    assume {:sourceloc "t7.c", 21, 3} true;
+    $r := NULL;
+    $exn := false;
     return;
 }
 
@@ -146,15 +269,19 @@ axiom llvm.dbg.declare == -16;
 
 axiom malloc == -24;
 
-axiom __SMACK_dummy == -32;
+axiom __SMACK_nondet == -32;
 
-axiom __SMACK_code == -40;
+axiom main == -40;
 
-axiom __SMACK_decls == -48;
+axiom __SMACK_dummy == -48;
 
-axiom __SMACK_top_decl == -56;
+axiom __SMACK_code == -56;
 
-axiom llvm.dbg.value == -64;
+axiom __SMACK_decls == -64;
+
+axiom __SMACK_top_decl == -72;
+
+axiom llvm.dbg.value == -80;
 
 axiom NULL == NULL;
 
@@ -1181,6 +1308,17 @@ function {:inline} $zext.i8.i64(p: int) : int
   p
 }
 
+procedure $alloca(n: int) returns (p: int);
+  ensures $sgt.ref(p, NULL) == $1.i1;
+  ensures p == old($CurrAddr);
+  ensures $sgt.ref($CurrAddr, old($CurrAddr)) == $1.i1;
+  ensures $sge.ref(n, NULL) == $1.i1 ==> $sge.ref($CurrAddr, $add.ref(old($CurrAddr), n)) == $1.i1;
+  ensures $Alloc[p];
+  ensures (forall q: int :: { $Alloc[q] } q != p ==> ($Alloc[q] <==> old($Alloc[q])));
+  ensures $sge.ref(n, NULL) == $1.i1 ==> (forall q: int :: { $base(q) } $sle.ref(p, q) == $1.i1 && $slt.ref(q, $add.ref(p, n)) == $1.i1 ==> $base(q) == p);
+
+
+
 procedure $free(p: int);
   modifies $Alloc;
   ensures !$Alloc[p];
@@ -1201,6 +1339,10 @@ procedure {:allocator} $malloc(n: int) returns (p: int);
 
 
 procedure __SMACK_code.ref(p0: int);
+
+
+
+procedure __SMACK_nondet() returns (r: int);
 
 
 
@@ -1244,6 +1386,10 @@ procedure boogie_si_record_ref(i: int);
 
 
 
+procedure llvm.dbg.declare(p0: int, p1: int);
+
+
+
 procedure llvm.dbg.value(p0: int, p1: int, p2: int);
 
 
@@ -1262,7 +1408,7 @@ var $exnv: int;
 
 const {:allocated} NULL: int;
 
-axiom NULL == NULL;
+axiom NULL == 0;
 
 procedure {:allocator "full"} {:AngelicUnknown} unknown_int() returns (r: int);
 
@@ -1278,54 +1424,65 @@ const __block_call___SMACK_dummy: bool;
 
 const __block_call_foo: bool;
 
+const __block_call_main: bool;
+
 procedure {:entrypoint} CorralMain();
-  modifies $CurrAddr, $exnv, $Alloc, $M.1, $exn;
+  modifies $CurrAddr, $exnv, $exn, $Alloc, $M.0;
 
 
 
 implementation CorralMain()
 {
-  var {:originallocal "CorralMain", "v___SMACK_dummy"} v___SMACK_dummy: int;
-  var {:originallocal "CorralMain", "a_foo"} a_foo: int;
-  var {:originallocal "CorralMain", "$r_foo"} $r_foo: int;
+  var v___SMACK_dummy: int;
+  var x_foo: int;
+  var $r_main: int;
 
   CorralMainStart:
-    assume {:beginproc "CorralMain"} true;
-    assume {:basicblock "CorralMain", "CorralMainStart"} true;
     assume true;
-    call {:ConcretizeCallId 0} {:si_unique_call 3} {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
-    assume unknownTrigger_0($CurrAddr);
-    call {:ConcretizeCallId 1} {:si_unique_call 4} {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
-    assume unknownTrigger_1($exnv);
-    goto __split__xxx_CorralMainStart;
+    call {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
+    call {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
+    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4;
 
-  __split__xxx_CorralMainStart:
-    assume {:basicblock "CorralMain", "__split__xxx_CorralMainStart"} true;
-    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3;
+  L_BAF_4:
+    assume __block_call_main;
+    assume MustReach(true);
+    call $r_main := main();
+    return;
 
   L_BAF_3:
-    assume {:basicblock "CorralMain", "L_BAF_3"} true;
     assume __block_call_foo;
-    call {:ConcretizeCallId 2} {:si_unique_call 5} {:ConcretizeConstantName "a_foo"} a_foo := unknown_int();
-    assume unknownTrigger_2(a_foo);
+    call {:ConcretizeConstantName "x_foo"} x_foo := unknown_int();
     assume MustReach(true);
-    call {:si_unique_call 6} $r_foo := foo(a_foo);
-    assume {:endproc "CorralMain"} true;
+    call foo(x_foo);
     return;
 
   L_BAF_2:
-    assume {:basicblock "CorralMain", "L_BAF_2"} true;
-    assume {:endproc "CorralMain"} true;
     return;
 
   L_BAF_1:
-    assume {:basicblock "CorralMain", "L_BAF_1"} true;
-    assume {:endproc "CorralMain"} true;
     return;
 
   L_BAF_0:
-    assume {:basicblock "CorralMain", "L_BAF_0"} true;
-    assume {:endproc "CorralMain"} true;
+    return;
+}
+
+
+
+implementation $alloca(n: int) returns (p: int)
+{
+
+  L_BAF_5:
+    call {:ConcretizeConstantName "p"} p := unknown_int();
+    return;
+}
+
+
+
+implementation __SMACK_nondet() returns (r: int)
+{
+
+  L_BAF_6:
+    call {:ConcretizeConstantName "r"} r := unknown_int();
     return;
 }
 

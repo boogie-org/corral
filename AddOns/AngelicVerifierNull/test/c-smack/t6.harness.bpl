@@ -1,6 +1,10 @@
-var $M.0: [ref]int;
+var $M.0: int;
 
 var $M.1: [ref]int;
+
+var $M.2: [ref]int;
+
+var $M.3: [ref]int;
 
 type i1 = int;
 
@@ -22,7 +26,7 @@ type size = int;
 
 axiom NULL == NULL;
 
-axiom $GLOBALS_BOTTOM == -64;
+axiom $GLOBALS_BOTTOM == -100;
 
 axiom $EXTERNS_BOTTOM == -32768;
 
@@ -87,6 +91,10 @@ function {:inline} $i2p.i64(p: int) : int
   p
 }
 
+const P: int;
+
+const Q: int;
+
 const __SMACK_code: int;
 
 const __SMACK_decls: int;
@@ -95,29 +103,22 @@ const __SMACK_dummy: int;
 
 const __SMACK_top_decl: int;
 
+const bar: int;
+
 const foo: int;
 
 const llvm.dbg.declare: int;
 
 const llvm.dbg.value: int;
 
-const main: int;
+const malloc: int;
 
-procedure $init_funcs();
+const x: int;
 
-
-
-implementation $init_funcs()
-{
-
-  anon0:
-    return;
-}
-
-
+const y: int;
 
 procedure $static_init();
-  modifies $CurrAddr;
+  modifies $CurrAddr, $M.0, $M.1;
 
 
 
@@ -126,48 +127,146 @@ implementation $static_init()
 
   anon0:
     $CurrAddr := 1024;
+    $M.0 := NULL;
+    assert !(x == NULL);
+    $M.1[x] := NULL;
     return;
 }
 
 
 
-procedure foo(a: int) returns ($r: int);
-  modifies $M.1, $exn;
+procedure P();
+  modifies $M.3, $exn;
 
 
 
-implementation foo(a: int) returns ($r: int)
-{
-
-  $bb0:
-    call {:cexpr "a"} boogie_si_record_ref(a);
-    assume {:sourceloc "t5.c", 5, 2} true;
-    assert !(a == NULL);
-    $M.1[a] := 1;
-    assume {:sourceloc "t5.c", 6, 2} true;
-    $r := a;
-    $exn := false;
-    return;
-}
-
-
-
-procedure main() returns ($r: int);
-  modifies $CurrAddr, $M.1, $exn;
-
-
-
-implementation main() returns ($r: int)
+implementation P()
 {
   var $p0: int;
+  var $p1: int;
+  var $p2: int;
+  var $p3: int;
+  var $p4: int;
+  var $p5: int;
 
   $bb0:
-    call $static_init();
-    call $init_funcs();
-    call {:cexpr "x"} boogie_si_record_ref(NULL);
-    assume {:sourceloc "t5.c", 11, 2} true;
-    call $p0 := foo(NULL);
-    assume {:sourceloc "t5.c", 12, 2} true;
+    assume {:sourceloc "t6.c", 10, 6} true;
+    $p0 := $M.0;
+    assume {:sourceloc "t6.c", 10, 6} true;
+    $p1 := $eq.i32($p0, NULL);
+    assume {:sourceloc "t6.c", 10, 6} true;
+    goto $bb1, $bb2;
+
+  $bb2:
+    assume {:sourceloc "t6.c", 10, 6} true;
+    assume !($p1 == 1);
+    goto $bb3;
+
+  $bb3:
+    assume {:sourceloc "t6.c", 14, 1} true;
+    $exn := false;
+    return;
+
+  $bb1:
+    assume $p1 == 1;
+    assume {:sourceloc "t6.c", 12, 5} true;
+    assert !(x == NULL);
+    $p2 := $M.1[x];
+    assume {:sourceloc "t6.c", 12, 5} true;
+    assert !($p2 == NULL);
+    $p3 := $M.3[$p2];
+    assume {:sourceloc "t6.c", 12, 5} true;
+    $p4 := $add.i32($p3, 1);
+    assume {:sourceloc "t6.c", 12, 5} true;
+    assert !(x == NULL);
+    $p5 := $M.1[x];
+    assume {:sourceloc "t6.c", 12, 5} true;
+    assert !($p5 == NULL);
+    $M.3[$p5] := $p4;
+    assume {:sourceloc "t6.c", 13, 3} true;
+    goto $bb3;
+}
+
+
+
+procedure Q();
+  modifies $M.3, $exn;
+
+
+
+implementation Q()
+{
+  var $p0: int;
+  var $p1: int;
+  var $p2: int;
+  var $p3: int;
+  var $p4: int;
+  var $p5: int;
+
+  $bb0:
+    assume {:sourceloc "t6.c", 17, 6} true;
+    $p0 := $M.0;
+    assume {:sourceloc "t6.c", 17, 6} true;
+    $p1 := $eq.i32($p0, 1);
+    assume {:sourceloc "t6.c", 17, 6} true;
+    goto $bb1, $bb2;
+
+  $bb2:
+    assume {:sourceloc "t6.c", 17, 6} true;
+    assume !($p1 == 1);
+    goto $bb3;
+
+  $bb3:
+    assume {:sourceloc "t6.c", 21, 1} true;
+    $exn := false;
+    return;
+
+  $bb1:
+    assume $p1 == 1;
+    assume {:sourceloc "t6.c", 19, 5} true;
+    assert !(x == NULL);
+    $p2 := $M.1[x];
+    assume {:sourceloc "t6.c", 19, 5} true;
+    assert !($p2 == NULL);
+    $p3 := $M.3[$p2];
+    assume {:sourceloc "t6.c", 19, 5} true;
+    $p4 := $add.i32($p3, 1);
+    assume {:sourceloc "t6.c", 19, 5} true;
+    assert !(x == NULL);
+    $p5 := $M.1[x];
+    assume {:sourceloc "t6.c", 19, 5} true;
+    assert !($p5 == NULL);
+    $M.3[$p5] := $p4;
+    assume {:sourceloc "t6.c", 20, 3} true;
+    goto $bb3;
+}
+
+
+
+procedure bar() returns ($r: int);
+  modifies $CurrAddr, $Alloc, $M.1, $exn, $M.3;
+
+
+
+implementation bar() returns ($r: int)
+{
+  var $p0: int;
+  var $p1: int;
+
+  $bb0:
+    assume {:sourceloc "t6.c", 28, 7} true;
+    call $p0 := $malloc(4);
+    assume {:sourceloc "t6.c", 28, 7} true;
+    $p1 := $p0;
+    assume {:sourceloc "t6.c", 28, 7} true;
+    assert !(x == NULL);
+    $M.1[x] := $p1;
+    call {:cexpr "x"} boogie_si_record_i64($p1);
+    assume {:sourceloc "t6.c", 29, 3} true;
+    call foo(P);
+    assume {:sourceloc "t6.c", 30, 3} true;
+    call foo(Q);
+    assume {:sourceloc "t6.c", 31, 3} true;
     $r := NULL;
     $exn := false;
     return;
@@ -175,21 +274,62 @@ implementation main() returns ($r: int)
 
 
 
-axiom foo == -8;
+procedure foo(f: int);
+  modifies $exn, $M.3;
 
-axiom llvm.dbg.declare == -16;
 
-axiom main == -24;
 
-axiom __SMACK_dummy == -32;
+implementation foo(f: int)
+{
 
-axiom __SMACK_code == -40;
+  $bb0:
+    call {:cexpr "f"} boogie_si_record_ref(f);
+    assume {:sourceloc "t6.c", 24, 3} true;
+    goto $bb2, $bb3;
 
-axiom __SMACK_decls == -48;
+  $bb3:
+    assume f == Q;
+    call Q();
+    goto $bb1;
 
-axiom __SMACK_top_decl == -56;
+  $bb1:
+    assume {:sourceloc "t6.c", 25, 1} true;
+    $exn := false;
+    return;
 
-axiom llvm.dbg.value == -64;
+  $bb2:
+    assume f == P;
+    call P();
+    goto $bb1;
+}
+
+
+
+axiom y == -4;
+
+axiom x == -12;
+
+axiom P == -20;
+
+axiom Q == -28;
+
+axiom foo == -36;
+
+axiom llvm.dbg.declare == -44;
+
+axiom bar == -52;
+
+axiom malloc == -60;
+
+axiom __SMACK_dummy == -68;
+
+axiom __SMACK_code == -76;
+
+axiom __SMACK_decls == -84;
+
+axiom __SMACK_top_decl == -92;
+
+axiom llvm.dbg.value == -100;
 
 axiom NULL == NULL;
 
@@ -1309,47 +1449,66 @@ const __block_call_$init_funcs: bool;
 
 const __block_call_$static_init: bool;
 
+const __block_call_P: bool;
+
+const __block_call_Q: bool;
+
 const __block_call___SMACK_dummy: bool;
+
+const __block_call_bar: bool;
 
 const __block_call_foo: bool;
 
-const __block_call_main: bool;
-
 procedure {:entrypoint} CorralMain();
-  modifies $CurrAddr, $exnv, $exn, $M.1;
+  modifies $M.0, $CurrAddr, $exnv, $M.1, $M.3, $exn, $Alloc;
 
 
 
 implementation CorralMain()
 {
   var v___SMACK_dummy: int;
-  var a_foo: int;
-  var $r_foo: int;
-  var $r_main: int;
+  var $r_bar: int;
+  var f_foo: int;
 
   CorralMainStart:
     assume true;
+    call {:ConcretizeConstantName "$M.0"} $M.0 := unknown_int();
     call {:ConcretizeConstantName "$CurrAddr"} $CurrAddr := unknown_int();
     call {:ConcretizeConstantName "$exnv"} $exnv := unknown_int();
-    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4;
+    goto L_BAF_0, L_BAF_1, L_BAF_2, L_BAF_3, L_BAF_4, L_BAF_5, L_BAF_6;
+
+  L_BAF_6:
+    assume __block_call_foo;
+    call {:ConcretizeConstantName "f_foo"} f_foo := unknown_int();
+    assume MustReach(true);
+    call foo(f_foo);
+    return;
+
+  L_BAF_5:
+    assume __block_call_bar;
+    assume MustReach(true);
+    call $r_bar := bar();
+    return;
 
   L_BAF_4:
-    assume __block_call_main;
-    assume MustReach(true);
-    call $r_main := main();
     return;
 
   L_BAF_3:
-    assume __block_call_foo;
-    call {:ConcretizeConstantName "a_foo"} a_foo := unknown_int();
+    assume __block_call_Q;
     assume MustReach(true);
-    call $r_foo := foo(a_foo);
+    call Q();
     return;
 
   L_BAF_2:
+    assume __block_call_P;
+    assume MustReach(true);
+    call P();
     return;
 
   L_BAF_1:
+    assume __block_call_$static_init;
+    assume MustReach(true);
+    call $static_init();
     return;
 
   L_BAF_0:
