@@ -18,18 +18,19 @@ namespace ProofMinimization
         public static readonly string CostAttr = "pm_cost";
         //static Program ForLogging = null;
 
+        
+
         static void Main(string[] args)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
 
             if (args.Length < 1)
             {
-                Console.WriteLine("ProofMin file.bpl [options]");
+                Console.WriteLine("ProofMin file(s).bpl [options]");
                 return;
             }
 
             var boogieArgs = "";
-            string dualityprooffile = null;
             var once = false;
             var usePerf = false;
             var printcontracts = false;
@@ -53,12 +54,6 @@ namespace ProofMinimization
                     continue;
                 }
 
-                if (args[i].StartsWith("/duality:"))
-                {
-                    dualityprooffile = args[i].Substring("/duality:".Length);
-                    continue;
-                }
-
                 if (args[i].StartsWith("/keep:"))
                 {
                     keepPatterns.Add(args[i].Substring("/keep:".Length));
@@ -74,50 +69,57 @@ namespace ProofMinimization
                 boogieArgs += args[i] + " ";
             }
 
+            // Initialize Boogie
             boogieArgs += " /typeEncoding:m /weakArrayTheory /errorLimit:1 ";
             Initalize(boogieArgs);
 
-            var program = BoogieUtil.ReadAndResolve(args[0]);
-
-            // Input program must be an RMT query
-            if (program.TopLevelDeclarations.OfType<Implementation>()
-                .Any(impl => impl.Blocks
-                    .Any(blk => blk.Cmds
-                        .Any(c => c is AssertCmd && !BoogieUtil.isAssertTrue(c)))))
-                throw new Exception("Input program cannot have an assertion");
-
-            var ep = program.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
-                .FirstOrDefault();
-
-            if (ep == null)
-                throw new Exception("Entrypoint not found");
-
-            // Inject duality proof
-            if (dualityprooffile != null)
-                program = InjectDualityProof(program, dualityprooffile);
-
-            // Add annotations
-            foreach (var p in keepPatterns)
+            // Get the input files
+            var files = System.IO.Directory.GetFiles(".", args[0]);
+            if (files.Length == 0)
             {
-                var re = new Regex(p);
-                program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential") && re.IsMatch(c.Name))
-                .Iter(c => c.AddAttribute(MustKeepAttr));
+                Console.WriteLine("No files given");
+                return;
             }
+            Console.WriteLine("Found {0} files", files.Length);
 
-            // Prune, according to annotations
-            DropConstants(program, new HashSet<string>(
-                program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
-                .Select(c => c.Name)));
+            // file name -> Program
+            Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
+            // template ID -> file -> {constants}
+            Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
 
-            var inprog = new PersistentProgram(program);
+            foreach (var f in files)
+            {
+                var program = BoogieUtil.ReadAndResolve(args[0]);
+                CheckRMT(program);
 
-            var proofmin = new ProofMin(inprog, usePerf);
+                // Add annotations
+                foreach (var p in keepPatterns)
+                {
+                    var re = new Regex(p);
+                    program.TopLevelDeclarations.OfType<Constant>()
+                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential") && re.IsMatch(c.Name))
+                    .Iter(c => c.AddAttribute(MustKeepAttr));
+                }
+
+                // Prune, according to annotations
+                DropConstants(program, new HashSet<string>(
+                    program.TopLevelDeclarations.OfType<Constant>()
+                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
+                    .Select(c => c.Name)));
+
+                // Normalize expressions
+
+
+                // create template map
+
+
+                fileToProg.Add(f, new PersistentProgram(program));
+            }
 
             if (once)
             {
+                Debug.Assert(fileToProg.Count == 1);
+                var proofmin = new ProofMin(fileToProg.Values.First(), usePerf);
                 proofmin.RunOnce(printcontracts);
                 return;
             }
@@ -180,20 +182,78 @@ namespace ProofMinimization
             }
         }
 
+        // Input program must be an RMT query
+        static void CheckRMT(Program program)
+        {            
+            if (program.TopLevelDeclarations.OfType<Implementation>()
+                .Any(impl => impl.Blocks
+                    .Any(blk => blk.Cmds
+                        .Any(c => c is AssertCmd && !BoogieUtil.isAssertTrue(c)))))
+                throw new Exception("Input program cannot have an assertion");
+
+            var ep = program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
+                .FirstOrDefault();
+
+            if (ep == null)
+                throw new Exception("Entrypoint not found");
+        }
+
+        // remove implications, push negation inside
+        class SimplifyExpr : StandardVisitor
+        {
+            private SimplifyExpr() { }
+
+            public static Expr Simplify(Expr expr)
+            {
+                var vs = new SimplifyExpr();
+                return vs.VisitExpr(expr);
+            }
+
+            public override Expr VisitNAryExpr(NAryExpr node)
+            {
+                Expr ret = node;
+
+                // Remove implies
+                if (node.Fun is BinaryOperator && (node.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Imp)
+                {
+                    ret = Expr.Or(Expr.Not(node.Args[0]), node.Args[1]) as NAryExpr;
+                }
+
+                // Push negation inside
+                if (node.Fun is UnaryOperator && (node.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
+                {
+                    ret = PushNegationInside(node.Args[0]);
+                }
+
+                return base.VisitExpr(ret);
+            }
+
+
+            // push negations inside
+            static Expr PushNegationInside(Expr expr)
+            {
+                var nary = expr as NAryExpr;
+                if (nary == null)
+                    return Expr.Not(expr);
+
+                if (nary.Fun is UnaryOperator && (nary.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
+                    return nary.Args[0];
+
+                if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
+                    return Expr.Or(PushNegationInside(nary.Args[0]), PushNegationInside(nary.Args[1]));
+
+                if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
+                    return Expr.And(PushNegationInside(nary.Args[0]), PushNegationInside(nary.Args[1]));
+
+                return Expr.Not(expr);
+            }
+        }
+
         static Expr NormalizeExpr(Expr expr)
         {
             var disj = ProofMin.GetExprDisjuncts(expr);
-            if (disj.Count == 1)
-            {
-                var conj = ProofMin.GetExprConjunctions(expr);
-                if (conj.Count == 1)
-                    return expr;
-                conj = conj.Map(e => NormalizeExpr(e));
-                conj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
-
-                return Expr.And(conj);
-            }
-            else
+            if (disj.Count != 1)
             {
                 disj = disj.Map(e => NormalizeExpr(e));
                 disj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
@@ -202,6 +262,64 @@ namespace ProofMinimization
                     ret = Expr.Or(ret, disj[i]);
                 return ret;
             }
+
+            var conj = ProofMin.GetExprConjunctions(expr);
+            if (conj.Count != 1)
+            {
+                conj = conj.Map(e => NormalizeExpr(e));
+                conj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
+
+                return Expr.And(conj);
+            }
+
+            var naryexpr = expr as NAryExpr;
+            if (naryexpr == null)
+                return expr;
+
+            if (naryexpr.Fun is BinaryOperator)
+            {
+                NAryExpr nexpr;
+                bool applyNeg;
+
+                NormalizeOperator((naryexpr.Fun as BinaryOperator), naryexpr.Args[0], naryexpr.Args[1], out nexpr, out applyNeg);
+
+                if (applyNeg) return Expr.Not(nexpr);
+                return nexpr;
+            }
+
+            return expr;
+        }
+
+        static void NormalizeOperator(BinaryOperator op, Expr arg1, Expr arg2, out NAryExpr expr, out bool applyNeg)
+        {
+            expr = null;
+            applyNeg = false;
+
+            BinaryOperator.Opcode newop = op.Op;
+
+            if (op.Op == BinaryOperator.Opcode.Lt)
+                newop = BinaryOperator.Opcode.Ge;
+            else if (op.Op == BinaryOperator.Opcode.Le)
+                newop = BinaryOperator.Opcode.Gt;
+            else if (op.Op == BinaryOperator.Opcode.Neq)
+                newop = BinaryOperator.Opcode.Eq;
+
+            var comp = new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString())));
+            var constructExpr = new Func<BinaryOperator, Expr, Expr, NAryExpr>((o, e1, e2) =>
+                {
+                    if (o.Op == BinaryOperator.Opcode.Eq && comp(e1, e2) > 0)
+                        return new NAryExpr(Token.NoToken, o, new List<Expr> { e2, e1 });
+                    return new NAryExpr(Token.NoToken, o, new List<Expr> { e1, e2 });
+                });
+
+            if (newop == op.Op)
+            {
+                expr = constructExpr(op, arg1, arg2);
+                applyNeg = false;
+            }
+
+            expr = constructExpr(new BinaryOperator(Token.NoToken, newop), arg1, arg2); 
+            applyNeg = true;
         }
 
         static HashSet<string> BreakDownInvariants(Program program, HashSet<string> candidates)
@@ -307,7 +425,7 @@ namespace ProofMinimization
              */
         }
 
-        static Program InjectDualityProof(Program program, string DualityProofFile)
+        public static Program InjectDualityProof(Program program, string DualityProofFile)
         {
             Program DualityProof;
 
@@ -380,7 +498,8 @@ namespace ProofMinimization
             cba.Util.BoogieVerify.options.extraFlags.Add("SiStingy");
 
             BoogieVerify.removeAsserts = false;
-            
+            cba.PersistentCBAProgram.useIO = true;
+            ProgTransformation.PersistentProgramIO.useFiles = true;
         }
     }
 
