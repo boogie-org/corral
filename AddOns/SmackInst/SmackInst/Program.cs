@@ -12,7 +12,7 @@ namespace SmackInst
 {
     class Driver
     {
-        public static readonly string MallocName = "$malloc";
+        public static readonly HashSet<string> MallocNames = new HashSet<string>{ "$malloc", "$alloca" };
         public static readonly string allocVar = "$CurrAddr";
 
         public static bool initMem = false;
@@ -56,13 +56,9 @@ namespace SmackInst
             program = BoogieUtil.ReResolve(program);
 
             // add "allocator" to malloc
-            var malloc = program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => p.Name == MallocName)
-                .FirstOrDefault();
-            if (malloc != null)
-            {
-                malloc.AddAttribute("allocator");
-            }
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => MallocNames.Contains(p.Name))
+                .Iter(p => p.AddAttribute("allocator"));
 
             // Create "null"
             var nil = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "NULL", btype.Int), false);
@@ -101,12 +97,6 @@ namespace SmackInst
 
         static void InitMemory(Program program)
         {
-            // find malloc
-            var malloc = program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => p.Name == MallocName)
-                .FirstOrDefault();
-            if (malloc == null) return;
-            
             // find curraddr
             var alloc = program.TopLevelDeclarations.OfType<GlobalVariable>().Where(g => g.Name == allocVar)
                 .FirstOrDefault();
@@ -114,10 +104,12 @@ namespace SmackInst
 
             // create alloc_init
             var allocinit = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                alloc.Name + "_init", alloc.TypedIdent.Type));
+                alloc.Name + "_init", alloc.TypedIdent.Type), false);
 
             // malloc ensures ret > alloc_init
-            malloc.Ensures.Add(new Ensures(false, Expr.Gt(Expr.Ident(malloc.OutParams[0]), Expr.Ident(allocinit))));
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => MallocNames.Contains(p.Name))
+                .Iter(p => p.Ensures.Add(new Ensures(false, Expr.Gt(Expr.Ident(p.OutParams[0]), Expr.Ident(allocinit)))));
 
             // forall x : int :: { M[x] } M[x] >= 0 && M[x] < alloc_init
             var initM = new Func<Variable, Expr>(M =>
