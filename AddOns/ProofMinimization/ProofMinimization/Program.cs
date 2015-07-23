@@ -8,6 +8,7 @@ using System.Diagnostics;
 using cba.Util;
 using PersistentProgram = ProgTransformation.PersistentProgram;
 using System.Text.RegularExpressions;
+using btype = Microsoft.Boogie.Type;
 
 namespace ProofMinimization
 {
@@ -16,9 +17,10 @@ namespace ProofMinimization
         public static readonly string MustKeepAttr = "pm_mustkeep";
         public static readonly string DropAttr = "pm_drop";
         public static readonly string CostAttr = "pm_cost";
+        
         //static Program ForLogging = null;
 
-        
+        public static bool dbg = false;
 
         static void Main(string[] args)
         {
@@ -46,6 +48,12 @@ namespace ProofMinimization
                 if (args[i] == "/once")
                 {
                     once = true;
+                    continue;
+                }
+                if (args[i] == "/dbg")
+                {
+                    dbg = true;
+                    Minimize.dbg = true;
                     continue;
                 }
                 if (args[i] == "/printAssignment")
@@ -82,39 +90,7 @@ namespace ProofMinimization
             }
             Console.WriteLine("Found {0} files", files.Length);
 
-            // file name -> Program
-            Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
-            // template ID -> file -> {constants}
-            Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
 
-            foreach (var f in files)
-            {
-                var program = BoogieUtil.ReadAndResolve(args[0]);
-                CheckRMT(program);
-
-                // Add annotations
-                foreach (var p in keepPatterns)
-                {
-                    var re = new Regex(p);
-                    program.TopLevelDeclarations.OfType<Constant>()
-                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential") && re.IsMatch(c.Name))
-                    .Iter(c => c.AddAttribute(MustKeepAttr));
-                }
-
-                // Prune, according to annotations
-                DropConstants(program, new HashSet<string>(
-                    program.TopLevelDeclarations.OfType<Constant>()
-                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, DropAttr))
-                    .Select(c => c.Name)));
-
-                // Normalize expressions
-
-
-                // create template map
-
-
-                fileToProg.Add(f, new PersistentProgram(program));
-            }
 
             if (once)
             {
@@ -134,17 +110,18 @@ namespace ProofMinimization
             if (!ret)
                 return;
 
-            Console.WriteLine("Done with the first run");
             foreach (var c in candidates)
             {
-                Console.WriteLine("First run: {0}", contracts[c]);
+                Console.WriteLine("Additional contract required: {0}", contracts[c]);
             }
             foreach (var tup in constantToPerfDelta)
             {
                 if (tup.Value <= 2) continue;
-                Console.WriteLine("First run pref: {0} {1}", tup.Value, contracts[tup.Key]);
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
             }
 
+            /*
+             
             // Lets see if we can break down things further
             program = inprog.getProgram();
             // drop ones that we don't need anymore
@@ -180,147 +157,9 @@ namespace ProofMinimization
                 if (tup.Value <= 2) continue;
                 Console.WriteLine("Contract to pref: {0} {1}", tup.Value, NormalizeExpr(contracts[tup.Key]));
             }
+             */
         }
 
-        // Input program must be an RMT query
-        static void CheckRMT(Program program)
-        {            
-            if (program.TopLevelDeclarations.OfType<Implementation>()
-                .Any(impl => impl.Blocks
-                    .Any(blk => blk.Cmds
-                        .Any(c => c is AssertCmd && !BoogieUtil.isAssertTrue(c)))))
-                throw new Exception("Input program cannot have an assertion");
-
-            var ep = program.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"))
-                .FirstOrDefault();
-
-            if (ep == null)
-                throw new Exception("Entrypoint not found");
-        }
-
-        // remove implications, push negation inside
-        class SimplifyExpr : StandardVisitor
-        {
-            private SimplifyExpr() { }
-
-            public static Expr Simplify(Expr expr)
-            {
-                var vs = new SimplifyExpr();
-                return vs.VisitExpr(expr);
-            }
-
-            public override Expr VisitNAryExpr(NAryExpr node)
-            {
-                Expr ret = node;
-
-                // Remove implies
-                if (node.Fun is BinaryOperator && (node.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Imp)
-                {
-                    ret = Expr.Or(Expr.Not(node.Args[0]), node.Args[1]) as NAryExpr;
-                }
-
-                // Push negation inside
-                if (node.Fun is UnaryOperator && (node.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
-                {
-                    ret = PushNegationInside(node.Args[0]);
-                }
-
-                return base.VisitExpr(ret);
-            }
-
-
-            // push negations inside
-            static Expr PushNegationInside(Expr expr)
-            {
-                var nary = expr as NAryExpr;
-                if (nary == null)
-                    return Expr.Not(expr);
-
-                if (nary.Fun is UnaryOperator && (nary.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
-                    return nary.Args[0];
-
-                if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
-                    return Expr.Or(PushNegationInside(nary.Args[0]), PushNegationInside(nary.Args[1]));
-
-                if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
-                    return Expr.And(PushNegationInside(nary.Args[0]), PushNegationInside(nary.Args[1]));
-
-                return Expr.Not(expr);
-            }
-        }
-
-        static Expr NormalizeExpr(Expr expr)
-        {
-            var disj = ProofMin.GetExprDisjuncts(expr);
-            if (disj.Count != 1)
-            {
-                disj = disj.Map(e => NormalizeExpr(e));
-                disj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
-                var ret = disj[0];
-                for (int i = 1; i < disj.Count; i++)
-                    ret = Expr.Or(ret, disj[i]);
-                return ret;
-            }
-
-            var conj = ProofMin.GetExprConjunctions(expr);
-            if (conj.Count != 1)
-            {
-                conj = conj.Map(e => NormalizeExpr(e));
-                conj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
-
-                return Expr.And(conj);
-            }
-
-            var naryexpr = expr as NAryExpr;
-            if (naryexpr == null)
-                return expr;
-
-            if (naryexpr.Fun is BinaryOperator)
-            {
-                NAryExpr nexpr;
-                bool applyNeg;
-
-                NormalizeOperator((naryexpr.Fun as BinaryOperator), naryexpr.Args[0], naryexpr.Args[1], out nexpr, out applyNeg);
-
-                if (applyNeg) return Expr.Not(nexpr);
-                return nexpr;
-            }
-
-            return expr;
-        }
-
-        static void NormalizeOperator(BinaryOperator op, Expr arg1, Expr arg2, out NAryExpr expr, out bool applyNeg)
-        {
-            expr = null;
-            applyNeg = false;
-
-            BinaryOperator.Opcode newop = op.Op;
-
-            if (op.Op == BinaryOperator.Opcode.Lt)
-                newop = BinaryOperator.Opcode.Ge;
-            else if (op.Op == BinaryOperator.Opcode.Le)
-                newop = BinaryOperator.Opcode.Gt;
-            else if (op.Op == BinaryOperator.Opcode.Neq)
-                newop = BinaryOperator.Opcode.Eq;
-
-            var comp = new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString())));
-            var constructExpr = new Func<BinaryOperator, Expr, Expr, NAryExpr>((o, e1, e2) =>
-                {
-                    if (o.Op == BinaryOperator.Opcode.Eq && comp(e1, e2) > 0)
-                        return new NAryExpr(Token.NoToken, o, new List<Expr> { e2, e1 });
-                    return new NAryExpr(Token.NoToken, o, new List<Expr> { e1, e2 });
-                });
-
-            if (newop == op.Op)
-            {
-                expr = constructExpr(op, arg1, arg2);
-                applyNeg = false;
-            }
-
-            expr = constructExpr(new BinaryOperator(Token.NoToken, newop), arg1, arg2); 
-            applyNeg = true;
-        }
 
         static HashSet<string> BreakDownInvariants(Program program, HashSet<string> candidates)
         {
@@ -355,7 +194,7 @@ namespace ProofMinimization
 
                     if (!match) continue;
 
-                    var elements = ProofMin.BreakDownExpr(expr);
+                    var elements = SimplifyExpr.BreakDownExpr(expr);
                     if (elements.Count == 1)
                     {
                         markkeep.Add(constantName);
@@ -387,42 +226,12 @@ namespace ProofMinimization
             return markkeep;
         }
 
-        static void DropConstants(Program program, HashSet<string> drop)
-        {
-            // Prune, according to annotations
-            var constants = new HashSet<string>(
-                program.TopLevelDeclarations.OfType<Constant>()
-                .Select(c => c.Name));
-
-            var dontdrop = constants.Difference(drop);
-
-            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, dontdrop, true);
-            program.RemoveTopLevelDeclarations(c => c is Constant && drop.Contains((c as Constant).Name));
-        }
-
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             Console.WriteLine("Got Ctrl-C");
             //Log(0);
             System.Diagnostics.Process.GetCurrentProcess()
                 .Kill();
-        }
-
-        static void Log(int i)
-        {
-            /*
-            if (ForLogging == null) return;
-
-            ForLogging.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => keep.Contains(c.Name))
-                .Iter(c => c.AddAttribute(MustKeepAttr));
-
-            ForLogging.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => dropped.Contains(c.Name))
-                .Iter(c => c.AddAttribute(DropAttr));
-
-            BoogieUtil.PrintProgram(ForLogging, string.Format("pmh_logged{0}.bpl", i == 0 ? "" : i.ToString()));
-             */
         }
 
         public static Program InjectDualityProof(Program program, string DualityProofFile)
@@ -448,7 +257,7 @@ namespace ProofMinimization
                 implToContracts.Add(proc.Name, new List<Expr>());
                 foreach (var ens in proc.Ensures)
                 {
-                    implToContracts[proc.Name].AddRange(ProofMin.GetExprConjunctions(ens.Condition));
+                    implToContracts[proc.Name].AddRange(SimplifyExpr.GetExprConjunctions(ens.Condition));
                 }
             }
 
@@ -483,6 +292,17 @@ namespace ProofMinimization
             return BoogieUtil.ReResolveInMem(program);
         }
 
+
+        static Dictionary<string, Expr> GetContracts(Program program)
+        {
+            var constants = new HashSet<string>(program.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Select(c => c.Name));
+
+            return
+                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, constants);
+        }
+
         static void Initalize(string boogieOptions)
         {
             CommandLineOptions.Install(new CommandLineOptions());
@@ -505,23 +325,24 @@ namespace ProofMinimization
 
     class ProofMin
     {
+        public static bool usePerf = false;
+
         HashSet<string> keep;
         HashSet<string> dropped;
 
         Stopwatch sw;
-        bool usePerf;
+        
         Random rand;
         PersistentProgram inprog;
         Dictionary<string, int> candidateToCost;
 
         static int InvocationCounter = 0;
 
-        public ProofMin(PersistentProgram program, bool usePerf)
+        public ProofMin(PersistentProgram program)
         {
             keep = new HashSet<string>();
             dropped = null;
             sw = new Stopwatch();
-            this.usePerf = usePerf;
             rand = new Random((int)DateTime.Now.Ticks);
             this.inprog = program;
 
@@ -577,24 +398,11 @@ namespace ProofMinimization
             sw.Start();
 
             // Prune
-            var inlineDepthBound = Math.Max(0, CommandLineOptions.Clo.InlineDepth);
-            for (int id = inlineDepthBound; id <= inlineDepthBound; id++)
-            {
-                CommandLineOptions.Clo.InlineDepth = id;
-                Console.WriteLine("------ Inline Depth {0} -------", id);
-                var additional = FindMin(inprog, candidates, constantToPerf, ref perf);
+            var additional = FindMin(inprog, candidates, constantToPerf, ref perf);
 
-                // re-test the additional ones with higher inline depth
-                keep = keep.Difference(additional);
-                candidates = new HashSet<string>(additional);
+            keep = keep.Difference(additional);
+            candidates = new HashSet<string>(additional);
 
-                if (id != inlineDepthBound)
-                {
-                    var contracts = GetContracts();
-                    foreach (var c in candidates)
-                        Console.WriteLine("Potential at InDt {0}: {1}", id, contracts[c]);
-                }
-            }
             constantsToKeep = candidates;
             constantsToDrop = dropped;
             return true;
@@ -657,7 +465,7 @@ namespace ProofMinimization
         }
 
 
-        int PerfMetric(int n)
+        static int PerfMetric(int n)
         {
             if (!usePerf) return Int32.MaxValue;
             if (n < 50) return (n + 100);
@@ -681,16 +489,6 @@ namespace ProofMinimization
             return selected.ToList()[ind];
         }
 
-        public Dictionary<string, Expr> GetContracts()
-        {
-            var program = inprog.getProgram();
-            var constants = new HashSet<string>(program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
-                .Select(c => c.Name));
-
-            return
-                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, constants);
-        }
 
         public void RunOnce(bool printcontracts)
         {
@@ -787,44 +585,6 @@ namespace ProofMinimization
             return rstatus;
         }
 
-        public static List<Expr> GetExprConjunctions(Expr expr)
-        {
-            return GetSubExprs(expr, BinaryOperator.Opcode.And);
-        }
-
-        public static List<Expr> GetExprDisjuncts(Expr expr)
-        {
-            return GetSubExprs(expr, BinaryOperator.Opcode.Or);
-        }
-
-        // Return the set of conjuncts of the expr
-        public static List<Expr> GetSubExprs(Expr expr, BinaryOperator.Opcode op)
-        {
-            var conjuncts = new List<Expr>();
-            if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
-                ((expr as NAryExpr).Fun as BinaryOperator).Op == op)
-            {
-                var c0 = GetSubExprs((expr as NAryExpr).Args[0], op);
-                var c1 = GetSubExprs((expr as NAryExpr).Args[1], op);
-                conjuncts.AddRange(c0);
-                conjuncts.AddRange(c1);
-            }
-            else
-            {
-                conjuncts.Add(expr);
-            }
-
-            return conjuncts;
-        }
-
-        // Break (a && b) || (c && d) to {a, b, c, d}
-        public static List<Expr> BreakDownExpr(Expr expr)
-        {
-            var ret = new List<Expr>();
-            var disj = GetExprDisjuncts(expr);
-            disj.Iter(d => ret.AddRange(GetExprConjunctions(d)));
-            return ret;
-        }
 
     }
 }
