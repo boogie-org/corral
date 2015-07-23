@@ -62,11 +62,11 @@ namespace SmackInst
             // axiom NULL == 0;
             var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
 
-            program.AddTopLevelDeclaration(nil);
-            program.AddTopLevelDeclaration(ax);
-
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
+
+            program.AddTopLevelDeclaration(nil);
+            program.AddTopLevelDeclaration(ax);
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
@@ -266,22 +266,6 @@ namespace SmackInst
 			cmd.Lhss.Iter(e => reads.VisitExpr(e.AsExpr));
 			cmd.Rhss.Iter(e => reads.VisitExpr(e));
             foreach (var tup in reads.accesses)
-            {
-                ret.Add(MkAssert(tup.Item2));
-            }
-
-            var gm = new GatherMemAccesses();
-            foreach (var lhs in cmd.Lhss)
-            {
-                if (lhs is MapAssignLhs)
-                {
-                    var ma = lhs as MapAssignLhs;
-                    ma.Indexes.Iter(e => gm.VisitExpr(e));
-                }
-
-            }
-
-            foreach (var tup in gm.accesses)
             {
                 ret.Add(MkAssert(tup.Item2));
             }
