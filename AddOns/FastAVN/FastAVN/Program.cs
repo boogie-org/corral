@@ -100,16 +100,6 @@ namespace FastAVN
                 // initialize corral and boogie for fastAVN
                 InitializeCorralandBoogie();
 
-                // identify entrypoints
-                var origprog = BoogieUtil.ReadAndOnlyResolve(args[0]);
-                var orig_entrypoints = new HashSet<string>();
-                var entrypoints = new HashSet<string>();
-
-                origprog.TopLevelDeclarations
-                .OfType<Implementation>()
-                .Where(x => QKeyValue.FindBoolAttribute((x as Implementation).Proc.Attributes, "entrypoint"))
-                .Iter(x => orig_entrypoints.Add(x.Name));
-
                 // Run harness instrumentation
                 var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
                 var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
@@ -122,23 +112,18 @@ namespace FastAVN
                 var prog = BoogieUtil.ReadAndOnlyResolve(resultfile);
 
                 // Do a run on instrumented program, filter out entrypoints
-                Procedure entrypoint_proc = prog.TopLevelDeclarations.OfType<Procedure>().Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes)).FirstOrDefault();
-
-                Debug.Assert(entrypoint_proc != null);
-
-                Implementation entrypoint_impl = prog.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(entrypoint_proc.Name)).FirstOrDefault();
+                var entrypoints = new HashSet<string>();
+                var entrypoint_impl = prog.TopLevelDeclarations.OfType<Implementation>()
+                    .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                    .FirstOrDefault();
+                Debug.Assert(entrypoint_impl != null);
 
                 // other entrypoints can never reach an assertion, don't run AVN on them
                 foreach (Block b in entrypoint_impl.Blocks)
                 {
-                    foreach (Cmd c in b.Cmds)
-                    {
-                        if (c is CallCmd)
-                        {
-                            var cc = c as CallCmd;
-                            if (orig_entrypoints.Contains(cc.callee)) entrypoints.Add(cc.callee);
-                        }
-                    }
+                    b.Cmds.OfType<CallCmd>()
+                        .Where(cc => QKeyValue.FindBoolAttribute(cc.Attributes, AvUtil.AvnAnnotations.AvhEntryPointAttr))
+                        .Iter(cc => entrypoints.Add(cc.callee));
                 }
 
                 // do reachability analysis on procedures

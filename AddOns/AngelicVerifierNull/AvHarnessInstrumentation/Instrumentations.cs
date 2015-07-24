@@ -136,6 +136,7 @@ namespace AvHarnessInstrumentation
 
                     var callCmd = new CallCmd(Token.NoToken, impl.Name, args.ConvertAll(x => (Expr)IdentifierExpr.Ident(x)),
                         rets.ConvertAll(x => IdentifierExpr.Ident(x)));
+                    callCmd.Attributes = new QKeyValue(Token.NoToken, AvUtil.AvnAnnotations.AvhEntryPointAttr, new List<object>(), callCmd.Attributes);
 
                     cmds.Add(callCmd);
                     //succ
