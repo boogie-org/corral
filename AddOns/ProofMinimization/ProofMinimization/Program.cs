@@ -34,7 +34,6 @@ namespace ProofMinimization
 
             var boogieArgs = "";
             var once = false;
-            var usePerf = false;
             var printcontracts = false;
             var keepPatterns = new HashSet<string>();
 
@@ -70,7 +69,7 @@ namespace ProofMinimization
 
                 if (args[i].StartsWith("/perf"))
                 {
-                    usePerf = true;
+                    Minimize.usePerf = true;
                     continue;
                 }
 
@@ -90,34 +89,29 @@ namespace ProofMinimization
             }
             Console.WriteLine("Found {0} files", files.Length);
 
-
-
             if (once)
             {
-                Debug.Assert(fileToProg.Count == 1);
-                var proofmin = new ProofMin(fileToProg.Values.First(), usePerf);
-                proofmin.RunOnce(printcontracts);
+                Debug.Assert(files.Count() == 1);
+                RunOnce(new PersistentProgram(BoogieUtil.ReadAndResolve(files.First(), true)), printcontracts);
                 return;
             }
 
-            HashSet<string> candidates;
-            Dictionary<string, int> constantToPerfDelta;
-            HashSet<string> dropped;
-            var contracts = proofmin.GetContracts();
-            
-            var ret = proofmin.Run(out candidates, out dropped, out constantToPerfDelta);
+            Minimize.ReadFiles(files, keepPatterns);
 
-            if (!ret)
-                return;
+            Dictionary<int, int> templateToPerfDelta;
+            var min = Minimize.FindMin(out templateToPerfDelta);
 
-            foreach (var c in candidates)
+            var t2str = new Dictionary<int, string>();
+            Minimize.strToTemplate.Iter(tup => t2str.Add(tup.Value, tup.Key));
+
+            foreach (var c in min)
             {
-                Console.WriteLine("Additional contract required: {0}", contracts[c]);
+                Console.WriteLine("Additional contract required: {0}", t2str[c]);
             }
-            foreach (var tup in constantToPerfDelta)
+            foreach (var tup in templateToPerfDelta)
             {
                 if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, contracts[tup.Key]);
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, t2str[tup.Key]);
             }
 
             /*
@@ -233,6 +227,53 @@ namespace ProofMinimization
             System.Diagnostics.Process.GetCurrentProcess()
                 .Kill();
         }
+
+        public static void RunOnce(PersistentProgram inprog, bool printcontracts)
+        {
+            var program = inprog.getProgram();
+            program.Typecheck();
+            BoogieUtil.PrintProgram(program, "hi_query.bpl");
+
+            Console.WriteLine("Running HoudiniLite");
+            var assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
+            Console.WriteLine("Inferred {0} contracts", assignment.Count);
+
+            // Read the program again, add contracts
+            program = inprog.getProgram();
+            program.Typecheck();
+
+            var contracts =
+                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
+
+            BoogieUtil.PrintProgram(program, "si_query.bpl");
+
+            // Run SI
+            var err = new List<BoogieErrorTrace>();
+
+            var rstatus = BoogieVerify.Verify(program, out err, true);
+            Console.WriteLine("SI Return status: {0}", rstatus);
+            if (err == null || err.Count == 0)
+                Console.WriteLine("program verified");
+            else
+            {
+                foreach (var trace in err.OfType<BoogieAssertErrorTrace>())
+                {
+                    Console.WriteLine("{0} did not verify", trace.impl.Name);
+                    //if (!config.noTrace) trace.cex.Print(0, Console.Out);
+                }
+            }
+
+            Console.WriteLine(string.Format("Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
+            Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+
+            if (printcontracts)
+            {
+                foreach (var tup in contracts)
+                    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
+
+            }
+        }
+
 
         public static Program InjectDualityProof(Program program, string DualityProofFile)
         {
@@ -489,52 +530,6 @@ namespace ProofMinimization
             return selected.ToList()[ind];
         }
 
-
-        public void RunOnce(bool printcontracts)
-        {
-            var program = inprog.getProgram();
-            program.Typecheck();
-            BoogieUtil.PrintProgram(program, "hi_query.bpl");
-
-            Console.WriteLine("Running HoudiniLite");
-            var assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
-            Console.WriteLine("Inferred {0} contracts", assignment.Count);
-
-            // Read the program again, add contracts
-            program = inprog.getProgram();
-            program.Typecheck();
-
-            var contracts =
-                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
-
-            BoogieUtil.PrintProgram(program, "si_query.bpl");
-
-            // Run SI
-            var err = new List<BoogieErrorTrace>();
-
-            var rstatus = BoogieVerify.Verify(program, out err, true);
-            Console.WriteLine("SI Return status: {0}", rstatus);
-            if (err == null || err.Count == 0)
-                Console.WriteLine("program verified");
-            else
-            {
-                foreach (var trace in err.OfType<BoogieAssertErrorTrace>())
-                {
-                    Console.WriteLine("{0} did not verify", trace.impl.Name);
-                    //if (!config.noTrace) trace.cex.Print(0, Console.Out);
-                }
-            }
-
-            Console.WriteLine(string.Format("Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
-            Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
-
-            if (printcontracts)
-            {
-                foreach (var tup in contracts)
-                    Console.WriteLine("{0}: {1}", tup.Key, tup.Value);
-
-            }
-        }
 
         static int IterCnt = 0;
 
