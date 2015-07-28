@@ -241,6 +241,9 @@ namespace cba
 
         private static Program PrepareQuery(IEnumerable<Implementation> loopImpls, Program program)
         {
+            // Sometimes loops have multiple backedges, hence multiple recursive calls: merge them
+            loopImpls.Iter(impl => mergeRecCalls(impl));
+
             var dup = new FixedDuplicator(true);
             // Make copies of loopImpl procs
             var loopProcsCopy = new Dictionary<string, Procedure>();
@@ -394,6 +397,122 @@ namespace cba
 
             loopCaller.Add(impl.Name, preds.First());
 
+            return true;
+        }
+
+
+        // If the impl has multiple calls:
+        //   "call foo(args); return;"
+        // with the same args, then merge these calls into one
+        public static string mergeRecCalls(Implementation impl)
+        {
+            // find the recursive calls
+            var rBlocks = new List<Block>();
+            foreach (var blk in impl.Blocks)
+            {
+                var rc =
+                    blk.Cmds
+                    .OfType<CallCmd>()
+                    .Where(cc => cc.callee == impl.Name);
+                if (!rc.Any()) continue;
+                if (rc.Count() != 1) return null;
+
+                // make sure recursive call is last in the block
+                var rcall = rc.First();
+                if (rcall != blk.Cmds.Last()) return null;
+
+                // check return
+                if (!(blk.TransferCmd is ReturnCmd)) return null;
+
+                rBlocks.Add(blk);
+            }
+
+            if (rBlocks.Count <= 1) return null;
+
+            // grab the rec calls
+            var recCalls = new Dictionary<string, CallCmd>();
+            rBlocks.Iter(blk => recCalls.Add(blk.Label, blk.Cmds.Last() as CallCmd));
+
+            // prune attributes
+            var origAttr = new Dictionary<string, QKeyValue>();
+            recCalls.Iter(kvp => origAttr.Add(kvp.Key, kvp.Value.Attributes));
+
+            recCalls.Values
+                .Iter(cc => cc.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "si_unique_call", "si_old_unique_call" }, cc.Attributes));
+
+            // check that all recursive calls have the same arguments
+
+            // Check 1: ToString
+            var callStr = new HashSet<string>();
+            recCalls.Values
+                .Iter(cc =>
+                {
+                    var str = new System.IO.StringWriter();
+                    var tt = new TokenTextWriter(str);
+                    cc.Emit(tt, 0);
+                    tt.Close();
+                    callStr.Add(str.ToString());
+                    str.Close();
+                });
+
+            if (callStr.Count != 1)
+            {
+                // restore attributes
+                recCalls
+                    .Iter(kvp => kvp.Value.Attributes = origAttr[kvp.Key]);
+                return null;
+            }
+
+            // Check 2: AST
+            var rc1 = recCalls[recCalls.Keys.First()];
+            if (
+                recCalls.Values
+                .Where(c => !IsSame(rc1, c))
+                .Any())
+            {
+                // restore attributes
+                recCalls
+                    .Iter(kvp => kvp.Value.Attributes = origAttr[kvp.Key]);
+
+                return null;
+            }
+
+            // Merge
+            rc1.Attributes = origAttr[recCalls.Keys.First()];
+            var nb = BoogieAstFactory.MkBlock(rc1);
+            rBlocks.Iter(blk => blk.Cmds.Remove(blk.Cmds.Last()));
+            rBlocks.Iter(blk =>
+            {
+                var gc = BoogieAstFactory.MkGotoCmd(nb.Label);
+                gc.labelTargets = new List<Block>();
+                gc.labelTargets.Add(nb);
+                blk.TransferCmd = gc;
+            });
+            impl.Blocks.Add(nb);
+            return nb.Label;
+        }
+
+
+        // check if two calls have the same arguments
+        private static bool IsSame(CallCmd c1, CallCmd c2)
+        {
+            if (c1.Ins.Count != c2.Ins.Count) return false;
+            if (c1.Outs.Count != c2.Outs.Count) return false;
+            if (c1.callee != c2.callee) return false;
+
+            var op = c1.Outs.Zip(c2.Outs, (ie1, ie2) => (ie1.Decl.Name == ie2.Decl.Name));
+            if (op.Any(b => b == false)) return false;
+
+            var ins = c1.Ins.Zip(c2.Ins, (e1, e2) => Tuple.Create(e1, e2));
+            foreach (var pair in ins)
+            {
+                var e1 = pair.Item1 as IdentifierExpr;
+                var e2 = pair.Item2 as IdentifierExpr;
+
+                // TODO: more deeper check
+                if (e1 == null || e2 == null) return false;
+                if (e1.Decl.Name != e2.Decl.Name) return false;
+            }
             return true;
         }
     }
