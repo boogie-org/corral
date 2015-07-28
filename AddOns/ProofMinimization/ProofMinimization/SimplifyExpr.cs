@@ -47,16 +47,19 @@ namespace ProofMinimization
             // Remove implies
             if (node.Fun is BinaryOperator && (node.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Imp)
             {
-                ret = Expr.Or(Expr.Not(node.Args[0]), node.Args[1]) as NAryExpr;
+                ret = Expr.Or(Expr.Not(node.Args[0]), node.Args[1]);
+                return base.VisitNAryExpr(ret as NAryExpr);
             }
 
             // Push negation inside
             if (node.Fun is UnaryOperator && (node.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not)
             {
                 ret = PushNegationInside(node.Args[0]);
+                if (ret is NAryExpr) return base.VisitNAryExpr(ret as NAryExpr);
+                return base.VisitExpr(ret);
             }
 
-            return base.VisitExpr(ret);
+            return base.VisitNAryExpr(node);
         }
 
 
@@ -167,9 +170,11 @@ namespace ProofMinimization
                 expr = constructExpr(op, arg1, arg2);
                 applyNeg = false;
             }
-
-            expr = constructExpr(new BinaryOperator(Token.NoToken, newop), arg1, arg2);
-            applyNeg = true;
+            else
+            {
+                expr = constructExpr(new BinaryOperator(Token.NoToken, newop), arg1, arg2);
+                applyNeg = true;
+            }
         }
 
 
