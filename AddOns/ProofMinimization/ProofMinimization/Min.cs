@@ -19,6 +19,7 @@ namespace ProofMinimization
         static readonly int TemplateCounterStart = 1000;
         static int IterCnt = 0;
         public static bool usePerf = false;
+        public static bool useSI = true;
 
         // file name -> Program
         static Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
@@ -353,6 +354,7 @@ namespace ProofMinimization
         static int PerfMetric(int n)
         {
             if (!usePerf) return Int32.MaxValue;
+            if (!useSI) return (n+1);
             if (n < 50) return (n + 100);
             return 2 * n;
         }

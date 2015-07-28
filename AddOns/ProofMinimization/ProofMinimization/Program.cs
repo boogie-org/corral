@@ -56,6 +56,12 @@ namespace ProofMinimization
                     once = true;
                     continue;
                 }
+                if (args[i] == "/noSI")
+                {
+                    Minimize.useSI = false;
+                    Minimize.usePerf = true;
+                    continue;
+                }
                 if (args[i] == "/dbg")
                 {
                     dbg = true;
