@@ -56,6 +56,7 @@ namespace ExplainError
         private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestatevar}
         private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
         private static bool noFilters = false; //if true, then matches any atom
+        private static bool diplayPropertyMaps = true; //hack: added for filtering valid
 
         //flags to define Boolean structure on the cover
         private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL;
@@ -1491,6 +1492,13 @@ namespace ExplainError
             vu.Visit(c);
             return vu.Vars.Any(v => QKeyValue.FindBoolAttribute(v.Attributes, "guardvar"));
         }
+
+        private static bool ContainsPropertyMap(Expr c)
+        {
+            var vu = new VarsUsed();
+            vu.Visit(c);
+            return vu.Vars.Any(v => (QKeyValue.FindBoolAttribute(v.Attributes, "propertyMap") && v.TypedIdent.Type.IsMap));
+        }
         private static bool ContainsTypeStateVar(Expr c)
         {
             var expr = c as NAryExpr;
@@ -1519,6 +1527,7 @@ namespace ExplainError
             if (noFilters) return false; //anything matches
             if (displayTypeStateVariables && ContainsTypeStateVar(c)) return false;  //definitely matches
             if (!displayGuardVariables && ContainsGuardVar(c)) return true;  //definitely not matches
+            if (diplayPropertyMaps && ContainsPropertyMap(c)) return false;
             if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return true;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return true;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return true;
