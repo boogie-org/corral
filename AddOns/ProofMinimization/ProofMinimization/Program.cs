@@ -36,9 +36,16 @@ namespace ProofMinimization
             var once = false;
             var printcontracts = false;
             var keepPatterns = new HashSet<string>();
+            var filePatterns = new HashSet<string>();
 
-            for (int i = 1; i < args.Length; i++)
+            for (int i = 0; i < args.Length; i++)
             {
+                if (!args[i].StartsWith("/") && args[i].EndsWith(".bpl"))
+                {
+                    filePatterns.Add(args[i]);
+                    continue;
+                }
+
                 if (args[i] == "/break")
                 {
                     System.Diagnostics.Debugger.Launch();
@@ -47,6 +54,12 @@ namespace ProofMinimization
                 if (args[i] == "/once")
                 {
                     once = true;
+                    continue;
+                }
+                if (args[i] == "/noSI")
+                {
+                    Minimize.useSI = false;
+                    Minimize.usePerf = true;
                     continue;
                 }
                 if (args[i] == "/dbg")
@@ -81,13 +94,18 @@ namespace ProofMinimization
             Initalize(boogieArgs);
 
             // Get the input files
-            var files = System.IO.Directory.GetFiles(".", args[0]);
-            if (files.Length == 0)
+            var files = new HashSet<string>();
+            foreach (var fp in filePatterns)
+            {
+                files.UnionWith(System.IO.Directory.GetFiles(".", fp));
+            }
+
+            if (files.Count == 0)
             {
                 Console.WriteLine("No files given");
                 return;
             }
-            Console.WriteLine("Found {0} files", files.Length);
+            Console.WriteLine("Found {0} files", files.Count);
 
             if (once)
             {

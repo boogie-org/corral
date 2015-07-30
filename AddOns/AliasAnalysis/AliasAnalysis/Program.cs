@@ -223,6 +223,12 @@ namespace AliasAnalysis
 
             var nary = ret as NAryExpr;
             if (nary != null && nary.Fun is BinaryOperator
+                && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
+            {
+                if (nary.Args.Any(a => a == Expr.True))
+                    return Expr.True;
+            }
+            if (nary != null && nary.Fun is BinaryOperator
                 && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
             {
                 if (nary.Args.Any(a => a == Expr.False))

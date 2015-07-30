@@ -19,6 +19,7 @@ namespace ProofMinimization
         static readonly int TemplateCounterStart = 1000;
         static int IterCnt = 0;
         public static bool usePerf = false;
+        public static bool useSI = true;
 
         // file name -> Program
         static Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
@@ -26,6 +27,8 @@ namespace ProofMinimization
         static Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
         // identifier string -> template ID 
         public static Dictionary<string, int> strToTemplate = new Dictionary<string, int>();
+        public static Dictionary<int, string> templateToStr = new Dictionary<int, string>();
+
         // file -> constants to keep always
         static Dictionary<string, HashSet<string>> fileToKeepConstants = new Dictionary<string, HashSet<string>>();
         // file -> perf
@@ -114,7 +117,14 @@ namespace ProofMinimization
                         if (fileToKeepConstants[f].Contains(constantName)) continue;
 
                         var templateId = QKeyValue.FindIntAttribute(ens.Attributes, "template", -1);
-                        if (templateId != -1) addTemplate(templateId, f, constantName);
+                        if (templateId != -1)
+                        {
+                            addTemplate(templateId, f, constantName);
+                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
+                            {
+                                strToTemplate.Add(SimplifyExpr.ExprToTemplate(expr), templateId);
+                            }
+                        }
                         else
                         {
                             var temp = SimplifyExpr.ExprToTemplate(expr);
@@ -138,14 +148,16 @@ namespace ProofMinimization
                 fileToProg.Add(f, new PersistentProgram(program));
             }
 
+            templateToStr = new Dictionary<int, string>();
+            strToTemplate.Iter(tup => templateToStr.Add(tup.Value, tup.Key));
+
             if (dbg)
             {
-                var id2str = new Dictionary<int, string>();
-                strToTemplate.Iter(tup => id2str.Add(tup.Value, tup.Key));
+
 
                 foreach (var tup in templateMap)
                 {
-                    Console.WriteLine("Template {0} :: {1}", tup.Key, id2str[tup.Key]);
+                    Console.WriteLine("Template {0} :: {1}", tup.Key, templateToStr[tup.Key]);
                     foreach (var tup2 in tup.Value)
                     {
                         Console.WriteLine("  File {0}", tup2.Key);
@@ -175,14 +187,18 @@ namespace ProofMinimization
                 var c = PickRandom(templates);
                 templates.Remove(c);
 
-                Console.WriteLine("  >> Trying {0}", c);
+                Console.WriteLine("  >> Trying {0} :: {1}", c, templateToStr[c]);
 
                 Dictionary<string, int> perf;
-                var rt = PruneAndRun(templates.Union(tokeep), out perf);
+                HashSet<string> filesVerified;
+                string fileFailed;
+
+                var rt = PruneAndRun(templates.Union(tokeep), out perf, out filesVerified, out fileFailed);
 
                 if (rt == BoogieVerify.ReturnStatus.OK)
                 {
                     // dropping was fine
+                    Console.WriteLine("  >> Files verified: {0}", filesVerified.Concat(" "));
                     Console.WriteLine("  >> Dropping it");
 
                     // TODO: maintain information of extra constants that are
@@ -198,6 +214,9 @@ namespace ProofMinimization
                 }
                 else
                 {
+                    Debug.Assert(fileFailed != null);
+                    Console.WriteLine("  >> Files verified: {0}", filesVerified.Concat(" "));
+                    Console.WriteLine("  >> File failed: {0}", fileFailed);
                     Console.WriteLine("  >> Cannot drop");
                     tokeep.Add(c);
                 }
@@ -211,9 +230,13 @@ namespace ProofMinimization
 
 
         // Prune away non-candidates, verify using the rest
-        static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf)
+        static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf, out HashSet<string> filesVerified, out string fileFailed)
         {
             perf = new Dictionary<string, int>();
+
+            filesVerified = new HashSet<string>();
+            fileFailed = null;
+
             foreach (var tup in fileToProg)
             {
                 var file = tup.Key;
@@ -267,9 +290,13 @@ namespace ProofMinimization
                 BoogieVerify.verificationTime = TimeSpan.Zero;
 
                 if (rstatus != BoogieVerify.ReturnStatus.OK)
+                {
+                    fileFailed = file;
                     return BoogieVerify.ReturnStatus.NOK;
+                }
 
                 perf[file] = procs_inlined;
+                filesVerified.Add(file);
             }
 
             return BoogieVerify.ReturnStatus.OK;
@@ -282,6 +309,8 @@ namespace ProofMinimization
 
             var program = inp.getProgram();
             program.Typecheck();
+
+            program =  BoogieUtil.ReResolve(program);
 
             // Remove non-candidates
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, candidates, true);
@@ -325,6 +354,7 @@ namespace ProofMinimization
         static int PerfMetric(int n)
         {
             if (!usePerf) return Int32.MaxValue;
+            if (!useSI) return (n+1);
             if (n < 50) return (n + 100);
             return 2 * n;
         }

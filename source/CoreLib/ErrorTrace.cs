@@ -1748,7 +1748,7 @@ namespace cba
                 return;
             }
 
-            var acmd = cmd as AssertCmd;
+            var acmd = cmd as PredicateCmd;
             if (acmd == null)
             {
                 return;
@@ -1765,12 +1765,24 @@ namespace cba
             }
             else
             {
-                file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourceFile");
-                if (file == null) file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile");
-                line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceLine", -1);
-                if (line == -1) line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceline", -1);
-                extra = QKeyValue.FindStringAttribute(acmd.Attributes, "print");
-                am = QKeyValue.FindStringAttribute(acmd.Attributes, "abortM");
+                var attr = BoogieUtil.getAttr("sourceloc", acmd.Attributes);
+
+                if (attr != null && attr.Count == 3)
+                {
+                    file = attr[0] as string;
+                    var tt = attr[1] as LiteralExpr;
+                    if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
+                        line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;
+                }
+                else
+                {
+                    file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourceFile");
+                    if (file == null) file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile");
+                    line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceLine", -1);
+                    if (line == -1) line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceline", -1);
+                    extra = QKeyValue.FindStringAttribute(acmd.Attributes, "print");
+                    am = QKeyValue.FindStringAttribute(acmd.Attributes, "abortM");
+                }
             }
 
             if (file == null || line == -1) return;
