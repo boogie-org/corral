@@ -46,6 +46,13 @@ namespace ProofMinimization
                     continue;
                 }
 
+                if (args[i].StartsWith("/files:"))
+                {
+                    filePatterns.UnionWith(
+                        System.IO.File.ReadAllLines(args[i].Substring("/files:".Length)));
+                    continue;
+                }                   
+
                 if (args[i] == "/break")
                 {
                     System.Diagnostics.Debugger.Launch();
@@ -97,7 +104,10 @@ namespace ProofMinimization
             var files = new HashSet<string>();
             foreach (var fp in filePatterns)
             {
-                files.UnionWith(System.IO.Directory.GetFiles(".", fp));
+                if (System.IO.Path.IsPathRooted(fp))
+                    files.Add(fp);
+                else
+                    files.UnionWith(System.IO.Directory.GetFiles(".", fp));
             }
 
             if (files.Count == 0)

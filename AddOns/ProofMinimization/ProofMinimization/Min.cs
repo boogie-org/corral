@@ -151,10 +151,10 @@ namespace ProofMinimization
             templateToStr = new Dictionary<int, string>();
             strToTemplate.Iter(tup => templateToStr.Add(tup.Value, tup.Key));
 
+            Console.WriteLine("Found {0} templates", templateMap.Count);
+
             if (dbg)
             {
-
-
                 foreach (var tup in templateMap)
                 {
                     Console.WriteLine("Template {0} :: {1}", tup.Key, templateToStr[tup.Key]);
