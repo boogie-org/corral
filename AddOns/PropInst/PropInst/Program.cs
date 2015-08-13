@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Text;
@@ -14,6 +15,8 @@ namespace PropInst
 {
     internal class Driver
     {
+        public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
+
         private static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -23,12 +26,13 @@ namespace PropInst
             }
 
             var globalDecs = new List<GlobalDec>();
-            var insertions = new List<Insertion>();
+            var insertionsAtCmd = new List<Prop_InsertCodeAtCmd>();
             var giveBodyToStubs = new List<GiveBodyToStub>();
+            var insertionsAtProcStart = new List<Prop_InsertCodeAtProcStart>();
 
             #region parse the property file
 
-            var propString = System.IO.File.ReadAllText(args[0]);
+            var propString = File.ReadAllText(args[0]);
             var singleInstructions = propString.Split(new string[] { "####" }, StringSplitOptions.None);
             foreach (var s in singleInstructions)
             {
@@ -50,10 +54,13 @@ namespace PropInst
                         }
                         break;
                     case "insertionBefore:":
-                        insertions.Add(new Insertion(instructionData));
+                        insertionsAtCmd.Add(new Prop_InsertCodeAtCmd(instructionData));
                         break;
                     case "giveBodyToStub:":
                         giveBodyToStubs.Add(new GiveBodyToStub(instructionData));
+                        break;
+                    case "insertCodeAtProcedureStart:":
+                        insertionsAtProcStart.Add(new Prop_InsertCodeAtProcStart(instructionData));
                         break;
                 }
 
@@ -88,7 +95,7 @@ namespace PropInst
                     foreach (var toMatchStub in gbts.Stubs)
                     {
 
-                        if (Matches(toMatchStub, boogieStub))
+                        if (MatchStubs(toMatchStub, boogieStub))
                         {
                             var newProc = BoogieAstFactory.MkImpl(
                                 boogieStub.Name,
@@ -111,28 +118,94 @@ namespace PropInst
 
             #endregion
 
-            //Property: find insertions sites (Commands), insert code there
-            InstrumentInsertion.Instrument(boogieProgram, insertions.First());
+            #region Property: find insertions sites (Commands), insert code there
+            //InstrumentInsertionAtCmd.Instrument(boogieProgram, insertions.First());
+            insertionsAtCmd.Iter(i => InstrumentInsertionAtCmd.Instrument(boogieProgram, i));
+            #endregion
 
+            //Property: find insertion sites (Procedures), insert code there
+
+            
+            insertionsAtProcStart.Iter(i => InstrumentInsertionAtProc.Instrument(boogieProgram, i));
 
 
             // write the output
             BoogieUtil.PrintProgram(boogieProgram, "result.bpl");
         }
-
-
-        private class InstrumentInsertion
+        private class InstrumentInsertionAtProc
         {
-            private Insertion _insertion;
-            private InstrumentInsertion(Insertion ins)
+
+
+            private Prop_InsertCodeAtProcStart _property;
+
+            public InstrumentInsertionAtProc(Prop_InsertCodeAtProcStart pins)
             {
-                _insertion = ins;
+                _property = pins;
             }
 
-
-            public static void Instrument(Program program, Insertion ins)
+            private static HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
+            public static void Instrument(Program program, Prop_InsertCodeAtProcStart ins)
             {
-                var im = new InstrumentInsertion(ins);
+                 var im = new InstrumentInsertionAtProc(ins);
+
+                program.TopLevelDeclarations
+                    .OfType<Implementation>()
+                    .Iter(im.Instrument);
+            }
+
+            private void Instrument(Implementation impl)
+            {
+                var psm = new ProcedureSigMatcher(_property.ToMatch, impl);
+                if (!psm.MatchSig())
+                {
+                    return;
+                } 
+
+                Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok), 
+                    "trying to instrument a procedure that has been instrumented already " +
+                    "--> behaviour of resulting boogie program is not well-defined," +
+                    " i.e., it may depend on the order of the instrumentations in the property");
+                _procsThatHaveBeenInstrumented.Add(impl.tok);
+
+                var fpv = new FindParamsVisitor();
+                fpv.VisitCmdSeq(_property.ToInsert);
+                IdentifierExpr anyP = fpv.Idexs.First(i => i.Name == "##ANYPARAMS");
+                if (anyP != null)
+                {
+                    foreach (var p in impl.InParams)
+                    {
+                        var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
+                        var substitution = new Dictionary<IdentifierExpr, Expr> {{anyP, id}};
+                        var sv = new SubstitionVisitor(substitution);
+                        var toInsertClone = _property.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));//hack to get a deepcopy
+                        var newCmds = sv.VisitCmdSeq(toInsertClone);
+                        impl.Blocks.Insert(0, BoogieAstFactory.MkBlock(newCmds));
+                    }
+                }
+            }
+        }
+
+        class FindParamsVisitor : FixedVisitor
+        {
+            public List<IdentifierExpr> Idexs = new List<IdentifierExpr>();
+            public override Expr VisitIdentifierExpr(IdentifierExpr node)
+            {
+                Idexs.Add(node);
+                return base.VisitIdentifierExpr(node);
+            }
+        }
+
+        private class InstrumentInsertionAtCmd
+        {
+            private readonly Prop_InsertCodeAtCmd _propInsertCodeAtCmd;
+            private InstrumentInsertionAtCmd(Prop_InsertCodeAtCmd ins)
+            {
+                _propInsertCodeAtCmd = ins;
+            }
+
+            public static void Instrument(Program program, Prop_InsertCodeAtCmd ins)
+            {
+                var im = new InstrumentInsertionAtCmd(ins);
 
                 program.TopLevelDeclarations
                     .OfType<Implementation>()
@@ -151,30 +224,15 @@ namespace PropInst
                         if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
                         else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
                         else if (cmd is AssertCmd) newcmds.AddRange(ProcessAssert(cmd as AssertCmd));
-                        //else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
-                        //if (cmd.GetType() == _insertion.GetType())
-                        //{
-                        //    newcmds.AddRange(ProcessCmd(cmd));
-                        //}
+                        else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
                         else newcmds.Add(cmd);
                     }
                     block.Cmds = newcmds;
                 }
-
             }
-                        private List<Cmd> ProcessCall(CallCmd cmd)
+            private List<Cmd> ProcessCall(CallCmd cmd)
             {
                 var ret = new List<Cmd>();
-
-                //var gm = new GatherMemAccesses();
-                //var gm = null
-                //cmd.Ins.Where(e => e != null).Iter(e => gm.VisitExpr(e));
-
-                //foreach (var tup in gm.accesses)
-                //{
-                //    ret.Add(MkAssert(tup.Item2));
-                //}
-                //ret.Add(cmd);
 
                 return ret;
             }
@@ -183,61 +241,22 @@ namespace PropInst
             {
                 var ret = new List<Cmd>();
 
-                var toMatch = _insertion.Match as AssumeCmd;
+                var toMatch = (AssumeCmd) _propInsertCodeAtCmd.Match;
 
-                //check if the attributes in the match are a subset of the attributs in cmd
-                var matches = true;
-                var attr = toMatch.Attributes;
-                for (; attr != null; attr = attr.Next)
-                {
-                    if (!BoogieUtil.checkAttrExists(attr.Key, cmd.Attributes))
-                    {
-                        return new List<Cmd>() { cmd }; //no subset --> do nothing
-                    }
-                }
-
-
-
-
+                if (!AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
+                    return new List<Cmd>() { cmd }; //not all attributs of toMatch are in cmd --> do nothing
 
                 //check if the Expression matches
-                MatchVisitor mv = new MatchVisitor(new List<Expr>() { toMatch.Expr });
+                var mv = new ExprMatchVisitor(new List<Expr>() { toMatch.Expr });
                 mv.VisitExpr(cmd.Expr);
 
                 if (mv.MayStillMatch)
                 {
                     var sv = new SubstitionVisitor(mv.Substitution);
-
-                    ret.AddRange(sv.VisitCmdSeq(_insertion.ToInsert));
-
-                    //make hashtable with variables..
-                    //var ht = new Dictionary<Variable, Expr>();
-
-                    //foreach (var p in mv.Substitution)
-                    //{
-                    //    string varDecStr = string.Format("var {0} : int;", p.Key.Name);
-                    //    var vd = Driver.ToVariable(varDecStr);
-                    //    ht.Add(vd, p.Value);
-                    //}
-
-                    //var sub = Substituter.SubstitutionFromHashtable(ht);
-
-                    //foreach (var c in _insertion.ToInsert)
-                    //{
-                    //    ret.Add(Substituter.Apply(sub, c));
-                    //}
-
-
-
+                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));//hack to get a deepcopy
+                    ret.AddRange(sv.VisitCmdSeq((List<Cmd>) toInsertClone));
                 }
 
-                //var gm = new GatherMemAccesses();
-                //gm.VisitExpr(cmd.Expr);
-                //foreach (var tup in gm.accesses)
-                //{
-                //    ret.Add(MkAssert(tup.Item2));
-                //}
-                //ret.Add(cmd);
                 ret.Add(cmd);
                 return ret;
             }
@@ -254,16 +273,7 @@ namespace PropInst
             {
                 var ret = new List<Cmd>();
 
-                //var reads = new GatherMemAccesses();
 
-                //cmd.Lhss.Iter(e => reads.VisitExpr(e.AsExpr));
-                //cmd.Rhss.Iter(e => reads.VisitExpr(e));
-                //foreach (var tup in reads.accesses)
-                //{
-                //    ret.Add(MkAssert(tup.Item2));
-                //}
-
-                //ret.Add(cmd);
 
                 ret.Add(cmd);
                 return ret;
@@ -272,8 +282,8 @@ namespace PropInst
 
         class SubstitionVisitor : FixedVisitor
         {
-            private Dictionary<IdentifierExpr, IdentifierExpr> sub;
-            public SubstitionVisitor(Dictionary<IdentifierExpr, IdentifierExpr> psub)
+            private readonly Dictionary<IdentifierExpr, Expr> sub;
+            public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> psub)
             {
                 sub = psub;
             }
@@ -289,13 +299,13 @@ namespace PropInst
             }
         }
 
-        class MatchVisitor : FixedVisitor
+        class ExprMatchVisitor : FixedVisitor
         {
             private List<Expr> _toConsume;
             public bool MayStillMatch = true;
-            public readonly Dictionary<IdentifierExpr, IdentifierExpr> Substitution = new Dictionary<IdentifierExpr, IdentifierExpr>();
+            public readonly Dictionary<IdentifierExpr, Expr> Substitution = new Dictionary<IdentifierExpr, Expr>();
 
-            public MatchVisitor(List<Expr> pToConsume)
+            public ExprMatchVisitor(List<Expr> pToConsume)
             {
                 _toConsume = pToConsume;
             }
@@ -335,15 +345,9 @@ namespace PropInst
                 }
                 return base.VisitIdentifierExpr(node);
             }
-
-
-            public override Expr VisitExpr(Expr node)
-            {
-                return base.VisitExpr(node);
-            }
         }
 
-        private static bool Matches(Procedure toMatchStub, Procedure boogieStub)
+        private static bool MatchStubs(Procedure toMatchStub, Procedure boogieStub)
         {
             //paramsToSubstitute = new Dictionary<Variable, Variable>();
             if (toMatchStub.Name != boogieStub.Name)
@@ -357,14 +361,19 @@ namespace PropInst
                 if (toMatchStub.InParams[i].GetType() != boogieStub.InParams[i].GetType())
                     return false;
             }
-            //for (int i = 0; i < toMatchStub.InParams.Count; i++)
-            //{
-            //    var p = toMatchStub.InParams[i];
-            //    if (p.Name.StartsWith("##"))
-            //    {
-            //        paramsToSubstitute.Add(p, boogieStub.InParams[i]);
-            //    }
-            //}
+
+            return true;
+        }
+ 
+        public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
+        {
+            for (; left != null; left = left.Next)//TODO: make a reference copy of left to work on??
+            {
+                if (!BoogieUtil.checkAttrExists(left.Key, right))
+                {
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -416,50 +425,59 @@ namespace PropInst
             }
             return new string[] { strInParen, rest };
         }*/
+    }
 
-        public static Expr ToExpr(string str)
+    internal class ProcedureSigMatcher
+    {
+        private Procedure _toMatch;
+        private Implementation _impl;
+
+        public ProcedureSigMatcher(Procedure toMatch, Implementation impl)
         {
-            Program program;
-
-            // parse str as an unresolved expr
-            var programText = string.Format("procedure foo(); ensures {0};", str);
-            Parser.Parse(programText, "dummy.bpl", out program);
-
-            return program.TopLevelDeclarations.OfType<Procedure>()
-                .First().Ensures.First().Condition;
+            _impl = impl;
+            _toMatch = toMatch;
         }
 
-        public static Cmd ToCmd(string str)
+        public bool MatchSig()
         {
-            Program program;
 
-            // parse str as an unresolved expr
-            var programText = string.Format("procedure foo() {{ {0} }}", str);
-            Parser.Parse(programText, "dummy.bpl", out program);
+            if (!Driver.AreAttributesASubset(_toMatch.Attributes, _impl.Attributes))
+                return false;
 
-            return program.TopLevelDeclarations.OfType<Implementation>().First().Blocks.First().Cmds.First();
-        }
+            if (_toMatch.Name.StartsWith("##"))
+            {
 
-        public static Declaration ToDecl(string str)
-        {
-            Program program;
-            Parser.Parse(str, "dummy.bpl", out program);
-            return program.TopLevelDeclarations.First();
-        }
+            }
+            else if (_toMatch.Name != _impl.Name)
+            {
+                return false;
+            }
 
-        public static Procedure ToProcedure(string str)
-        {
-            Program program;
-            Parser.Parse(str, "dummy.bpl", out program);
-            return program.TopLevelDeclarations.OfType<Procedure>().First();
 
-        }
+            if (_toMatch.InParams.Count == 1 && _toMatch.InParams[0].Name == "##ANYPARAMS")
+            {
+                
+            }
+            else if (_toMatch.InParams.Count != _impl.InParams.Count)
+            {
+                return false;
+            }
+            else
+            {
+                for (int i = 0; i < _toMatch.InParams.Count; i++)
+                {
+                    if (_toMatch.InParams[i].GetType() != _impl.InParams[i].GetType())
+                        return false;
+                }
+            }
 
-        internal static Variable ToVariable(string str)
-        {
-            Program program;
-            Parser.Parse(str, "dummy.bpl", out program);
-            return program.TopLevelDeclarations.OfType<Variable>().First();
+            if (_toMatch.OutParams.Count == 1 && _toMatch.OutParams[0].Name == "##ANYPARAMS")
+            {
+                
+            }
+            else if (_toMatch.OutParams.Count != _impl.OutParams.Count)
+                return false;
+            return true;
         }
     }
 
@@ -470,7 +488,7 @@ namespace PropInst
             Dec = new List<Declaration>();
             foreach (var line in pDec.Split(new char[] { '\n' }))
             {
-                Dec.Add(Driver.ToDecl(line));
+                Dec.Add(StringToBoogie.ToDecl(line));
             }
         }
 
@@ -482,7 +500,7 @@ namespace PropInst
         }
     }
 
-    internal class Insertion
+    internal class Prop_InsertCodeAtCmd
     {
         public readonly Cmd Match;
         public readonly List<Cmd> ToInsert = new List<Cmd>();
@@ -491,7 +509,7 @@ namespace PropInst
             Match, Insert, None
         };
 
-        public Insertion(string s)
+        public Prop_InsertCodeAtCmd(string s)
         {
             var mode = ParseMode.None;
             foreach (var line in s.Split('\n'))
@@ -509,10 +527,10 @@ namespace PropInst
                         {
                             case ParseMode.Match:
                                 Debug.Assert(Match == null);
-                                Match = Driver.ToCmd(line);
+                                Match = StringToBoogie.ToCmd(line);
                                 break;
                             case ParseMode.Insert:
-                                ToInsert.Add(Driver.ToCmd(line));
+                                ToInsert.Add(StringToBoogie.ToCmd(line));
                                 break;
                             default:
                                 Debug.Assert(false);
@@ -551,10 +569,10 @@ namespace PropInst
                         switch (mode)
                         {
                             case ParseMode.Stubs:
-                                Stubs.Add(Driver.ToProcedure(line));
+                                Stubs.Add(StringToBoogie.ToProcedure(line));
                                 break;
                             case ParseMode.Body:
-                                Body.Add(Driver.ToCmd(line));
+                                Body.Add(StringToBoogie.ToCmd(line));
                                 break;
                             default:
                                 Debug.Assert(false);
@@ -564,6 +582,48 @@ namespace PropInst
                 }
             }
 
+        }
+    }
+
+    class Prop_InsertCodeAtProcStart
+    {
+        public readonly Procedure ToMatch;
+        public readonly List<Cmd> ToInsert = new List<Cmd>();
+        private enum ParseMode
+        {
+            Match, Insert, None
+        };
+
+        public Prop_InsertCodeAtProcStart(string s)
+        {
+            var mode = ParseMode.None;
+            foreach (var line in s.Split('\n'))
+            {
+                switch (line.Trim())
+                {
+                    case "procedureSignature:":
+                        mode = ParseMode.Match;
+                        break;
+                    case "code:":
+                        mode = ParseMode.Insert;
+                        break;
+                    default:
+                        switch (mode)
+                        {
+                            case ParseMode.Match:
+                                Debug.Assert(ToMatch == null);
+                                ToMatch = StringToBoogie.ToProcedure(line);
+                                break;
+                            case ParseMode.Insert:
+                                ToInsert.Add(StringToBoogie.ToCmd(line));
+                                break;
+                            default:
+                                Debug.Assert(false);
+                                break;
+                        }
+                        break;
+                }
+            }
         }
     }
 }

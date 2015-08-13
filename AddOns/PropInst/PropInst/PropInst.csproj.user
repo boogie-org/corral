@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <StartArguments>C:\Users\t-alnu\Desktop\try\test.avp  C:\Users\t-alnu\Desktop\try\ps_crlnondetToMalloc.bpl</StartArguments>
+    <StartArguments>C:\Users\t-alnu\Desktop\try\test.avp  C:\Users\t-alnu\Desktop\try\ps_crlnondetToMalloc_insertedEPs.bpl</StartArguments>
   </PropertyGroup>
 </Project>
