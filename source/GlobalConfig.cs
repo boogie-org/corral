@@ -61,7 +61,7 @@ namespace cba
         public static bool catchAllExceptions = false;
 
         // Use ArrayTheory in the boogie verifier
-        public static bool useArrayTheory = false;
+        public static ArrayTheoryOptions useArrayTheory = ArrayTheoryOptions.WEAK;
 
         // Hint for when to start conserving memory
         public static int memLimit

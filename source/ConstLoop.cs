@@ -435,12 +435,12 @@ namespace cba
             options.StratifiedInliningWithoutModels = true;
             BoogieVerify.options = options;
 
-            if (!GlobalConfig.useArrayTheory)
-            {
-                CommandLineOptions.Clo.WeakArrayTheory = false; // z3 no longer supports options below
-                // CommandLineOptions.Clo.Z3Options.Remove("ARRAY_WEAK=true");
-                // CommandLineOptions.Clo.Z3Options.Remove("ARRAY_EXTENSIONAL=false");
-            }
+            // set strong array theory
+            var ua_old = CommandLineOptions.Clo.UseArrayTheory;
+            var wa_old = CommandLineOptions.Clo.WeakArrayTheory;
+            CommandLineOptions.Clo.UseArrayTheory = true;
+            CommandLineOptions.Clo.WeakArrayTheory = false; 
+
             var to = CommandLineOptions.Clo.ProverKillTime;
             CommandLineOptions.Clo.ProverKillTime = 5;
 
@@ -475,12 +475,9 @@ namespace cba
             }
 
             // Reset options
-            if (!GlobalConfig.useArrayTheory)
-            {
-                CommandLineOptions.Clo.WeakArrayTheory = true; // z3 no longer supports options below
-                // CommandLineOptions.Clo.Z3Options.Add("ARRAY_WEAK=true");
-                // CommandLineOptions.Clo.Z3Options.Add("ARRAY_EXTENSIONAL=false");
-            }
+            CommandLineOptions.Clo.UseArrayTheory = ua_old;
+            CommandLineOptions.Clo.WeakArrayTheory = wa_old; 
+
             CommandLineOptions.Clo.ProverKillTime = to;
 
             return ret;
