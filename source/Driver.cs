@@ -92,7 +92,7 @@ namespace cba
 
             GlobalConfig.useLocalVariableAbstraction = config.useLocalVariableAbstraction;
             GlobalConfig.genCTrace = config.genCTrace;
-            GlobalConfig.useArrayTheory = config.useArrayTheory;
+            GlobalConfig.useArrayTheory = config.arrayTheory;
             GlobalConfig.printInstrumented = config.printInstrumented;
             GlobalConfig.instrumentedFile = config.instrumentedFile;
             GlobalConfig.addRaiseException = !config.noRaiseException;
@@ -135,7 +135,7 @@ namespace cba
             string boogieOptions = "";
             boogieOptions += config.boogieOpts;
 
-            boogieOptions += "/stratifiedInline:1 /extractLoops ";
+            boogieOptions += "/extractLoops /errorLimit:1 ";
 
             boogieOptions += string.Format("/recursionBound:{0} ", config.recursionBound);
 
@@ -158,20 +158,19 @@ namespace cba
             VariableSlicing.UseSimpleSlicing = false;
             InstrumentationConfig.raiseExceptionBeforeAllProcedures = false;
 
-            if (GlobalConfig.useArrayTheory)
+            if (GlobalConfig.useArrayTheory == ArrayTheoryOptions.STRONG)
                 boogieOptions += " /useArrayTheory";
-            else
-            {
-                // KLM: remove direct setting of Z3 options, since these depend on Z3 version...
+            else if (GlobalConfig.useArrayTheory == ArrayTheoryOptions.WEAK)
                 boogieOptions += " /useArrayTheory /weakArrayTheory ";
-                // was: boogieOptions += " /useArrayTheory /z3opt:ARRAY_WEAK=true /z3opt:ARRAY_EXTENSIONAL=false ";
-            }
 
             if (config.printBoogieFlags)
                 Console.WriteLine("Using Boogie flags: {0}", boogieOptions);
 
             if (BoogieUtil.InitializeBoogie(boogieOptions))
                 throw new InternalError("Cannot initialize Boogie");
+
+            if (CommandLineOptions.Clo.UseProverEvaluate)
+                CommandLineOptions.Clo.StratifiedInliningWithoutModels = true;
 
             GlobalConfig.corralStartTime = DateTime.Now;
         }

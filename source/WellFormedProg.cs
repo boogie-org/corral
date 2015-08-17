@@ -41,11 +41,6 @@ namespace cba
 
             foreach (Declaration decl in prog.TopLevelDeclarations)
             {
-                if (GlobalConfig.useArrayTheory)
-                {
-                    //checkBaseTypes(decl);
-                }
-
                 if (decl is Procedure)
                 {
                     checkProc(decl as Procedure, procsWithImpl, procsNotCalled);

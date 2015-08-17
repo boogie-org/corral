@@ -71,7 +71,7 @@ namespace cba
         public bool newStratifiedInlining { get; private set; }
         public string newStratifiedInliningAlgo { get; private set; }
 
-        public bool useArrayTheory { get; private set; }
+        public ArrayTheoryOptions arrayTheory { get; private set; }
 
         public bool printInstrumented { get; private set; }
         public bool printVerify { get; private set; }
@@ -267,7 +267,7 @@ namespace cba
             printProgress = false;
             inputFile = null;
             includeFiles = new List<string>();
-            useArrayTheory = false;
+            arrayTheory = ArrayTheoryOptions.WEAK;
             printInstrumented = false;
             printVerify = false;
             instrumentedFile = "instrumented.bpl";
@@ -334,7 +334,7 @@ namespace cba
             prevCorralState = null;
             dumpCorralState = null;
 
-            newStratifiedInlining = false;
+            newStratifiedInlining = true;
             newStratifiedInliningAlgo = "";
 
             NumCex = 1;
@@ -478,7 +478,7 @@ namespace cba
             }
             else if (flag == "/useArrayTheory")
             {
-                useArrayTheory = true;
+                arrayTheory = ArrayTheoryOptions.STRONG;
             }
             else if (flag == "/useProverEvaluate")
             {
@@ -690,6 +690,10 @@ namespace cba
                 printLanguageSemantics();
                 throw new InvalidInput("Stopping");
             }
+            else if (flag == "/oldStratifiedInlining")
+            {
+                newStratifiedInlining = false;
+            }
             else if (flag == "/newStratifiedInlining")
             {
                 newStratifiedInlining = true;
@@ -699,6 +703,10 @@ namespace cba
                 newStratifiedInlining = true;
                 var split = flag.Split(sep);
                 newStratifiedInliningAlgo = split[1];
+            }
+            else if (flag == "/noArrayTheory")
+            {
+                arrayTheory = ArrayTheoryOptions.NONE;
             }
             else if (flag == "/fwdBck")
             {
@@ -741,4 +749,6 @@ namespace cba
         }
 
     }
+
+    public enum ArrayTheoryOptions { NONE, WEAK, STRONG };
 }

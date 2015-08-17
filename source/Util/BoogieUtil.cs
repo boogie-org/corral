@@ -44,6 +44,9 @@ namespace cba.Util
 
             CommandLineOptions.Clo.Parse(args.ToArray());
 
+            // No Max: avoids theorem prover restarts
+            CommandLineOptions.Clo.MaxProverMemory = 0;
+
             return false;
         }
 
