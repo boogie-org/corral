@@ -12,31 +12,74 @@ using btype = Microsoft.Boogie.Type;
 
 namespace ProofMinimization
 {
-    // TODO: make this non-static
-    static class Minimize
+
+    struct MinimizerData
     {
+        // file name -> Program
+        public Dictionary<string, PersistentProgram> fileToProg;
+        // template ID -> file -> {constants}
+        public Dictionary<int, Dictionary<string, HashSet<string>>> templateMap;
+        // identifier string -> template ID 
+        public Dictionary<string, int> strToTemplate;
+        public Dictionary<int, string> templateToStr;
+        // file -> constants to keep always
+        public Dictionary<string, HashSet<string>> fileToKeepConstants;
+        // file -> perf
+        public Dictionary<string, int> fileToPerf;
+        // template Id -> template expression
+        public Dictionary<int, Expr> tempIdToExpr;
+
+        public MinimizerData(Dictionary<string, PersistentProgram> fileToProg, Dictionary<string, int> fileToPerf,
+                             Dictionary<string, HashSet<string>> fileToKeepConstants, Dictionary<int, Dictionary<string, HashSet<string>>> templateMap,
+                             Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr) 
+        {
+            this.fileToProg = fileToProg;
+            this.fileToPerf = fileToPerf;
+            this.fileToKeepConstants = fileToKeepConstants;
+            this.templateMap = templateMap;
+            this.templateToStr = templateToStr;
+            this.strToTemplate = strToTemplate;
+            this.tempIdToExpr = tempIdToExpr;
+        }
+    }
+
+    abstract class Minimizer
+    {
+        // file name -> Program
+        public MinimizerData mdata;
+
+        public Minimizer(MinimizerData mdata)
+        {
+            this.mdata = mdata;
+        }
+
+        public abstract HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta);
+    }
+
+
+
+    // TODO: make this non-static
+    // ZVONIMIR: I believe this TODO could now be removed.
+    static class MinControl
+    {
+        public static int IterCnt = 0;
         public static bool dbg = false;
         static readonly int TemplateCounterStart = 1000;
-        static int IterCnt = 0;
         public static bool usePerf = false;
         public static bool useSI = true;
-
-        // file name -> Program
-        static Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
-        // template ID -> file -> {constants}
-        static Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
-        // identifier string -> template ID 
-        public static Dictionary<string, int> strToTemplate = new Dictionary<string, int>();
-        public static Dictionary<int, string> templateToStr = new Dictionary<int, string>();
-
-        // file -> constants to keep always
-        static Dictionary<string, HashSet<string>> fileToKeepConstants = new Dictionary<string, HashSet<string>>();
-        // file -> perf
-        static Dictionary<string, int> fileToPerf = new Dictionary<string, int>();
-
-
-        public static void ReadFiles(IEnumerable<string> files, HashSet<string> keepPatterns)
+        public static int method = 0;
+        
+        public static MinimizerData ReadFiles(IEnumerable<string> files, HashSet<string> keepPatterns)
         {
+            Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
+            Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
+            Dictionary<string, int> strToTemplate = new Dictionary<string, int>();
+            Dictionary<int, string> templateToStr = new Dictionary<int, string>();
+            Dictionary<string, HashSet<string>> fileToKeepConstants = new Dictionary<string, HashSet<string>>();
+            Dictionary<string, int> fileToPerf = new Dictionary<string, int>();
+            Dictionary<int, Expr> tempIdToExpr = new Dictionary<int, Expr>();
+
+
             var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
                 {
                     if (!templateMap.ContainsKey(templateId)) templateMap.Add(templateId, new Dictionary<string, HashSet<string>>());
@@ -84,7 +127,7 @@ namespace ProofMinimization
                 HashSet<string> assignment;
                 int perf = 0;
 
-                var ret = PruneAndRun(new PersistentProgram(program), consts, out assignment, ref perf);
+                var ret = ConstrInitialProof(new PersistentProgram(program), consts, out assignment, ref perf);
 
                 if (ret != BoogieVerify.ReturnStatus.OK)
                 {
@@ -113,6 +156,8 @@ namespace ProofMinimization
                         var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
                             ens.Condition, allconstants.Keys, out constantName, out expr);
 
+                        expr = SimplifyExpr.NormalizeExpr(expr);
+
                         if (!match) continue;
                         if (fileToKeepConstants[f].Contains(constantName)) continue;
 
@@ -138,6 +183,7 @@ namespace ProofMinimization
                                 // create new template
                                 strToTemplate.Add(temp, TemplateCounterStart + strToTemplate.Count);
                                 addTemplate(strToTemplate[temp], f, constantName);
+                                tempIdToExpr[strToTemplate[temp]] = SimplifyExpr.ExprToTemplateExpr(expr);
                             }
                         }
                     }
@@ -165,152 +211,33 @@ namespace ProofMinimization
                     }
                 }
             }
+            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr);
         }
 
-        // Minimize
-        public static HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
+        public static HashSet<int> Minimize(MinimizerData data, out  Dictionary<int, int> templateToPerfDelta)
         {
-            templateToPerfDelta = new Dictionary<int, int>();
-
-            var iter = 1;
-            var tokeep = new HashSet<int>();
-            var templates = new HashSet<int>(templateMap.Keys);
-            var sw = new Stopwatch();
-            
-            sw.Start();
-
-            while (templates.Count != 0)
+            if (method == 1)
             {
-                Console.WriteLine("------ ITER {0} -------", iter++);
-
-                // Drop one and re-run
-                var c = PickRandom(templates);
-                templates.Remove(c);
-
-                Console.WriteLine("  >> Trying {0} :: {1}", c, templateToStr[c]);
-
-                Dictionary<string, int> perf;
-                HashSet<string> filesVerified;
-                string fileFailed;
-
-                var rt = PruneAndRun(templates.Union(tokeep), out perf, out filesVerified, out fileFailed);
-
-                if (rt == BoogieVerify.ReturnStatus.OK)
-                {
-                    // dropping was fine
-                    Console.WriteLine("  >> Files verified: {0}", filesVerified.Concat(" "));
-                    Console.WriteLine("  >> Dropping it");
-
-                    // TODO: maintain information of extra constants that are
-                    // no longer provable, and prune templateMap accordingly
-
-                    // Extra information
-                    var delta = 0;
-                    perf.Iter(tup => delta += (tup.Value - fileToPerf[tup.Key]));
-                    templateToPerfDelta[c] = delta;
-
-                    // Update perf stats
-                    perf.Iter(tup => fileToPerf[tup.Key] = tup.Value);
-                }
-                else
-                {
-                    Debug.Assert(fileFailed != null);
-                    Console.WriteLine("  >> Files verified: {0}", filesVerified.Concat(" "));
-                    Console.WriteLine("  >> File failed: {0}", fileFailed);
-                    Console.WriteLine("  >> Cannot drop");
-                    tokeep.Add(c);
-                }
-
-                //Log(iter);
-                Console.WriteLine("Time elapsed: {0} sec", sw.Elapsed.TotalSeconds.ToString("F2"));
+                K1BreadthMinimizer minimizer = new K1BreadthMinimizer(data);
+                return minimizer.FindMin(out templateToPerfDelta);
             }
-
-            return tokeep;
+            else
+            {
+                ConjuctMinimizer minimizer = new ConjuctMinimizer(data);
+                return minimizer.FindMin(out templateToPerfDelta);
+            }
         }
 
 
-        // Prune away non-candidates, verify using the rest
-        static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf, out HashSet<string> filesVerified, out string fileFailed)
-        {
-            perf = new Dictionary<string, int>();
 
-            filesVerified = new HashSet<string>();
-            fileFailed = null;
-
-            foreach (var tup in fileToProg)
-            {
-                var file = tup.Key;
-
-                var program = tup.Value.getProgram();
-                program.Typecheck();
-
-                // all constants
-                var allconstants = new HashSet<string>(
-                    program.TopLevelDeclarations.OfType<Constant>()
-                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
-                    .Select(c => c.Name));
-
-                // candidate constants
-                var candidates = new HashSet<string>();
-                candidateTemplates.Where(t => templateMap[t].ContainsKey(file))
-                    .Iter(t => candidates.UnionWith(templateMap[t][file]));
-
-                // to keep
-                var keep = fileToKeepConstants[file].Intersection(allconstants);
-
-                // drop
-                DropConstants(program, allconstants.Difference(candidates.Union(keep)));
-
-                // Run Houdini
-                var assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
-                //Console.WriteLine("  >> Contracts: {0}", assignment.Count);
-
-                // Read the program again, add contracts
-                program = tup.Value.getProgram();
-                program.Typecheck();
-
-                // Enforce the assignment back into the program
-                CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, assignment);
-
-                // Run SI
-                var err = new List<BoogieErrorTrace>();
-
-                // Set bound
-                BoogieVerify.options.maxInlinedBound = 0;
-                if (fileToPerf[file] != 0)
-                    BoogieVerify.options.maxInlinedBound = PerfMetric(fileToPerf[file]);
-
-                var rstatus = BoogieVerify.Verify(program, out err, true);
-                //Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
-                //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
-
-                var procs_inlined = BoogieVerify.CallTreeSize + 1;
-                BoogieVerify.options.CallTree = new HashSet<string>();
-                BoogieVerify.CallTreeSize = 0;
-                BoogieVerify.verificationTime = TimeSpan.Zero;
-
-                if (rstatus != BoogieVerify.ReturnStatus.OK)
-                {
-                    fileFailed = file;
-                    return BoogieVerify.ReturnStatus.NOK;
-                }
-
-                perf[file] = procs_inlined;
-                filesVerified.Add(file);
-            }
-
-            return BoogieVerify.ReturnStatus.OK;
-        }
-
-        // Prune away non-candidates, verify using the rest
-        static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
+        // Construct initial proof (removing non-candidates along the way).
+        public static BoogieVerify.ReturnStatus ConstrInitialProof(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
         {
             IterCnt++;
-
             var program = inp.getProgram();
             program.Typecheck();
-
-            program =  BoogieUtil.ReResolve(program);
+            
+            program = BoogieUtil.ReResolve(program);
 
             // Remove non-candidates
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(program, candidates, true);
@@ -336,7 +263,7 @@ namespace ProofMinimization
             // Set bound
             BoogieVerify.options.maxInlinedBound = 0;
             if (inlined != 0)
-                BoogieVerify.options.maxInlinedBound = PerfMetric(inlined);
+                BoogieVerify.options.maxInlinedBound = MinControl.PerfMetric(inlined);
 
             var rstatus = BoogieVerify.Verify(program, out err, true);
             //Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
@@ -347,11 +274,10 @@ namespace ProofMinimization
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
-
             return rstatus;
         }
-
-        static int PerfMetric(int n)
+   
+        public static int PerfMetric(int n)
         {
             if (!usePerf) return Int32.MaxValue;
             if (!useSI) return (n+1);
@@ -362,7 +288,7 @@ namespace ProofMinimization
         static Random rand = null;
 
         // pick one with max cost randomly
-        static T PickRandom<T>(HashSet<T> set)
+        public static T PickRandom<T>(HashSet<T> set)
         {
             Debug.Assert(set.Count != 0);
 
@@ -380,7 +306,7 @@ namespace ProofMinimization
         }
 
         // Prune away some constants from the program
-        static void DropConstants(Program program, HashSet<string> drop)
+        public static void DropConstants(Program program, HashSet<string> drop)
         {
             
             var constants = new HashSet<string>(
@@ -394,7 +320,7 @@ namespace ProofMinimization
         }
 
         // Input program must be an RMT query
-        static void CheckRMT(Program program)
+        public static void CheckRMT(Program program)
         {
             if (program.TopLevelDeclarations.OfType<Implementation>()
                 .Any(impl => impl.Blocks

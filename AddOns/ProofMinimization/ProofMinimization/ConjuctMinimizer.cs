@@ -13,7 +13,6 @@ namespace ProofMinimization
 
     class ConjuctMinimizer : Minimizer
     {
-        int IterCnt = 0;
         Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
         Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>(); 
         Dictionary<string, int> strToTemplate = new Dictionary<string, int>();

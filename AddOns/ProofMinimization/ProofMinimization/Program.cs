@@ -65,14 +65,14 @@ namespace ProofMinimization
                 }
                 if (args[i] == "/noSI")
                 {
-                    Minimize.useSI = false;
-                    Minimize.usePerf = true;
+                    MinControl.useSI = false;
+                    MinControl.usePerf = true;
                     continue;
                 }
                 if (args[i] == "/dbg")
                 {
                     dbg = true;
-                    Minimize.dbg = true;
+                    MinControl.dbg = true;
                     continue;
                 }
                 if (args[i] == "/printAssignment")
@@ -89,8 +89,35 @@ namespace ProofMinimization
 
                 if (args[i].StartsWith("/perf"))
                 {
-                    Minimize.usePerf = true;
+                    MinControl.usePerf = true;
                     continue;
+                }
+
+                if (args[i].StartsWith("/perf"))
+                {
+                    MinControl.usePerf = true;
+                    continue;
+                }
+
+                if (args[i].StartsWith("/method:"))
+                {
+                    string method = args[i].Substring("/method:".Length).Trim();
+                    try
+                    {
+                        int m = Int32.Parse(method);
+                        if (m < 0 || m > 1)
+                        {
+                            Console.WriteLine("Method not supported! Supported methods are 0 and 1.");
+                            return;
+                        }
+
+                        MinControl.method = m;
+                        continue;
+                    } catch (Exception e)
+                    {
+                        Console.WriteLine("Method format incorrect!");
+                        return;
+                    }
                 }
 
                 boogieArgs += args[i] + " ";
@@ -124,13 +151,12 @@ namespace ProofMinimization
                 return;
             }
 
-            Minimize.ReadFiles(files, keepPatterns);
-
+            MinimizerData data = MinControl.ReadFiles(files, keepPatterns);
             Dictionary<int, int> templateToPerfDelta;
-            var min = Minimize.FindMin(out templateToPerfDelta);
+            var min = MinControl.Minimize(data, out templateToPerfDelta);
 
             var t2str = new Dictionary<int, string>();
-            Minimize.strToTemplate.Iter(tup => t2str.Add(tup.Value, tup.Key));
+            data.strToTemplate.Iter(tup => t2str.Add(tup.Value, tup.Key));
 
             foreach (var c in min)
             {

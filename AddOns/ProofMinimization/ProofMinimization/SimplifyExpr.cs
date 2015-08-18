@@ -85,7 +85,12 @@ namespace ProofMinimization
         // replace formal-ins and outs with a unique variable
         public static string ExprToTemplate(Expr expr)
         {
-            var GetFin = new Func<btype, Variable>(ty =>
+            return ExprToTemplateExpr(expr).ToString();
+        }
+
+        public static Expr ExprToTemplateExpr(Expr expr)
+        {
+             var GetFin = new Func<btype, Variable>(ty =>
                 BoogieAstFactory.MkFormal("v_fin_" + ty.ToString(), ty, true));
             var GetFout = new Func<btype, Variable>(ty =>
                 BoogieAstFactory.MkFormal("v_fout_" + ty.ToString(), ty, true));
@@ -100,15 +105,26 @@ namespace ProofMinimization
                     return Expr.Ident(v);
                 }), expr);
 
-            return ret.ToString();
+            return ret;
         }
 
-        static Expr NormalizeExpr(Expr expr)
+
+
+        public static Expr NormalizeExpr(Expr expr)
+        {
+            var nexpr = normalizeExpr(expr);
+            nexpr = ConvertToCNF(nexpr);
+            //Console.WriteLine("Normalization from {0} to {1}", expr.ToString(), nexpr.ToString());
+            //Debug.Assert(IsCleanFolCNF(nexpr));
+            return nexpr;
+        }
+
+        static Expr normalizeExpr(Expr expr)
         {
             var disj = GetExprDisjuncts(expr);
             if (disj.Count != 1)
             {
-                disj = disj.Map(e => NormalizeExpr(e));
+                disj = disj.Map(e => normalizeExpr(e));
                 disj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
                 var ret = disj[0];
                 for (int i = 1; i < disj.Count; i++)
@@ -119,7 +135,7 @@ namespace ProofMinimization
             var conj = GetExprConjunctions(expr);
             if (conj.Count != 1)
             {
-                conj = conj.Map(e => NormalizeExpr(e));
+                conj = conj.Map(e => normalizeExpr(e));
                 conj.Sort(new Comparison<Expr>((e1, e2) => (e1.ToString().CompareTo(e2.ToString()))));
 
                 return Expr.And(conj);
@@ -134,16 +150,17 @@ namespace ProofMinimization
                 NAryExpr nexpr;
                 bool applyNeg;
 
-                NormalizeOperator((naryexpr.Fun as BinaryOperator), naryexpr.Args[0], naryexpr.Args[1], out nexpr, out applyNeg);
+                normalizeOperator((naryexpr.Fun as BinaryOperator), naryexpr.Args[0], naryexpr.Args[1], out nexpr, out applyNeg);
 
                 if (applyNeg) return Expr.Not(nexpr);
                 return nexpr;
             }
 
+            
             return expr;
         }
 
-        static void NormalizeOperator(BinaryOperator op, Expr arg1, Expr arg2, out NAryExpr expr, out bool applyNeg)
+        static void normalizeOperator(BinaryOperator op, Expr arg1, Expr arg2, out NAryExpr expr, out bool applyNeg)
         {
             expr = null;
             applyNeg = false;
@@ -178,6 +195,105 @@ namespace ProofMinimization
         }
 
 
+        // Checks whether a given expression is in a CNF form. Also, the formula should not have conjucts
+        // that are conjucts for themselves, which can happen due to weird use of parenthesis. The same goes
+        // for disjuncts. Assumes the expression has been passed through normalize(Expr expr).
+        public static bool IsCleanFolCNF(Expr expr)
+        {
+            // This basically checks if the given expression is a CNF formula.
+            // Not needed as we expect this will happen.
+            var conjucts = GetSubExprs(expr, BinaryOperator.Opcode.And);
+            if (conjucts.Count == 0)
+            {
+                //Console.WriteLine("Not a CNF formula at all.");
+                return false;
+            }
+
+            // Now check that each conjcut is a clause.
+            foreach (var conjuct in conjucts)
+            {
+                // First check that each conjunct is not a conjunct by itself, i.e., that each
+                // form
+                var cconjucts = GetSubExprs(conjuct, BinaryOperator.Opcode.And);
+                if (cconjucts.Count > 1)
+                {
+                    //Console.WriteLine("Not a CNF formula since conjuct {0} has conjucts.", conjuct.ToString());
+                    return false;
+                }
+
+                // Now check that each 
+                var disjuncts = GetSubExprs(conjuct, BinaryOperator.Opcode.Or);
+                foreach (var disjunct in disjuncts)
+                {
+                    // Now check that each disjunct is not a disjunction itself. 
+                    var ddisjuncts = GetSubExprs(disjunct, BinaryOperator.Opcode.Or);
+                    if (ddisjuncts.Count > 1)
+                    {
+                        //Console.WriteLine("Not a CNF formula since disjunct {0} has disjuncts.", disjunct.ToString());
+                        return false;
+                    }
+
+                    // Now check that each disjunct is not a conjuction.
+                    var dconjucts = GetSubExprs(disjunct, BinaryOperator.Opcode.And);
+                    if (dconjucts.Count > 1)
+                    {
+                        //Console.WriteLine("Not a CNF formula since disjunct {0} has conjucts.", disjunct.ToString());
+                        return false;
+                    }
+                }
+            }
+
+            //Console.WriteLine("{0} is a CNF FOL formula", expr.ToString());
+            return true;
+        }
+
+
+        // Convert a FOL formula that was passed through normalize(Expr expr) to a CNF formula.
+        public static Expr ConvertToCNF(Expr expr)
+        {
+            // Case where we have conjunction (P^Q). Inductively, we have that
+            // P is a conjunction itself as well as Q. So just conjunct them together.
+            if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
+                ((expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
+            {
+                var f = GetSubExprs(ConvertToCNF((expr as NAryExpr).Args[0]), BinaryOperator.Opcode.And);
+                var s = GetSubExprs(ConvertToCNF((expr as NAryExpr).Args[1]), BinaryOperator.Opcode.And);
+
+                List<Expr> conjucts = new List<Expr>();
+                conjucts.AddRange(f); conjucts.AddRange(s);
+                return reduce(conjucts, BinaryOperator.Opcode.And);
+
+            }
+
+            // Case where we have disjunction (PvQ). Inductively, we have that
+            // P is a conjunction itself as well as Q. So make a distributive
+            // cross product where we have conjuctions of disjunctions. 
+            if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
+               ((expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
+            {
+                var f = GetSubExprs(ConvertToCNF((expr as NAryExpr).Args[0]), BinaryOperator.Opcode.And);
+                var s = GetSubExprs(ConvertToCNF((expr as NAryExpr).Args[1]), BinaryOperator.Opcode.And);
+
+                if (f.Count == 1 && s.Count == 1)
+                    return expr;
+
+                List<Expr> disjuncts = new List<Expr>();
+                for (int i = 0; i < f.Count; i++)
+                {
+                    for (int j = 0; j < s.Count; j++)
+                    {
+                        var disjunct = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, BinaryOperator.Opcode.Or), new List<Expr> { f[i], s[j] });
+                        disjuncts.Add(disjunct);
+                    }
+                }
+                return reduce(disjuncts, BinaryOperator.Opcode.And);
+            }
+
+            // We've encountered a literal because all negations are pushed inwards by normalize
+            // and implication and equivalencer are resolved.
+            return expr;
+        }
+
         public static List<Expr> GetExprConjunctions(Expr expr)
         {
             return GetSubExprs(expr, BinaryOperator.Opcode.And);
@@ -208,6 +324,8 @@ namespace ProofMinimization
             return conjuncts;
         }
 
+
+
         // Break (a && b) || (c && d) to {a, b, c, d}
         public static List<Expr> BreakDownExpr(Expr expr)
         {
@@ -215,6 +333,18 @@ namespace ProofMinimization
             var disj = GetExprDisjuncts(expr);
             disj.Iter(d => ret.AddRange(GetExprConjunctions(d)));
             return ret;
+        }
+
+
+        public static Expr reduce(List<Expr> exprs, BinaryOperator.Opcode op)
+        {
+            Expr expr = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, op), new List<Expr> {exprs[exprs.Count - 1], exprs[exprs.Count - 2]});
+            for (int i = 3; (exprs.Count - i) >= 0; i++)
+            {
+                var c = exprs[exprs.Count - i];
+                expr = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, op), new List<Expr> {c, expr});
+            }
+            return expr;
         }
 
     }
