@@ -346,7 +346,7 @@ namespace PropInst
                                     {
                                         //hack to get a deepcopy
                                         var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
-                                        var sv = new SubstitionVisitor(emv.IdentifierSubstitution, emv.FunctionSubstitution, emv.ComplexSubstitution);
+                                        var sv = new SubstitionVisitor(emv.IdentifierSubstitution, emv.FunctionSubstitution, emv.Substitution);
                                         ret.AddRange(sv.VisitCmdSeq(toInsertClone));
                                     }
                                 }

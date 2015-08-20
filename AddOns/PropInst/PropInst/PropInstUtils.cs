@@ -24,75 +24,83 @@ namespace PropInst
 
     class SubstitionVisitor : FixedVisitor
     {
-        private readonly Dictionary<IdentifierExpr, Expr> _sub;
+        private readonly Dictionary<IdentifierExpr, Expr> _idSub;
         private readonly Dictionary<string, IAppliable> _funcSub;
-        private List<Tuple<Expr, Expr>> _complexSub;
-        private Stack<List<Tuple<Expr, Expr>>> _possibleComplexMatches = new Stack<List<Tuple<Expr, Expr>>>();
+        //private List<Tuple<Expr, Expr>> _complexSub;
+        //private Stack<List<Tuple<Expr, Expr>>> _possibleComplexMatches = new Stack<List<Tuple<Expr, Expr>>>();
+        private readonly Dictionary<IdentifierExpr, Expr> _substitution;
+
 
         public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> psub) 
-            : this(psub, new Dictionary<string, IAppliable>(0), new List<Tuple<Expr, Expr>>(0))
+            : this(psub, new Dictionary<string, IAppliable>(0), new Dictionary<IdentifierExpr, Expr>(0))
         {
         }
 
         public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> psub, Dictionary<string, IAppliable> pFuncSub )
-            : this(psub, pFuncSub, new List<Tuple<Expr, Expr>>(0))
+            : this(psub, pFuncSub, new Dictionary<IdentifierExpr, Expr>())
         {
         }
 
-        public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> psub, Dictionary<string, IAppliable> pFuncSub, List<Tuple<Expr, Expr>>  pComplexSub)
+        public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> pIdsub, Dictionary<string, IAppliable> pFuncSub, Dictionary<IdentifierExpr, Expr> pSub)
         {
-            _sub = psub;
+            _idSub = pIdsub;
             _funcSub = pFuncSub;
-            _complexSub = pComplexSub;
-            _possibleComplexMatches.Push(pComplexSub);
+            _substitution = pSub;
+            //_complexSub = pComplexSub;
+            //_possibleComplexMatches.Push(pComplexSub);
         }
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
-            //Debug.Assert(_possibleComplexMatches.Peek().Count <= 1);
-            foreach (var pair in _possibleComplexMatches.Peek())
+            ////Debug.Assert(_possibleComplexMatches.Peek().Count <= 1);
+            //foreach (var pair in _possibleComplexMatches.Peek())
+            //{
+            //    IdentifierExpr idToMatch = null;
+            //    if (pair.Item1 is NAryExpr)
+            //    {
+            //        var nae = (NAryExpr) pair.Item1;
+            //        if (nae.Fun.FunctionName == Constants.IdExpr)
+            //        {
+            //            Debug.Assert(nae.Args.Count == 1);
+            //            idToMatch = (IdentifierExpr) nae.Args[0];
+            //        }
+            //        else
+            //        {
+            //            continue;
+            //        }
+            //    }
+            //    else if (pair.Item1 is IdentifierExpr)
+            //    {
+            //        idToMatch = (IdentifierExpr) pair.Item1;
+            //    }
+            //    else
+            //    {
+            //        //no match
+            //        continue;
+            //    }
+
+            //    if (idToMatch.Name == node.Name)
+            //    {
+            //        return pair.Item2;
+            //    }
+            //    //if (idToMatch.Name.StartsWith("##")) --> when we do complex matching, we don't need the simple, right??..
+            //    //{
+
+            //    //    var replacement = _idSub[node];
+            //    //    return replacement;
+            //    //}
+
+            //}
+            //TODO
+            if (_substitution.ContainsKey(node)) 
             {
-                IdentifierExpr idToMatch = null;
-                if (pair.Item1 is NAryExpr)
-                {
-                    var nae = (NAryExpr) pair.Item1;
-                    if (nae.Fun.FunctionName == Constants.IdExpr)
-                    {
-                        Debug.Assert(nae.Args.Count == 1);
-                        idToMatch = (IdentifierExpr) nae.Args[0];
-                    }
-                    else
-                    {
-                        continue;
-                    }
-                }
-                else if (pair.Item1 is IdentifierExpr)
-                {
-                    idToMatch = (IdentifierExpr) pair.Item1;
-                }
-                else
-                {
-                    //no match
-                    continue;
-                }
-
-                if (idToMatch.Name == node.Name)
-                {
-                    return pair.Item2;
-                }
-                //if (idToMatch.Name.StartsWith("##")) --> when we do complex matching, we don't need the simple, right??..
-                //{
-
-                //    var replacement = _sub[node];
-                //    return replacement;
-                //}
-
+                var replacement = _substitution[node];
+                return replacement;
             }
 
-
-            if (_sub.ContainsKey(node)) 
+            if (_idSub.ContainsKey(node)) 
             {
-                var replacement = _sub[node];
+                var replacement = _idSub[node];
                 return replacement;
             }
 
@@ -105,38 +113,39 @@ namespace PropInst
             var dispatchedArgs = new List<Expr>();
             foreach (var arg in node.Args)
             {
-                List<Tuple<Expr, Expr>> newPossibleComplexMatches;
-                if (node.Fun.FunctionName == Constants.AnySum)
-                {
-                    newPossibleComplexMatches = new List<Tuple<Expr, Expr>>();
-                    foreach (var complexSubPair in _possibleComplexMatches.Peek())
-                    {
-                        if (!(complexSubPair.Item1 is NAryExpr))
-                            continue; //this cannot become a match --> leave it out..
-                        var item1 = (NAryExpr) complexSubPair.Item1;
-                        if (item1.Fun.FunctionName == Constants.AnySum)
-                        {
-                            var item2 = complexSubPair.Item2;
-                            //if (item2 is NAryExpr && ((NAryExpr) item2).Fun.FunctionName == Constants.AnySum)
-                            //    item2 = ((NAryExpr) item2).Args[0];
+                //List<Tuple<Expr, Expr>> newPossibleComplexMatches;
+                //if (node.Fun.FunctionName == Constants.AnySum)
+                //{
+                //    newPossibleComplexMatches = new List<Tuple<Expr, Expr>>();
+                //    foreach (var complexSubPair in _possibleComplexMatches.Peek())
+                //    {
+                //        if (!(complexSubPair.Item1 is NAryExpr))
+                //            continue; //this cannot become a match --> leave it out..
+                //        var item1 = (NAryExpr) complexSubPair.Item1;
+                //        if (item1.Fun.FunctionName == Constants.AnySum)
+                //        {
+                //            var item2 = complexSubPair.Item2;
+                //            //if (item2 is NAryExpr && ((NAryExpr) item2).Fun.FunctionName == Constants.AnySum)
+                //            //    item2 = ((NAryExpr) item2).Args[0];
 
-                            Debug.Assert(item1.Args.Count == 1, Constants.AnySum + " may get at most one argument");
-                            //Debug.Assert(item2.Args.Count == 1, Constants.AnySum + " may get at most one argument");
+                //            Debug.Assert(item1.Args.Count == 1, Constants.AnySum + " may get at most one argument");
+                //            //Debug.Assert(item2.Args.Count == 1, Constants.AnySum + " may get at most one argument");
 
-                            var newPair = new Tuple<Expr, Expr>(item1.Args[0], item2);
-                            //var newPair = new Tuple<Expr, Expr>(item1.Args[0], complexSubPair.Item2);
-                            newPossibleComplexMatches.Add(newPair);
-                        }
-                    }
-                }
-                else
-                {
-                    newPossibleComplexMatches =
-                        _possibleComplexMatches.Peek();
-                }
-                _possibleComplexMatches.Push(newPossibleComplexMatches);
+                //            var newPair = new Tuple<Expr, Expr>(item1.Args[0], item2);
+                //            //var newPair = new Tuple<Expr, Expr>(item1.Args[0], complexSubPair.Item2);
+                //            newPossibleComplexMatches.Add(newPair);
+                //        }
+                //    }
+                //}
+                //else
+                //{
+                //    newPossibleComplexMatches =
+                //        _possibleComplexMatches.Peek();
+                //}
+                //_possibleComplexMatches.Push(newPossibleComplexMatches);
                 dispatchedArgs.Add(VisitExpr(arg));
-                _possibleComplexMatches.Pop();
+                //_possibleComplexMatches.Pop();
+                //TODO?..
             }
  
 
@@ -171,8 +180,10 @@ namespace PropInst
         //problem with IAppliable -> IAppliable: the hashcode function of IAppliaple refers to the function declaration, which is null for the expression from our property..
         public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
         //public readonly Dictionary<Expr, Expr> ComplexSubstitution = new Dictionary<Expr, Expr>();
-        //problem with Dictionary Expr -> Expr: the hashcode function of an NaryExpression refers to the function declaration, which is null for the expression from our property..
-        public readonly List<Tuple<Expr, Expr>> ComplexSubstitution = new List<Tuple<Expr, Expr>>();
+        ////problem with Dictionary Expr -> Expr: the hashcode function of an NaryExpression refers to the function declaration, which is null for the expression from our property..
+        //public readonly List<Tuple<Expr, Expr>> ComplexSubstitution = new List<Tuple<Expr, Expr>>();
+        
+        public readonly Dictionary<IdentifierExpr, Expr> Substitution = new Dictionary<IdentifierExpr, Expr>();
 
 
         public ExprMatchVisitor(List<Expr> pToConsume)
@@ -192,7 +203,26 @@ namespace PropInst
                 return base.VisitNAryExpr(node);
             }
 
+
             var naeToConsume = (NAryExpr) _toConsume.First();
+
+            var isSubstitutionStart = naeToConsume.Fun.FunctionName == "=="
+                                      && naeToConsume.Args[0] is IdentifierExpr
+                                      && ((IdentifierExpr) naeToConsume.Args[0]).Name.StartsWith("??");
+            var substIdEx = naeToConsume.Args[0] as IdentifierExpr;
+            if (isSubstitutionStart)
+            {
+                if (naeToConsume.Args[1] is IdentifierExpr)
+                {
+                    //for this we should have the other substitutions with ##id..
+                    // maybe unify some other time..
+                    throw new NotImplementedException(); 
+                }
+                naeToConsume = (NAryExpr) naeToConsume.Args[1];
+            }
+            if (isSubstitutionStart)
+                Substitution.Add(substIdEx, node);//TODO or dispatch node first??
+
 
             if (((naeToConsume.Fun.FunctionName != Constants.AnyArgs)
                  && (naeToConsume.Fun.FunctionName != Constants.AnySum)
@@ -206,6 +236,7 @@ namespace PropInst
             if (naeToConsume.Fun.Equals(node.Fun))
             {
                 _toConsume = new List<Expr>(naeToConsume.Args);
+
                 return base.VisitNAryExpr(node);
             } 
             if (naeToConsume.Fun.FunctionName.StartsWith("##"))
@@ -240,7 +271,8 @@ namespace PropInst
                 MayStillMatch = msmNew;
                 if (MayStillMatch)
                 {
-                    ComplexSubstitution.Add(new Tuple<Expr, Expr>(naeToConsume, lastMatch));
+                    //TODO
+                    //ComplexSubstitution.Add(new Tuple<Expr, Expr>(naeToConsume, lastMatch));
                 }
                 return base.VisitNAryExpr(node);
             }
@@ -251,7 +283,8 @@ namespace PropInst
                 _toConsume = new List<Expr>(naeToConsume.Args);
                 //_toConsume.AddRange(naeToConsume.Args);
                 var dispatchResult = this.VisitNAryExpr(node);
-                ComplexSubstitution.Add(new Tuple<Expr, Expr>(naeToConsume, dispatchResult));
+                //TODO
+                //ComplexSubstitution.Add(new Tuple<Expr, Expr>(naeToConsume, dispatchResult));
                 return dispatchResult;
             }
             MayStillMatch = false;
@@ -295,7 +328,8 @@ namespace PropInst
                 _toConsume.RemoveAt(0);
                 _toConsume.Insert(0, ((NAryExpr) funAp).Args[0]);
                 var dispatchResult =  this.VisitIdentifierExpr(node); //this, not base
-                ComplexSubstitution.Add(new Tuple<Expr, Expr>(funAp, dispatchResult));
+                //TODO
+                //ComplexSubstitution.Add(new Tuple<Expr, Expr>(funAp, dispatchResult));
                 return dispatchResult;
             }
 
