@@ -304,7 +304,6 @@ namespace PropInst
 
                     foreach (var arg in cmd.Ins)
                     {
-
                         Debug.Assert(anyArgsExpr.Args.Count == 1, 
                             "we expect Constants.AnyArgs to have at most one argument, " +
                             "which is the matching pattern expression");
@@ -337,7 +336,7 @@ namespace PropInst
                                 // we have a memory access
                                 foreach (var access in gma.accesses)
                                 {
-                                    var emv = new ExprMatchVisitor(new List<Expr>() {memAccessToMatchExpr});
+                                    var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
                                     emv.Visit(access.Item2);
                                     // here we have all we need to make a new command:
                                     // for each arg of the anyargs, for each memoryAccess in that arg:
@@ -347,7 +346,7 @@ namespace PropInst
                                     {
                                         //hack to get a deepcopy
                                         var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
-                                        var sv = new SubstitionVisitor(emv.Substitution, emv.FunctionSubstitution);
+                                        var sv = new SubstitionVisitor(emv.IdentifierSubstitution, emv.FunctionSubstitution, emv.ComplexSubstitution);
                                         ret.AddRange(sv.VisitCmdSeq(toInsertClone));
                                     }
                                 }
@@ -392,7 +391,7 @@ namespace PropInst
 
                 if (mv.MayStillMatch)
                 {
-                    var sv = new SubstitionVisitor(mv.Substitution);
+                    var sv = new SubstitionVisitor(mv.IdentifierSubstitution);
                     //hack to get a deepcopy
                     var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
                     //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_propInsertCodeAtCmd.ToInsert);//does not seem to work as I expect..
@@ -433,6 +432,8 @@ namespace PropInst
         public const string AnyType = "$$ANYTYPE";
         public const string AnyProcedure = "$$ANYPROC";
         public const string AnyExpr = "$$ANYEXP";
+        // matches a sum, i.e. a (possibly nested) naryExpr with function '+'
+        // also matches a sum with only one summand, i.e. matches anything that matches the expression within
         public const string AnySum = "$$ANYSUM";
         // any IdentifierExpr, if used as a function (with a single argument), 
         // the identifier found can be referred to by that argument
