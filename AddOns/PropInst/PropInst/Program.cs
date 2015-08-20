@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -33,25 +34,19 @@ namespace PropInst
             #region parse the property file
 
             var propString = File.ReadAllText(args[0]);
-            var singleInstructions = propString.Split(new string[] { "####" }, StringSplitOptions.None);
+            var singleInstructions = propString.Split(new string[] {Constants.RuleSeparator}, StringSplitOptions.None);
             foreach (var s in singleInstructions)
             {
                 var instruction = s.Trim();
-                var lines = instruction.Split(new char[] { '\n' }, 2);
+                var lines = instruction.Split(new char[] {'\n'}, 2);
 
                 var instructionType = lines[0].Trim();
-                var instructionData = lines[1].Trim();
-
+                var instructionData = lines[1].Split(new char[] {'\n'}).Where(line => !(line.StartsWith("//") || line.Trim() == ""));
 
                 switch (instructionType)
                 {
                     case "globalDec:":
-                        {
-                            var globDec = new Prop_GlobalDec(instructionData);
-                            globalDecs.Add(globDec);
-                            Console.WriteLine("added global declaration:");
-                            Console.WriteLine(globDec);
-                        }
+                        globalDecs.Add(new Prop_GlobalDec(instructionData));
                         break;
                     case "insertionBefore:":
                         insertionsAtCmd.Add(new Prop_InsertCodeAtCmd(instructionData));
@@ -80,6 +75,7 @@ namespace PropInst
             globalDecs.Iter(gd => boogieProgram.AddTopLevelDeclarations(gd.Dec));
 
             #region Property: replace stubs with implementations
+
             var toReplace = new Dictionary<Procedure, List<Declaration>>();
             foreach (var boogieStub in boogieProgram.TopLevelDeclarations.OfType<Procedure>())
             {
@@ -93,7 +89,8 @@ namespace PropInst
                                 boogieStub.Name,
                                 toMatchStub.InParams, //just take the names that match the body..
                                 toMatchStub.OutParams, //just take the names that match the body..
-                                new List<Variable>(),  //local variables not necessary for now, may be part of the body in the future
+                                new List<Variable>(),
+                                //local variables not necessary for now, may be part of the body in the future
                                 gbts.Body);
 
                             toReplace.Add(boogieStub, newProc);
@@ -106,6 +103,7 @@ namespace PropInst
                 boogieProgram.RemoveTopLevelDeclaration(kvp.Key);
                 boogieProgram.AddTopLevelDeclarations(kvp.Value);
             }
+
             #endregion
 
             // Property: find insertions sites (Commands), insert code there
@@ -121,149 +119,6 @@ namespace PropInst
         }
 
 
-        private class InstrumentInsertionAtProc
-        {
-            private Prop_InsertCodeAtProcStart _property;
-
-            public InstrumentInsertionAtProc(Prop_InsertCodeAtProcStart pins)
-            {
-                _property = pins;
-            }
-
-            private static HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
-            public static void Instrument(Program program, Prop_InsertCodeAtProcStart ins)
-            {
-                 var im = new InstrumentInsertionAtProc(ins);
-
-                program.TopLevelDeclarations
-                    .OfType<Implementation>()
-                    .Iter(im.Instrument);
-            }
-
-            private void Instrument(Implementation impl)
-            {
-                var psm = new ProcedureSigMatcher(_property.ToMatch, impl);
-                if (!psm.MatchSig())
-                {
-                    return;
-                } 
-
-                Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok), 
-                    "trying to instrument a procedure that has been instrumented already " +
-                    "--> behaviour of resulting boogie program is not well-defined," +
-                    " i.e., it may depend on the order of the instrumentations in the property");
-                _procsThatHaveBeenInstrumented.Add(impl.tok);
-
-                var fpv = new FindIdentifiersVisitor();
-                fpv.VisitCmdSeq(_property.ToInsert);
-                if (fpv.Identifiers.Exists(i => i.Name == "##ANYPARAMS"))
-                {
-                    IdentifierExpr anyP = fpv.Identifiers.First(i => i.Name == "##ANYPARAMS");
-                    for (int i = 0; i < impl.InParams.Count; i++)
-                    {
-                        var p = impl.InParams[i];
-                        // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
-                        // with matching (subset) attributes
-                        if (psm.ToMatchAnyParamsAttributes == null
-                            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, p.Attributes)
-                            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, impl.Proc.InParams[i].Attributes))
-                        {
-                            var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
-                            var substitution = new Dictionary<IdentifierExpr, Expr> { { anyP, id } };
-                            var sv = new SubstitionVisitor(substitution);
-                            var toInsertClone = _property.ToInsert.Map(x => StringToBoogie.ToCmd(x.ToString()));//hack to get a deepcopy
-                            //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_property.ToInsert);//does not seem to work as I expect..
-                            var newCmds = sv.VisitCmdSeq(toInsertClone);
-                            impl.Blocks.Insert(0, BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
-                        }
-                    }
-                }
-            }
-        }
-
-        private class InstrumentInsertionAtCmd
-        {
-            private readonly Prop_InsertCodeAtCmd _propInsertCodeAtCmd;
-            private InstrumentInsertionAtCmd(Prop_InsertCodeAtCmd ins)
-            {
-                _propInsertCodeAtCmd = ins;
-            }
-
-            public static void Instrument(Program program, Prop_InsertCodeAtCmd ins)
-            {
-                var im = new InstrumentInsertionAtCmd(ins);
-
-                program.TopLevelDeclarations
-                    .OfType<Implementation>()
-                    .Iter(im.Instrument);
-            }
-
-            private void Instrument(Implementation impl)
-            {
-                foreach (var block in impl.Blocks)
-                {
-                    var newcmds = new List<Cmd>();
-                    foreach (Cmd cmd in block.Cmds)
-                    {
-                        if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                        else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
-                        else if (cmd is AssertCmd) newcmds.AddRange(ProcessAssert(cmd as AssertCmd));
-                        else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
-                        else newcmds.Add(cmd);
-                    }
-                    block.Cmds = newcmds;
-                }
-            }
-            private List<Cmd> ProcessCall(CallCmd cmd)
-            {
-                var ret = new List<Cmd>();
-
-                return ret;
-            }
-
-            private List<Cmd> ProcessAssume(AssumeCmd cmd)
-            {
-                var ret = new List<Cmd>();
-
-                var toMatch = (AssumeCmd) _propInsertCodeAtCmd.Match;
-
-                if (!AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
-                    return new List<Cmd>() { cmd }; //not all attributs of toMatch are in cmd --> do nothing
-
-                //check if the Expression matches
-                var mv = new ExprMatchVisitor(new List<Expr>() { toMatch.Expr });
-                mv.VisitExpr(cmd.Expr);
-
-                if (mv.MayStillMatch)
-                {
-                    var sv = new SubstitionVisitor(mv.Substitution);
-                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));//hack to get a deepcopy
-                    //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_propInsertCodeAtCmd.ToInsert);//does not seem to work as I expect..
-                    ret.AddRange(sv.VisitCmdSeq((List<Cmd>) toInsertClone));
-                }
-
-                ret.Add(cmd);
-                return ret;
-            }
-
-            private List<Cmd> ProcessAssert(AssertCmd cmd)
-            {
-                var ret = new List<Cmd>();
-                
-                ret.Add(cmd);
-                return ret;
-            }
-
-            private List<Cmd> ProcessAssign(AssignCmd cmd)
-            {
-                var ret = new List<Cmd>();
-
-
-
-                ret.Add(cmd);
-                return ret;
-            }
-        }
 
 
         private static bool MatchStubs(Procedure toMatchStub, Procedure boogieStub)
@@ -282,10 +137,10 @@ namespace PropInst
 
             return true;
         }
- 
+
         public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
         {
-            for (; left != null; left = left.Next)//TODO: make a reference copy of left to work on??
+            for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
             {
                 if (!BoogieUtil.checkAttrExists(left.Key, right))
                 {
@@ -296,6 +151,293 @@ namespace PropInst
         }
     }
 
+    class InstrumentInsertionAtProc
+    {
+        private Prop_InsertCodeAtProcStart _property;
+
+        public InstrumentInsertionAtProc(Prop_InsertCodeAtProcStart pins)
+        {
+            _property = pins;
+        }
+
+        private static HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
+
+        public static void Instrument(Program program, Prop_InsertCodeAtProcStart ins)
+        {
+            var im = new InstrumentInsertionAtProc(ins);
+
+            program.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Iter(im.Instrument);
+        }
+
+        private void Instrument(Implementation impl)
+        {
+            var psm = new ProcedureSigMatcher(_property.ToMatch, impl);
+            if (!psm.MatchSig())
+            {
+                return;
+            }
+
+            Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok),
+                "trying to instrument a procedure that has been instrumented already " +
+                "--> behaviour of resulting boogie program is not well-defined," +
+                " i.e., it may depend on the order of the instrumentations in the property");
+            _procsThatHaveBeenInstrumented.Add(impl.tok);
+
+            var fpv = new FindIdentifiersVisitor();
+            fpv.VisitCmdSeq(_property.ToInsert);
+            if (fpv.Identifiers.Exists(i => i.Name == Constants.AnyParams))
+            {
+                IdentifierExpr anyP = fpv.Identifiers.First(i => i.Name == Constants.AnyParams);
+                for (int i = 0; i < impl.InParams.Count; i++)
+                {
+                    var p = impl.InParams[i];
+                    // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
+                    // with matching (subset) attributes
+                    if (psm.ToMatchAnyParamsAttributes == null
+                        || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, p.Attributes)
+                        ||
+                        Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                    {
+                        var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
+                        var substitution = new Dictionary<IdentifierExpr, Expr> { { anyP, id } };
+                        var sv = new SubstitionVisitor(substitution);
+                        var toInsertClone = _property.ToInsert.Map(x => StringToBoogie.ToCmd(x.ToString()));
+                        //hack to get a deepcopy
+                        //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_property.ToInsert);//does not seem to work as I expect..
+                        var newCmds = sv.VisitCmdSeq(toInsertClone);
+                        impl.Blocks.Insert(0,
+                            BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                    }
+                }
+            }
+        }
+    }
+
+    class InstrumentInsertionAtCmd
+    {
+        private readonly Prop_InsertCodeAtCmd _propInsertCodeAtCmd;
+        private readonly Program _program; // exists for debugging purposes
+
+        private InstrumentInsertionAtCmd(Prop_InsertCodeAtCmd ins, Program prog)
+        {
+            _propInsertCodeAtCmd = ins;
+            _program = prog;
+        }
+
+        public static void Instrument(Program program, Prop_InsertCodeAtCmd ins)
+        {
+            var im = new InstrumentInsertionAtCmd(ins, program);
+
+            program.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Iter(im.Instrument);
+        }
+
+        private void Instrument(Implementation impl)
+        {
+            foreach (var block in impl.Blocks)
+            {
+                var newcmds = new List<Cmd>();
+                foreach (Cmd cmd in block.Cmds)
+                {
+                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
+                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
+                    else if (cmd is AssertCmd) newcmds.AddRange(ProcessAssert(cmd as AssertCmd));
+                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
+                    else newcmds.Add(cmd);
+                }
+                block.Cmds = newcmds;
+                //Debug.Assert(BoogieUtil.ResolveProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl"));
+                //Debug.Assert(BoogieUtil.ReResolve(_program) != null);
+                //Debug.Assert(BoogieUtil.TypecheckProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl"));
+                //BoogieUtil.ReResolve(_program);
+                //BoogieUtil.PrintProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl");
+            }
+        }
+
+        private List<Cmd> ProcessCall(CallCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            foreach (var m in _propInsertCodeAtCmd.Matches)
+            {
+                if (!(m is CallCmd))
+                    continue;
+                var toMatch = (CallCmd) m;
+
+                //match procedure name
+                if (toMatch.callee == Constants.AnyProcedure)
+                {
+                    // do nothing
+                }
+                else if (toMatch.callee.StartsWith("##"))
+                {
+                    //TODO: implement, probably: remember the real identifier..
+                }
+                else if (toMatch.callee == cmd.Proc.Name)
+                {
+                    // do nothing
+                }
+                else
+                {
+                    //no match
+                    continue;
+                }
+
+                if (toMatch.Ins.Count == 1
+                    && toMatch.Ins[0] is IdentifierExpr
+                    && (toMatch.Ins[0] as IdentifierExpr).Name == Constants.AnyArgs)
+                {
+                    //TODO: implement 
+                }
+                else if (toMatch.Ins.Count == 1
+                    && toMatch.Ins[0] is NAryExpr
+                    && ((NAryExpr) toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
+                {
+                    var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
+
+                    List<Expr> matchingExprs = new List<Expr>();
+
+                    //var substitution = new Dictionary<IdentifierExpr, Expr>();
+
+                    foreach (var arg in cmd.Ins)
+                    {
+
+                        Debug.Assert(anyArgsExpr.Args.Count == 1, 
+                            "we expect Constants.AnyArgs to have at most one argument, " +
+                            "which is the matching pattern expression");
+                        if (anyArgsExpr.Args[0] is NAryExpr
+                            && ((NAryExpr) anyArgsExpr.Args[0]).Fun.FunctionName == Constants.MemAccess)
+                        {
+                            //special case: we want to match anything that is a memory access 
+                            //i.e. someting like MemT.sometypename[someExpression]
+                            //and get out someExpression
+                            //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
+                            var memAccessExpr = (NAryExpr) anyArgsExpr.Args[0];
+
+                            Debug.Assert(memAccessExpr.Args.Count == 1);
+                            //Debug.Assert(memAccessExpr.Args[0] is IdentifierExpr,
+                            //   "do the TODO above --> generalize to other matches..");
+
+                            var memAccessToMatchExpr =  memAccessExpr.Args[0];
+
+                            //substitution.Add();
+                            var gma = new GatherMemAccesses();
+                            gma.Visit(arg);
+
+                            if (gma.accesses.Count == 0)
+                            {
+                                // there's no memory access in this argument --> do nothing for it
+                                continue;
+                            }
+                            else
+                            {
+                                // we have a memory access
+                                foreach (var access in gma.accesses)
+                                {
+                                    var emv = new ExprMatchVisitor(new List<Expr>() {memAccessToMatchExpr});
+                                    emv.Visit(access.Item2);
+                                    // here we have all we need to make a new command:
+                                    // for each arg of the anyargs, for each memoryAccess in that arg:
+                                    // instantiate the ToInsert accordingly
+
+                                    if (emv.MayStillMatch)
+                                    {
+                                        //hack to get a deepcopy
+                                        var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
+                                        var sv = new SubstitionVisitor(emv.Substitution, emv.FunctionSubstitution);
+                                        ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            //TODO: other matches of anyargs than memAccess
+                            throw new NotImplementedException();
+                        }
+                    }
+
+                    //               ExprMatchVisitor emv = new ExprMatchVisitor(toMatch.);
+                }
+                    
+            }
 
 
+
+            ret.Add(cmd);
+            return ret;
+        }
+
+        private List<Cmd> ProcessAssume(AssumeCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            //var toMatch = (AssumeCmd) _propInsertCodeAtCmd.Match;
+            foreach (var m in _propInsertCodeAtCmd.Matches)
+            {
+                if (!(m is AssumeCmd))
+                    continue;
+                var toMatch = (AssumeCmd)m;
+
+                if (!Driver.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
+                    continue;
+                //return new List<Cmd>() {cmd}; //not all attributs of toMatch are in cmd --> do nothing
+
+                //check if the Expression matches
+                var mv = new ExprMatchVisitor(new List<Expr>() { toMatch.Expr });
+                mv.VisitExpr(cmd.Expr);
+
+                if (mv.MayStillMatch)
+                {
+                    var sv = new SubstitionVisitor(mv.Substitution);
+                    //hack to get a deepcopy
+                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
+                    //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_propInsertCodeAtCmd.ToInsert);//does not seem to work as I expect..
+                    ret.AddRange(sv.VisitCmdSeq((List<Cmd>)toInsertClone));
+                }
+
+            }
+            ret.Add(cmd);
+            return ret;
+        }
+
+        private List<Cmd> ProcessAssert(AssertCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            ret.Add(cmd);
+            return ret;
+        }
+
+        private List<Cmd> ProcessAssign(AssignCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+
+
+            ret.Add(cmd);
+            return ret;
+        }
+    }
+
+    internal class Constants
+    {
+        // arbitrary list of parameters (at a procedure declaration)
+        public const string AnyParams = "$$ANYPARAMS"; 
+        // arbitrary list of arguments (at a procedure call)
+        // may be used as a function: argument is an expression, we choose those where the expression matches
+        public const string AnyArgs = "$$ANYARGUMENTS";
+        public const string AnyType = "$$ANYTYPE";
+        public const string AnyProcedure = "$$ANYPROC";
+        public const string AnyExpr = "$$ANYEXP";
+        public const string AnySum = "$$ANYSUM";
+        // any IdentifierExpr, if used as a function (with a single argument), 
+        // the identifier found can be referred to by that argument
+        public const string IdExpr = "$$IDEXPR";
+        public const string MemAccess = "$$MEMACCESS";
+        public static string RuleSeparator = "####";
+    }
 }

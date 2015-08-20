@@ -11,10 +11,10 @@ namespace PropInst
 
     class Prop_GlobalDec
     {
-        public Prop_GlobalDec(string pDec)
+        public Prop_GlobalDec(IEnumerable<string> pDecLines)
         {
             Dec = new List<Declaration>();
-            foreach (var line in pDec.Split(new char[] { '\n' }))
+            foreach (var line in pDecLines)
             {
                 Dec.Add(StringToBoogie.ToDecl(line));
             }
@@ -32,17 +32,17 @@ namespace PropInst
     
     internal class Prop_InsertCodeAtCmd
     {
-        public readonly Cmd Match;
+        public readonly List<Cmd> Matches = new List<Cmd>();
         public readonly List<Cmd> ToInsert = new List<Cmd>();
         private enum ParseMode
         {
             Match, Insert, None
         };
 
-        public Prop_InsertCodeAtCmd(string s)
+        public Prop_InsertCodeAtCmd(IEnumerable<string> lines )
         {
             var mode = ParseMode.None;
-            foreach (var line in s.Split('\n'))
+            foreach (var line in lines)
             {
                 switch (line.Trim())
                 {
@@ -56,8 +56,8 @@ namespace PropInst
                         switch (mode)
                         {
                             case ParseMode.Match:
-                                Debug.Assert(Match == null);
-                                Match = StringToBoogie.ToCmd(line);
+                                Matches.Add(StringToBoogie.ToCmd(line));
+                                mode = ParseMode.None; //matches have exactly one line
                                 break;
                             case ParseMode.Insert:
                                 ToInsert.Add(StringToBoogie.ToCmd(line));
@@ -82,10 +82,10 @@ namespace PropInst
         public readonly List<Procedure> Stubs = new List<Procedure>();
         public readonly List<Cmd> Body = new List<Cmd>();
 
-        public Prop_GiveBodyToStub(string s)
+        public Prop_GiveBodyToStub(IEnumerable<string> lines )
         {
             var mode = ParseMode.None;
-            foreach (var line in s.Split('\n'))
+            foreach (var line in lines)
             {
                 switch (line.Trim())
                 {
@@ -127,10 +127,10 @@ namespace PropInst
             None
         };
 
-        public Prop_InsertCodeAtProcStart(string s)
+        public Prop_InsertCodeAtProcStart(IEnumerable<string> lines )
         {
             var mode = ParseMode.None;
-            foreach (var line in s.Split('\n'))
+            foreach (var line in lines)
             {
                 switch (line.Trim())
                 {
