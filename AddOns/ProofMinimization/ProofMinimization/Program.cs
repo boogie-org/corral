@@ -115,7 +115,7 @@ namespace ProofMinimization
                         continue;
                     } catch (Exception e)
                     {
-                        Console.WriteLine("Method format incorrect!");
+                        Console.WriteLine("Method format incorrect! + ({0})", e.ToString());
                         return;
                     }
                 }
@@ -150,7 +150,7 @@ namespace ProofMinimization
                 RunOnce(new PersistentProgram(BoogieUtil.ReadAndResolve(files.First(), true)), printcontracts);
                 return;
             }
-
+            
             MinimizerData data = MinControl.ReadFiles(files, keepPatterns);
             Dictionary<int, int> templateToPerfDelta;
             var min = MinControl.Minimize(data, out templateToPerfDelta);

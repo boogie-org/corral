@@ -29,9 +29,12 @@ namespace ProofMinimization
         // template Id -> template expression
         public Dictionary<int, Expr> tempIdToExpr;
 
+        public Dictionary<string, HashSet<int>> fileToTempIds;
+
         public MinimizerData(Dictionary<string, PersistentProgram> fileToProg, Dictionary<string, int> fileToPerf,
                              Dictionary<string, HashSet<string>> fileToKeepConstants, Dictionary<int, Dictionary<string, HashSet<string>>> templateMap,
-                             Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr) 
+                             Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr,
+                             Dictionary<string, HashSet<int>> fileToTempIds) 
         {
             this.fileToProg = fileToProg;
             this.fileToPerf = fileToPerf;
@@ -40,6 +43,7 @@ namespace ProofMinimization
             this.templateToStr = templateToStr;
             this.strToTemplate = strToTemplate;
             this.tempIdToExpr = tempIdToExpr;
+            this.fileToTempIds = fileToTempIds;
         }
     }
 
@@ -77,8 +81,9 @@ namespace ProofMinimization
             Dictionary<int, string> templateToStr = new Dictionary<int, string>();
             Dictionary<string, HashSet<string>> fileToKeepConstants = new Dictionary<string, HashSet<string>>();
             Dictionary<string, int> fileToPerf = new Dictionary<string, int>();
+            
             Dictionary<int, Expr> tempIdToExpr = new Dictionary<int, Expr>();
-
+            Dictionary<string, HashSet<int>> fileToTempIds = new Dictionary<string, HashSet<int>>();
 
             var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
                 {
@@ -93,6 +98,7 @@ namespace ProofMinimization
                 CheckRMT(program);
 
                 fileToKeepConstants.Add(f, new HashSet<string>());
+                fileToTempIds.Add(f, new HashSet<int>());
 
                 // Add annotations
                 foreach (var p in keepPatterns)
@@ -181,9 +187,11 @@ namespace ProofMinimization
                             else
                             {
                                 // create new template
-                                strToTemplate.Add(temp, TemplateCounterStart + strToTemplate.Count);
+                                var tid = TemplateCounterStart + strToTemplate.Count;
+                                strToTemplate.Add(temp, tid);
                                 addTemplate(strToTemplate[temp], f, constantName);
                                 tempIdToExpr[strToTemplate[temp]] = SimplifyExpr.ExprToTemplateExpr(expr);
+                                fileToTempIds[f].Add(tid);
                             }
                         }
                     }
@@ -211,7 +219,7 @@ namespace ProofMinimization
                     }
                 }
             }
-            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr);
+            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr, fileToTempIds);
         }
 
         public static HashSet<int> Minimize(MinimizerData data, out  Dictionary<int, int> templateToPerfDelta)
