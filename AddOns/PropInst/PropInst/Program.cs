@@ -267,9 +267,15 @@ namespace PropInst
                     continue;
                 var toMatch = (CallCmd) m;
 
-                var identifierSubstitution = new Dictionary<IdentifierExpr, Expr>();
-                var functionSubstitution = new Dictionary<string, IAppliable>();
-                var substitution = new Dictionary<IdentifierExpr, Expr>();
+                //TODO: these will have to map to lists of Expressions and so in the end (there may be multiple matches..)
+                // --> so we'll call the substitutionvisitor for each list entry and get a new command out..
+                //var identifierSubstitution = new Dictionary<IdentifierExpr, List<Expr>>();
+                //var functionSubstitution = new Dictionary<string, List<IAppliable>>();
+                //var substitution = new Dictionary<IdentifierExpr, List<Expr>>();
+                var identifierSubstitutions = new List<Dictionary<IdentifierExpr, Expr>>();
+                var functionSubstitutions = new List<Dictionary<string, IAppliable>>();
+                var substitutions = new List<Dictionary<IdentifierExpr, Expr>>();
+
 
                 #region match procedure name
                 if (toMatch.callee == Constants.AnyProcedure)
@@ -293,7 +299,7 @@ namespace PropInst
 
                 #region match out parameters ("the things assigned to")
                 if (toMatch.Outs.Count == 1
-                    && toMatch.Outs[0].Name == Constants.AnyResults)
+                    && toMatch.Outs[0].Name == Constants.AnyLhss)
                 {
                     //matches anything --> do nothing/go on
                 }
@@ -317,7 +323,7 @@ namespace PropInst
                 {
                     var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
-                    List<Expr> matchingExprs = new List<Expr>();
+                    var matchingExprs = new List<Expr>();
 
                     foreach (var arg in cmd.Ins)
                     {
@@ -363,9 +369,11 @@ namespace PropInst
                                 if (emv.MayStillMatch)
                                 {
 
-                                    identifierSubstitution = MergeSubstitutions(emv.IdentifierSubstitution, identifierSubstitution);
-                                    functionSubstitution = MergeSubstitutions(emv.FunctionSubstitution, functionSubstitution);
-                                    substitution = MergeSubstitutions(emv.Substitution, substitution);
+                                    functionSubstitutions.Add(emv.FunctionSubstitution);
+                                    substitutions.Add(emv.Substitution);
+                                    //identifierSubstitutions = MergeSubstitutions(emv.IdentifierSubstitution, identifierSubstitutions);
+                                    //functionSubstitutions = MergeSubstitutions(emv.FunctionSubstitution, functionSubstitutions);
+                                    //substitution = MergeSubstitutions(emv.Substitution, substitution);
                                 }
                             }
                         }
@@ -378,42 +386,76 @@ namespace PropInst
                 }
                 #endregion
 
-                //hack to get a deepcopy
-                var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
-                var sv = new SubstitionVisitor(identifierSubstitution, functionSubstitution, substitution); 
-                ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                foreach (var subs in identifierSubstitutions)
+                {
+                   //hack to get a deepcopy
+                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
+
+                    var sv = new SubstitionVisitor(subs);
+                    ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                }
+                foreach (var subs in substitutions)
+                {
+                   //hack to get a deepcopy
+                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
+
+                    var sv = new SubstitionVisitor(subs);
+                    ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                }
+
             }
             ret.Add(cmd);
             return ret;
         }
 
-        private Dictionary<string, IAppliable> MergeSubstitutions(Dictionary<string, IAppliable> sub1, Dictionary<string, IAppliable> sub2)
-        {
-            var result = new Dictionary<string, IAppliable>();
-            foreach (var kvp in sub1)
-            {
-                result.Add(kvp.Key, kvp.Value);
-            }
-            foreach (var kvp in sub2)
-            {
-                result.Add(kvp.Key, kvp.Value);
-            }
-            return result;
-        }
+        //private List<Dictionary<IdentifierExpr, Expr>>  Convert(Dictionary<IdentifierExpr> )
 
-        private Dictionary<IdentifierExpr, Expr> MergeSubstitutions(Dictionary<IdentifierExpr, Expr> sub1, Dictionary<IdentifierExpr, Expr> sub2)
-        {
-            var result = new Dictionary<IdentifierExpr, Expr>();
-            foreach (var kvp in sub1)
-            {
-                result.Add(kvp.Key, kvp.Value);
-            }
-            foreach (var kvp in sub2)
-            {
-                result.Add(kvp.Key, kvp.Value);
-            }
-            return result;
-        }
+        //private Dictionary<string, List<IAppliable>> MergeSubstitutions(Dictionary<string, IAppliable> sub1, Dictionary<string, List<IAppliable>> sub2)
+        //{
+        //    var converted = new Dictionary<string, List<IAppliable>>();
+        //    foreach (var kvp in sub1)
+        //        converted[kvp.Key] = new List<IAppliable>() { kvp.Value };
+        //    return MergeSubstitutions(converted, sub2);
+        //}
+
+        //private Dictionary<IdentifierExpr, List<Expr>> MergeSubstitutions(Dictionary<IdentifierExpr, Expr> sub1, Dictionary<IdentifierExpr, List<Expr>> sub2)
+        //{
+        //    var converted = new Dictionary<IdentifierExpr, List<Expr>>();
+        //    foreach (var kvp in sub1)
+        //        converted[kvp.Key] = new List<Expr>() { kvp.Value };
+        //    return MergeSubstitutions(converted, sub2);
+        //}
+
+        //private Dictionary<string, List<IAppliable>> MergeSubstitutions(Dictionary<string, List<IAppliable>> sub1, Dictionary<string, List<IAppliable>> sub2)
+        //{
+        //    var result = new Dictionary<string, List<IAppliable>>();
+        //    foreach (var kvp in sub1)
+        //    {
+        //        result.Add(kvp.Key, kvp.Value);
+        //    }
+        //    foreach (var kvp in sub2)
+        //    {
+        //        if (result.ContainsKey(kvp.Key))
+        //            result[kvp.Key].AddRange(kvp.Value);
+        //        else
+        //            result.Add(kvp.Key, kvp.Value);
+        //    }
+        //    return result;
+        //}
+
+        //private Dictionary<IdentifierExpr, List<Expr>> MergeSubstitutions(Dictionary<IdentifierExpr, List<Expr>> sub1, Dictionary<IdentifierExpr, List<Expr>> sub2)
+        //{
+        //    var result = new Dictionary<IdentifierExpr, List<Expr>>();
+        //    foreach (var kvp in sub1)
+        //    {
+        //        result.Add(kvp.Key, kvp.Value);
+        //    }
+        //    foreach (var kvp in sub2)
+        //    {
+        //        result.Add(kvp.Key, kvp.Value);
+        //    }
+        //    return result;
+        //}
 
 
         private List<Cmd> ProcessAssume(AssumeCmd cmd)
@@ -437,7 +479,7 @@ namespace PropInst
 
                 if (mv.MayStillMatch)
                 {
-                    var sv = new SubstitionVisitor(mv.IdentifierSubstitution);
+                    var sv = new SubstitionVisitor(mv.Substitution);
                     //hack to get a deepcopy
                     var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
                     //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_propInsertCodeAtCmd.ToInsert);//does not seem to work as I expect..
@@ -493,7 +535,9 @@ namespace PropInst
         public const string AnyArgs = "$$ANYARGUMENTS";
         //arbitrary list of results of a call
         // these are always IdentifierExprs
-        public const string AnyResults = "$$ANYRESULTS";
+        //public const string AnyResults = "$$ANYRESULTS";
+        //nicer instead of AnyResults:
+        public const string AnyLhss = "$$ANYLEFTHANDSIDES";
         public const string AnyType = "$$ANYTYPE";
         public const string AnyProcedure = "$$ANYPROC";
         public const string AnyExpr = "$$ANYEXP";

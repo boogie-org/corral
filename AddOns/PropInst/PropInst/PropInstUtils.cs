@@ -99,13 +99,8 @@ namespace PropInst
     {
         private List<Expr> _toConsume;
         public bool MayStillMatch = true;
-        public readonly Dictionary<IdentifierExpr, Expr> IdentifierSubstitution = new Dictionary<IdentifierExpr, Expr>();
-        //problem with IAppliable -> IAppliable: the hashcode function of IAppliaple refers to the function declaration, which is null for the expression from our property..
+        //public readonly Dictionary<IdentifierExpr, Expr> IdentifierSubstitution = new Dictionary<IdentifierExpr, Expr>();
         public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
-        //public readonly Dictionary<Expr, Expr> ComplexSubstitution = new Dictionary<Expr, Expr>();
-        ////problem with Dictionary Expr -> Expr: the hashcode function of an NaryExpression refers to the function declaration, which is null for the expression from our property..
-        //public readonly List<Tuple<Expr, Expr>> ComplexSubstitution = new List<Tuple<Expr, Expr>>();
-        
         public readonly Dictionary<IdentifierExpr, Expr> Substitution = new Dictionary<IdentifierExpr, Expr>();
 
 
@@ -271,8 +266,8 @@ namespace PropInst
             }
             if (idexToConsume.Name.StartsWith("##"))
             {
-                if (!IdentifierSubstitution.ContainsKey(idexToConsume))
-                    IdentifierSubstitution.Add(idexToConsume, node);//TODO: understand..
+                if (!Substitution.ContainsKey(idexToConsume))
+                    Substitution.Add(idexToConsume, node);//TODO: understand..
                 _toConsume.RemoveAt(0);
                 return base.VisitIdentifierExpr(node);
             }
