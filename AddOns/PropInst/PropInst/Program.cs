@@ -18,6 +18,9 @@ namespace PropInst
     {
         public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
 
+
+        //TODO: collect some stats about the instrumentation, mb some debugging output??
+
         private static void Main(string[] args)
         {
             if (args.Length < 3)
@@ -34,14 +37,14 @@ namespace PropInst
             #region parse the property file
 
             var propString = File.ReadAllText(args[0]);
-            var singleInstructions = propString.Split(new string[] {Constants.RuleSeparator}, StringSplitOptions.None);
+            var singleInstructions = propString.Split(new string[] { Constants.RuleSeparator }, StringSplitOptions.None);
             foreach (var s in singleInstructions)
             {
                 var instruction = s.Trim();
-                var lines = instruction.Split(new char[] {'\n'}, 2);
+                var lines = instruction.Split(new char[] { '\n' }, 2);
 
                 var instructionType = lines[0].Trim();
-                var instructionData = lines[1].Split(new char[] {'\n'}).Where(line => !(line.StartsWith("//") || line.Trim() == ""));
+                var instructionData = lines[1].Split(new char[] { '\n' }).Where(line => !(line.StartsWith("//") || line.Trim() == ""));
 
                 switch (instructionType)
                 {
@@ -218,12 +221,10 @@ namespace PropInst
     class InstrumentInsertionAtCmd
     {
         private readonly Prop_InsertCodeAtCmd _propInsertCodeAtCmd;
-        private readonly Program _program; // exists for debugging purposes
 
         private InstrumentInsertionAtCmd(Prop_InsertCodeAtCmd ins, Program prog)
         {
             _propInsertCodeAtCmd = ins;
-            _program = prog;
         }
 
         public static void Instrument(Program program, Prop_InsertCodeAtCmd ins)
@@ -249,11 +250,6 @@ namespace PropInst
                     else newcmds.Add(cmd);
                 }
                 block.Cmds = newcmds;
-                //Debug.Assert(BoogieUtil.ResolveProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl"));
-                //Debug.Assert(BoogieUtil.ReResolve(_program) != null);
-                //Debug.Assert(BoogieUtil.TypecheckProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl"));
-                //BoogieUtil.ReResolve(_program);
-                //BoogieUtil.PrintProgram(_program, "C:\\Users\\t-alnu\\Desktop\\try\\out.bpl");
             }
         }
 
@@ -265,17 +261,9 @@ namespace PropInst
             {
                 if (!(m is CallCmd))
                     continue;
-                var toMatch = (CallCmd) m;
+                var toMatch = (CallCmd)m;
 
-                //TODO: these will have to map to lists of Expressions and so in the end (there may be multiple matches..)
-                // --> so we'll call the substitutionvisitor for each list entry and get a new command out..
-                //var identifierSubstitution = new Dictionary<IdentifierExpr, List<Expr>>();
-                //var functionSubstitution = new Dictionary<string, List<IAppliable>>();
-                //var substitution = new Dictionary<IdentifierExpr, List<Expr>>();
-                var identifierSubstitutions = new List<Dictionary<IdentifierExpr, Expr>>();
-                var functionSubstitutions = new List<Dictionary<string, IAppliable>>();
-                var substitutions = new List<Dictionary<IdentifierExpr, Expr>>();
-
+                var substitutions = new List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>>();
 
                 #region match procedure name
                 if (toMatch.callee == Constants.AnyProcedure)
@@ -319,143 +307,88 @@ namespace PropInst
                 }
                 else if (toMatch.Ins.Count == 1
                     && toMatch.Ins[0] is NAryExpr
-                    && ((NAryExpr) toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
+                    && ((NAryExpr)toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
                 {
-                    var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
+                    var anyArgsExpr = (NAryExpr)toMatch.Ins[0];
 
                     var matchingExprs = new List<Expr>();
 
                     foreach (var arg in cmd.Ins)
                     {
-                        //List<Cmd> ret = new List<Cmd>();
 
-                        var toMatchNae = anyArgsExpr;
-
-                        Debug.Assert(toMatchNae.Args.Count == 1,
+                        Debug.Assert(anyArgsExpr.Args.Count == 1,
                             "we expect Constants.AnyArgs to have at most one argument, " +
                             "which is the matching pattern expression");
-                        if (toMatchNae.Args[0] is NAryExpr
-                            && ((NAryExpr)toMatchNae.Args[0]).Fun.FunctionName == Constants.MemAccess)
-                        {
-                            //special case: we want to match anything that is a memory access 
-                            //i.e. someting like MemT.sometypename[someExpression]
-                            //and get out someExpression
-                            //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
-                            var memAccessExpr = (NAryExpr)toMatchNae.Args[0];
-
-                            Debug.Assert(memAccessExpr.Args.Count == 1);
-                            //TODO above --> generalize to other matches..");
-
-                            var memAccessToMatchExpr = memAccessExpr.Args[0];
-
-                            var gma = new GatherMemAccesses();
-                            gma.Visit(arg);
-
-                            if (gma.accesses.Count == 0)
-                            {
-                                // there's no memory access in this argument --> do nothing for it
-                                return ret;
-                            }
-
-                            // we have a memory access
-                            foreach (var access in gma.accesses)
-                            {
-                                var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
-                                emv.Visit(access.Item2);
-
-                                // here we have all we need to make a new command:
-                                // for each arg of the anyargs, for each memoryAccess in that arg:
-                                // instantiate the ToInsert accordingly
-                                if (emv.MayStillMatch)
-                                {
-
-                                    functionSubstitutions.Add(emv.FunctionSubstitution);
-                                    substitutions.Add(emv.Substitution);
-                                    //identifierSubstitutions = MergeSubstitutions(emv.IdentifierSubstitution, identifierSubstitutions);
-                                    //functionSubstitutions = MergeSubstitutions(emv.FunctionSubstitution, functionSubstitutions);
-                                    //substitution = MergeSubstitutions(emv.Substitution, substitution);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            //TODO: other matches of anyargs than memAccess
-                            throw new NotImplementedException();
-                        }
+                        UpdateSubstitutionsAccordingToMatchAndTargetExpr(anyArgsExpr.Args[0], arg, substitutions);
                     }
                 }
                 #endregion
-
-                foreach (var subs in identifierSubstitutions)
+                foreach (var subsPair in substitutions)
                 {
-                   //hack to get a deepcopy
+                    //hack to get a deepcopy
                     var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
 
-                    var sv = new SubstitionVisitor(subs);
+                    var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2);
                     ret.AddRange(sv.VisitCmdSeq(toInsertClone));
                 }
-                foreach (var subs in substitutions)
-                {
-                   //hack to get a deepcopy
-                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
-
-                    var sv = new SubstitionVisitor(subs);
-                    ret.AddRange(sv.VisitCmdSeq(toInsertClone));
-                }
-
             }
             ret.Add(cmd);
             return ret;
         }
 
-        //private List<Dictionary<IdentifierExpr, Expr>>  Convert(Dictionary<IdentifierExpr> )
+        private static void UpdateSubstitutionsAccordingToMatchAndTargetExpr(Expr toMatch, Expr expr, List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>> substitutions)
+        {
 
-        //private Dictionary<string, List<IAppliable>> MergeSubstitutions(Dictionary<string, IAppliable> sub1, Dictionary<string, List<IAppliable>> sub2)
-        //{
-        //    var converted = new Dictionary<string, List<IAppliable>>();
-        //    foreach (var kvp in sub1)
-        //        converted[kvp.Key] = new List<IAppliable>() { kvp.Value };
-        //    return MergeSubstitutions(converted, sub2);
-        //}
+            if (toMatch is NAryExpr
+                && ((NAryExpr)toMatch).Fun.FunctionName == Constants.MemAccess)
+            {
+                //special case: we want to match anything that is a memory access 
+                //i.e. someting like MemT.sometypename[someExpression]
+                //and get out someExpression
+                //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
+                var memAccessExpr = (NAryExpr)toMatch;
 
-        //private Dictionary<IdentifierExpr, List<Expr>> MergeSubstitutions(Dictionary<IdentifierExpr, Expr> sub1, Dictionary<IdentifierExpr, List<Expr>> sub2)
-        //{
-        //    var converted = new Dictionary<IdentifierExpr, List<Expr>>();
-        //    foreach (var kvp in sub1)
-        //        converted[kvp.Key] = new List<Expr>() { kvp.Value };
-        //    return MergeSubstitutions(converted, sub2);
-        //}
+                Debug.Assert(memAccessExpr.Args.Count == 1);
+                //TODO above --> generalize to other matches..");
 
-        //private Dictionary<string, List<IAppliable>> MergeSubstitutions(Dictionary<string, List<IAppliable>> sub1, Dictionary<string, List<IAppliable>> sub2)
-        //{
-        //    var result = new Dictionary<string, List<IAppliable>>();
-        //    foreach (var kvp in sub1)
-        //    {
-        //        result.Add(kvp.Key, kvp.Value);
-        //    }
-        //    foreach (var kvp in sub2)
-        //    {
-        //        if (result.ContainsKey(kvp.Key))
-        //            result[kvp.Key].AddRange(kvp.Value);
-        //        else
-        //            result.Add(kvp.Key, kvp.Value);
-        //    }
-        //    return result;
-        //}
+                var memAccessToMatchExpr = memAccessExpr.Args[0];
 
-        //private Dictionary<IdentifierExpr, List<Expr>> MergeSubstitutions(Dictionary<IdentifierExpr, List<Expr>> sub1, Dictionary<IdentifierExpr, List<Expr>> sub2)
-        //{
-        //    var result = new Dictionary<IdentifierExpr, List<Expr>>();
-        //    foreach (var kvp in sub1)
-        //    {
-        //        result.Add(kvp.Key, kvp.Value);
-        //    }
-        //    foreach (var kvp in sub2)
-        //    {
-        //        result.Add(kvp.Key, kvp.Value);
-        //    }
-        //    return result;
-        //}
+                var gma = new GatherMemAccesses();
+                gma.Visit(expr);
+
+                if (gma.accesses.Count == 0)
+                {
+                    // there's no memory access in this argument --> do nothing for it
+                    //return ret;
+                    return;
+                }
+
+                // we have a memory access
+                foreach (var access in gma.accesses)
+                {
+                    var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
+                    emv.Visit(access.Item2);
+
+                    // here we have all we need to make a new command:
+                    // for each expr of the anyargs, for each memoryAccess in that expr:
+                    // instantiate the ToInsert accordingly
+                    if (emv.MayStillMatch)
+                    {
+                        //TODO: right now, we get a substitution (pair) for each match. 
+                        //TODO: In the future we may need to several substitutions for example because
+                        //TODO: there are many memaccesses, args that match anyargs, and so on.. --> right??
+                        substitutions.Add(
+                            new Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>(emv.Substitution,
+                                emv.FunctionSubstitution));
+                    }
+                }
+            }
+            else
+            {
+                //TODO: other matches of anyargs than memAccess
+                throw new NotImplementedException();
+            }
+        }
 
 
         private List<Cmd> ProcessAssume(AssumeCmd cmd)
@@ -506,18 +439,37 @@ namespace PropInst
             {
                 if (!(m is AssignCmd))
                     continue;
-                var toMatchCmd = (AssignCmd) m;
+                var toMatchCmd = (AssignCmd)m;
 
-                Debug.Assert(toMatchCmd.Lhss.Count == 1, "--> have to adapt to multi-assignments..");
-                var toMatchLhs = toMatchCmd.Lhss.First().AsExpr;
-                var toMatchRhs = toMatchCmd.Rhss.First();
+                var substitutions = new List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>>();
 
-                Debug.Assert(cmd.Lhss.Count == 1, "--> have to adapt to multi-assignments..");
-                //var lhsEmv = new ExprMatchVisitor(new List<Expr>() { toMatchLhs});
-                //lhsEmv.VisitExpr(cmd.Lhss.First().AsExpr);
-                //var rhsEmv = new ExprMatchVisitor(new List<Expr>() { toMatchRhs});
-                //rhsEmv.VisitExpr(cmd.Rhss.First());
+                //do Lefthandsides match??
+                if (toMatchCmd.Lhss.Count == 1
+                    && toMatchCmd.Lhss.First() is SimpleAssignLhs
+                    && toMatchCmd.Lhss.First().DeepAssignedIdentifier.Name == Constants.AnyLhss)
+                {
+                    //matches --> go on.. 
+                }
+                else
+                {
+                    continue;
+                }
 
+                //do Righthandsides match??
+                for (int i = 0; i < cmd.Rhss.Count; i++)
+                {
+                    var rhs = cmd.Rhss[i];
+                    UpdateSubstitutionsAccordingToMatchAndTargetExpr(toMatchCmd.Rhss[i], rhs, substitutions);
+                }
+
+                foreach (var subsPair in substitutions)
+                {
+                    //hack to get a deepcopy
+                    var toInsertClone = _propInsertCodeAtCmd.ToInsert.Map(i => StringToBoogie.ToCmd(i.ToString()));
+
+                    var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2);
+                    ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                }
             }
 
 
@@ -529,7 +481,7 @@ namespace PropInst
     internal class Constants
     {
         // arbitrary list of parameters (at a procedure declaration)
-        public const string AnyParams = "$$ANYPARAMS"; 
+        public const string AnyParams = "$$ANYPARAMS";
         // arbitrary list of arguments (at a procedure call)
         // may be used as a function: argument is an expression, we choose those where the expression matches
         public const string AnyArgs = "$$ANYARGUMENTS";
