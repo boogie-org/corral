@@ -15,6 +15,8 @@ namespace ProofMinimization
     // remove implications, push negation inside
     public class SimplifyExpr : StandardVisitor
     {
+        public static HashSet<Variable> templateVars = new HashSet<Variable>();
+
         private SimplifyExpr() { }
 
         public static void SimplifyEnsures(Ensures ens, Dictionary<string, Constant> CandidateConstants)
@@ -99,9 +101,17 @@ namespace ProofMinimization
                 Substituter.Apply(new Substitution(v =>
                 {
                     if (v is Formal && (v as Formal).InComing)
-                        return Expr.Ident(GetFin(v.TypedIdent.Type));
+                    {
+                        var nVar = GetFin(v.TypedIdent.Type);
+                        templateVars.Add(nVar);
+                        return Expr.Ident(nVar);
+                    }
                     if (v is Formal && !(v as Formal).InComing)
-                        return Expr.Ident(GetFout(v.TypedIdent.Type));
+                    {
+                        var nVar = GetFout(v.TypedIdent.Type);
+                        templateVars.Add(nVar);
+                        return Expr.Ident(nVar);
+                    }
                     return Expr.Ident(v);
                 }), expr);
 

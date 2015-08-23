@@ -213,7 +213,7 @@ namespace ProofMinimization
         {
             int simplifiedSize = simplificationSizes[simplSizeIndex];
             // This is probably not even necessary, but can save some time.
-            // Simplified size always has to strictly less than the clause size.
+            // Simplified size always has to be strictly less than the clause size.
             if (simplifiedSize >= annots.GetClause(clauseIndex).Count)
             {
                 return null;
@@ -303,18 +303,76 @@ namespace ProofMinimization
             Console.WriteLine("Indexed template ({0}):", templates.Count);
             Console.WriteLine("\t{0}", icnf.ToString());
 
-            Console.WriteLine("Printing k1 simplified templates");
+            Console.WriteLine("Listing k1 simplified templates");
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(icnf);
 
             TemplateAnnotations simple;
             while((simple = iter.next()) != null)
             {
-                Console.WriteLine(simple.ToString());
+                Console.WriteLine("Subtemplate: {0}", simple.ToString());
+                Console.WriteLine("Now listing its instantiations.");
+
+                var insts = instantiateTemplate(simple, program);
+                foreach (var proc in insts.Keys)
+                {
+                    Console.WriteLine("Instantiations for procedure {0}", proc.Name);
+
+                    foreach (var inst in insts[proc]) 
+                    {
+                        Console.WriteLine(inst.ToString());
+                    }
+                }
                 Console.WriteLine("");
 
             }
             
 
+        }
+
+
+        Dictionary<Procedure, List<Expr>> instantiateTemplate(TemplateAnnotations tanns, ProgTransformation.PersistentProgram program)
+        {
+            // Get global variables.
+            Program prog = program.getProgram();
+            var globals = new Dictionary<string, Variable>();
+            prog.TopLevelDeclarations
+                .OfType<Variable>()
+                .Iter(c => globals.Add(c.Name, c));
+
+            // TODO: This should be done simpler???
+            var tannsCNF = tanns.ToCnfExpression();
+            var annots = SimplifyExpr.GetExprConjunctions(tannsCNF);
+
+            Dictionary<Procedure, List<Expr>> procToInsts = new Dictionary<Procedure, List<Expr>>();
+
+            foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var proc = impl.Proc;
+                if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")) continue;
+
+                var formals = new Dictionary<string, Variable>();
+                proc.InParams.OfType<Formal>()
+                    .Iter(f => formals.Add(f.Name, f));
+                proc.OutParams.OfType<Formal>()
+                    .Iter(f => formals.Add(f.Name, f));
+
+                List<Expr> procInsts = new List<Expr>();
+                for (int i = 0; i < annots.Count; i++) 
+                {
+                    var annot = annots[i];
+                    var insts = instantiateProcTemplates(annot, globals, formals);
+                    procInsts.AddRange(insts);
+                }
+
+                procToInsts[proc] = procInsts;
+            }
+
+            return procToInsts;
+        }
+
+        List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, Dictionary<string, Variable> formals)
+        {
+            return MinControl.InstantiateTemplate(template, SimplifyExpr.templateVars, globals, formals);
         }
 
     }

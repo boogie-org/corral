@@ -343,5 +343,132 @@ namespace ProofMinimization
             if (ep == null)
                 throw new Exception("Entrypoint not found");
         }
+
+
+        // Basically a copy of InstantiateTemplates from VerificationPasses.
+        public static List<Expr> InstantiateTemplate(Expr template, HashSet<Variable> templateVars, 
+                                                     Dictionary<string, Variable> globals, Dictionary<string, Variable> formals)
+        {
+            HashSet<string> templateVarNames = new HashSet<string>();
+            templateVars.Iter(v => templateVarNames.Add(v.Name));
+            
+            var ret = new List<Expr>();
+
+            var dup = new FixedDuplicator();
+
+            // TODO: Akash's code uses globalsUsed. Why????
+            var used = new GlobalVarsUsed();
+            used.VisitExpr(template);
+
+            if (used.varsUsed.Any(g => !globals.ContainsKey(g) && !templateVarNames.Contains(g)))
+            {
+                Console.WriteLine("UNINDENTIFED VARIABLE FOUND IN THE TEMPLATE: {0}", template.ToString());
+                return ret;
+            }
+                
+
+            var subst = new Dictionary<string, Variable>();
+
+            var templateVarUsed = used.varsUsed.Intersection(templateVarNames);
+            
+            if (templateVarUsed.Count == 0)
+            {
+                var e = dup.VisitExpr(template);
+                e = (new VarSubstituter(subst, globals, new Dictionary<string, Function>())).VisitExpr(e);
+                ret.Add(e);
+                return ret;
+            }
+
+            // Set of matches for each template variable
+            var matches = new Dictionary<string, HashSet<Variable>>();
+            
+            foreach (var tvName in templateVarUsed)
+            {
+                var tv = templateVars.First(v => v.Name == tvName);
+                matches.Add(tvName, new HashSet<Variable>());
+
+                var includeFormalIn = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalIn");
+                var includeFormalOut = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalOut");
+                var includeGlobals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeGlobals");
+
+                if (!includeFormalIn && !includeFormalOut && !includeGlobals)
+                {
+                    includeFormalIn = true;
+                    includeFormalOut = true;
+                    includeGlobals = true;
+                }
+
+                var onlyMatchVar = QKeyValue.FindStringAttribute(tv.Attributes, "match");
+                System.Text.RegularExpressions.Regex matchRegEx = null;
+                if (onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
+
+                foreach (var kvp in globals.Concat(formals))
+                {
+                    if (tv.TypedIdent.Type.ToString() != kvp.Value.TypedIdent.Type.ToString())
+                        continue;
+
+                    if (kvp.Value is Constant) continue;
+                    if (matchRegEx != null && !matchRegEx.IsMatch(kvp.Key)) continue;
+                    if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
+                    if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
+                    if (!includeGlobals && kvp.Value is GlobalVariable) continue;
+
+                    matches[tvName].Add(kvp.Value);
+
+                }
+            }
+
+            // return if empty set of matches
+            if (matches.Any(kvp => kvp.Value.Count == 0))
+                return ret;
+
+            // take cartesian product
+            var tvars = new List<string>(matches.Keys);
+            var matchArr = new List<Variable[]>();
+            for (int i = 0; i < tvars.Count; i++)
+            {
+                var arr = new Variable[matches[tvars[i]].Count];
+                int j = 0;
+                foreach (var v in matches[tvars[i]]) arr[j++] = v;
+                matchArr.Add(arr);
+            }
+
+            // N-bit counter
+            var counter = new int[tvars.Count];
+            for (int i = 0; i < counter.Length; i++) counter[i] = 0;
+            var GetNext = new Func<bool>(() =>
+            {
+                var done = false;
+                var i = 0;
+                while (!done)
+                {
+                    counter[i]++;
+                    if (counter[i] == matchArr[i].Length)
+                    {
+                        counter[i] = 0;
+                        i++;
+                        if (i == counter.Length)
+                            return false;
+                    }
+                    else
+                    {
+                        done = true;
+                    }
+                }
+                return true;
+            });
+
+            do
+            {
+                subst = new Dictionary<string, Variable>();
+                for (int i = 0; i < tvars.Count; i++)
+                    subst.Add(tvars[i], matchArr[i][counter[i]]);
+                var e = dup.VisitExpr(template);
+                e = (new VarSubstituter(subst, globals)).VisitExpr(e);
+                ret.Add(e);
+            } while (GetNext());
+
+            return ret;
+        }
     }
 }
