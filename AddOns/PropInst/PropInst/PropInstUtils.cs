@@ -2,9 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using cba.Util;
 using Microsoft.Boogie;
 
@@ -69,26 +66,12 @@ namespace PropInst
             {
                 dispatchedArgs.Add(VisitExpr(arg));
             }
- 
 
             if (_funcSub.ContainsKey(node.Fun.FunctionName))
             {
                 Debug.Assert(dispatchedArgs.Count == node.Args.Count); //otherwise use ANYFUNC or so..
                 return new NAryExpr(Token.NoToken, _funcSub[node.Fun.FunctionName], dispatchedArgs);
             }
-
-            //TODO: can go, right?..
-            //// when putting together the result, just leave out ANYSUM and IDEXPR and so on..
-            //if (node.Fun.FunctionName == Constants.AnySum)
-            //{
-            //    Debug.Assert(dispatchedArgs.Count == 1);
-            //    return dispatchedArgs.First();
-            //}
-            //if (node.Fun.FunctionName == Constants.IdExpr)
-            //{
-            //    Debug.Assert(dispatchedArgs.Count == 1);
-            //    return dispatchedArgs.First();
-            //}
 
             //default: just put together the NAryExpression with the function from before
             return new NAryExpr(node.tok, node.Fun, dispatchedArgs);
@@ -99,7 +82,6 @@ namespace PropInst
     {
         private List<Expr> _toConsume;
         public bool MayStillMatch = true;
-        //public readonly Dictionary<IdentifierExpr, Expr> IdentifierSubstitution = new Dictionary<IdentifierExpr, Expr>();
         public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
         public readonly Dictionary<IdentifierExpr, Expr> Substitution = new Dictionary<IdentifierExpr, Expr>();
 
@@ -171,8 +153,6 @@ namespace PropInst
             if (naeToConsume.Fun.FunctionName == Constants.AnySum
                 && node.Fun.FunctionName == "+")//TODO: find out how to match the BinaryOperator nicer..
             {
-                //var dispatchResults = new List<Expr>();
-
                 //drop the AnySum from toConsume
                 if (_toConsume.Count > 0)
                 {
@@ -189,12 +169,9 @@ namespace PropInst
                     _toConsume = tcTmp;
                     var dispatchResult = base.VisitExpr(arg);
                     msmNew |= MayStillMatch;
-                    // dispatchResults.Add(dispatchResult);
-                    
                 }
                 MayStillMatch = msmNew;
-                //return base.VisitNAryExpr(node);
-                return node;
+                return node; //!! node, not base.Visit(node) or so.. (because we're doing the dispatch by hand, here..)
             }
             if (naeToConsume.Fun.FunctionName == Constants.AnySum
                 && node.Args.Count == 1)
@@ -208,7 +185,6 @@ namespace PropInst
                     _toConsume.Insert(0, naeToConsume.Args[0]);
                 }
                return this.VisitNAryExpr(node);
-                //return node;
             }
             MayStillMatch = false;
             return base.VisitNAryExpr(node);
@@ -251,8 +227,6 @@ namespace PropInst
                 _toConsume.RemoveAt(0);
                 _toConsume.Insert(0, ((NAryExpr) funAp).Args[0]);
                 var dispatchResult =  this.VisitIdentifierExpr(node); //this, not base
-                //TODO
-                //ComplexSubstitution.Add(new Tuple<Expr, Expr>(funAp, dispatchResult));
                 return dispatchResult;
             }
 

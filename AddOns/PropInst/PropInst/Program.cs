@@ -1,14 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Microsoft.Boogie;
 using cba.Util;
 
@@ -156,14 +150,14 @@ namespace PropInst
 
     class InstrumentInsertionAtProc
     {
-        private Prop_InsertCodeAtProcStart _property;
+        private readonly Prop_InsertCodeAtProcStart _property;
 
         public InstrumentInsertionAtProc(Prop_InsertCodeAtProcStart pins)
         {
             _property = pins;
         }
 
-        private static HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
+        private static readonly HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
 
         public static void Instrument(Program program, Prop_InsertCodeAtProcStart ins)
         {
