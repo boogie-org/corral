@@ -12,6 +12,9 @@ namespace PropInst
     {
         public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
 
+        private enum ReadMode { Toplevel, RuleLhs, RuleRhs, Decls, BoogieCode,
+            RuleArrow
+        };
 
         //TODO: collect some stats about the instrumentation, mb some debugging output??
 
@@ -23,85 +26,130 @@ namespace PropInst
                 return;
             }
 
-            var globalDecs = new List<Prop_GlobalDec>();
-            var insertionsAtCmd = new List<Prop_InsertCodeAtCmd>();
-            var giveBodyToStubs = new List<Prop_GiveBodyToStub>();
-            var insertionsAtProcStart = new List<Prop_InsertCodeAtProcStart>();
-
-            #region parse the property file
-
-            var propString = File.ReadAllText(args[0]);
-            var singleInstructions = propString.Split(new string[] { Constants.RuleSeparator }, StringSplitOptions.None);
-            foreach (var s in singleInstructions)
-            {
-                var instruction = s.Trim();
-                var lines = instruction.Split(new char[] { '\n' }, 2);
-
-                var instructionType = lines[0].Trim();
-                var instructionData = lines[1].Split(new char[] { '\n' }).Where(line => !(line.StartsWith("//") || line.Trim() == ""));
-
-                switch (instructionType)
-                {
-                    case "globalDec:":
-                        globalDecs.Add(new Prop_GlobalDec(instructionData));
-                        break;
-                    case "insertionBefore:":
-                        insertionsAtCmd.Add(new Prop_InsertCodeAtCmd(instructionData));
-                        break;
-                    case "giveBodyToStub:":
-                        giveBodyToStubs.Add(new Prop_GiveBodyToStub(instructionData));
-                        break;
-                    case "insertCodeAtProcedureStart:":
-                        insertionsAtProcStart.Add(new Prop_InsertCodeAtProcStart(instructionData));
-                        break;
-                }
-
-            }
-
-            #endregion
-
-            #region initialize Boogie, parse input boogie program
-
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
-            var boogieProgram = BoogieUtil.ReadAndResolve(args[1], false);
 
-            #endregion
+            //read the boogie program that is to be instrumented
+            var boogieProgram = BoogieUtil.ReadAndResolve(args[1], true);
 
-            //Property: insert global declarations
-            globalDecs.Iter(gd => boogieProgram.AddTopLevelDeclarations(gd.Dec));
+            #region parse the property file
+            var propLines = File.ReadLines(args[0]);
 
-            #region Property: replace stubs with implementations
+            var mode = ReadMode.Toplevel;
+            string boogieLines = "";
+            var pCounter = 0;
 
-            var toReplace = new Dictionary<Procedure, List<Declaration>>();
-            foreach (var boogieStub in boogieProgram.TopLevelDeclarations.OfType<Procedure>())
+            string currentRuleOrDecl = "";
+            string ruleLhs = "";
+
+            string globalDeclarations = "";
+            string templateVariables = "";
+            var ruleTriples = new List<Tuple<string, string, string>>();
+
+            foreach (var line1 in propLines)
             {
-                foreach (var gbts in giveBodyToStubs)
-                {
-                    foreach (var toMatchStub in gbts.Stubs)
-                    {
-                        if (MatchStubs(toMatchStub, boogieStub))
-                        {
-                            var newProc = BoogieAstFactory.MkImpl(
-                                boogieStub.Name,
-                                toMatchStub.InParams, //just take the names that match the body..
-                                toMatchStub.OutParams, //just take the names that match the body..
-                                new List<Variable>(),
-                                //local variables not necessary for now, may be part of the body in the future
-                                gbts.Body);
+                //deal with the curly braces that belong to the property language (not to Boogie)
+                var line = line1;
+                var pChange = countChar(line, '{') - countChar(line, '}');
+                if (pCounter == 0 && pChange > 0)
+                    line = line.Substring(line.IndexOf('{') + 1);
+                pCounter = pCounter + pChange;
+                if (pCounter == 0 && pChange < 0)
+                    line = line.Substring(0, line.LastIndexOf('}'));
 
-                            toReplace.Add(boogieStub, newProc);
+                switch (mode)
+                {
+                    case ReadMode.Toplevel:
+                        currentRuleOrDecl = line.Trim();
+                        if (line.Trim() == "GlobalDeclarations")
+                        {
+                            mode = ReadMode.Decls;
                         }
-                    }
+                        if (line.Trim() == "TemplateVariables")
+                        {
+                            mode = ReadMode.Decls;
+                        }
+                        if (line.Trim() == "CmdRule")
+                        {
+                            mode = ReadMode.RuleLhs;
+
+                        }
+                        if (line.Trim() == "InsertAtBeginningRule")
+                        {
+                            mode = ReadMode.RuleLhs;
+                        }
+                        break;
+                    case ReadMode.RuleLhs:
+                        boogieLines += line;
+                        if (pCounter == 0)
+                        {
+                            mode = ReadMode.RuleArrow;
+                            ruleLhs = boogieLines;
+                            boogieLines = "";
+                            continue;
+                        }
+                        break;
+                    case ReadMode.RuleArrow:
+                        Debug.Assert(line.Trim() == "-->");
+                        mode = ReadMode.RuleRhs;
+                        break;
+                    case ReadMode.RuleRhs:
+                        boogieLines += line;
+                        if (pCounter == 0)
+                        {
+                            mode = ReadMode.Toplevel;
+                            var ruleRhs = boogieLines;
+                            ruleTriples.Add(new Tuple<string, string, string>(currentRuleOrDecl, ruleLhs, ruleRhs));
+                            boogieLines = "";
+                            continue;
+                        }
+                        break;
+                    case ReadMode.Decls:
+                        boogieLines += line;
+                        if (pCounter == 0)
+                        {
+                            if (currentRuleOrDecl == "GlobalDeclarations")
+                            {
+                                mode = ReadMode.Toplevel;
+                                globalDeclarations = boogieLines;
+                            } 
+                            else if (currentRuleOrDecl == "TemplateVariables")
+                            {
+                                mode = ReadMode.Toplevel;
+                                templateVariables = boogieLines;
+                            }
+                            boogieLines = "";
+                            continue;
+                        }
+                        break;
+                    case ReadMode.BoogieCode:
+                        boogieLines += line;
+                        break;
+                    default:
+                        throw new Exception();
                 }
             }
-            foreach (var kvp in toReplace)
-            {
-                boogieProgram.RemoveTopLevelDeclaration(kvp.Key);
-                boogieProgram.AddTopLevelDeclarations(kvp.Value);
-            }
 
+            var rules = new List<Rule>();
+            foreach (var triple in ruleTriples)
+            {
+                if (triple.Item1 == "CmdRule")
+                {
+                    rules.Add(new CmdRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
+                }
+                if (triple.Item1 == "InsertAtBeginningRule")
+                {
+                    rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
+                }
+            }
             #endregion
+
+            //add the global declarations from the property to the Boogie program
+            {
+                Program prog;
+                Parser.Parse(globalDeclarations, "dummy.bpl", out prog);
+                boogieProgram.AddTopLevelDeclarations(prog.TopLevelDeclarations);
+            }
 
             // Property: find insertions sites (Commands), insert code there
             insertionsAtCmd.Iter(i => InstrumentInsertionAtCmd.Instrument(boogieProgram, i));
@@ -110,10 +158,202 @@ namespace PropInst
             insertionsAtProcStart.Iter(i => InstrumentInsertionAtProc.Instrument(boogieProgram, i));
 
 
-            // write the output
-            var outputFile = args[2];
+
+
+
+            string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
+
+            //Console.WriteLine("any to exit");
+            //Console.ReadKey();
         }
+
+        private static int countChar(string line, char p1)
+        {
+            var result = 0;
+            foreach (var c in line)
+                if (c == p1)
+                    result++;
+            return result;
+        }
+
+
+        class Rule
+        {
+            private string _lhs;
+            private string _rhs;
+            private string _templateDeclarations;
+
+            public Rule(string plhs, string prhs, string pTemplateDeclarations)
+            {
+                _lhs = plhs;
+                _rhs = prhs;
+                _templateDeclarations = pTemplateDeclarations;
+            }
+        }
+
+        class CmdRule : Rule
+        {
+            const string CmdTemplate = "{0}\n" +
+                                       "procedure {{:This}} this();" + //for our special keyword representing the match
+                                  "procedure helperProc() {{\n" +
+                                  "  {1}" +
+                                  "}}\n";
+
+            public readonly List<Cmd> CmdsToMatch;
+
+            public readonly List<Cmd> InsertionTemplate;
+
+            public CmdRule(string plhs, string prhs, string pDeclarations) 
+                : base(plhs, prhs, pDeclarations)
+            {
+                Program prog;
+                string progString = string.Format(CmdTemplate, pDeclarations, plhs);
+                Parser.Parse(progString, "dummy.bpl", out prog);
+                BoogieUtil.ResolveProgram(prog, "dummy.bpl");
+
+                CmdsToMatch = new List<Cmd>();
+                CmdsToMatch.AddRange(prog.Implementations.First().Blocks.First().Cmds);
+
+                progString = string.Format(CmdTemplate, pDeclarations, prhs);
+                Parser.Parse(progString, "dummy.bpl", out prog);
+                BoogieUtil.ResolveProgram(prog, "dummy.bpl");
+
+                InsertionTemplate = new List<Cmd>();
+                InsertionTemplate.AddRange(prog.Implementations.First().Blocks.First().Cmds);
+            }
+        }
+
+        class InsertAtBeginningRule : Rule
+        {
+            const string InsertAtBeginningTemplate = "{0}" +
+                                  "procedure helperProc() {{\n" +
+                                  "  {1}" +
+                                  "}}\n";
+
+            public readonly List<Procedure> ProceduresToMatch;
+
+            public readonly List<Cmd> InsertionTemplate;
+
+            public InsertAtBeginningRule(string plhs, string prhs, string pDeclarations) 
+                : base(plhs, prhs, pDeclarations)
+            {
+                Program prog;
+                string progString = pDeclarations;
+                Parser.Parse(progString, "dummy.bpl", out prog);
+
+                ProceduresToMatch = new List<Procedure>();
+                ProceduresToMatch.AddRange(prog.Procedures);
+
+                string firstProc = ProceduresToMatch.First().Name; //Convention: we refer to the first
+
+
+                
+
+                BoogieUtil.ResolveProgram(prog, "dummy.bpl");
+
+
+
+
+
+            }
+        }
+
+
+
+
+
+        //    var globalDecs = new List<Prop_GlobalDec>();
+        //    var insertionsAtCmd = new List<Prop_InsertCodeAtCmd>();
+        //    var giveBodyToStubs = new List<Prop_GiveBodyToStub>();
+        //    var insertionsAtProcStart = new List<Prop_InsertCodeAtProcStart>();
+
+        //    #region parse the property file
+
+        //    var propString = File.ReadAllText(args[0]);
+        //    var singleInstructions = propString.Split(new string[] { Constants.RuleSeparator }, StringSplitOptions.None);
+        //    foreach (var s in singleInstructions)
+        //    {
+        //        var instruction = s.Trim();
+        //        var lines = instruction.Split(new char[] { '\n' }, 2);
+
+        //        var instructionType = lines[0].Trim();
+        //        var instructionData = lines[1].Split(new char[] { '\n' }).Where(line => !(line.StartsWith("//") || line.Trim() == ""));
+
+        //        switch (instructionType)
+        //        {
+        //            case "globalDec:":
+        //                globalDecs.Add(new Prop_GlobalDec(instructionData));
+        //                break;
+        //            case "insertionBefore:":
+        //                insertionsAtCmd.Add(new Prop_InsertCodeAtCmd(instructionData));
+        //                break;
+        //            case "giveBodyToStub:":
+        //                giveBodyToStubs.Add(new Prop_GiveBodyToStub(instructionData));
+        //                break;
+        //            case "insertCodeAtProcedureStart:":
+        //                insertionsAtProcStart.Add(new Prop_InsertCodeAtProcStart(instructionData));
+        //                break;
+        //        }
+
+        //    }
+
+        //    #endregion
+
+        //    #region initialize Boogie, parse input boogie program
+
+        //    CommandLineOptions.Install(new CommandLineOptions());
+        //    CommandLineOptions.Clo.PrintInstrumented = true;
+        //    var boogieProgram = BoogieUtil.ReadAndResolve(args[1], false);
+
+        //    #endregion
+
+        //    //Property: insert global declarations
+        //    globalDecs.Iter(gd => boogieProgram.AddTopLevelDeclarations(gd.Dec));
+
+        //    #region Property: replace stubs with implementations
+
+        //    var toReplace = new Dictionary<Procedure, List<Declaration>>();
+        //    foreach (var boogieStub in boogieProgram.TopLevelDeclarations.OfType<Procedure>())
+        //    {
+        //        foreach (var gbts in giveBodyToStubs)
+        //        {
+        //            foreach (var toMatchStub in gbts.Stubs)
+        //            {
+        //                if (MatchStubs(toMatchStub, boogieStub))
+        //                {
+        //                    var newProc = BoogieAstFactory.MkImpl(
+        //                        boogieStub.Name,
+        //                        toMatchStub.InParams, //just take the names that match the body..
+        //                        toMatchStub.OutParams, //just take the names that match the body..
+        //                        new List<Variable>(),
+        //                        //local variables not necessary for now, may be part of the body in the future
+        //                        gbts.Body);
+
+        //                    toReplace.Add(boogieStub, newProc);
+        //                }
+        //            }
+        //        }
+        //    }
+        //    foreach (var kvp in toReplace)
+        //    {
+        //        boogieProgram.RemoveTopLevelDeclaration(kvp.Key);
+        //        boogieProgram.AddTopLevelDeclarations(kvp.Value);
+        //    }
+
+        //    #endregion
+
+        //    // Property: find insertions sites (Commands), insert code there
+        //    insertionsAtCmd.Iter(i => InstrumentInsertionAtCmd.Instrument(boogieProgram, i));
+
+        //    //Property: find insertion sites (Procedures), insert code there
+        //    insertionsAtProcStart.Iter(i => InstrumentInsertionAtProc.Instrument(boogieProgram, i));
+
+
+        //    // write the output
+        //    var outputFile = args[2];
+        //    BoogieUtil.PrintProgram(boogieProgram, outputFile);
+        //}
 
 
 
