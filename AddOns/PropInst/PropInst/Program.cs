@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Boogie;
 using cba.Util;
 
@@ -313,7 +314,6 @@ namespace PropInst
 
         private List<Cmd> ProcessCall(CallCmd cmd)
         {
-            var ret = new List<Cmd>();
 
             foreach (var rule in _rules)
             {
@@ -324,11 +324,13 @@ namespace PropInst
                     var toMatch = (CallCmd) m;
 
                     var substitutions =
-                        new List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>>();
+                        new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>();
 
                     #region match procedure name
 
-                    if (toMatch.callee == Constants.AnyProcedure)
+                    //if (toMatch.callee == Constants.AnyProcedure)
+                    var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
+                    if (matchCallee != null)
                     {
                         // do nothing
                     }
@@ -355,9 +357,13 @@ namespace PropInst
                     {
                         //matches anything --> do nothing/go on
                     }
+                    else if (toMatch.Outs.Count == cmd.Outs.Count)
+                    {
+                        //TODO.. --> match, make substitution..
+                    }
                     else
                     {
-                        throw new NotImplementedException();
+                        //TODO.. --> match, make substitution..
                     }
 
                     #endregion
@@ -365,44 +371,65 @@ namespace PropInst
 
                     #region match arguments
 
-                    if (toMatch.Ins.Count == 1
-                        && toMatch.Ins[0] is IdentifierExpr
-                        && (toMatch.Ins[0] as IdentifierExpr).Name == Constants.AnyArgs)
+                    if (BoogieUtil.checkAttrExists(Constants.AnyArgs, matchCallee.Attributes))
                     {
-                        //TODO: implement 
-                    }
-                    else if (toMatch.Ins.Count == 1
-                             && toMatch.Ins[0] is NAryExpr
-                             && ((NAryExpr) toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
-                    {
+                        //else if (toMatch.Ins.Count == 1
+                        //         && toMatch.Ins[0] is NAryExpr
+                        //         && ((NAryExpr) toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
+                        //{
                         var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
-                        var matchingExprs = new List<Expr>();
+                        //var matchingExprs = new List<Expr>();
+
+                        var atLeastOneMatches = false;
 
                         foreach (var arg in cmd.Ins)
                         {
 
-                            Debug.Assert(anyArgsExpr.Args.Count == 1,
-                                "we expect Constants.AnyArgs to have at most one argument, " +
-                                "which is the matching pattern expression");
-                            UpdateSubstitutionsAccordingToMatchAndTargetExpr(anyArgsExpr.Args[0], arg, substitutions);
+                            //Debug.Assert(anyArgsExpr.Args.Count == 1,
+                            //    "we expect Constants.AnyArgs to have at most one argument, " +
+                            //    "which is the matching pattern expression");
+                            //UpdateSubstitutionsAccordingToMatchAndTargetExpr(anyArgsExpr.Args[0], arg, substitutions);
+                            var emv = new ExprMatchVisitor(new List<Expr>() {anyArgsExpr});
+                            emv.VisitExpr(arg);
+
+                            if (emv.Matches)
+                            {
+                                atLeastOneMatches = true;
+                                substitutions.Add(
+                                    new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
+                                        emv.Substitution, emv.FunctionSubstitution));
+                            }
                         }
+                        //if (substitutions.Count == 0)
+                        if (!atLeastOneMatches)
+                            continue;
+                    }
+                    else
+                    {
+                        //match them one by one
+                        //TODO
+                        //if they don't match:
+                        continue;
                     }
 
                     #endregion
 
+                    var ret = new List<Cmd>();
                     foreach (var subsPair in substitutions)
                     {
-                        //hack to get a deepcopy
-                        var toInsertClone = rule.InsertionTemplate.Map(i => StringToBoogie.ToCmd(i.ToString()));
+                        ////hack to get a deepcopy
+                        //var toInsertClone = rule.InsertionTemplate.Map(i => StringToBoogie.ToCmd(i.ToString()));
 
-                        //var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2); //TODO go over
-                        //ret.AddRange(sv.VisitCmdSeq(toInsertClone));
+                        var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd); //TODO go over
+                        ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
                     }
+                    //the rule yielded a match --> done
+                    return ret;
                 }
             }
-            ret.Add(cmd);
-            return ret;
+            //ret.Add(cmd);
+            return new List<Cmd>() { cmd };
         }
 
 
@@ -426,7 +453,7 @@ namespace PropInst
                     var mv = new ExprMatchVisitor(new List<Expr>() {toMatch.Expr});
                     mv.VisitExpr(cmd.Expr);
 
-                    if (mv.MayStillMatch)
+                    if (mv.Matches)
                     {
                         var sv = new SubstitionVisitor(mv.Substitution);
                         //hack to get a deepcopy
@@ -451,7 +478,7 @@ namespace PropInst
 
         private List<Cmd> ProcessAssign(AssignCmd cmd)
         {
-            var ret = new List<Cmd>();
+            //var ret = new List<Cmd>();
             foreach (var rule in _rules)
             {
                 foreach (var m in rule.CmdsToMatch)
@@ -481,7 +508,7 @@ namespace PropInst
                         rEmv.VisitExpr(rhs);
 
 
-                        if (lEmv.MayStillMatch && rEmv.MayStillMatch)
+                        if (lEmv.Matches && rEmv.Matches)
                         {
                             foreach (var kvp in lEmv.Substitution)
                                 substitution.Add(kvp.Key, kvp.Value);
@@ -492,18 +519,17 @@ namespace PropInst
                             foreach (var kvp in rEmv.FunctionSubstitution)
                                 funcSubstitution.Add(kvp.Key, kvp.Value);
 
-                            var sv = new SubstitionVisitor(substitution, funcSubstitution);
+                            var sv = new SubstitionVisitor(substitution, funcSubstitution, cmd);
                             var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
-                            ret.AddRange(substitutedCmds);
 
-                            return ret;
+                            return substitutedCmds;
                         }
 
                     }
 
                 }
             }
-            return ret;
+            return new List<Cmd>() { cmd };
         }
 
         private static void UpdateSubstitutionsAccordingToMatchAndTargetExpr(Expr toMatch, Expr expr, List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>> substitutions)
@@ -542,7 +568,7 @@ namespace PropInst
                     // here we have all we need to make a new command:
                     // for each expr of the anyargs, for each memoryAccess in that expr:
                     // instantiate the ToInsert accordingly
-                    if (emv.MayStillMatch)
+                    if (emv.Matches)
                     {
                         //TODO: right now, we get a substitution (pair) for each match. 
                         //TODO: In the future we may need to several substitutions for example because

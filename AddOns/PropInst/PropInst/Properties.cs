@@ -26,8 +26,8 @@ namespace PropInst
     class CmdRule : Rule
     {
         private const string CmdTemplate = "{0}\n" +
-                                           "procedure {{:This}} this();" +
-            //for our special keyword representing the match
+            //for our special keyword representing the match:
+                                           "procedure {{:This}} #this();" +
                                            "procedure helperProc1() {{\n" +
                                            "  {1}" +
                                            "}}\n" +
@@ -39,7 +39,7 @@ namespace PropInst
 
         public readonly List<Cmd> InsertionTemplate;
 
-        private Program _prog;
+        public Program Prog;
 
         public CmdRule(string plhs, string prhs, string pDeclarations)
             : base(plhs, prhs, pDeclarations)
@@ -54,7 +54,7 @@ namespace PropInst
 
             InsertionTemplate = new List<Cmd>();
             InsertionTemplate.AddRange(prog.Implementations.ElementAt(1).Blocks.First().Cmds);
-            _prog = prog;
+            Prog = prog;
         }
     }
 

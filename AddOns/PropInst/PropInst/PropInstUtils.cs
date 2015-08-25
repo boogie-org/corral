@@ -30,17 +30,20 @@ namespace PropInst
     {
         private readonly Dictionary<string, IAppliable> _funcSub;
         private readonly Dictionary<Declaration, Expr> _substitution;
+        private readonly Cmd _matchCmd;
+
 
 
         public SubstitionVisitor(Dictionary<Declaration, Expr> psub)
-            : this(psub, new Dictionary<string, IAppliable>(0))
+            : this(psub, new Dictionary<string, IAppliable>(0), null)
         {
         }
 
-        public SubstitionVisitor(Dictionary<Declaration, Expr> psub, Dictionary<string, IAppliable> pFuncSub )
+        public SubstitionVisitor(Dictionary<Declaration, Expr> psub, Dictionary<string, IAppliable> pFuncSub, Cmd mCmd )
         {
             _substitution = psub;
             _funcSub = pFuncSub;
+            _matchCmd = mCmd;
         }
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
@@ -50,28 +53,70 @@ namespace PropInst
                 var replacement = _substitution[node.Decl];
                 return replacement;
             }
-            //if (_idSub.ContainsKey(node)) 
-            //{
-            //    var replacement = _idSub[node];
-            //    return replacement;
-            //}
             return new IdentifierExpr(node.tok, node.Decl, node.Immutable);
-            //return base.VisitIdentifierExpr(node);
         }
-
-        /////////////////
-        // here begin the visit overrides that are only necessary for the cloning --> one might move them to a clone visitor..
-        /////////////////
 
         public override AssignLhs VisitSimpleAssignLhs(SimpleAssignLhs node)
         {
-            Expr e = VisitIdentifierExpr(node.AssignedVariable);
+            var e = VisitIdentifierExpr(node.AssignedVariable);
             if (!(e is IdentifierExpr))
             {
                 throw new InvalidExpressionException("lhs must be an identifier, also after substitution --> malformed property??");
             }
             return new SimpleAssignLhs(node.tok, (IdentifierExpr) e);
         }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var dispatchedArgs = new List<Expr>();
+            foreach (var arg in node.Args)
+            {
+                dispatchedArgs.Add(VisitExpr(arg));
+            }
+
+            if (_funcSub.ContainsKey(node.Fun.FunctionName))
+            {
+                Debug.Assert(dispatchedArgs.Count == node.Args.Count); //otherwise use ANYFUNC or so..
+                return new NAryExpr(Token.NoToken, _funcSub[node.Fun.FunctionName], dispatchedArgs);
+            }
+
+            //default: just put together the NAryExpression with the function from before
+            return new NAryExpr(node.tok, node.Fun, dispatchedArgs);
+        }
+
+        public override Cmd VisitCallCmd(CallCmd node)
+        {
+
+            //special syntax "call this();"
+            if (node.callee == "#this")
+            {
+                Debug.Assert(_matchCmd != null);
+                return _matchCmd;
+            }
+
+            var dispatchedIns = new List<Expr>();
+            foreach (var arg in node.Ins)
+            {
+                dispatchedIns.Add(VisitExpr(arg));
+            }
+
+            var dispatchedOuts = new List<IdentifierExpr>();
+            foreach (var arg in node.Outs)
+            {
+                var e = VisitIdentifierExpr(arg);
+                if (!(e is IdentifierExpr))
+                {
+                    throw new InvalidExpressionException("lhs must be an identifier, also after substitution --> malformed property??");
+                }
+                dispatchedOuts.Add((IdentifierExpr)e);
+            }
+            return new CallCmd(node.tok, node.callee, dispatchedIns, dispatchedOuts, node.Attributes, node.IsAsync);//TODO clone the attributes too??
+        }
+
+        /////////////////
+        // here begin the visit overrides that are only necessary for the cloning, and have nothing to do with the substitution itself 
+        // --> one might move them to a clone visitor..
+        /////////////////
 
         public override AssignLhs VisitMapAssignLhs(MapAssignLhs node)
         {
@@ -96,24 +141,6 @@ namespace PropInst
             return new MapAssignLhs(node.tok, newAssignLhs, dispatchedIndices);
         }
 
-        public override Expr VisitNAryExpr(NAryExpr node)
-        {
-            //we have to dispatch explicitly, here..
-            var dispatchedArgs = new List<Expr>();
-            foreach (var arg in node.Args)
-            {
-                dispatchedArgs.Add(VisitExpr(arg));
-            }
-
-            if (_funcSub.ContainsKey(node.Fun.FunctionName))
-            {
-                Debug.Assert(dispatchedArgs.Count == node.Args.Count); //otherwise use ANYFUNC or so..
-                return new NAryExpr(Token.NoToken, _funcSub[node.Fun.FunctionName], dispatchedArgs);
-            }
-
-            //default: just put together the NAryExpression with the function from before
-            return new NAryExpr(node.tok, node.Fun, dispatchedArgs);
-        }
 
         public override Cmd VisitAssertCmd(AssertCmd node)
         {
@@ -177,10 +204,14 @@ namespace PropInst
     class ExprMatchVisitor : FixedVisitor
     {
         private List<Expr> _toConsume;
-        public bool MayStillMatch = true;
+        public bool Matches = true;
         public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
         public readonly Dictionary<Declaration, Expr> Substitution = new Dictionary<Declaration, Expr>();
 
+        public ExprMatchVisitor(Expr pToConsume)
+        {
+            _toConsume = new List<Expr>() {pToConsume};
+        }
 
         public ExprMatchVisitor(List<Expr> pToConsume)
         {
@@ -190,10 +221,10 @@ namespace PropInst
         public override Expr VisitNAryExpr(NAryExpr node)
         {
             //start with some negative cases
-            if (!MayStillMatch
+            if (!Matches
                 ||_toConsume.Count == 0)
             {
-                MayStillMatch = false;
+                Matches = false;
                 return base.VisitNAryExpr(node);
             }
 
@@ -212,7 +243,7 @@ namespace PropInst
 
             if (((NAryExpr) _toConsume.First()).Args.Count != node.Args.Count)
             {
-                MayStillMatch = false;
+                Matches = false;
                 return base.VisitNAryExpr(node);
             }
 
@@ -233,21 +264,21 @@ namespace PropInst
                     FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);//TODO: understand..
                 return base.VisitNAryExpr(node);
             }
-            MayStillMatch = false;
+            Matches = false;
             return base.VisitNAryExpr(node);
         }
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
-            if (!MayStillMatch
+            if (!Matches
                 || _toConsume.Count == 0)
             {
-                MayStillMatch = false;
+                Matches = false;
                 return base.VisitIdentifierExpr(node);
             }
             if (!(_toConsume.First() is IdentifierExpr))
             {
-                MayStillMatch = false;
+                Matches = false;
                 return base.VisitIdentifierExpr(node);
             }
 
@@ -260,32 +291,34 @@ namespace PropInst
                 return base.VisitIdentifierExpr(node);
             }
 
-            MayStillMatch = false;
+            Matches = false;
             return base.VisitIdentifierExpr(node);
         }
         public override Expr VisitLiteralExpr(LiteralExpr node)
         {
-            if (!MayStillMatch
+            if (!Matches
                 || _toConsume.Count == 0)
             {
-                MayStillMatch = false;
+                Matches = false;
                 return base.VisitLiteralExpr(node);
             }
 
             if (!(_toConsume.First() is LiteralExpr))
             {
-                //TODO: may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr)
                 {
+                    //TODO add check for the correspoinding attribut which says it may match anything
                     Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
                     return node;
                 }
+                Matches = false;
+                return base.VisitLiteralExpr(node);
             }
             if (node.Val.Equals(((LiteralExpr) _toConsume.First()).Val))
             {
                 return base.VisitLiteralExpr(node);
             }
-            MayStillMatch = false;
+            Matches = false;
             return base.VisitLiteralExpr(node);
         }
     }
