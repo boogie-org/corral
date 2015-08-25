@@ -28,30 +28,20 @@ namespace PropInst
     /// </summary>
     class SubstitionVisitor : FixedVisitor
     {
-        //private readonly Dictionary<IdentifierExpr, Expr> _idSub;
         private readonly Dictionary<string, IAppliable> _funcSub;
         private readonly Dictionary<Declaration, Expr> _substitution;
 
 
         public SubstitionVisitor(Dictionary<Declaration, Expr> psub)
             : this(psub, new Dictionary<string, IAppliable>(0))
-            //: this(psub, new Dictionary<string, IAppliable>(0), new Dictionary<IdentifierExpr, Expr>(0))
         {
         }
 
         public SubstitionVisitor(Dictionary<Declaration, Expr> psub, Dictionary<string, IAppliable> pFuncSub )
-            //: this(psub, pFuncSub, new Dictionary<IdentifierExpr, Expr>())
         {
             _substitution = psub;
             _funcSub = pFuncSub;
         }
-
-        //public SubstitionVisitor(Dictionary<IdentifierExpr, Expr> pIdsub, Dictionary<string, IAppliable> pFuncSub, Dictionary<IdentifierExpr, Expr> pSub)
-        //{
-        //    _idSub = pIdsub;
-        //    _funcSub = pFuncSub;
-        //    _substitution = pSub;
-        //}
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
@@ -68,6 +58,10 @@ namespace PropInst
             return new IdentifierExpr(node.tok, node.Decl, node.Immutable);
             //return base.VisitIdentifierExpr(node);
         }
+
+        /////////////////
+        // here begin the visit overrides that are only necessary for the cloning --> one might move them to a clone visitor..
+        /////////////////
 
         public override AssignLhs VisitSimpleAssignLhs(SimpleAssignLhs node)
         {
@@ -208,7 +202,6 @@ namespace PropInst
                 //TODO: may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr)
                 {
-                    //Substitution.Add((IdentifierExpr) _toConsume.First(), node);
                     Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
                     return node;
                 }
@@ -216,28 +209,8 @@ namespace PropInst
 
             var naeToConsume = (NAryExpr) _toConsume.First();
 
-            //var isSubstitutionStart = naeToConsume.Fun.FunctionName == "=="
-            //                          && naeToConsume.Args[0] is IdentifierExpr
-            //                          && ((IdentifierExpr) naeToConsume.Args[0]).Name.StartsWith("??");
-            //var substIdEx = naeToConsume.Args[0] as IdentifierExpr;
-            //if (isSubstitutionStart)
-            //{
-            //    if (naeToConsume.Args[1] is IdentifierExpr)
-            //    {
-            //        //for this we should have the other substitutions with ##id..
-            //        // maybe unify some other time..
-            //        throw new NotImplementedException(); 
-            //    }
-            //    naeToConsume = (NAryExpr) naeToConsume.Args[1];
-            //}
-            //if (isSubstitutionStart)
-            //    Substitution.Add(substIdEx, node);//TODO or dispatch node first??
 
-
-            if (//((naeToConsume.Fun.FunctionName != Constants.AnyArgs)
-                // && (naeToConsume.Fun.FunctionName != Constants.AnySum)
-                 //&& 
-                 ((NAryExpr) _toConsume.First()).Args.Count != node.Args.Count)
+            if (((NAryExpr) _toConsume.First()).Args.Count != node.Args.Count)
             {
                 MayStillMatch = false;
                 return base.VisitNAryExpr(node);
@@ -245,7 +218,6 @@ namespace PropInst
 
             // now the positive cases
             if (naeToConsume.Fun.Equals(node.Fun))
-            //if (naeToConsume.Fun.FunctionName == node.Fun.FunctionName)
             {
                 _toConsume = new List<Expr>(naeToConsume.Args);
 
@@ -253,7 +225,6 @@ namespace PropInst
             } 
             if (naeToConsume.Fun is FunctionCall
                 && ((FunctionCall) naeToConsume.Fun).Func != null)
-            //if (naeToConsume.Fun.FunctionName.StartsWith("##"))
             {
                 var func = ((FunctionCall) naeToConsume.Fun).Func; //TODO: use attributes..
 
@@ -262,46 +233,6 @@ namespace PropInst
                     FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);//TODO: understand..
                 return base.VisitNAryExpr(node);
             }
-            //if (naeToConsume.Fun.FunctionName == Constants.AnyArgs)
-            //{
-            //    throw new NotImplementedException();//TODO..
-            //}
-            //if (naeToConsume.Fun.FunctionName == Constants.AnySum
-            //    && node.Fun.FunctionName == "+")//TODO: find out how to match the BinaryOperator nicer..
-            //{
-            //    //drop the AnySum from toConsume
-            //    if (_toConsume.Count > 0)
-            //    {
-            //        _toConsume.RemoveAt(0);
-            //        _toConsume.Insert(0, naeToConsume.Args[0]);
-            //    }
-
-            //    var tcTmp = _toConsume;
-            //    var msmNew = false;
-            //    foreach (var arg in node.Args) //we want to match one of the arguments..
-            //    {
-            //        MayStillMatch = true;
-
-            //        _toConsume = tcTmp;
-            //        var dispatchResult = base.VisitExpr(arg);
-            //        msmNew |= MayStillMatch;
-            //    }
-            //    MayStillMatch = msmNew;
-            //    return node; //!! node, not base.Visit(node) or so.. (because we're doing the dispatch by hand, here..)
-            //}
-            //if (naeToConsume.Fun.FunctionName == Constants.AnySum
-            //    && node.Args.Count == 1)
-            //{
-            //    //we have the addition with one summand - case: just drop the AnySum from toConsume
-
-            //    //drop the AnySum from toConsume
-            //    if (_toConsume.Count > 0)
-            //    {
-            //        _toConsume.RemoveAt(0);
-            //        _toConsume.Insert(0, naeToConsume.Args[0]);
-            //    }
-            //   return this.VisitNAryExpr(node);
-            //}
             MayStillMatch = false;
             return base.VisitNAryExpr(node);
         }
@@ -314,51 +245,16 @@ namespace PropInst
                 MayStillMatch = false;
                 return base.VisitIdentifierExpr(node);
             }
-            // account for special keywords IDEXPR and ANYSUM
-            // as we are visiting an IdentifierExpr their effect is the same
-            // ANYSUM is supposed to match sums with just one summand
-            // in contrast to IDEXPR it does also match complex expressions inside, 
-            // but that is not asked for here (as, again: we are visitin an IdentifierExpr)
-            var toConsumeIsNaryDdIdExpr = (_toConsume.First() is NAryExpr)
-                                          && (((NAryExpr) _toConsume.First()).Fun.FunctionName == Constants.IdExpr);
-            var toConsumeIsNaryDdAnySum = (_toConsume.First() is NAryExpr)
-                                          && (((NAryExpr) _toConsume.First()).Fun.FunctionName == Constants.AnySum);
-
-            if (//!toConsumeIsNaryDdIdExpr 
-                 //   && !toConsumeIsNaryDdAnySum
-               //     && 
-                !(_toConsume.First() is IdentifierExpr))
+            if (!(_toConsume.First() is IdentifierExpr))
             {
                 MayStillMatch = false;
                 return base.VisitIdentifierExpr(node);
             }
 
-            //if (toConsumeIsNaryDdIdExpr || toConsumeIsNaryDdAnySum)
-            //{
-            //    var ddIdExpr = (NAryExpr) _toConsume.First();
-            //    //we want to match any IdentifierExpr, and refer to it later with the given (single) argument
-            //    Debug.Assert(ddIdExpr.Args.Count == 1);
-            //    Debug.Assert(toConsumeIsNaryDdAnySum || ddIdExpr.Args[0] is IdentifierExpr);
-            //    //just remove the function application of IDEXPR or ANYSUM here from _toConsume, then restart the method on the argument
-            //    var funAp = _toConsume[0];
-            //    _toConsume.RemoveAt(0);
-            //    _toConsume.Insert(0, ((NAryExpr) funAp).Args[0]);
-            //    var dispatchResult =  this.VisitIdentifierExpr(node); //this, not base
-            //    return dispatchResult;
-            //}
-
             var idexToConsume = (IdentifierExpr) _toConsume.First();
-            //if (idexToConsume.Name == node.Name
-            //    || idexToConsume.Name == Constants.IdExpr)
-            //{
-            //    //do nothing --> just go on matching..
-            //    _toConsume.RemoveAt(0);
-            //    return base.VisitIdentifierExpr(node);
-            //}
+
             if (idexToConsume.Decl != null)
-            //if (idexToConsume.Name.StartsWith("##"))
             {
-                //if (!Substitution.ContainsKey(idexToConsume))//TODO: understand..
                 Substitution.Add(idexToConsume.Decl, node);
                 _toConsume.RemoveAt(0);
                 return base.VisitIdentifierExpr(node);

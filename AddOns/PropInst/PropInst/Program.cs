@@ -462,7 +462,6 @@ namespace PropInst
 
                     var substitution = new Dictionary<Declaration, Expr>();
                     var funcSubstitution = new Dictionary<string, IAppliable>();//TODO: move from string to IAppliable?
-                        //new List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>>();
 
                     //match each Lhs together with the corresponding rhs
 
@@ -476,7 +475,6 @@ namespace PropInst
                         var lhs = cmd.Lhss[i].AsExpr;
                         var lEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Lhss[0].AsExpr});
                         lEmv.VisitExpr(lhs);
-                        //UpdateSubstitutionsAccordingToMatchAndTargetExpr(toMatchCmd.Lhss[i], lhs, substitution, funcSubstitution);
 
                         var rhs = cmd.Rhss[i];
                         var rEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Rhss[0]});
@@ -494,24 +492,17 @@ namespace PropInst
                             foreach (var kvp in rEmv.FunctionSubstitution)
                                 funcSubstitution.Add(kvp.Key, kvp.Value);
 
-                            //do the substitution, return (convention: only the first match counts)
-                            //hack to get a deepcopy
-                            //var toInsertClone = rule.GetClonedInsertionTemplate();
-
                             var sv = new SubstitionVisitor(substitution, funcSubstitution);
                             var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
                             ret.AddRange(substitutedCmds);
-                            //ret.AddRange(sv.VisitCmdSeq(toInsertClone));
 
                             return ret;
                         }
 
-                        //UpdateSubstitutionsAccordingToMatchAndTargetExpr(toMatchCmd.Rhss[i], rhs, substitution, funcSubstitution);
                     }
 
                 }
             }
-            //ret.Add(cmd);
             return ret;
         }
 
