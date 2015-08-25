@@ -23,3 +23,4 @@ AddOns/AngelicVerifierNull/test/last_query.bpl
 AddOns/AngelicVerifierNull/test/runcorral.bpl
 AddOns/AngelicVerifierNull/test/temp_rar.bpl
 AddOns/AngelicVerifierNull/test/trace_prog.bpl
+/AddOns/PropInst/PropInst/PropInst.csproj.user
