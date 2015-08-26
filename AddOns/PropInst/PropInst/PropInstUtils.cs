@@ -325,56 +325,68 @@ namespace PropInst
 
      class ProcedureSigMatcher
     {
-        private readonly Procedure _toMatch;
-        private readonly Implementation _impl;
-
         // idea: if we have ##ANYPARAMS specified in toMatch, then we may chose to filter parameters through these Attributs 
         // (as usual, only params are used whose attributes are a superset of the ones specified in toMatch)
-        public QKeyValue ToMatchAnyParamsAttributes;
-
-        public ProcedureSigMatcher(Procedure toMatch, Implementation impl)
-        {
-            _impl = impl;
-            _toMatch = toMatch;
-        }
-
-         public bool MatchSig()
+         //public static bool MatchSig(Procedure toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams)
+         public static bool MatchSig(Implementation toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams)
          {
+             toMatchAnyParamsAttributes = null;
+             allowsAnyParams = false;
 
-             if (!Driver.AreAttributesASubset(_toMatch.Attributes, _impl.Attributes)) return false;
-
-             if (_toMatch.Name.StartsWith("##"))
-             {
-                 //do nothing
-             }
-             else if (_toMatch.Name != _impl.Name)
+             if (!Driver.AreAttributesASubset(toMatch.Attributes, impl.Attributes))
              {
                  return false;
              }
-             if (_toMatch.InParams.Count == 1 && _toMatch.InParams[0].Name == "##ANYPARAMS")
+
+             // match procedure name
+             if (BoogieUtil.checkAttrExists(Constants.AnyProcedure, toMatch.Attributes))
              {
-                 ToMatchAnyParamsAttributes = _toMatch.InParams[0].Attributes;
+                 //do nothing
              }
-             else if (_toMatch.InParams.Count != _impl.InParams.Count)
+             else if (toMatch.Name != impl.Name)
+             {
+                 return false;
+             }
+
+             // match procedure parameters
+             if (toMatch.InParams.Count == 1 
+                 && (BoogieUtil.checkAttrExists(Constants.AnyParams, toMatch.InParams[0].Attributes)
+                   || BoogieUtil.checkAttrExists(Constants.AnyParams, toMatch.Proc.InParams[0].Attributes)))
+             {
+                 toMatchAnyParamsAttributes = toMatch.InParams[0].Attributes;
+                 if (toMatchAnyParamsAttributes != null)
+                     toMatchAnyParamsAttributes.Next = toMatch.Proc.InParams[0].Attributes;
+                 else
+                     toMatchAnyParamsAttributes = toMatch.Proc.InParams[0].Attributes;
+
+                 BoogieUtil.removeAttr(Constants.AnyParams, toMatchAnyParamsAttributes);
+                 allowsAnyParams = true;
+             }
+             else if (toMatch.InParams.Count != impl.InParams.Count)
              {
                  return false;
              }
              else
              {
-                 for (int i = 0; i < _toMatch.InParams.Count; i++)
+                 for (int i = 0; i < toMatch.InParams.Count; i++)
                  {
-                     if (_toMatch.InParams[i].GetType() != _impl.InParams[i].GetType())
+                     if (toMatch.InParams[i].TypedIdent.Name != impl.InParams[i].TypedIdent.Name)
+                     {
                          return false;
+                     }
                  }
              }
-             if (_toMatch.OutParams.Count == 1 && _toMatch.OutParams[0].Name == "##ANYPARAMS")
+
+             // match procedure out parameters
+             if (toMatch.OutParams.Count == 1 && toMatch.OutParams[0].Name == "##ANYPARAMS")
              {
                  //do nothing
              }
-             else if (_toMatch.OutParams.Count != _impl.OutParams.Count)
+             else if (toMatch.OutParams.Count != impl.OutParams.Count)
              {
                  return false;
              }
+
              return true;
         }
     }

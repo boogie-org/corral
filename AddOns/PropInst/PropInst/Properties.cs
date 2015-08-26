@@ -60,76 +60,91 @@ namespace PropInst
 
     class InsertAtBeginningRule : Rule
     {
-        const string InsertAtBeginningTemplate = "{0}" +
-                              "procedure helperProc() {{\n" +
-                              "  {1}" +
-                              "}}\n";
+        //const string InsertAtBeginningTemplate = "{0}" +
+        //                      "procedure helperProc() {{\n" +
+        //                      "  {1}" +
+        //                      "}}\n";
 
-        public readonly List<Procedure> ProceduresToMatch;
+        //public readonly List<Procedure> ProceduresToMatch;
 
-        public readonly List<Cmd> InsertionTemplate;
+        //public readonly List<Cmd> InsertionTemplate;
 
-        public InsertAtBeginningRule(string plhs, string prhs, string pDeclarations)
-            : base(plhs, prhs, pDeclarations)
+        //public readonly Dictionary<Procedure, List<Cmd>> ProcedureToMatchToInsertion;
+
+        // we need to use the implementation for matching, because the variable declaration of the 
+        // parameter occurences in the body (rhs of the rule) refer to those of the implementation, not
+        // declaration of the procedure
+        public readonly Dictionary<Implementation, List<Cmd>> ProcedureToMatchToInsertion;
+
+        public InsertAtBeginningRule(string plhs, string prhs, string globalDecls)
+            : base(plhs, prhs, globalDecls)
         {
-            Program prog;
-            string progString = pDeclarations;
-            Parser.Parse(progString, "dummy.bpl", out prog);
+            //ProcedureToMatchToInsertion = new Dictionary<Procedure, List<Cmd>>();
+            ProcedureToMatchToInsertion = new Dictionary<Implementation, List<Cmd>>();
 
-            ProceduresToMatch = new List<Procedure>();
-            ProceduresToMatch.AddRange(prog.Procedures);
+            //bit hacky: we need to get the delcaration code for each procedure..
+            // .. and we want them preferably without the semicolon..
+            var procStrings = new List<string>((plhs.Split(new char[] {';'})));//.Map(s => s + ";");
+            procStrings.RemoveAt(procStrings.Count - 1);
 
-            string firstProc = ProceduresToMatch.First().Name; //Convention: we refer to the first
+            //we need a separate insertion for every progstring because the IdentifierExpression pointing
+            // to one of the parameters must refer to the declaration in the procedure declaration..
 
-            //TODO
-
-
-            BoogieUtil.ResolveProgram(prog, "dummy.bpl");
-        }
-    }
-
-    internal class Prop_InsertCodeAtProcStart
-    {
-        public readonly Procedure ToMatch;
-        public readonly List<Cmd> ToInsert = new List<Cmd>();
-
-        private enum ParseMode
-        {
-            Match,
-            Insert,
-            None
-        };
-
-        public Prop_InsertCodeAtProcStart(IEnumerable<string> lines)
-        {
-            var mode = ParseMode.None;
-            foreach (var line in lines)
+            foreach (var procString in procStrings)
             {
-                switch (line.Trim())
-                {
-                    case "procedureSignature:":
-                        mode = ParseMode.Match;
-                        break;
-                    case "code:":
-                        mode = ParseMode.Insert;
-                        break;
-                    default:
-                        switch (mode)
-                        {
-                            case ParseMode.Match:
-                                Debug.Assert(ToMatch == null);
-                                ToMatch = StringToBoogie.ToProcedure(line);
-                                break;
-                            case ParseMode.Insert:
-                                ToInsert.Add(StringToBoogie.ToCmd(line));
-                                break;
-                            default:
-                                Debug.Assert(false);
-                                break;
-                        }
-                        break;
-                }
+                Program prog;
+                string progString = globalDecls +  procString + "{\n" + prhs + "\n}";
+                Parser.Parse(progString, "dummy.bpl", out prog);
+                BoogieUtil.ResolveProgram(prog, "dummy.bpl");
+
+                //ProcedureToMatchToInsertion.Add(prog.Procedures.First(), prog.Implementations.First().Blocks.First().Cmds);
+                ProcedureToMatchToInsertion.Add(prog.Implementations.First(), prog.Implementations.First().Blocks.First().Cmds);
             }
         }
     }
+
+    //internal class Prop_InsertCodeAtProcStart
+    //{
+    //    public readonly Procedure ToMatch;
+    //    public readonly List<Cmd> ToInsert = new List<Cmd>();
+
+    //    private enum ParseMode
+    //    {
+    //        Match,
+    //        Insert,
+    //        None
+    //    };
+
+    //    public Prop_InsertCodeAtProcStart(IEnumerable<string> lines)
+    //    {
+    //        var mode = ParseMode.None;
+    //        foreach (var line in lines)
+    //        {
+    //            switch (line.Trim())
+    //            {
+    //                case "procedureSignature:":
+    //                    mode = ParseMode.Match;
+    //                    break;
+    //                case "code:":
+    //                    mode = ParseMode.Insert;
+    //                    break;
+    //                default:
+    //                    switch (mode)
+    //                    {
+    //                        case ParseMode.Match:
+    //                            Debug.Assert(ToMatch == null);
+    //                            ToMatch = StringToBoogie.ToProcedure(line);
+    //                            break;
+    //                        case ParseMode.Insert:
+    //                            ToInsert.Add(StringToBoogie.ToCmd(line));
+    //                            break;
+    //                        default:
+    //                            Debug.Assert(false);
+    //                            break;
+    //                    }
+    //                    break;
+    //            }
+    //        }
+    //    }
+    //}
 }

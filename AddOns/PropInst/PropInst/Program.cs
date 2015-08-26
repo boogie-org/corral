@@ -51,7 +51,7 @@ namespace PropInst
             {
                 //deal with the curly braces that belong to the property language (not to Boogie)
                 var line = line1;
-                var pChange = countChar(line, '{') - countChar(line, '}');
+                var pChange = CountChar(line, '{') - CountChar(line, '}');
                 if (pCounter == 0 && pChange > 0)
                     line = line.Substring(line.IndexOf('{') + 1);
                 pCounter = pCounter + pChange;
@@ -140,7 +140,7 @@ namespace PropInst
                 }
                 if (triple.Item1 == "InsertAtBeginningRule")
                 {
-                    rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
+                    rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations));
                 }
             }
             #endregion
@@ -157,6 +157,7 @@ namespace PropInst
             //insertionsAtCmd.Iter(i => InstrumentInsertionAtCmd.Instrument(boogieProgram, i));
 
             //Property: find insertion sites (Procedures), insert code there
+            InstrumentInsertionAtProc.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
             //rules.OfType<InsertAtBeginningRule>()>
             //insertionsAtProcStart.Iter(i => InstrumentInsertionAtProc.Instrument(boogieProgram, i));
 
@@ -171,7 +172,7 @@ namespace PropInst
             //Console.ReadKey();
         }
 
-        private static int countChar(string line, char p1)
+        private static int CountChar(string line, char p1)
         {
             var result = 0;
             foreach (var c in line)
@@ -183,27 +184,34 @@ namespace PropInst
 
 
 
-        private static bool MatchStubs(Procedure toMatchStub, Procedure boogieStub)
-        {
-            if (toMatchStub.Name != boogieStub.Name)
-                return false;
-            if (toMatchStub.InParams.Count != boogieStub.InParams.Count)
-                return false;
-            if (toMatchStub.OutParams.Count != boogieStub.OutParams.Count)
-                return false;
-            for (int i = 0; i < toMatchStub.InParams.Count; i++)
-            {
-                if (toMatchStub.InParams[i].GetType() != boogieStub.InParams[i].GetType())
-                    return false;
-            }
+        //private static bool MatchStubs(Procedure toMatchStub, Procedure boogieStub)
+        //{
+        //    if (toMatchStub.Name != boogieStub.Name)
+        //        return false;
+        //    if (toMatchStub.InParams.Count != boogieStub.InParams.Count)
+        //        return false;
+        //    if (toMatchStub.OutParams.Count != boogieStub.OutParams.Count)
+        //        return false;
+        //    for (int i = 0; i < toMatchStub.InParams.Count; i++)
+        //    {
+        //        if (toMatchStub.InParams[i].GetType() != boogieStub.InParams[i].GetType())
+        //            return false;
+        //    }
 
-            return true;
-        }
+        //    return true;
+        //}
 
         public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
         {
             for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
             {
+                //need to filter out keyword attributes
+                if (left.Key == Constants.AnyProcedure
+                    || left.Key == Constants.AnyParams)
+                {
+                    continue;
+                }
+
                 if (!BoogieUtil.checkAttrExists(left.Key, right))
                 {
                     return false;
@@ -215,16 +223,17 @@ namespace PropInst
 
     class InstrumentInsertionAtProc
     {
-        private readonly Prop_InsertCodeAtProcStart _property;
+        private readonly IEnumerable<InsertAtBeginningRule> _rules;
+        //private readonly Prop_InsertCodeAtProcStart _rules;
 
-        public InstrumentInsertionAtProc(Prop_InsertCodeAtProcStart pins)
+        public InstrumentInsertionAtProc(IEnumerable<InsertAtBeginningRule> pins)
         {
-            _property = pins;
+            _rules = pins;
         }
 
-        private static readonly HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
+        //private static readonly HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
 
-        public static void Instrument(Program program, Prop_InsertCodeAtProcStart ins)
+        public static void Instrument(Program program, IEnumerable<InsertAtBeginningRule> ins)
         {
             var im = new InstrumentInsertionAtProc(ins);
 
@@ -235,44 +244,81 @@ namespace PropInst
 
         private void Instrument(Implementation impl)
         {
-            var psm = new ProcedureSigMatcher(_property.ToMatch, impl);
-            if (!psm.MatchSig())
+            foreach (var rule in _rules)
             {
-                return;
-            }
 
-            Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok),
-                "trying to instrument a procedure that has been instrumented already " +
-                "--> behaviour of resulting boogie program is not well-defined," +
-                " i.e., it may depend on the order of the instrumentations in the property");
-            _procsThatHaveBeenInstrumented.Add(impl.tok);
-
-            var fpv = new FindIdentifiersVisitor();
-            fpv.VisitCmdSeq(_property.ToInsert);
-            if (fpv.Identifiers.Exists(i => i.Name == Constants.AnyParams))
-            {
-                IdentifierExpr anyP = fpv.Identifiers.First(i => i.Name == Constants.AnyParams);
-                for (int i = 0; i < impl.InParams.Count; i++)
+                foreach (var procSig in rule.ProcedureToMatchToInsertion.Keys)
                 {
-                    var p = impl.InParams[i];
-                    // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
-                    // with matching (subset) attributes
-                    if (psm.ToMatchAnyParamsAttributes == null
-                        || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, p.Attributes)
-                        ||
-                        Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                    bool allowsAnyParams;
+                    QKeyValue anyParamsAttributes;
+                    if (ProcedureSigMatcher.MatchSig(procSig, impl, out anyParamsAttributes, out allowsAnyParams))
                     {
-                        var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
-                        var substitution = new Dictionary<Declaration, Expr> { { anyP.Decl, id } }; //TODO go over (doing any way, right?..)
-                        var sv = new SubstitionVisitor(substitution);
-                        var toInsertClone = _property.ToInsert.Map(x => StringToBoogie.ToCmd(x.ToString()));
-                        //hack to get a deepcopy
-                        //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_property.ToInsert);//does not seem to work as I expect..
-                        var newCmds = sv.VisitCmdSeq(toInsertClone);
-                        impl.Blocks.Insert(0,
-                            BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                        if (allowsAnyParams)
+                        {
+                            for (int i = 0; i < impl.InParams.Count; i++)
+                            {
+                                var p = impl.InParams[i];
+                                // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
+                                // with matching (subset) attributes
+                                // we look both in the implementation's and the procedure declaration's signature
+                                if (anyParamsAttributes == null
+                                    || Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
+                                    || Driver.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                                {
+                                    var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
+                                    var substitution = new Dictionary<Declaration, Expr> { { procSig.InParams[0], id } };
+                                    var sv = new SubstitionVisitor(substitution);
+                                    var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
+                                    impl.Blocks.Insert(0,
+                                        BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                                }
+                            }
+                        }
                     }
+
+
+
                 }
+
+
+                //var psm = new ProcedureSigMatcher(rule.ProcedureToMatchToInsertion.Keys.First(), impl);
+                //if (!psm.MatchSig())
+                //{
+                //    return;
+                //}
+
+                ////Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok),
+                ////    "trying to instrument a procedure that has been instrumented already " +
+                ////    "--> behaviour of resulting boogie program is not well-defined," +
+                ////    " i.e., it may depend on the order of the instrumentations in the property");
+                ////_procsThatHaveBeenInstrumented.Add(impl.tok);
+
+                //var fpv = new FindIdentifiersVisitor();
+                ////fpv.VisitCmdSeq(_rules.ToInsert);
+                //if (fpv.Identifiers.Exists(i => i.Name == Constants.AnyParams))
+                //{
+                //    IdentifierExpr anyP = fpv.Identifiers.First(i => i.Name == Constants.AnyParams);
+                //    for (int i = 0; i < impl.InParams.Count; i++)
+                //    {
+                //        var p = impl.InParams[i];
+                //        // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
+                //        // with matching (subset) attributes
+                //        if (psm.ToMatchAnyParamsAttributes == null
+                //            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, p.Attributes)
+                //            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                //        {
+                //            var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
+                //            var substitution = new Dictionary<Declaration, Expr> { { anyP.Decl, id } }; //TODO go over (doing any way, right?..)
+                //            var sv = new SubstitionVisitor(substitution);
+                //            //var toInsertClone = _rules.ToInsert.Map(x => StringToBoogie.ToCmd(x.ToString()));
+                //            //hack to get a deepcopy
+                //            //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_rules.ToInsert);//does not seem to work as I expect..
+                //            //var newCmds = sv.VisitCmdSeq(toInsertClone);
+                //            //impl.Blocks.Insert(0,
+                //            //    BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                //        }
+                //    }
+                //}
             }
         }
     }
@@ -373,36 +419,26 @@ namespace PropInst
 
                     if (BoogieUtil.checkAttrExists(Constants.AnyArgs, matchCallee.Attributes))
                     {
-                        //else if (toMatch.Ins.Count == 1
-                        //         && toMatch.Ins[0] is NAryExpr
-                        //         && ((NAryExpr) toMatch.Ins[0]).Fun.FunctionName == Constants.AnyArgs)
-                        //{
                         var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
-                        //var matchingExprs = new List<Expr>();
 
-                        var atLeastOneMatches = false;
+                        var atLeastOneMatch = false;
 
                         foreach (var arg in cmd.Ins)
                         {
 
-                            //Debug.Assert(anyArgsExpr.Args.Count == 1,
-                            //    "we expect Constants.AnyArgs to have at most one argument, " +
-                            //    "which is the matching pattern expression");
-                            //UpdateSubstitutionsAccordingToMatchAndTargetExpr(anyArgsExpr.Args[0], arg, substitutions);
                             var emv = new ExprMatchVisitor(new List<Expr>() {anyArgsExpr});
                             emv.VisitExpr(arg);
 
                             if (emv.Matches)
                             {
-                                atLeastOneMatches = true;
+                                atLeastOneMatch = true;
                                 substitutions.Add(
                                     new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
                                         emv.Substitution, emv.FunctionSubstitution));
                             }
                         }
-                        //if (substitutions.Count == 0)
-                        if (!atLeastOneMatches)
+                        if (!atLeastOneMatch)
                             continue;
                     }
                     else
