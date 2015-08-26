@@ -328,10 +328,11 @@ namespace PropInst
         // idea: if we have ##ANYPARAMS specified in toMatch, then we may chose to filter parameters through these Attributs 
         // (as usual, only params are used whose attributes are a superset of the ones specified in toMatch)
          //public static bool MatchSig(Procedure toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams)
-         public static bool MatchSig(Implementation toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams)
+         public static bool MatchSig(Implementation toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams, out Dictionary<Declaration, Expr> paramSubstitution)
          {
              toMatchAnyParamsAttributes = null;
              allowsAnyParams = false;
+             paramSubstitution = new Dictionary<Declaration, Expr>();
 
              if (!Driver.AreAttributesASubset(toMatch.Attributes, impl.Attributes))
              {
@@ -370,10 +371,11 @@ namespace PropInst
              {
                  for (int i = 0; i < toMatch.InParams.Count; i++)
                  {
-                     if (toMatch.InParams[i].TypedIdent.Name != impl.InParams[i].TypedIdent.Name)
+                     if (!toMatch.InParams[i].TypedIdent.Type.Equals(impl.InParams[i].TypedIdent.Type))
                      {
                          return false;
                      }
+                     paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, impl.InParams[i]));
                  }
              }
 

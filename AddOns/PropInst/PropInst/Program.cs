@@ -225,9 +225,11 @@ namespace PropInst
     {
         private readonly IEnumerable<InsertAtBeginningRule> _rules;
         //private readonly Prop_InsertCodeAtProcStart _rules;
+        private Program _program;
 
-        public InstrumentInsertionAtProc(IEnumerable<InsertAtBeginningRule> pins)
+        public InstrumentInsertionAtProc(IEnumerable<InsertAtBeginningRule> pins, Program pProg)
         {
+            _program = pProg;
             _rules = pins;
         }
 
@@ -235,11 +237,44 @@ namespace PropInst
 
         public static void Instrument(Program program, IEnumerable<InsertAtBeginningRule> ins)
         {
-            var im = new InstrumentInsertionAtProc(ins);
+            var iiap = new InstrumentInsertionAtProc(ins, program);
 
+            //for procedures with an implementation we insert our code at the beginning of that
             program.TopLevelDeclarations
                 .OfType<Implementation>()
-                .Iter(im.Instrument);
+                .Iter(iiap.Instrument);
+
+            //for procedures without an implementation we add one and insert our code there
+            List<Procedure> stubs = new List<Procedure>();
+            program.TopLevelDeclarations
+                .OfType<Procedure>()
+                .Where(p => program.Implementations.All(i => i.Name != p.Name))
+                .Iter(stubs.Add);
+
+            stubs.Iter(iiap.Instrument);
+                //.Iter(iiap.Instrument);
+            //foreach (var tld in program.TopLevelDeclarations)
+            //{
+            //    if (tld is Procedure)
+            //    {
+            //        iiap.Instrument(tld as Procedure);
+            //    }
+            //}
+        }
+
+        private void Instrument(Procedure proc)
+        {
+            //if (_program.FindImplementation(proc.Name) != null)
+            //    return;
+
+
+            _program.RemoveTopLevelDeclaration(proc);
+
+            var newImpl = BoogieAstFactory.MkImpl(
+                proc.Name, proc.InParams, proc.OutParams, new List<Variable>(), new List<Block>());
+            _program.AddTopLevelDeclarations(newImpl);
+
+            Instrument(newImpl.OfType<Implementation>().First());
         }
 
         private void Instrument(Implementation impl)
@@ -251,7 +286,8 @@ namespace PropInst
                 {
                     bool allowsAnyParams;
                     QKeyValue anyParamsAttributes;
-                    if (ProcedureSigMatcher.MatchSig(procSig, impl, out anyParamsAttributes, out allowsAnyParams))
+                    Dictionary<Declaration, Expr> paramSubstitution;
+                    if (ProcedureSigMatcher.MatchSig(procSig, impl, out anyParamsAttributes, out allowsAnyParams, out paramSubstitution))
                     {
                         if (allowsAnyParams)
                         {
@@ -269,11 +305,37 @@ namespace PropInst
                                     var substitution = new Dictionary<Declaration, Expr> { { procSig.InParams[0], id } };
                                     var sv = new SubstitionVisitor(substitution);
                                     var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
-                                    impl.Blocks.Insert(0,
-                                        BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                                    if (impl.Blocks.Count > 0)
+                                    {
+                                        impl.Blocks.Insert(0,
+                                            BoogieAstFactory.MkBlock(newCmds,
+                                                BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                                    }
+                                    else
+                                    {
+                                        impl.Blocks.Add(
+                                           BoogieAstFactory.MkBlock(newCmds));
+                                    }
                                 }
                             }
                         }
+                        else {
+                            var sv = new SubstitionVisitor(paramSubstitution);
+                            var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
+                            if (impl.Blocks.Count > 0)
+                            {
+                                impl.Blocks.Insert(0,
+                                    BoogieAstFactory.MkBlock(newCmds,
+                                        BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                            }
+                            else
+                            {
+                                impl.Blocks.Add(
+                                   BoogieAstFactory.MkBlock(newCmds));
+                            }
+                        }
+                        //only take the first match
+                        return;
                     }
 
 
