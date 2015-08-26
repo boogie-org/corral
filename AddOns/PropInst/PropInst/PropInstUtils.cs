@@ -230,12 +230,16 @@ namespace PropInst
 
             if (!(_toConsume.First() is NAryExpr))
             {
-                //TODO: may still be an IdentifierExp intended to match any exp
-                if (_toConsume.First() is IdentifierExpr)
+                //may still be an IdentifierExp intended to match any exp
+                if (_toConsume.First() is IdentifierExpr
+                    && !BoogieUtil.checkAttrExists(Constants.IdExpr, ((IdentifierExpr) _toConsume.First()).Decl.Attributes))
                 {
                     Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
+                    _toConsume.RemoveAt(0);
                     return node;
                 }
+                Matches = false;
+                return base.VisitNAryExpr(node);
             }
 
             var naeToConsume = (NAryExpr) _toConsume.First();
@@ -309,6 +313,7 @@ namespace PropInst
                 {
                     //TODO add check for the correspoinding attribut which says it may match anything
                     Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
+                    _toConsume.RemoveAt(0);
                     return node;
                 }
                 Matches = false;

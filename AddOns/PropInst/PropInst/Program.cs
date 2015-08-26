@@ -27,11 +27,13 @@ namespace PropInst
                 return;
             }
 
+            // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
 
-            //read the boogie program that is to be instrumented
-            var boogieProgram = BoogieUtil.ReadAndResolve(args[1], true);
+            // read the boogie program that is to be instrumented
+            var boogieProgram = BoogieUtil.ReadAndResolve(args[1], false);
+            //var boogieProgram = BoogieUtil.ReadAndResolve(args[1], true);
 
             #region parse the property file
             var propLines = File.ReadLines(args[0]);
@@ -145,7 +147,7 @@ namespace PropInst
             }
             #endregion
 
-            //add the global declarations from the property to the Boogie program
+            //Property: add the global declarations from the property to the Boogie program
             {
                 Program prog;
                 Parser.Parse(globalDeclarations, "dummy.bpl", out prog);
@@ -154,22 +156,13 @@ namespace PropInst
 
             // Property: find insertions sites (Commands), insert code there
             InstrumentInsertionAtCmd.Instrument(boogieProgram, rules.OfType<CmdRule>());
-            //insertionsAtCmd.Iter(i => InstrumentInsertionAtCmd.Instrument(boogieProgram, i));
 
             //Property: find insertion sites (Procedures), insert code there
             InstrumentInsertionAtProc.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
-            //rules.OfType<InsertAtBeginningRule>()>
-            //insertionsAtProcStart.Iter(i => InstrumentInsertionAtProc.Instrument(boogieProgram, i));
-
-
-
 
 
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
-
-            //Console.WriteLine("any to exit");
-            //Console.ReadKey();
         }
 
         private static int CountChar(string line, char p1)
@@ -180,26 +173,6 @@ namespace PropInst
                     result++;
             return result;
         }
-
-
-
-
-        //private static bool MatchStubs(Procedure toMatchStub, Procedure boogieStub)
-        //{
-        //    if (toMatchStub.Name != boogieStub.Name)
-        //        return false;
-        //    if (toMatchStub.InParams.Count != boogieStub.InParams.Count)
-        //        return false;
-        //    if (toMatchStub.OutParams.Count != boogieStub.OutParams.Count)
-        //        return false;
-        //    for (int i = 0; i < toMatchStub.InParams.Count; i++)
-        //    {
-        //        if (toMatchStub.InParams[i].GetType() != boogieStub.InParams[i].GetType())
-        //            return false;
-        //    }
-
-        //    return true;
-        //}
 
         public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
         {
@@ -224,8 +197,7 @@ namespace PropInst
     class InstrumentInsertionAtProc
     {
         private readonly IEnumerable<InsertAtBeginningRule> _rules;
-        //private readonly Prop_InsertCodeAtProcStart _rules;
-        private Program _program;
+        private readonly Program _program;
 
         public InstrumentInsertionAtProc(IEnumerable<InsertAtBeginningRule> pins, Program pProg)
         {
@@ -233,7 +205,6 @@ namespace PropInst
             _rules = pins;
         }
 
-        //private static readonly HashSet<IToken> _procsThatHaveBeenInstrumented = new HashSet<IToken>();
 
         public static void Instrument(Program program, IEnumerable<InsertAtBeginningRule> ins)
         {
@@ -634,24 +605,24 @@ namespace PropInst
     internal class Constants
     {
         // arbitrary list of parameters (at a procedure declaration)
-        public const string AnyParams = "$$ANYPARAMS";
+        public const string AnyParams = "#AnyParameters";
         // arbitrary list of arguments (at a procedure call)
         // may be used as a function: argument is an expression, we choose those where the expression matches
-        public const string AnyArgs = "$$ANYARGUMENTS";
+        public const string AnyArgs = "#AnyArguments";
         //arbitrary list of results of a call
         // these are always IdentifierExprs
         //public const string AnyResults = "$$ANYRESULTS";
         //nicer instead of AnyResults:
         public const string AnyLhss = "$$ANYLEFTHANDSIDES";
         public const string AnyType = "$$ANYTYPE";
-        public const string AnyProcedure = "$$ANYPROC";
+        public const string AnyProcedure = "#AnyProcedure";
         public const string AnyExpr = "$$ANYEXP";
         // matches a sum, i.e. a (possibly nested) naryExpr with function '+'
         // also matches a sum with only one summand, i.e. matches anything that matches the expression within
         public const string AnySum = "$$ANYSUM";
         // any IdentifierExpr, if used as a function (with a single argument), 
         // the identifier found can be referred to by that argument
-        public const string IdExpr = "$$IDEXPR";
+        public const string IdExpr = "#IdentifierExpr";
         public const string MemAccess = "$$MEMACCESS";
         public static string RuleSeparator = "####";
     }
