@@ -224,25 +224,26 @@ namespace PropInst
             stubs.Iter(iiap.Instrument);
         }
 
-        private void Instrument(Procedure proc)
-        {
-            //implementations' parameters are not allowed to have attributes --> strip them for our new implementation
-            var newInParams = new List<Variable>();
-            foreach (var v in proc.InParams)
-                newInParams.Add(new LocalVariable(v.tok, v.TypedIdent));
-            var newOutParams = new List<Variable>();
-            foreach (var v in proc.OutParams)
-                newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
+        //private void Instrument(Procedure proc)
+        //{
+        //    //implementations' parameters are not allowed to have attributes --> strip them for our new implementation
+        //    var newInParams = new List<Variable>();
+        //    foreach (var v in proc.InParams)
+        //        newInParams.Add(new LocalVariable(v.tok, v.TypedIdent));
+        //    var newOutParams = new List<Variable>();
+        //    foreach (var v in proc.OutParams)
+        //        newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
 
-            var newImpl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, proc.OutParams, new List<Variable>(), new List<Block>());
+        //    var newImpl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, newOutParams, new List<Variable>(), new List<Block>());
 
           
-            _program.AddTopLevelDeclaration(newImpl);
+        //    _program.AddTopLevelDeclaration(newImpl);
 
-            Instrument(newImpl);
-        }
+        //    Instrument(newImpl);
+        //}
 
-        private void Instrument(Implementation impl)
+        private void Instrument(DeclWithFormals dwf)
+        //private void Instrument(Implementation impl)
         {
             foreach (var rule in _rules)
             {
@@ -252,56 +253,86 @@ namespace PropInst
                     bool allowsAnyParams;
                     QKeyValue anyParamsAttributes;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, impl, out anyParamsAttributes, out allowsAnyParams, out paramSubstitution))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, out anyParamsAttributes, out allowsAnyParams, out paramSubstitution))
                     {
-                        if (allowsAnyParams)
+                        Implementation impl = null;
+                        if (dwf is Implementation)
                         {
-                            for (int i = 0; i < impl.InParams.Count; i++)
-                            {
-                                var p = impl.InParams[i];
-                                // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
-                                // with matching (subset) attributes
-                                // we look both in the implementation's and the procedure declaration's signature
-                                if (anyParamsAttributes == null
-                                    || Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
-                                    || Driver.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
-                                {
-                                    var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
-                                    var substitution = new Dictionary<Declaration, Expr> { { procSig.InParams[0], id } };
-                                    var sv = new SubstitionVisitor(substitution);
-                                    var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
-                                    if (impl.Blocks.Count > 0)
-                                    {
-                                        impl.Blocks.Insert(0,
-                                            BoogieAstFactory.MkBlock(newCmds,
-                                                BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
-                                    }
-                                    else
-                                    {
-                                        impl.Blocks.Add(
-                                           BoogieAstFactory.MkBlock(newCmds));
-                                    }
-                                }
-                            }
+                            impl = (Implementation) dwf;
                         }
-                        else {
-                            var sv = new SubstitionVisitor(paramSubstitution);
-                            var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
-                            if (impl.Blocks.Count > 0)
-                            {
-                                impl.Blocks.Insert(0,
-                                    BoogieAstFactory.MkBlock(newCmds,
-                                        BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
-                            }
-                            else
-                            {
-                                impl.Blocks.Add(
-                                   BoogieAstFactory.MkBlock(newCmds));
-                            }
+                        else if (dwf is Procedure)
+                        {
+                            var proc = (Procedure)dwf;
+
+                            var newInParams = new List<Variable>();
+                            foreach (var v in proc.InParams)
+                                newInParams.Add(new LocalVariable(v.tok, v.TypedIdent));
+                            var newOutParams = new List<Variable>();
+                            foreach (var v in proc.OutParams)
+                                newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
+
+                            impl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, newOutParams, new List<Variable>(), new List<Block>());
+
+
+                            _program.AddTopLevelDeclaration(impl);
+
+                            //Instrument(newImpl);
                         }
+                        injectCode(impl, allowsAnyParams, anyParamsAttributes, procSig, rule, paramSubstitution);
                         //only take the first match
                         return;
                     }
+                }
+            }
+        }
+
+        private static void injectCode(Implementation impl, bool allowsAnyParams, QKeyValue anyParamsAttributes,
+            Implementation procSig, InsertAtBeginningRule rule, Dictionary<Declaration, Expr> paramSubstitution)
+        {
+            if (allowsAnyParams)
+            {
+                for (int i = 0; i < impl.InParams.Count; i++)
+                {
+                    var p = impl.InParams[i];
+                    // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
+                    // with matching (subset) attributes
+                    // we look both in the implementation's and the procedure declaration's signature
+                    if (anyParamsAttributes == null
+                        || Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
+                        || Driver.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                    {
+                        var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
+                        var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[0], id}};
+                        var sv = new SubstitionVisitor(substitution);
+                        var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
+                        if (impl.Blocks.Count > 0)
+                        {
+                            impl.Blocks.Insert(0,
+                                BoogieAstFactory.MkBlock(newCmds,
+                                    BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                        }
+                        else
+                        {
+                            impl.Blocks.Add(
+                                BoogieAstFactory.MkBlock(newCmds));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var sv = new SubstitionVisitor(paramSubstitution);
+                var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
+                if (impl.Blocks.Count > 0)
+                {
+                    impl.Blocks.Insert(0,
+                        BoogieAstFactory.MkBlock(newCmds,
+                            BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
+                }
+                else
+                {
+                    impl.Blocks.Add(
+                        BoogieAstFactory.MkBlock(newCmds));
                 }
             }
         }

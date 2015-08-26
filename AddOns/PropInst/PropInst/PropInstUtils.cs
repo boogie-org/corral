@@ -332,14 +332,13 @@ namespace PropInst
     {
         // idea: if we have ##ANYPARAMS specified in toMatch, then we may chose to filter parameters through these Attributs 
         // (as usual, only params are used whose attributes are a superset of the ones specified in toMatch)
-         //public static bool MatchSig(Procedure toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams)
-         public static bool MatchSig(Implementation toMatch, Implementation impl, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams, out Dictionary<Declaration, Expr> paramSubstitution)
+         public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, out QKeyValue toMatchAnyParamsAttributes, out bool allowsAnyParams, out Dictionary<Declaration, Expr> paramSubstitution)
          {
              toMatchAnyParamsAttributes = null;
              allowsAnyParams = false;
              paramSubstitution = new Dictionary<Declaration, Expr>();
 
-             if (!Driver.AreAttributesASubset(toMatch.Attributes, impl.Attributes))
+             if (!Driver.AreAttributesASubset(toMatch.Attributes, dwf.Attributes))
              {
                  return false;
              }
@@ -349,7 +348,7 @@ namespace PropInst
              {
                  //do nothing
              }
-             else if (toMatch.Name != impl.Name)
+             else if (toMatch.Name != dwf.Name)
              {
                  return false;
              }
@@ -368,7 +367,7 @@ namespace PropInst
                  BoogieUtil.removeAttr(Constants.AnyParams, toMatchAnyParamsAttributes);
                  allowsAnyParams = true;
              }
-             else if (toMatch.InParams.Count != impl.InParams.Count)
+             else if (toMatch.InParams.Count != dwf.InParams.Count)
              {
                  return false;
              }
@@ -376,11 +375,11 @@ namespace PropInst
              {
                  for (int i = 0; i < toMatch.InParams.Count; i++)
                  {
-                     if (!toMatch.InParams[i].TypedIdent.Type.Equals(impl.InParams[i].TypedIdent.Type))
+                     if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
                      {
                          return false;
                      }
-                     paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, impl.InParams[i]));
+                     paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, dwf.InParams[i]));
                  }
              }
 
@@ -389,7 +388,7 @@ namespace PropInst
              {
                  //do nothing
              }
-             else if (toMatch.OutParams.Count != impl.OutParams.Count)
+             else if (toMatch.OutParams.Count != dwf.OutParams.Count)
              {
                  return false;
              }
