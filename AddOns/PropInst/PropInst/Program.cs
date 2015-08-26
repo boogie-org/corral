@@ -245,30 +245,18 @@ namespace PropInst
                 .Iter(iiap.Instrument);
 
             //for procedures without an implementation we add one and insert our code there
-            List<Procedure> stubs = new List<Procedure>();
+            var stubs = new List<Procedure>();
             program.TopLevelDeclarations
                 .OfType<Procedure>()
                 .Where(p => program.Implementations.All(i => i.Name != p.Name))
                 .Iter(stubs.Add);
 
             stubs.Iter(iiap.Instrument);
-                //.Iter(iiap.Instrument);
-            //foreach (var tld in program.TopLevelDeclarations)
-            //{
-            //    if (tld is Procedure)
-            //    {
-            //        iiap.Instrument(tld as Procedure);
-            //    }
-            //}
         }
 
         private void Instrument(Procedure proc)
         {
-            //if (_program.FindImplementation(proc.Name) != null)
-            //    return;
-
-
-            _program.RemoveTopLevelDeclaration(proc);
+           _program.RemoveTopLevelDeclaration(proc);
 
             var newImpl = BoogieAstFactory.MkImpl(
                 proc.Name, proc.InParams, proc.OutParams, new List<Variable>(), new List<Block>());
@@ -337,50 +325,7 @@ namespace PropInst
                         //only take the first match
                         return;
                     }
-
-
-
                 }
-
-
-                //var psm = new ProcedureSigMatcher(rule.ProcedureToMatchToInsertion.Keys.First(), impl);
-                //if (!psm.MatchSig())
-                //{
-                //    return;
-                //}
-
-                ////Debug.Assert(!_procsThatHaveBeenInstrumented.Contains(impl.tok),
-                ////    "trying to instrument a procedure that has been instrumented already " +
-                ////    "--> behaviour of resulting boogie program is not well-defined," +
-                ////    " i.e., it may depend on the order of the instrumentations in the property");
-                ////_procsThatHaveBeenInstrumented.Add(impl.tok);
-
-                //var fpv = new FindIdentifiersVisitor();
-                ////fpv.VisitCmdSeq(_rules.ToInsert);
-                //if (fpv.Identifiers.Exists(i => i.Name == Constants.AnyParams))
-                //{
-                //    IdentifierExpr anyP = fpv.Identifiers.First(i => i.Name == Constants.AnyParams);
-                //    for (int i = 0; i < impl.InParams.Count; i++)
-                //    {
-                //        var p = impl.InParams[i];
-                //        // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
-                //        // with matching (subset) attributes
-                //        if (psm.ToMatchAnyParamsAttributes == null
-                //            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, p.Attributes)
-                //            || Driver.AreAttributesASubset(psm.ToMatchAnyParamsAttributes, impl.Proc.InParams[i].Attributes))
-                //        {
-                //            var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, immutable: true);
-                //            var substitution = new Dictionary<Declaration, Expr> { { anyP.Decl, id } }; //TODO go over (doing any way, right?..)
-                //            var sv = new SubstitionVisitor(substitution);
-                //            //var toInsertClone = _rules.ToInsert.Map(x => StringToBoogie.ToCmd(x.ToString()));
-                //            //hack to get a deepcopy
-                //            //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_rules.ToInsert);//does not seem to work as I expect..
-                //            //var newCmds = sv.VisitCmdSeq(toInsertClone);
-                //            //impl.Blocks.Insert(0,
-                //            //    BoogieAstFactory.MkBlock(newCmds, BoogieAstFactory.MkGotoCmd(impl.Blocks.First().Label)));
-                //        }
-                //    }
-                //}
             }
         }
     }
