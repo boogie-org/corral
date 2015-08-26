@@ -221,19 +221,25 @@ namespace PropInst
                 .OfType<Procedure>()
                 .Where(p => program.Implementations.All(i => i.Name != p.Name))
                 .Iter(stubs.Add);
-
             stubs.Iter(iiap.Instrument);
         }
 
         private void Instrument(Procedure proc)
         {
-           _program.RemoveTopLevelDeclaration(proc);
+            //implementations' parameters are not allowed to have attributes --> strip them for our new implementation
+            var newInParams = new List<Variable>();
+            foreach (var v in proc.InParams)
+                newInParams.Add(new LocalVariable(v.tok, v.TypedIdent));
+            var newOutParams = new List<Variable>();
+            foreach (var v in proc.OutParams)
+                newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
 
-            var newImpl = BoogieAstFactory.MkImpl(
-                proc.Name, proc.InParams, proc.OutParams, new List<Variable>(), new List<Block>());
-            _program.AddTopLevelDeclarations(newImpl);
+            var newImpl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, proc.OutParams, new List<Variable>(), new List<Block>());
 
-            Instrument(newImpl.OfType<Implementation>().First());
+          
+            _program.AddTopLevelDeclaration(newImpl);
+
+            Instrument(newImpl);
         }
 
         private void Instrument(Implementation impl)
