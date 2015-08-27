@@ -216,6 +216,7 @@ namespace PropInst
                 .Iter(iiap.Instrument);
 
             //for procedures without an implementation we add one and insert our code there
+            //need to iterate separately, because this changes ToplevelDeclarations on a match
             var stubs = new List<Procedure>();
             program.TopLevelDeclarations
                 .OfType<Procedure>()
@@ -224,30 +225,10 @@ namespace PropInst
             stubs.Iter(iiap.Instrument);
         }
 
-        //private void Instrument(Procedure proc)
-        //{
-        //    //implementations' parameters are not allowed to have attributes --> strip them for our new implementation
-        //    var newInParams = new List<Variable>();
-        //    foreach (var v in proc.InParams)
-        //        newInParams.Add(new LocalVariable(v.tok, v.TypedIdent));
-        //    var newOutParams = new List<Variable>();
-        //    foreach (var v in proc.OutParams)
-        //        newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
-
-        //    var newImpl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, newOutParams, new List<Variable>(), new List<Block>());
-
-          
-        //    _program.AddTopLevelDeclaration(newImpl);
-
-        //    Instrument(newImpl);
-        //}
-
         private void Instrument(DeclWithFormals dwf)
-        //private void Instrument(Implementation impl)
         {
             foreach (var rule in _rules)
             {
-
                 foreach (var procSig in rule.ProcedureToMatchToInsertion.Keys)
                 {
                     bool allowsAnyParams;
@@ -275,10 +256,8 @@ namespace PropInst
 
 
                             _program.AddTopLevelDeclaration(impl);
-
-                            //Instrument(newImpl);
                         }
-                        injectCode(impl, allowsAnyParams, anyParamsAttributes, procSig, rule, paramSubstitution);
+                        InjectCode(impl, allowsAnyParams, anyParamsAttributes, procSig, rule, paramSubstitution);
                         //only take the first match
                         return;
                     }
@@ -286,7 +265,7 @@ namespace PropInst
             }
         }
 
-        private static void injectCode(Implementation impl, bool allowsAnyParams, QKeyValue anyParamsAttributes,
+        private static void InjectCode(Implementation impl, bool allowsAnyParams, QKeyValue anyParamsAttributes,
             Implementation procSig, InsertAtBeginningRule rule, Dictionary<Declaration, Expr> paramSubstitution)
         {
             if (allowsAnyParams)
