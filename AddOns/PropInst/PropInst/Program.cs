@@ -562,59 +562,59 @@ namespace PropInst
             return new List<Cmd>() { cmd };
         }
 
-        private static void UpdateSubstitutionsAccordingToMatchAndTargetExpr(Expr toMatch, Expr expr, List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>> substitutions)
-        {
+        //private static void UpdateSubstitutionsAccordingToMatchAndTargetExpr(Expr toMatch, Expr expr, List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>> substitutions)
+        //{
 
-            if (toMatch is NAryExpr
-                && ((NAryExpr)toMatch).Fun.FunctionName == Constants.MemAccess)
-            {
-                //special case: we want to match anything that is a memory access 
-                //i.e. someting like MemT.sometypename[someExpression]
-                //and get out someExpression
-                //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
-                var memAccessExpr = (NAryExpr)toMatch;
+        //    if (toMatch is NAryExpr
+        //        && ((NAryExpr)toMatch).Fun.FunctionName == Constants.MemAccess)
+        //    {
+        //        //special case: we want to match anything that is a memory access 
+        //        //i.e. someting like MemT.sometypename[someExpression]
+        //        //and get out someExpression
+        //        //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
+        //        var memAccessExpr = (NAryExpr)toMatch;
 
-                Debug.Assert(memAccessExpr.Args.Count == 1);
-                //TODO above --> generalize to other matches..");
+        //        Debug.Assert(memAccessExpr.Args.Count == 1);
+        //        //TODO above --> generalize to other matches..");
 
-                var memAccessToMatchExpr = memAccessExpr.Args[0];
+        //        var memAccessToMatchExpr = memAccessExpr.Args[0];
 
-                var gma = new GatherMemAccesses();
-                gma.Visit(expr);
+        //        var gma = new GatherMemAccesses();
+        //        gma.Visit(expr);
 
-                if (gma.accesses.Count == 0)
-                {
-                    // there's no memory access in this argument --> do nothing for it
-                    //return ret;
-                    return;
-                }
+        //        if (gma.accesses.Count == 0)
+        //        {
+        //            // there's no memory access in this argument --> do nothing for it
+        //            //return ret;
+        //            return;
+        //        }
 
-                // we have a memory access
-                foreach (var access in gma.accesses)
-                {
-                    var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
-                    emv.Visit(access.Item2);
+        //        // we have a memory access
+        //        foreach (var access in gma.accesses)
+        //        {
+        //            var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
+        //            emv.Visit(access.Item2);
 
-                    // here we have all we need to make a new command:
-                    // for each expr of the anyargs, for each memoryAccess in that expr:
-                    // instantiate the ToInsert accordingly
-                    if (emv.Matches)
-                    {
-                        //TODO: right now, we get a substitution (pair) for each match. 
-                        //TODO: In the future we may need to several substitutions for example because
-                        //TODO: there are many memaccesses, args that match anyargs, and so on.. --> right??
-                        //substitutions.Add(
-                        //    new Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>(emv.Substitution,
-                        //        emv.FunctionSubstitution));//TODO go over
-                    }
-                }
-            }
-            else
-            {
-                //TODO: other matches of anyargs than memAccess
-                throw new NotImplementedException();
-            }
-        }
+        //            // here we have all we need to make a new command:
+        //            // for each expr of the anyargs, for each memoryAccess in that expr:
+        //            // instantiate the ToInsert accordingly
+        //            if (emv.Matches)
+        //            {
+        //                //TODO: right now, we get a substitution (pair) for each match. 
+        //                //TODO: In the future we may need to several substitutions for example because
+        //                //TODO: there are many memaccesses, args that match anyargs, and so on.. --> right??
+        //                //substitutions.Add(
+        //                //    new Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>(emv.Substitution,
+        //                //        emv.FunctionSubstitution));//TODO go over
+        //            }
+        //        }
+        //    }
+        //    else
+        //    {
+        //        //TODO: other matches of anyargs than memAccess
+        //        throw new NotImplementedException();
+        //    }
+        //}
 
     }
   

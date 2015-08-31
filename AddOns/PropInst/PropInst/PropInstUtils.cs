@@ -244,7 +244,6 @@ namespace PropInst
 
             var naeToConsume = (NAryExpr) _toConsume.First();
 
-
             if (((NAryExpr) _toConsume.First()).Args.Count != node.Args.Count)
             {
                 Matches = false;
@@ -255,7 +254,6 @@ namespace PropInst
             if (naeToConsume.Fun.Equals(node.Fun))
             {
                 _toConsume = new List<Expr>(naeToConsume.Args);
-
                 return base.VisitNAryExpr(node);
             } 
             if (naeToConsume.Fun is FunctionCall
@@ -263,9 +261,9 @@ namespace PropInst
             {
                 var func = ((FunctionCall) naeToConsume.Fun).Func; //TODO: use attributes..
 
+                FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
+
                 _toConsume = new List<Expr>(naeToConsume.Args);
-                if (!FunctionSubstitution.ContainsKey(naeToConsume.Fun.FunctionName))
-                    FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);//TODO: understand..
                 return base.VisitNAryExpr(node);
             }
             Matches = false;
@@ -397,32 +395,32 @@ namespace PropInst
         }
     }
 
-     public class GatherMemAccesses : FixedVisitor
-     {
-         public List<Tuple<Variable, Expr>> accesses;
-         public GatherMemAccesses()
-         {
-             accesses = new List<Tuple<Variable, Expr>>();
-         }
+     //public class GatherMemAccesses : FixedVisitor
+     //{
+     //    public List<Tuple<Variable, Expr>> accesses;
+     //    public GatherMemAccesses()
+     //    {
+     //        accesses = new List<Tuple<Variable, Expr>>();
+     //    }
 
-         public override Expr VisitForallExpr(ForallExpr node)
-         {
-             return node;
-         }
+     //    public override Expr VisitForallExpr(ForallExpr node)
+     //    {
+     //        return node;
+     //    }
 
-         public override Expr VisitExistsExpr(ExistsExpr node)
-         {
-             return node;
-         }
+     //    public override Expr VisitExistsExpr(ExistsExpr node)
+     //    {
+     //        return node;
+     //    }
 
-         public override Expr VisitNAryExpr(NAryExpr node)
-         {
-             if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
-             {
-                 accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
-             }
+     //    public override Expr VisitNAryExpr(NAryExpr node)
+     //    {
+     //        if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
+     //        {
+     //            accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
+     //        }
 
-             return base.VisitNAryExpr(node);
-         }
-     }
+     //        return base.VisitNAryExpr(node);
+     //    }
+     //}
 }

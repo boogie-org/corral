@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using cba.Util;
 using Microsoft.Boogie;
@@ -44,8 +45,23 @@ namespace PropInst
         public CmdRule(string plhs, string prhs, string pDeclarations)
             : base(plhs, prhs, pDeclarations)
         {
+            var rhs = prhs;
+
+            //allow keyword-command "#this;" instead of "call #this;":
+            const string onlyThisPattern = @"#this\s*;";
+            var callThisMatch = Regex.Match(rhs, @"call\s* #this\(\)\s*;");
+            var onlyThisMatch = Regex.Match(rhs, onlyThisPattern);
+            if (callThisMatch.Success)
+            {
+                // do nothing
+            } 
+            else if (onlyThisMatch.Success)
+            {
+                rhs = Regex.Replace(rhs, onlyThisPattern, "call #this();");
+            }
+
             Program prog;
-            string progString = string.Format(CmdTemplate, pDeclarations, plhs, prhs);
+            string progString = string.Format(CmdTemplate, pDeclarations, plhs, rhs);
             Parser.Parse(progString, "dummy.bpl", out prog);
             BoogieUtil.ResolveProgram(prog, "dummy.bpl");
 
