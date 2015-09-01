@@ -8,23 +8,9 @@ using Microsoft.Boogie;
 
 namespace PropInst
 {
-
-    class FindIdentifiersVisitor : FixedVisitor
-    {
-        public readonly List<IdentifierExpr> Identifiers = new List<IdentifierExpr>();
-        public override Expr VisitIdentifierExpr(IdentifierExpr node)
-        {
-            Identifiers.Add(node);
-            return base.VisitIdentifierExpr(node);
-        }
-    }
-
-
     /// <summary>
     /// A visitor that executes a given Substitution.
-    /// old: (Note that this visitor "consumes" the substitution template, i.e.,
-    /// the replacements are not done in a copy but the template itself.)
-    /// new: the substitution makes a deep copy of the template
+    /// the substitution makes a deep copy of the template, i.e., a new Expr/Cmd/.. is returned
     /// </summary>
     class SubstitionVisitor : FixedVisitor
     {
@@ -95,10 +81,7 @@ namespace PropInst
             }
 
             var dispatchedIns = new List<Expr>();
-            foreach (var arg in node.Ins)
-            {
-                dispatchedIns.Add(VisitExpr(arg));
-            }
+            node.Ins.Iter(arg => dispatchedIns.Add(VisitExpr(arg)));
 
             var dispatchedOuts = new List<IdentifierExpr>();
             foreach (var arg in node.Outs)
@@ -394,33 +377,4 @@ namespace PropInst
              return true;
         }
     }
-
-     //public class GatherMemAccesses : FixedVisitor
-     //{
-     //    public List<Tuple<Variable, Expr>> accesses;
-     //    public GatherMemAccesses()
-     //    {
-     //        accesses = new List<Tuple<Variable, Expr>>();
-     //    }
-
-     //    public override Expr VisitForallExpr(ForallExpr node)
-     //    {
-     //        return node;
-     //    }
-
-     //    public override Expr VisitExistsExpr(ExistsExpr node)
-     //    {
-     //        return node;
-     //    }
-
-     //    public override Expr VisitNAryExpr(NAryExpr node)
-     //    {
-     //        if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
-     //        {
-     //            accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
-     //        }
-
-     //        return base.VisitNAryExpr(node);
-     //    }
-     //}
 }
