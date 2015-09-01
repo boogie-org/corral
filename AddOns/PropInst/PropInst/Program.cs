@@ -343,8 +343,7 @@ namespace PropInst
                 foreach (Cmd cmd in block.Cmds)
                 {
                     if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
-                    else if (cmd is AssertCmd) newcmds.AddRange(ProcessAssert(cmd as AssertCmd));
+                    else if (cmd is PredicateCmd) newcmds.AddRange(ProcessPredicateCmd(cmd as PredicateCmd));
                     else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
                     else newcmds.Add(cmd);
                 }
@@ -354,7 +353,6 @@ namespace PropInst
 
         private List<Cmd> ProcessCall(CallCmd cmd)
         {
-
             foreach (var rule in _rules)
             {
                 foreach (var m in rule.CmdsToMatch)
@@ -448,9 +446,6 @@ namespace PropInst
                     var ret = new List<Cmd>();
                     foreach (var subsPair in substitutions)
                     {
-                        ////hack to get a deepcopy
-                        //var toInsertClone = rule.InsertionTemplate.Map(i => StringToBoogie.ToCmd(i.ToString()));
-
                         var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd); //TODO go over
                         ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
                     }
@@ -458,52 +453,33 @@ namespace PropInst
                     return ret;
                 }
             }
-            //ret.Add(cmd);
             return new List<Cmd>() { cmd };
         }
 
-
-        private List<Cmd> ProcessAssume(AssumeCmd cmd)
+        private List<Cmd> ProcessPredicateCmd(PredicateCmd cmd)
         {
-            var ret = new List<Cmd>();
-            foreach (var rule in _rules)
+             foreach (var rule in _rules)
             {
-                //var toMatchNae = (AssumeCmd) _propInsertCodeAtCmd.Match;
                 foreach (var m in rule.CmdsToMatch)
                 {
-                    if (!(m is AssumeCmd))
+                    if (!((m is AssertCmd && cmd is AssertCmd) || (m is AssumeCmd && cmd is AssumeCmd)))
                         continue;
-                    var toMatch = (AssumeCmd) m;
+
+                    var toMatch = (PredicateCmd) m;
 
                     if (!Driver.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
                         continue;
-                    //return new List<Cmd>() {cmd}; //not all attributs of toMatchNae are in cmd --> do nothing
 
-                    //check if the Expression matches
                     var mv = new ExprMatchVisitor(new List<Expr>() {toMatch.Expr});
                     mv.VisitExpr(cmd.Expr);
 
-                    if (mv.Matches)
-                    {
-                        var sv = new SubstitionVisitor(mv.Substitution);
-                        //hack to get a deepcopy
-                        var toInsertClone = rule.InsertionTemplate.Map(i => StringToBoogie.ToCmd(i.ToString()));
-                        //var toInsertClone = BoogieAstFactory.CloneCmdSeq(_propInsertCodeAtCmd.ToInsert);//does not seem to work as I expect..
-                        ret.AddRange(sv.VisitCmdSeq((List<Cmd>) toInsertClone));
-                    }
+                    if (!mv.Matches) continue;
 
+                    var sv = new SubstitionVisitor(mv.Substitution, mv.FunctionSubstitution, cmd);
+                    return sv.VisitCmdSeq(rule.InsertionTemplate);
                 }
             }
-            ret.Add(cmd);
-            return ret;
-        }
-
-        private List<Cmd> ProcessAssert(AssertCmd cmd)
-        {
-            var ret = new List<Cmd>();
-            //TODO..
-            ret.Add(cmd);
-            return ret;
+            return new List<Cmd>() { cmd };
         }
 
         private List<Cmd> ProcessAssign(AssignCmd cmd)
@@ -520,10 +496,10 @@ namespace PropInst
                     var substitution = new Dictionary<Declaration, Expr>();
                     var funcSubstitution = new Dictionary<string, IAppliable>();//TODO: move from string to IAppliable?
 
-                    //match each Lhs together with the corresponding rhs
 
                     //CONVENTION: x := e matches  x1, x2 := e1, e2;  (the first match is taken, as usual)
-                    //  --> i.e., we treat a multi-assign as if it were several assignments
+                    //  --> i.e., we treat a multi-assign as if it were several assignments for matching purposes
+                    //     but we make at most one insertion for a multi-assign --> TODO: revise
                     Debug.Assert(toMatchCmd.Lhss.Count == 1);
 
 
@@ -536,7 +512,6 @@ namespace PropInst
                         var rhs = cmd.Rhss[i];
                         var rEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Rhss[0]});
                         rEmv.VisitExpr(rhs);
-
 
                         if (lEmv.Matches && rEmv.Matches)
                         {
@@ -554,68 +529,11 @@ namespace PropInst
 
                             return substitutedCmds;
                         }
-
                     }
-
                 }
             }
             return new List<Cmd>() { cmd };
         }
-
-        //private static void UpdateSubstitutionsAccordingToMatchAndTargetExpr(Expr toMatch, Expr expr, List<Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>> substitutions)
-        //{
-
-        //    if (toMatch is NAryExpr
-        //        && ((NAryExpr)toMatch).Fun.FunctionName == Constants.MemAccess)
-        //    {
-        //        //special case: we want to match anything that is a memory access 
-        //        //i.e. someting like MemT.sometypename[someExpression]
-        //        //and get out someExpression
-        //        //TODO: this is the current case --> generalize such that someExpression may be a complex match, too??
-        //        var memAccessExpr = (NAryExpr)toMatch;
-
-        //        Debug.Assert(memAccessExpr.Args.Count == 1);
-        //        //TODO above --> generalize to other matches..");
-
-        //        var memAccessToMatchExpr = memAccessExpr.Args[0];
-
-        //        var gma = new GatherMemAccesses();
-        //        gma.Visit(expr);
-
-        //        if (gma.accesses.Count == 0)
-        //        {
-        //            // there's no memory access in this argument --> do nothing for it
-        //            //return ret;
-        //            return;
-        //        }
-
-        //        // we have a memory access
-        //        foreach (var access in gma.accesses)
-        //        {
-        //            var emv = new ExprMatchVisitor(new List<Expr>() { memAccessToMatchExpr });
-        //            emv.Visit(access.Item2);
-
-        //            // here we have all we need to make a new command:
-        //            // for each expr of the anyargs, for each memoryAccess in that expr:
-        //            // instantiate the ToInsert accordingly
-        //            if (emv.Matches)
-        //            {
-        //                //TODO: right now, we get a substitution (pair) for each match. 
-        //                //TODO: In the future we may need to several substitutions for example because
-        //                //TODO: there are many memaccesses, args that match anyargs, and so on.. --> right??
-        //                //substitutions.Add(
-        //                //    new Tuple<Dictionary<IdentifierExpr, Expr>, Dictionary<string, IAppliable>>(emv.Substitution,
-        //                //        emv.FunctionSubstitution));//TODO go over
-        //            }
-        //        }
-        //    }
-        //    else
-        //    {
-        //        //TODO: other matches of anyargs than memAccess
-        //        throw new NotImplementedException();
-        //    }
-        //}
-
     }
   
     internal class Constants
@@ -632,14 +550,7 @@ namespace PropInst
         public const string AnyLhss = "$$ANYLEFTHANDSIDES";
         public const string AnyType = "$$ANYTYPE";
         public const string AnyProcedure = "#AnyProcedure";
-        public const string AnyExpr = "$$ANYEXP";
-        // matches a sum, i.e. a (possibly nested) naryExpr with function '+'
-        // also matches a sum with only one summand, i.e. matches anything that matches the expression within
-        public const string AnySum = "$$ANYSUM";
-        // any IdentifierExpr, if used as a function (with a single argument), 
-        // the identifier found can be referred to by that argument
+        // any IdentifierExpr
         public const string IdExpr = "#IdentifierExpr";
-        public const string MemAccess = "$$MEMACCESS";
-        public static string RuleSeparator = "####";
     }
 }
