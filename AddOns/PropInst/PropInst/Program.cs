@@ -53,12 +53,15 @@ namespace PropInst
             {
                 //deal with the curly braces that belong to the property language (not to Boogie)
                 var line = line1;
-                var pChange = CountChar(line, '{') - CountChar(line, '}');
-                if (pCounter == 0 && pChange > 0)
+                if (pCounter == 0 && line.LastIndexOf('{') != -1)
                     line = line.Substring(line.IndexOf('{') + 1);
-                pCounter = pCounter + pChange;
-                if (pCounter == 0 && pChange < 0)
+                pCounter += CountChar(line1, '{') - CountChar(line1, '}');
+                if (pCounter == 0 && line.LastIndexOf('}') != -1)
                     line = line.Substring(0, line.LastIndexOf('}'));
+
+                // allow line comments on the top level (inside the parentheses, Boogie parsing is used anyway..)
+                if (pCounter == 0 && line.Contains("//"))
+                    line = line.Substring(0, line.IndexOf("//", System.StringComparison.Ordinal));
 
                 switch (mode)
                 {
@@ -83,7 +86,7 @@ namespace PropInst
                         }
                         break;
                     case ReadMode.RuleLhs:
-                        boogieLines += line;
+                        boogieLines += line + "\n";
                         if (pCounter == 0)
                         {
                             mode = ReadMode.RuleArrow;
@@ -97,7 +100,7 @@ namespace PropInst
                         mode = ReadMode.RuleRhs;
                         break;
                     case ReadMode.RuleRhs:
-                        boogieLines += line;
+                        boogieLines += line + "\n";
                         if (pCounter == 0)
                         {
                             mode = ReadMode.Toplevel;
@@ -108,25 +111,26 @@ namespace PropInst
                         }
                         break;
                     case ReadMode.Decls:
-                        boogieLines += line;
+                        boogieLines += line + "\n";
                         if (pCounter == 0)
                         {
-                            if (currentRuleOrDecl == "GlobalDeclarations")
+                            switch (currentRuleOrDecl)
                             {
-                                mode = ReadMode.Toplevel;
-                                globalDeclarations = boogieLines;
-                            } 
-                            else if (currentRuleOrDecl == "TemplateVariables")
-                            {
-                                mode = ReadMode.Toplevel;
-                                templateVariables = boogieLines;
+                                case "GlobalDeclarations":
+                                    mode = ReadMode.Toplevel;
+                                    globalDeclarations = boogieLines;
+                                    break;
+                                case "TemplateVariables":
+                                    mode = ReadMode.Toplevel;
+                                    templateVariables = boogieLines;
+                                    break;
                             }
                             boogieLines = "";
                             continue;
                         }
                         break;
                     case ReadMode.BoogieCode:
-                        boogieLines += line;
+                        boogieLines += line + "\n"; 
                         break;
                     default:
                         throw new Exception();
@@ -179,8 +183,7 @@ namespace PropInst
             for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
             {
                 //need to filter out keyword attributes
-                if (left.Key == Constants.AnyProcedure
-                    || left.Key == Constants.AnyParams)
+                if (KeyWords.AllKeywords.Contains(left.Key))
                 {
                     continue;
                 }
@@ -231,10 +234,10 @@ namespace PropInst
             {
                 foreach (var procSig in rule.ProcedureToMatchToInsertion.Keys)
                 {
-                    bool allowsAnyParams;
+                    int anyParamsPosition;
                     QKeyValue anyParamsAttributes;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, out anyParamsAttributes, out allowsAnyParams, out paramSubstitution))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, out anyParamsAttributes, out anyParamsPosition, out paramSubstitution))
                     {
                         Implementation impl = null;
                         if (dwf is Implementation)
@@ -257,7 +260,7 @@ namespace PropInst
 
                             _program.AddTopLevelDeclaration(impl);
                         }
-                        InjectCode(impl, allowsAnyParams, anyParamsAttributes, procSig, rule, paramSubstitution);
+                        InjectCode(impl, anyParamsPosition, anyParamsAttributes, procSig, rule, paramSubstitution);
                         //only take the first match
                         return;
                     }
@@ -265,23 +268,36 @@ namespace PropInst
             }
         }
 
-        private static void InjectCode(Implementation impl, bool allowsAnyParams, QKeyValue anyParamsAttributes,
+        private static void InjectCode(Implementation impl, int anyParamsPosition, QKeyValue anyParamsAttributes,
             Implementation procSig, InsertAtBeginningRule rule, Dictionary<Declaration, Expr> paramSubstitution)
         {
-            if (allowsAnyParams)
+            var doesAnyParamOccurInRhs = false;
+            if (anyParamsPosition != int.MaxValue)
             {
-                for (int i = 0; i < impl.InParams.Count; i++)
+                var anyParam = procSig.InParams[anyParamsPosition];
+                var oiv = new OccursInVisitor(anyParam);
+                oiv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
+                doesAnyParamOccurInRhs = oiv.Success;
+            }
+
+            //if (anyParamsPosition != int.MaxValue)
+            if (doesAnyParamOccurInRhs)
+            {
+                for (int i = anyParamsPosition; i < impl.InParams.Count; i++)
                 {
                     var p = impl.InParams[i];
                     // If attributes for the ##anyparams in the toMatch are given, we only insert code for those parameters of impl 
                     // with matching (subset) attributes
                     // we look both in the implementation's and the procedure declaration's signature
                     if (anyParamsAttributes == null
-                        || Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
+                        //|| Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
                         || Driver.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
                     {
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
-                        var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[0], id}};
+                        var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
+                        foreach (var kvp in paramSubstitution)
+                            substitution.Add(kvp.Key, kvp.Value);
+
                         var sv = new SubstitionVisitor(substitution);
                         var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
                         if (impl.Blocks.Count > 0)
@@ -316,6 +332,7 @@ namespace PropInst
             }
         }
     }
+
 
     class InstrumentInsertionAtCmd
     {
@@ -366,7 +383,7 @@ namespace PropInst
 
                     #region match procedure name
 
-                    //if (toMatch.callee == Constants.AnyProcedure)
+                    //if (toMatch.callee == KeyWords.AnyProcedure)
                     var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
                     if (matchCallee != null)
                     {
@@ -391,7 +408,7 @@ namespace PropInst
                     #region match out parameters ("the things assigned to")
 
                     if (toMatch.Outs.Count == 1
-                        && toMatch.Outs[0].Name == Constants.AnyLhss)
+                        && toMatch.Outs[0].Name == KeyWords.AnyLhss)
                     {
                         //matches anything --> do nothing/go on
                     }
@@ -409,7 +426,7 @@ namespace PropInst
 
                     #region match arguments
 
-                    if (BoogieUtil.checkAttrExists(Constants.AnyArgs, matchCallee.Attributes))
+                    if (BoogieUtil.checkAttrExists(KeyWords.AnyArgs, matchCallee.Attributes))
                     {
                         var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
@@ -536,7 +553,7 @@ namespace PropInst
         }
     }
   
-    internal class Constants
+    internal class KeyWords
     {
         // arbitrary list of parameters (at a procedure declaration)
         public const string AnyParams = "#AnyParameters";
@@ -552,5 +569,11 @@ namespace PropInst
         public const string AnyProcedure = "#AnyProcedure";
         // any IdentifierExpr
         public const string IdExpr = "#IdentifierExpr";
+        // matching a name with a regex
+        public const string NameMatches = "#NameMatches";
+        // procedure must be declared but not implemented
+        public const string NoImplementation = "#NoImplementation";
+
+        public static string[] AllKeywords = new string[] { AnyParams, AnyArgs, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation};
     }
 }
