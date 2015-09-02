@@ -237,7 +237,7 @@ namespace PropInst
                     int anyParamsPosition;
                     QKeyValue anyParamsAttributes;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, out anyParamsAttributes, out anyParamsPosition, out paramSubstitution))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out paramSubstitution))
                     {
                         Implementation impl = null;
                         if (dwf is Implementation)

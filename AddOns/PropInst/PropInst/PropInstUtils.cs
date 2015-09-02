@@ -315,7 +315,7 @@ namespace PropInst
 
      class ProcedureSigMatcher
     {
-         public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out Dictionary<Declaration, Expr> paramSubstitution)
+         public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out Dictionary<Declaration, Expr> paramSubstitution)
          {
              toMatchAnyParamsAttributes = null;
              anyParamsPosition = int.MaxValue;
@@ -327,6 +327,7 @@ namespace PropInst
              }
 
              // match procedure name
+
              if (BoogieUtil.checkAttrExists(KeyWords.AnyProcedure, toMatch.Attributes))
              {
                  //do nothing
@@ -350,6 +351,15 @@ namespace PropInst
                  return false;
              }
 
+             // if the procedure name is matched, it may still be that we are looking only for stubs
+             if (BoogieUtil.checkAttrExists(KeyWords.NoImplementation, toMatch.Attributes))
+             {
+                 foreach (var i in boogieProgram.Implementations)
+                     if (i.Name == dwf.Name)
+                         return false;
+             }
+
+
              // match procedure parameters
              for (var i = 0; i < toMatch.InParams.Count; i++)
              {
@@ -372,10 +382,9 @@ namespace PropInst
                      //don't add it to the substitution
                      continue;
                  }
-                 else if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
-                 {
+                 if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
                      return false;
-                 }
+
                  paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, dwf.InParams[i]));
              }
 
