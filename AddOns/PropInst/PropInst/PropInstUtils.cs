@@ -19,8 +19,6 @@ namespace PropInst
         private readonly Dictionary<Declaration, Expr> _substitution;
         private readonly Cmd _matchCmd;
 
-
-
         public SubstitionVisitor(Dictionary<Declaration, Expr> psub)
             : this(psub, new Dictionary<string, IAppliable>(0), null)
         {
@@ -279,6 +277,10 @@ namespace PropInst
                 _toConsume.RemoveAt(0);
                 return base.VisitIdentifierExpr(node);
             }
+            if (idexToConsume.Name == node.Name)
+            {
+                return base.VisitIdentifierExpr(node);
+            }
 
             Matches = false;
             return base.VisitIdentifierExpr(node);
@@ -296,7 +298,7 @@ namespace PropInst
             {
                 if (_toConsume.First() is IdentifierExpr)
                 {
-                    //TODO add check for the correspoinding attribut which says it may match anything
+                    //TODO add check for the corresponding attribute which says it may match anything
                     Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
                     _toConsume.RemoveAt(0);
                     return node;

@@ -13,9 +13,7 @@ namespace PropInst
     {
         public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
 
-        private enum ReadMode { Toplevel, RuleLhs, RuleRhs, Decls, BoogieCode,
-            RuleArrow
-        };
+        private enum ReadMode { Toplevel, RuleLhs, RuleRhs, Decls, BoogieCode, RuleArrow };
 
         //TODO: collect some stats about the instrumentation, mb some debugging output??
 
@@ -33,21 +31,42 @@ namespace PropInst
 
             // read the boogie program that is to be instrumented
             var boogieProgram = BoogieUtil.ReadAndResolve(args[1], false);
-            //var boogieProgram = BoogieUtil.ReadAndResolve(args[1], true);
 
-            #region parse the property file
+            // parse the property file
             var propLines = File.ReadLines(args[0]);
+            string globalDeclarations;
+            List<Rule> rules;
+            ParseProperty(propLines, out globalDeclarations, out rules);
 
-            var mode = ReadMode.Toplevel;
-            string boogieLines = "";
-            var pCounter = 0;
+            // GlobalDeclarations: add the global declarations from the property to the Boogie program
+            Program dummyProg;
+            Parser.Parse(globalDeclarations, "dummy.bpl", out dummyProg);
+            boogieProgram.AddTopLevelDeclarations(dummyProg.TopLevelDeclarations);
 
-            string currentRuleOrDecl = "";
-            string ruleLhs = "";
+            // CmdRule: find insertions sites (Commands), insert code there
+            InstrumentInsertionAtCmd.Instrument(boogieProgram, rules.OfType<CmdRule>());
 
-            string globalDeclarations = "";
-            string templateVariables = "";
+            // InsertAtBeginningRule: find insertion sites (Procedures), insert code there
+            InstrumentInsertionAtProc.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
+
+            string outputFile = args[2];
+            BoogieUtil.PrintProgram(boogieProgram, outputFile);
+
+            Stats.printStats();
+        }
+
+        private static void ParseProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Rule> rules)
+        {
             var ruleTriples = new List<Tuple<string, string, string>>();
+
+            string templateVariables = "";
+            globalDeclarations = "";
+
+            var pCounter = 0;
+            var boogieLines = "";
+            var mode = ReadMode.Toplevel;
+            string ruleLhs = "";
+            string currentRuleOrDecl = "";
 
             foreach (var line1 in propLines)
             {
@@ -78,7 +97,6 @@ namespace PropInst
                         if (line.Trim() == "CmdRule")
                         {
                             mode = ReadMode.RuleLhs;
-
                         }
                         if (line.Trim() == "InsertAtBeginningRule")
                         {
@@ -130,43 +148,27 @@ namespace PropInst
                         }
                         break;
                     case ReadMode.BoogieCode:
-                        boogieLines += line + "\n"; 
+                        boogieLines += line + "\n";
                         break;
                     default:
                         throw new Exception();
                 }
             }
 
-            var rules = new List<Rule>();
+            rules = new List<Rule>();
             foreach (var triple in ruleTriples)
             {
                 if (triple.Item1 == "CmdRule")
                 {
                     rules.Add(new CmdRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
+                    Stats.count("No CmdRule");
                 }
                 if (triple.Item1 == "InsertAtBeginningRule")
                 {
                     rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations));
+                    Stats.count("No InsertAtBeginningRule");
                 }
             }
-            #endregion
-
-            //Property: add the global declarations from the property to the Boogie program
-            {
-                Program prog;
-                Parser.Parse(globalDeclarations, "dummy.bpl", out prog);
-                boogieProgram.AddTopLevelDeclarations(prog.TopLevelDeclarations);
-            }
-
-            // Property: find insertions sites (Commands), insert code there
-            InstrumentInsertionAtCmd.Instrument(boogieProgram, rules.OfType<CmdRule>());
-
-            //Property: find insertion sites (Procedures), insert code there
-            InstrumentInsertionAtProc.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
-
-
-            string outputFile = args[2];
-            BoogieUtil.PrintProgram(boogieProgram, outputFile);
         }
 
         private static int CountChar(string line, char p1)
@@ -261,6 +263,7 @@ namespace PropInst
                             _program.AddTopLevelDeclaration(impl);
                         }
                         InjectCode(impl, anyParamsPosition, anyParamsAttributes, procSig, rule, paramSubstitution);
+                        Stats.count("Times InsertAtBeginningRule injected code");
                         //only take the first match
                         return;
                     }
@@ -467,6 +470,7 @@ namespace PropInst
                         ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
                     }
                     //the rule yielded a match --> done
+                    Stats.count("Times CmdRule injected code");
                     return ret;
                 }
             }
@@ -475,7 +479,7 @@ namespace PropInst
 
         private List<Cmd> ProcessPredicateCmd(PredicateCmd cmd)
         {
-             foreach (var rule in _rules)
+            foreach (var rule in _rules)
             {
                 foreach (var m in rule.CmdsToMatch)
                 {
@@ -491,6 +495,8 @@ namespace PropInst
                     mv.VisitExpr(cmd.Expr);
 
                     if (!mv.Matches) continue;
+
+                    Stats.count("Times CmdRule injected code");
 
                     var sv = new SubstitionVisitor(mv.Substitution, mv.FunctionSubstitution, cmd);
                     return sv.VisitCmdSeq(rule.InsertionTemplate);
@@ -544,6 +550,7 @@ namespace PropInst
                             var sv = new SubstitionVisitor(substitution, funcSubstitution, cmd);
                             var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
 
+                            Stats.count("Times CmdRule injected code");
                             return substitutedCmds;
                         }
                     }
