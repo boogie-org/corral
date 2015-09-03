@@ -44,10 +44,10 @@ namespace PropInst
             boogieProgram.AddTopLevelDeclarations(dummyProg.TopLevelDeclarations);
 
             // CmdRule: find insertions sites (Commands), insert code there
-            InstrumentInsertionAtCmd.Instrument(boogieProgram, rules.OfType<CmdRule>());
+            InstrumentCmdRule.Instrument(boogieProgram, rules.OfType<CmdRule>());
 
             // InsertAtBeginningRule: find insertion sites (Procedures), insert code there
-            InstrumentInsertionAtProc.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
+            InstrumentProcedureRule.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
 
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
@@ -199,12 +199,12 @@ namespace PropInst
         }
     }
 
-    class InstrumentInsertionAtProc
+    class InstrumentProcedureRule
     {
         private readonly IEnumerable<InsertAtBeginningRule> _rules;
         private readonly Program _program;
 
-        public InstrumentInsertionAtProc(IEnumerable<InsertAtBeginningRule> pins, Program pProg)
+        public InstrumentProcedureRule(IEnumerable<InsertAtBeginningRule> pins, Program pProg)
         {
             _program = pProg;
             _rules = pins;
@@ -213,7 +213,7 @@ namespace PropInst
 
         public static void Instrument(Program program, IEnumerable<InsertAtBeginningRule> ins)
         {
-            var iiap = new InstrumentInsertionAtProc(ins, program);
+            var iiap = new InstrumentProcedureRule(ins, program);
 
             //for procedures with an implementation we insert our code at the beginning of that
             program.TopLevelDeclarations
@@ -337,18 +337,18 @@ namespace PropInst
     }
 
 
-    class InstrumentInsertionAtCmd
+    class InstrumentCmdRule
     {
         private readonly IEnumerable<CmdRule> _rules;
 
-        private InstrumentInsertionAtCmd(IEnumerable<CmdRule> pRules)
+        private InstrumentCmdRule(IEnumerable<CmdRule> pRules)
         {
             _rules = pRules;
         }
 
         public static void Instrument(Program program, IEnumerable<CmdRule> ins)
         {
-            var im = new InstrumentInsertionAtCmd(ins);
+            var im = new InstrumentCmdRule(ins);
 
             program.TopLevelDeclarations
                 .OfType<Implementation>()
@@ -360,203 +360,313 @@ namespace PropInst
             foreach (var block in impl.Blocks)
             {
                 var newcmds = new List<Cmd>();
-                foreach (Cmd cmd in block.Cmds)
+                foreach (var cmd in block.Cmds)
                 {
-                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                    else if (cmd is PredicateCmd) newcmds.AddRange(ProcessPredicateCmd(cmd as PredicateCmd));
-                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
-                    else newcmds.Add(cmd);
+                    //if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
+                    //else if (cmd is PredicateCmd) newcmds.AddRange(ProcessPredicateCmd(cmd as PredicateCmd));
+                    //else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
+                    //else newcmds.Add(cmd);
+                    newcmds.AddRange(ProcessCmd(cmd));
                 }
                 block.Cmds = newcmds;
             }
         }
-
-        private List<Cmd> ProcessCall(CallCmd cmd)
+        private List<Cmd> ProcessCmd(Cmd cmd)
         {
             foreach (var rule in _rules)
             {
-                foreach (var m in rule.CmdsToMatch)
+                foreach (var toMatch in rule.CmdsToMatch)
                 {
-                    if (!(m is CallCmd))
+                    if (!(toMatch.GetType() == cmd.GetType()))
                         continue;
-                    var toMatch = (CallCmd) m;
+                    //var toMatch = (CallCmd) m;
 
-                    var substitutions =
-                        new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>();
-
-                    #region match procedure name
-
-                    //if (toMatch.callee == KeyWords.AnyProcedure)
-                    var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
-                    if (matchCallee != null)
+                    List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions = null;
+                    var match = false;
+                    if (cmd is CallCmd)
                     {
-                        // do nothing
+                        match = MatchCallCmd((CallCmd) cmd, rule, (CallCmd) toMatch, out substitutions);
                     }
-                    else if (toMatch.callee.StartsWith("##"))
+                    else if (cmd is AssignCmd)
                     {
-                        //TODO: implement, probably: remember the real identifier..
+                        match = MatchAssignCmd((AssignCmd) cmd, (AssignCmd) toMatch, out substitutions);
                     }
-                    else if (toMatch.callee == cmd.Proc.Name)
+                    else if (cmd is AssumeCmd)
                     {
-                        // do nothing
+                        match = MatchPredicateCmd((AssumeCmd) cmd, (AssumeCmd) toMatch, out substitutions);
                     }
-                    else
+                    else if (cmd is AssertCmd)
                     {
-                        //no match
-                        continue;
+                        match = MatchPredicateCmd((AssertCmd) cmd, (AssertCmd) toMatch, out substitutions);
+                    }
+                    else if (cmd is ReturnCmd)
+                    {
+                        throw new NotImplementedException();
                     }
 
-                    #endregion
-
-                    #region match out parameters ("the things assigned to")
-
-                    if (toMatch.Outs.Count == 1
-                        && toMatch.Outs[0].Name == KeyWords.AnyLhss)
+                    if (match)
                     {
-                        //matches anything --> do nothing/go on
-                    }
-                    else if (toMatch.Outs.Count == cmd.Outs.Count)
-                    {
-                        //TODO.. --> match, make substitution..
-                    }
-                    else
-                    {
-                        //TODO.. --> match, make substitution..
-                    }
-
-                    #endregion
-
-
-                    #region match arguments
-
-                    if (BoogieUtil.checkAttrExists(KeyWords.AnyArgs, matchCallee.Attributes))
-                    {
-                        var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
-
-
-                        var atLeastOneMatch = false;
-
-                        foreach (var arg in cmd.Ins)
+                        var ret = new List<Cmd>();
+                        foreach (var subsPair in substitutions)
                         {
-
-                            var emv = new ExprMatchVisitor(new List<Expr>() {anyArgsExpr});
-                            emv.VisitExpr(arg);
-
-                            if (emv.Matches)
-                            {
-                                atLeastOneMatch = true;
-                                substitutions.Add(
-                                    new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
-                                        emv.Substitution, emv.FunctionSubstitution));
-                            }
+                            var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                            ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
                         }
-                        if (!atLeastOneMatch)
-                            continue;
+                        //the rule yielded a match --> done
+                        Stats.count("Times CmdRule injected code");
+                        return ret;
                     }
-                    else
-                    {
-                        //match them one by one
-                        //TODO
-                        //if they don't match:
-                        continue;
-                    }
-
-                    #endregion
-
-                    var ret = new List<Cmd>();
-                    foreach (var subsPair in substitutions)
-                    {
-                        var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd); //TODO go over
-                        ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
-                    }
-                    //the rule yielded a match --> done
-                    Stats.count("Times CmdRule injected code");
-                    return ret;
                 }
             }
             return new List<Cmd>() { cmd };
         }
+        //private List<Cmd> ProcessCall(CallCmd cmd)
+        //{
+        //    foreach (var rule in _rules)
+        //    {
+        //        foreach (var m in rule.CmdsToMatch)
+        //        {
+        //            if (!(m is CallCmd))
+        //                continue;
+        //            var toMatch = (CallCmd) m;
 
-        private List<Cmd> ProcessPredicateCmd(PredicateCmd cmd)
+        //            List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions;
+        //            var match = MatchCallCmd(cmd, rule, toMatch, out substitutions);
+
+        //            if (match)
+        //            {
+        //                var ret = new List<Cmd>();
+        //                foreach (var subsPair in substitutions)
+        //                {
+        //                    var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd); //TODO go over
+        //                    ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+        //                }
+        //                //the rule yielded a match --> done
+        //                Stats.count("Times CmdRule injected code");
+        //                return ret;
+        //            }
+        //        }
+        //    }
+        //    return new List<Cmd>() { cmd };
+        //}
+
+        private static bool MatchCallCmd(CallCmd cmd, CmdRule rule, CallCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
         {
-            foreach (var rule in _rules)
+            // question:    why do we have a list of substitutions, here?
+            // answer:      the reason (right now) is AnyArgs: many arguments may match, the current semantics 
+            //              is that we want to make the insertion for every match (example: memory accesses)
+            substitutions = new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>();
+            var match = false;
+
+            #region match procedure name
+
+            //if (toMatch.callee == KeyWords.AnyProcedure)
+            var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
+            if (matchCallee != null)
             {
-                foreach (var m in rule.CmdsToMatch)
-                {
-                    if (!((m is AssertCmd && cmd is AssertCmd) || (m is AssumeCmd && cmd is AssumeCmd)))
-                        continue;
-
-                    var toMatch = (PredicateCmd) m;
-
-                    if (!Driver.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
-                        continue;
-
-                    var mv = new ExprMatchVisitor(new List<Expr>() {toMatch.Expr});
-                    mv.VisitExpr(cmd.Expr);
-
-                    if (!mv.Matches) continue;
-
-                    Stats.count("Times CmdRule injected code");
-
-                    var sv = new SubstitionVisitor(mv.Substitution, mv.FunctionSubstitution, cmd);
-                    return sv.VisitCmdSeq(rule.InsertionTemplate);
-                }
+                // do nothing
             }
-            return new List<Cmd>() { cmd };
-        }
-
-        private List<Cmd> ProcessAssign(AssignCmd cmd)
-        {
-            //var ret = new List<Cmd>();
-            foreach (var rule in _rules)
+            else if (toMatch.callee.StartsWith("##"))
             {
-                foreach (var m in rule.CmdsToMatch)
+                //TODO: implement, probably: remember the real identifier..
+            }
+            else if (toMatch.callee == cmd.Proc.Name)
+            {
+                // do nothing
+            }
+            else
+            {
+                //no match
+                return match;
+            }
+
+            #endregion
+
+            #region match out parameters ("the things assigned to")
+
+            //if (toMatch.Outs.Count == 1
+            //    && toMatch.Outs[0].Name == KeyWords.AnyLhss)
+            //{
+            //    //matches anything --> do nothing/go on
+            //}
+            //else 
+            if (toMatch.Outs.Count == cmd.Outs.Count)
+            {
+                //TODO.. --> match, make substitution..
+            }
+            else
+            {
+                //TODO.. --> match, make substitution..
+            }
+
+            #endregion
+
+            #region match arguments
+
+            if (BoogieUtil.checkAttrExists(KeyWords.AnyArgs, matchCallee.Attributes))
+            {
+                var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
+
+
+                var atLeastOneMatch = false;
+
+                foreach (var arg in cmd.Ins)
                 {
-                    if (!(m is AssignCmd))
-                        continue;
-                    var toMatchCmd = (AssignCmd) m;
+                    var emv = new ExprMatchVisitor(new List<Expr>() {anyArgsExpr});
+                    emv.VisitExpr(arg);
 
-                    var substitution = new Dictionary<Declaration, Expr>();
-                    var funcSubstitution = new Dictionary<string, IAppliable>();//TODO: move from string to IAppliable?
-
-
-                    //CONVENTION: x := e matches  x1, x2 := e1, e2;  (the first match is taken, as usual)
-                    //  --> i.e., we treat a multi-assign as if it were several assignments for matching purposes
-                    //     but we make at most one insertion for a multi-assign --> TODO: revise
-                    Debug.Assert(toMatchCmd.Lhss.Count == 1);
-
-
-                    for (int i = 0; i < cmd.Lhss.Count; i++)
+                    if (emv.Matches)
                     {
-                        var lhs = cmd.Lhss[i].AsExpr;
-                        var lEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Lhss[0].AsExpr});
-                        lEmv.VisitExpr(lhs);
-
-                        var rhs = cmd.Rhss[i];
-                        var rEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Rhss[0]});
-                        rEmv.VisitExpr(rhs);
-
-                        if (lEmv.Matches && rEmv.Matches)
-                        {
-                            foreach (var kvp in lEmv.Substitution)
-                                substitution.Add(kvp.Key, kvp.Value);
-                            foreach (var kvp in lEmv.FunctionSubstitution)
-                                funcSubstitution.Add(kvp.Key, kvp.Value);
-                            foreach (var kvp in rEmv.Substitution)
-                                substitution.Add(kvp.Key, kvp.Value);
-                            foreach (var kvp in rEmv.FunctionSubstitution)
-                                funcSubstitution.Add(kvp.Key, kvp.Value);
-
-                            var sv = new SubstitionVisitor(substitution, funcSubstitution, cmd);
-                            var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
-
-                            Stats.count("Times CmdRule injected code");
-                            return substitutedCmds;
-                        }
+                        atLeastOneMatch = true;
+                        substitutions.Add(
+                            new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
+                                emv.Substitution, emv.FunctionSubstitution));
+                        match = true;
                     }
                 }
+                if (!atLeastOneMatch)
+                    return match;
             }
-            return new List<Cmd>() { cmd };
+            else
+            {
+                //match them one by one
+                //TODO
+                //if they don't match:
+                return match;
+            }
+
+            #endregion
+
+            return match;
+        }
+
+        //private List<Cmd> ProcessPredicateCmd(PredicateCmd cmd)
+        //{
+        //    foreach (var rule in _rules)
+        //    {
+        //        foreach (var m in rule.CmdsToMatch)
+        //        {
+        //            if (!((m is AssertCmd && cmd is AssertCmd) || (m is AssumeCmd && cmd is AssumeCmd)))
+        //                continue;
+
+        //            var toMatch = (PredicateCmd) m;
+
+        //            Dictionary<Declaration, Expr> substitution;
+        //            Dictionary<string, IAppliable> functionSubstitution;
+        //            var match = MatchPredicateCmd(cmd, toMatch, out substitution, out functionSubstitution);
+
+        //            if (match)
+        //            {
+        //                Stats.count("Times CmdRule injected code");
+        //                var sv = new SubstitionVisitor(substitution, functionSubstitution, cmd);
+        //                return sv.VisitCmdSeq(rule.InsertionTemplate);
+        //            }
+        //        }
+        //    }
+        //    return new List<Cmd>() { cmd };
+        //}
+
+        private static bool MatchPredicateCmd(PredicateCmd cmd, PredicateCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
+            //out Dictionary<Declaration, Expr> substitution,
+            //out Dictionary<string, IAppliable> functionSubstitution)
+        {
+            var match = false;
+            //substitution = null;
+            //functionSubstitution = null;
+            substitutions = null;
+
+            if (!Driver.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
+            {
+                return match;
+            }
+
+            var mv = new ExprMatchVisitor(new List<Expr>() {toMatch.Expr});
+            mv.VisitExpr(cmd.Expr);
+
+            if (mv.Matches)
+            {
+                match = true;
+                //substitution = mv.Substitution;
+                //functionSubstitution = mv.FunctionSubstitution;
+                substitutions = 
+                    new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>() 
+                    { new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(mv.Substitution, mv.FunctionSubstitution) };
+            }
+            return match;
+        }
+
+        //private List<Cmd> ProcessAssign(AssignCmd cmd)
+        //{
+        //    //var ret = new List<Cmd>();
+        //    foreach (var rule in _rules)
+        //    {
+        //        foreach (var m in rule.CmdsToMatch)
+        //        {
+        //            if (!(m is AssignCmd))
+        //                continue;
+        //            var toMatchCmd = (AssignCmd) m;
+
+        //            Dictionary<Declaration, Expr> substitution;
+        //            Dictionary<string, IAppliable> funcSubstitution;
+        //            var match = MatchAssignCmd(cmd, toMatchCmd, out substitution, out funcSubstitution);
+
+        //            if (match)
+        //            {
+        //                var sv = new SubstitionVisitor(substitution, funcSubstitution, cmd);
+        //                var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
+
+        //                Stats.count("Times CmdRule injected code");
+        //                return substitutedCmds;
+        //            }
+        //        }
+        //    }
+        //    return new List<Cmd>() { cmd };
+        //}
+
+        private static bool MatchAssignCmd(AssignCmd cmd, AssignCmd toMatchCmd,  
+           out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>  substitutions)
+            //out Dictionary<Declaration, Expr> substitution,
+            //out Dictionary<string, IAppliable> funcSubstitution)
+        {
+            bool match = false;
+            var substitution = new Dictionary<Declaration, Expr>();
+            var funcSubstitution = new Dictionary<string, IAppliable>();
+            substitutions = null;
+
+            //CONVENTION: x := e matches  x1, x2 := e1, e2;  (the first match is taken, as usual)
+            //  --> i.e., we treat a multi-assign as if it were several assignments for matching purposes
+            //     but we make at most one insertion for a multi-assign --> TODO: revise
+            Debug.Assert(toMatchCmd.Lhss.Count == 1);
+
+            for (int i = 0; i < cmd.Lhss.Count; i++)
+            {
+                var lhs = cmd.Lhss[i].AsExpr;
+                var lEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Lhss[0].AsExpr});
+                lEmv.VisitExpr(lhs);
+
+                var rhs = cmd.Rhss[i];
+                var rEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Rhss[0]});
+                rEmv.VisitExpr(rhs);
+
+                if (lEmv.Matches && rEmv.Matches)
+                {
+                    foreach (var kvp in lEmv.Substitution)
+                        substitution.Add(kvp.Key, kvp.Value);
+                    foreach (var kvp in lEmv.FunctionSubstitution)
+                        funcSubstitution.Add(kvp.Key, kvp.Value);
+                    foreach (var kvp in rEmv.Substitution)
+                        substitution.Add(kvp.Key, kvp.Value);
+                    foreach (var kvp in rEmv.FunctionSubstitution)
+                        funcSubstitution.Add(kvp.Key, kvp.Value);
+
+                    substitutions = 
+                        new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>() 
+                        { new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(substitution, funcSubstitution) };
+                    match = true;
+                    break;
+                }
+            }
+            return match;
         }
     }
   
