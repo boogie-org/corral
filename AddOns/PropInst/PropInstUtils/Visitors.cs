@@ -3,17 +3,19 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using cba.Util;
 using Microsoft.Boogie;
 
-namespace PropInst
+namespace PropInstUtils
 {
     /// <summary>
     /// A visitor that executes a given Substitution.
     /// the substitution makes a deep copy of the template, i.e., a new Expr/Cmd/.. is returned
     /// </summary>
-    class SubstitionVisitor : FixedVisitor
+    public class SubstitionVisitor : FixedVisitor
     {
         private readonly Dictionary<string, IAppliable> _funcSub;
         private readonly Dictionary<Declaration, Expr> _substitution;
@@ -24,7 +26,7 @@ namespace PropInst
         {
         }
 
-        public SubstitionVisitor(Dictionary<Declaration, Expr> psub, Dictionary<string, IAppliable> pFuncSub, Cmd mCmd )
+        public SubstitionVisitor(Dictionary<Declaration, Expr> psub, Dictionary<string, IAppliable> pFuncSub, Cmd mCmd)
         {
             _substitution = psub;
             _funcSub = pFuncSub;
@@ -33,7 +35,7 @@ namespace PropInst
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
         {
-            if (node.Decl != null && _substitution.ContainsKey(node.Decl)) 
+            if (node.Decl != null && _substitution.ContainsKey(node.Decl))
             {
                 var replacement = _substitution[node.Decl];
                 return replacement;
@@ -51,7 +53,7 @@ namespace PropInst
             {
                 throw new InvalidExpressionException("lhs must be an identifier, also after substitution --> malformed property??");
             }
-            return new SimpleAssignLhs(node.tok, (IdentifierExpr) e);
+            return new SimpleAssignLhs(node.tok, (IdentifierExpr)e);
         }
 
         public override Expr VisitNAryExpr(NAryExpr node)
@@ -186,7 +188,7 @@ namespace PropInst
         }
     }
 
-    class ExprMatchVisitor : FixedVisitor
+    public class ExprMatchVisitor : FixedVisitor
     {
         private List<Expr> _toConsume;
         public bool Matches = true;
@@ -195,7 +197,7 @@ namespace PropInst
 
         public ExprMatchVisitor(Expr pToConsume)
         {
-            _toConsume = new List<Expr>() {pToConsume};
+            _toConsume = new List<Expr>() { pToConsume };
         }
 
         public ExprMatchVisitor(List<Expr> pToConsume)
@@ -207,7 +209,7 @@ namespace PropInst
         {
             //start with some negative cases
             if (!Matches
-                ||_toConsume.Count == 0)
+                || _toConsume.Count == 0)
             {
                 Matches = false;
                 return base.VisitNAryExpr(node);
@@ -217,9 +219,9 @@ namespace PropInst
             {
                 //may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr
-                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr) _toConsume.First()).Decl.Attributes))
+                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.First()).Decl.Attributes))
                 {
-                    Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
+                    Substitution.Add(((IdentifierExpr)_toConsume.First()).Decl, node);
                     _toConsume.RemoveAt(0);
                     return node;
                 }
@@ -227,9 +229,9 @@ namespace PropInst
                 return base.VisitNAryExpr(node);
             }
 
-            var naeToConsume = (NAryExpr) _toConsume.First();
+            var naeToConsume = (NAryExpr)_toConsume.First();
 
-            if (((NAryExpr) _toConsume.First()).Args.Count != node.Args.Count)
+            if (((NAryExpr)_toConsume.First()).Args.Count != node.Args.Count)
             {
                 Matches = false;
                 return base.VisitNAryExpr(node);
@@ -240,11 +242,11 @@ namespace PropInst
             {
                 _toConsume = new List<Expr>(naeToConsume.Args);
                 return base.VisitNAryExpr(node);
-            } 
+            }
             if (naeToConsume.Fun is FunctionCall
-                && ((FunctionCall) naeToConsume.Fun).Func != null)
+                && ((FunctionCall)naeToConsume.Fun).Func != null)
             {
-                var func = ((FunctionCall) naeToConsume.Fun).Func; //TODO: use attributes..
+                var func = ((FunctionCall)naeToConsume.Fun).Func; //TODO: use attributes..
 
                 FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
 
@@ -269,7 +271,7 @@ namespace PropInst
                 return base.VisitIdentifierExpr(node);
             }
 
-            var idexToConsume = (IdentifierExpr) _toConsume.First();
+            var idexToConsume = (IdentifierExpr)_toConsume.First();
 
             if (idexToConsume.Decl != null)
             {
@@ -299,14 +301,14 @@ namespace PropInst
                 if (_toConsume.First() is IdentifierExpr)
                 {
                     //TODO add check for the corresponding attribute which says it may match anything
-                    Substitution.Add(((IdentifierExpr) _toConsume.First()).Decl, node);
+                    Substitution.Add(((IdentifierExpr)_toConsume.First()).Decl, node);
                     _toConsume.RemoveAt(0);
                     return node;
                 }
                 Matches = false;
                 return base.VisitLiteralExpr(node);
             }
-            if (node.Val.Equals(((LiteralExpr) _toConsume.First()).Val))
+            if (node.Val.Equals(((LiteralExpr)_toConsume.First()).Val))
             {
                 return base.VisitLiteralExpr(node);
             }
@@ -315,126 +317,128 @@ namespace PropInst
         }
     }
 
-     class ProcedureSigMatcher
+
+
+    public class ProcedureSigMatcher
     {
-         public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out Dictionary<Declaration, Expr> paramSubstitution)
-         {
-             toMatchAnyParamsAttributes = null;
-             anyParamsPosition = int.MaxValue;
-             paramSubstitution = new Dictionary<Declaration, Expr>();
+        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out Dictionary<Declaration, Expr> paramSubstitution)
+        {
+            toMatchAnyParamsAttributes = null;
+            anyParamsPosition = int.MaxValue;
+            paramSubstitution = new Dictionary<Declaration, Expr>();
 
-             if (!Driver.AreAttributesASubset(toMatch.Attributes, dwf.Attributes))
-             {
-                 return false;
-             }
+            if (!PropInstUtils.AreAttributesASubset(toMatch.Attributes, dwf.Attributes))
+            {
+                return false;
+            }
 
-             // match procedure name
+            // match procedure name
 
-             if (BoogieUtil.checkAttrExists(KeyWords.AnyProcedure, toMatch.Attributes))
-             {
-                 //do nothing
-             }
-             else if (BoogieUtil.checkAttrExists(KeyWords.NameMatches, toMatch.Attributes))
-             {
-                 var nmAttrParams = BoogieUtil.getAttr(KeyWords.NameMatches, toMatch.Attributes);
-                 var regex = nmAttrParams.First().ToString();
-                 var m = Regex.Match(dwf.Name, regex);
-                 if (m.Success)
-                 {
-                     //do nothing
-                 }
-                 else
-                 {
-                     return false;
-                 }
-             }
-             else if (toMatch.Name != dwf.Name)
-             {
-                 return false;
-             }
+            if (BoogieUtil.checkAttrExists(KeyWords.AnyProcedure, toMatch.Attributes))
+            {
+                //do nothing
+            }
+            else if (BoogieUtil.checkAttrExists(KeyWords.NameMatches, toMatch.Attributes))
+            {
+                var nmAttrParams = BoogieUtil.getAttr(KeyWords.NameMatches, toMatch.Attributes);
+                var regex = nmAttrParams.First().ToString();
+                var m = Regex.Match(dwf.Name, regex);
+                if (m.Success)
+                {
+                    //do nothing
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else if (toMatch.Name != dwf.Name)
+            {
+                return false;
+            }
 
-             // if the procedure name is matched, it may still be that we are looking only for stubs
-             if (BoogieUtil.checkAttrExists(KeyWords.NoImplementation, toMatch.Attributes))
-             {
-                 foreach (var i in boogieProgram.Implementations)
-                     if (i.Name == dwf.Name)
-                         return false;
-             }
+            // if the procedure name is matched, it may still be that we are looking only for stubs
+            if (BoogieUtil.checkAttrExists(KeyWords.NoImplementation, toMatch.Attributes))
+            {
+                foreach (var i in boogieProgram.Implementations)
+                    if (i.Name == dwf.Name)
+                        return false;
+            }
 
 
-             // match procedure parameters
-             for (var i = 0; i < toMatch.InParams.Count; i++)
-             {
-                 if (i >= dwf.InParams.Count)
-                     return false;
+            // match procedure parameters
+            for (var i = 0; i < toMatch.InParams.Count; i++)
+            {
+                if (i >= dwf.InParams.Count)
+                    return false;
 
-                 if (i == toMatch.InParams.Count - 1
-                         && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.InParams[i].Attributes))
-                 {
-                     toMatchAnyParamsAttributes = toMatch.InParams[i].Attributes;
-                     if (toMatchAnyParamsAttributes != null)
-                         toMatchAnyParamsAttributes.Next = toMatch.Proc.InParams[i].Attributes;
-                     else
-                         toMatchAnyParamsAttributes = toMatch.Proc.InParams[i].Attributes;
-                     toMatchAnyParamsAttributes = BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
+                if (i == toMatch.InParams.Count - 1
+                        && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.InParams[i].Attributes))
+                {
+                    toMatchAnyParamsAttributes = toMatch.InParams[i].Attributes;
+                    if (toMatchAnyParamsAttributes != null)
+                        toMatchAnyParamsAttributes.Next = toMatch.Proc.InParams[i].Attributes;
+                    else
+                        toMatchAnyParamsAttributes = toMatch.Proc.InParams[i].Attributes;
+                    toMatchAnyParamsAttributes = BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
 
-                     //TODO the type may also be constrained
+                    //TODO the type may also be constrained
 
-                     anyParamsPosition = i;
-                     //don't add it to the substitution
-                     continue;
-                 }
-                 if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
-                     return false;
+                    anyParamsPosition = i;
+                    //don't add it to the substitution
+                    continue;
+                }
+                if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
+                    return false;
 
-                 paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, dwf.InParams[i]));
-             }
+                paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, dwf.InParams[i]));
+            }
 
-             // match procedure out parameters
-             for (var i = 0; i < toMatch.OutParams.Count; i++)
-             {
-                 if (i == toMatch.OutParams.Count - 1
-                         && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.OutParams[i].Attributes))
-                 {
-                     //TODO: do the same stuff as for inparams?..
+            // match procedure out parameters
+            for (var i = 0; i < toMatch.OutParams.Count; i++)
+            {
+                if (i == toMatch.OutParams.Count - 1
+                        && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.OutParams[i].Attributes))
+                {
+                    //TODO: do the same stuff as for inparams?..
 
-                     //toMatchAnyParamsAttributes = toMatch.OutParams[i].Attributes;
-                     //if (toMatchAnyParamsAttributes != null)
-                     //    toMatchAnyParamsAttributes.Next = toMatch.Proc.OutParams[i].Attributes;
-                     //else
-                     //    toMatchAnyParamsAttributes = toMatch.Proc.OutParams[i].Attributes;
-                     //BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
+                    //toMatchAnyParamsAttributes = toMatch.OutParams[i].Attributes;
+                    //if (toMatchAnyParamsAttributes != null)
+                    //    toMatchAnyParamsAttributes.Next = toMatch.Proc.OutParams[i].Attributes;
+                    //else
+                    //    toMatchAnyParamsAttributes = toMatch.Proc.OutParams[i].Attributes;
+                    //BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
 
-                     //TODO the type may also be constrained
+                    //TODO the type may also be constrained
 
-                     //anyParamsPosition = i;
-                 }
-                 else if (!toMatch.OutParams[i].TypedIdent.Type.Equals(dwf.OutParams[i].TypedIdent.Type))
-                 {
-                     return false;
-                 }
-                 paramSubstitution.Add(toMatch.OutParams[i], new IdentifierExpr(Token.NoToken, dwf.OutParams[i]));
-             }
-             return true;
+                    //anyParamsPosition = i;
+                }
+                else if (!toMatch.OutParams[i].TypedIdent.Type.Equals(dwf.OutParams[i].TypedIdent.Type))
+                {
+                    return false;
+                }
+                paramSubstitution.Add(toMatch.OutParams[i], new IdentifierExpr(Token.NoToken, dwf.OutParams[i]));
+            }
+            return true;
         }
     }
 
-     class OccursInVisitor : FixedVisitor
-     {
-         private readonly Variable _toSearch;
-         public bool Success = false;
-         public OccursInVisitor(Variable pToSearch)
-         {
-             _toSearch = pToSearch;
-         }
+    public class OccursInVisitor : FixedVisitor
+    {
+        private readonly Variable _toSearch;
+        public bool Success = false;
+        public OccursInVisitor(Variable pToSearch)
+        {
+            _toSearch = pToSearch;
+        }
 
-         public override Expr VisitIdentifierExpr(IdentifierExpr node)
-         {
-             if (node.Decl == _toSearch)
-             {
-                 Success = true;
-             }
-             return base.VisitIdentifierExpr(node);
-         }
-     }
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            if (node.Decl == _toSearch)
+            {
+                Success = true;
+            }
+            return base.VisitIdentifierExpr(node);
+        }
+    }
 }

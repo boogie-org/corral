@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Microsoft.Boogie;
 using cba.Util;
+using PropInstUtils;
 
 namespace PropInst
 {
@@ -179,24 +179,6 @@ namespace PropInst
                     result++;
             return result;
         }
-
-        public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
-        {
-            for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
-            {
-                //need to filter out keyword attributes
-                if (KeyWords.AllKeywords.Contains(left.Key))
-                {
-                    continue;
-                }
-
-                if (!BoogieUtil.checkAttrExists(left.Key, right))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
     }
 
     class InstrumentProcedureRule
@@ -283,7 +265,6 @@ namespace PropInst
                 doesAnyParamOccurInRhs = oiv.Success;
             }
 
-            //if (anyParamsPosition != int.MaxValue)
             if (doesAnyParamOccurInRhs)
             {
                 for (int i = anyParamsPosition; i < impl.InParams.Count; i++)
@@ -293,8 +274,7 @@ namespace PropInst
                     // with matching (subset) attributes
                     // we look both in the implementation's and the procedure declaration's signature
                     if (anyParamsAttributes == null
-                        //|| Driver.AreAttributesASubset(anyParamsAttributes, p.Attributes)
-                        || Driver.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                        || PropInstUtils.PropInstUtils.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
                     {
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
                         var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
@@ -336,7 +316,6 @@ namespace PropInst
         }
     }
 
-
     class InstrumentCmdRule
     {
         private readonly IEnumerable<CmdRule> _rules;
@@ -362,10 +341,6 @@ namespace PropInst
                 var newcmds = new List<Cmd>();
                 foreach (var cmd in block.Cmds)
                 {
-                    //if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                    //else if (cmd is PredicateCmd) newcmds.AddRange(ProcessPredicateCmd(cmd as PredicateCmd));
-                    //else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
-                    //else newcmds.Add(cmd);
                     newcmds.AddRange(ProcessCmd(cmd));
                 }
                 block.Cmds = newcmds;
@@ -379,7 +354,6 @@ namespace PropInst
                 {
                     if (!(toMatch.GetType() == cmd.GetType()))
                         continue;
-                    //var toMatch = (CallCmd) m;
 
                     List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions = null;
                     var match = false;
@@ -399,9 +373,9 @@ namespace PropInst
                     {
                         match = MatchPredicateCmd((AssertCmd) cmd, (AssertCmd) toMatch, out substitutions);
                     }
-                    else if (cmd is ReturnCmd)
+                    else
                     {
-                        throw new NotImplementedException();
+                        // no match
                     }
 
                     if (match)
@@ -420,35 +394,6 @@ namespace PropInst
             }
             return new List<Cmd>() { cmd };
         }
-        //private List<Cmd> ProcessCall(CallCmd cmd)
-        //{
-        //    foreach (var rule in _rules)
-        //    {
-        //        foreach (var m in rule.CmdsToMatch)
-        //        {
-        //            if (!(m is CallCmd))
-        //                continue;
-        //            var toMatch = (CallCmd) m;
-
-        //            List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions;
-        //            var match = MatchCallCmd(cmd, rule, toMatch, out substitutions);
-
-        //            if (match)
-        //            {
-        //                var ret = new List<Cmd>();
-        //                foreach (var subsPair in substitutions)
-        //                {
-        //                    var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd); //TODO go over
-        //                    ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
-        //                }
-        //                //the rule yielded a match --> done
-        //                Stats.count("Times CmdRule injected code");
-        //                return ret;
-        //            }
-        //        }
-        //    }
-        //    return new List<Cmd>() { cmd };
-        //}
 
         private static bool MatchCallCmd(CallCmd cmd, CmdRule rule, CallCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
         {
@@ -540,42 +485,12 @@ namespace PropInst
             return match;
         }
 
-        //private List<Cmd> ProcessPredicateCmd(PredicateCmd cmd)
-        //{
-        //    foreach (var rule in _rules)
-        //    {
-        //        foreach (var m in rule.CmdsToMatch)
-        //        {
-        //            if (!((m is AssertCmd && cmd is AssertCmd) || (m is AssumeCmd && cmd is AssumeCmd)))
-        //                continue;
-
-        //            var toMatch = (PredicateCmd) m;
-
-        //            Dictionary<Declaration, Expr> substitution;
-        //            Dictionary<string, IAppliable> functionSubstitution;
-        //            var match = MatchPredicateCmd(cmd, toMatch, out substitution, out functionSubstitution);
-
-        //            if (match)
-        //            {
-        //                Stats.count("Times CmdRule injected code");
-        //                var sv = new SubstitionVisitor(substitution, functionSubstitution, cmd);
-        //                return sv.VisitCmdSeq(rule.InsertionTemplate);
-        //            }
-        //        }
-        //    }
-        //    return new List<Cmd>() { cmd };
-        //}
-
         private static bool MatchPredicateCmd(PredicateCmd cmd, PredicateCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
-            //out Dictionary<Declaration, Expr> substitution,
-            //out Dictionary<string, IAppliable> functionSubstitution)
         {
             var match = false;
-            //substitution = null;
-            //functionSubstitution = null;
             substitutions = null;
 
-            if (!Driver.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
+            if (!PropInstUtils.PropInstUtils.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
             {
                 return match;
             }
@@ -586,8 +501,6 @@ namespace PropInst
             if (mv.Matches)
             {
                 match = true;
-                //substitution = mv.Substitution;
-                //functionSubstitution = mv.FunctionSubstitution;
                 substitutions = 
                     new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>() 
                     { new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(mv.Substitution, mv.FunctionSubstitution) };
@@ -595,38 +508,8 @@ namespace PropInst
             return match;
         }
 
-        //private List<Cmd> ProcessAssign(AssignCmd cmd)
-        //{
-        //    //var ret = new List<Cmd>();
-        //    foreach (var rule in _rules)
-        //    {
-        //        foreach (var m in rule.CmdsToMatch)
-        //        {
-        //            if (!(m is AssignCmd))
-        //                continue;
-        //            var toMatchCmd = (AssignCmd) m;
-
-        //            Dictionary<Declaration, Expr> substitution;
-        //            Dictionary<string, IAppliable> funcSubstitution;
-        //            var match = MatchAssignCmd(cmd, toMatchCmd, out substitution, out funcSubstitution);
-
-        //            if (match)
-        //            {
-        //                var sv = new SubstitionVisitor(substitution, funcSubstitution, cmd);
-        //                var substitutedCmds = sv.VisitCmdSeq(rule.InsertionTemplate);
-
-        //                Stats.count("Times CmdRule injected code");
-        //                return substitutedCmds;
-        //            }
-        //        }
-        //    }
-        //    return new List<Cmd>() { cmd };
-        //}
-
         private static bool MatchAssignCmd(AssignCmd cmd, AssignCmd toMatchCmd,  
            out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>  substitutions)
-            //out Dictionary<Declaration, Expr> substitution,
-            //out Dictionary<string, IAppliable> funcSubstitution)
         {
             bool match = false;
             var substitution = new Dictionary<Declaration, Expr>();
@@ -670,27 +553,4 @@ namespace PropInst
         }
     }
   
-    internal class KeyWords
-    {
-        // arbitrary list of parameters (at a procedure declaration)
-        public const string AnyParams = "#AnyParameters";
-        // arbitrary list of arguments (at a procedure call)
-        // may be used as a function: argument is an expression, we choose those where the expression matches
-        public const string AnyArgs = "#AnyArguments";
-        //arbitrary list of results of a call
-        // these are always IdentifierExprs
-        //public const string AnyResults = "$$ANYRESULTS";
-        //nicer instead of AnyResults:
-        public const string AnyLhss = "$$ANYLEFTHANDSIDES";
-        public const string AnyType = "$$ANYTYPE";
-        public const string AnyProcedure = "#AnyProcedure";
-        // any IdentifierExpr
-        public const string IdExpr = "#IdentifierExpr";
-        // matching a name with a regex
-        public const string NameMatches = "#NameMatches";
-        // procedure must be declared but not implemented
-        public const string NoImplementation = "#NoImplementation";
-
-        public static string[] AllKeywords = new string[] { AnyParams, AnyArgs, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation};
-    }
 }

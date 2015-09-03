@@ -4,16 +4,15 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{2E6D6D14-3927-4A7E-8AF3-2E87D220797D}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <ProjectGuid>{D2FE84CF-A502-4941-877E-5F82DAFE4D57}</ProjectGuid>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>PropInst</RootNamespace>
-    <AssemblyName>PropInst</AssemblyName>
+    <RootNamespace>PropInstUtils</RootNamespace>
+    <AssemblyName>PropInstUtils</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -23,7 +22,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -32,35 +30,15 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AbsInt">
-      <HintPath>..\..\..\references\AbsInt.dll</HintPath>
-    </Reference>
-    <Reference Include="Basetypes">
-      <HintPath>..\..\..\references\Basetypes.dll</HintPath>
-    </Reference>
-    <Reference Include="CodeContractsExtender">
-      <HintPath>..\..\..\references\CodeContractsExtender.dll</HintPath>
-    </Reference>
-    <Reference Include="Concurrency">
-      <HintPath>..\..\..\references\Concurrency.dll</HintPath>
-    </Reference>
     <Reference Include="Core">
       <HintPath>..\..\..\references\Core.dll</HintPath>
     </Reference>
     <Reference Include="CorralUtil">
       <HintPath>..\..\..\bin\Debug\CorralUtil.dll</HintPath>
     </Reference>
-    <Reference Include="Model">
-      <HintPath>..\..\..\references\Model.dll</HintPath>
-    </Reference>
-    <Reference Include="ParserHelper">
+    <Reference Include="ParserHelper, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\references\ParserHelper.dll</HintPath>
-    </Reference>
-    <Reference Include="Predication">
-      <HintPath>..\..\..\references\Predication.dll</HintPath>
-    </Reference>
-    <Reference Include="Provers.SMTLib">
-      <HintPath>..\..\..\references\Provers.SMTLib.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -69,26 +47,12 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="VCExpr">
-      <HintPath>..\..\..\references\VCExpr.dll</HintPath>
-    </Reference>
-    <Reference Include="VCGeneration">
-      <HintPath>..\..\..\references\VCGeneration.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
-    <Compile Include="Properties.cs" />
+    <Compile Include="GlobalConstants.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj">
-      <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
-      <Name>PropInstUtils</Name>
-    </ProjectReference>
+    <Compile Include="PropInstUtils.cs" />
+    <Compile Include="Visitors.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

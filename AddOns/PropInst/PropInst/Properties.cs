@@ -10,7 +10,7 @@ using Microsoft.Boogie;
 
 namespace PropInst
 {
-    class Rule
+    public class Rule
     {
         private string _lhs;
         private string _rhs;
@@ -24,7 +24,7 @@ namespace PropInst
         }
     }
 
-    class CmdRule : Rule
+    public class CmdRule : Rule
     {
         private const string CmdTemplate = "{0}\n" +
                                             //for our special keyword representing the match:
@@ -48,17 +48,11 @@ namespace PropInst
             var rhs = prhs;
 
             //allow keyword-command "#this;" instead of "call #this;":
+            Debug.Assert(!Regex.Match(rhs, @"call\s* #this\(\)\s*;").Success, "call #this(); syntax is deprecated");
             const string onlyThisPattern = @"#this\s*;";
-            var callThisMatch = Regex.Match(rhs, @"call\s* #this\(\)\s*;");
             var onlyThisMatch = Regex.Match(rhs, onlyThisPattern);
-            if (callThisMatch.Success)
-            {
-                // do nothing
-            } 
-            else if (onlyThisMatch.Success)
-            {
+            if (onlyThisMatch.Success)
                 rhs = Regex.Replace(rhs, onlyThisPattern, "call #this();");
-            }
 
             Program prog;
             string progString = string.Format(CmdTemplate, pDeclarations, plhs, rhs);
@@ -74,7 +68,7 @@ namespace PropInst
         }
     }
 
-    class InsertAtBeginningRule : Rule
+    public class InsertAtBeginningRule : Rule
     {
 
         // we need to use the implementation for matching, because the variable declaration of the 
