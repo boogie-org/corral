@@ -7,13 +7,13 @@ procedure {:entrypoint} main() {
 procedure foo(p: int)
 {
   assert valid[p];
-  call free(p);
+  call freeingMethod(p);
   assert valid[p];
-  call free(p);
+  call freeingMethod(p);
   return;
 }
 
-procedure {:free} free(a: int) {
+procedure freeingMethod(a: int) {
  valid[a] := false;
 }
 
