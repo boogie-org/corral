@@ -203,6 +203,9 @@ namespace CoreLib
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
 
+        // verification start time
+        DateTime startTime;
+
         public HashSet<string> GetCallTree()
         {
             return CallTree;
@@ -1190,6 +1193,15 @@ namespace CoreLib
             var boundHit = false;
             while (true)
             {
+                // Check timeout
+                if (CommandLineOptions.Clo.ProverKillTime != -1)
+                {
+                    if ((DateTime.UtcNow - startTime).TotalSeconds > CommandLineOptions.Clo.ProverKillTime)
+                    {
+                        return Outcome.TimedOut;
+                    }
+                }
+
                 // Bound on max procs inlined
                 if (BoogieVerify.options.maxInlinedBound != 0 &&
                     stats.numInlined > BoogieVerify.options.maxInlinedBound)
@@ -1509,6 +1521,8 @@ namespace CoreLib
         /* verification */
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
+            startTime = DateTime.UtcNow;
+
             // Sanity checking
             if (cba.Util.BoogieVerify.options.NonUniformUnfolding)
             {
