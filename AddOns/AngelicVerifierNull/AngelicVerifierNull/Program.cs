@@ -893,6 +893,7 @@ namespace AngelicVerifierNull
             //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
+            var corralStart = DateTime.Now;
             try
             {
                 Stats.count("count.check.refine");
@@ -902,6 +903,8 @@ namespace AngelicVerifierNull
             }
             catch (Exception)
             {
+                Console.WriteLine("Corral took: {0} seconds", (DateTime.Now - corralStart).TotalSeconds.ToString("F2"));
+
                 // dump corral state for next iteration
                 corralState = new cba.CorralState();
                 corralState.CallTree = cba.ConfigManager.progVerifyOptions.CallTree;
@@ -913,6 +916,7 @@ namespace AngelicVerifierNull
                         "corralinp" + corralIterationCount + ".bpl");
                 throw;
             }
+            Console.WriteLine("Corral took: {0} seconds", (DateTime.Now - corralStart).TotalSeconds.ToString("F2"));
 
             // dump corral state for next iteration
             corralState = new cba.CorralState();
