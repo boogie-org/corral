@@ -120,6 +120,10 @@
       <Project>{584822a6-f933-484f-aff3-5d3cc2337198}</Project>
       <Name>AliasAnalysis</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\PropInst\PropInstUtils\PropInstUtils.csproj">
+      <Project>{D2FE84CF-A502-4941-877E-5F82DAFE4D57}</Project>
+      <Name>PropInstUtils</Name>
+    </ProjectReference>
     <ProjectReference Include="..\AvUtil\AvUtil.csproj">
       <Project>{04d1ebfe-f934-44d2-86c6-407bc99ae00a}</Project>
       <Name>AvUtil</Name>

@@ -8,6 +8,7 @@ using System.IO;
 using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
+using PropInstUtils;
 using VC;
 using Microsoft.Basetypes;
 using BType = Microsoft.Boogie.Type;
@@ -57,6 +58,10 @@ namespace ExplainError
         private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
         private static bool noFilters = false; //if true, then matches any atom
         private static bool diplayPropertyMaps = true; //hack: added for filtering valid
+
+        //the Exprs to filter by
+        public static List<Expr> negativeFilters;
+        public static List<Expr> positiveFilters;
 
         //flags to define Boolean structure on the cover
         private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL;
@@ -1519,7 +1524,9 @@ namespace ExplainError
 
             return false;
         }
-        private static bool LiteralNotInVocabulary(Expr c)
+
+        #region LiteralNotInVocabulary reworked
+        private static bool LiteralNotInVocabularyOld(Expr c)
         {
             Console.Write("Atom:{0}\t", c);
             //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
@@ -1534,6 +1541,131 @@ namespace ExplainError
             if (!onlyDisplayAliasingInPre) return true;
             return false;
         }
+
+        private static bool LiteralNotInVocabulary(Expr c)
+        {
+//            string tv =
+//                @"TemplateVariables
+//{
+// var {:propertyMap} pm : [int] bool;
+// var i : int;
+//
+// var {:typestatevar} tsv : int; 
+// function f(int) : int;
+//
+// var {:#LiteralExpr} c : int;
+// var e : int;
+//}";
+
+//            //displayPropertyMaps
+//            String displayPropertyMaps_String =
+//                @"Filter
+//{ !pm[i] }";
+
+//            //displayTypeStateVariables
+//            String displayTypeStateVariables =
+//                @"Filter
+//{ tsv }
+//Filter
+//{ f(tsv) }
+//";
+//            //.. and so on? --> or we need something for matching all expressions that contain something..
+
+//            //displayGuardVariables
+//            //.. analogous to typeState??
+
+//            String dontDisplayComparisonWithConsts_String =
+//            @"Filter
+//{ e == c }
+//Filter
+//{ e != c }
+//Filter
+//{ e <= c }
+//Filter
+//{ e >= c }
+//Filter
+//{ e < c }
+//Filter
+//{ e > c }
+//Filter
+//{ c == e }
+//Filter
+//{ c != e }
+//Filter
+//{ c <= e }
+//Filter
+//{ c >= e }
+//Filter
+//{ c < e }
+//Filter
+//{ c > e }
+//";
+
+            //string filterString = tv
+            //                      + displayPropertyMaps_String
+            //                      + displayTypeStateVariables
+            //                      + dontDisplayComparisonWithConsts_String
+            //    ;
+
+            //TODO: in ExprMatchVisitor: is the propertyMap attribute, as given above, checked?
+
+            var match = false;
+            foreach (var nf in negativeFilters)
+            {
+                var emv = new ExprMatchVisitor(nf);
+                emv.Visit(c);
+                if (emv.Matches)
+                {
+                    return false;
+                }
+            }
+            foreach (var pf in positiveFilters)
+            {
+                var emv = new ExprMatchVisitor(pf);
+                emv.Visit(c);
+                if (emv.Matches)
+                {
+                    return false;
+                }
+            }
+
+            return false;
+            //string globalDeclarations;
+            //List<Tuple<string, string, string>> ruleTriples;
+            //string templateVariables;
+            //List<string> filters;
+            //PropertyParser.ParseProperty(filterString.Split(new[] {'\n'}), out globalDeclarations, out ruleTriples, out templateVariables, out filters);
+
+            //var match = false;
+            //foreach (var filter in filters)
+            //{
+            //Expr filterExpr = null;
+
+            //string templateString = "{0}\n {1}\n procedure foo() {{\n assume {2};\n }}\n";
+            //try
+            //{
+            //    Program dummyProg;
+            //    var progString = string.Format(templateString, globalDeclarations, templateVariables, filter);
+            //    Parser.Parse(progString, "dummy.bpl", out dummyProg);
+            //    BoogieUtil.ResolveProgram(dummyProg, "dummy.bpl");
+            //    filterExpr = ((AssumeCmd)dummyProg.Implementations.First().Blocks.First().Cmds.First()).Expr;
+            //}
+            //catch (Exception)
+            //{
+
+            //}
+
+            //    var emv = new ExprMatchVisitor(filterExpr);
+            //    emv.Visit(c);
+            //    if (emv.Matches)
+            //    {
+            //        match = true;
+            //        break;
+            //    }
+            //}
+        }
+
+        #endregion
 
         /// <summary>
         /// Splits a conjunction into its components
@@ -1857,4 +1989,5 @@ namespace ExplainError
         #endregion
 
     }
+
 }

@@ -1,11 +1,13 @@
 ﻿
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using Microsoft.Boogie;
+using PropInstUtils;
 using btype = Microsoft.Boogie.Type;
 using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
@@ -38,6 +40,8 @@ namespace AngelicVerifierNull
         public static bool reportOnMaxBlockCount = false;
         // Suppress when blocking on free variables?
         public static bool blockOnFreeVars = false;
+        // File containing the filters for ExplainError
+        public static string eeFilters = "";
         // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
         public static bool UseDuplicator
         { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
@@ -122,6 +126,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/EE:"))
                 .Iter(s => Options.EEflags.Add("/" + s.Substring("/EE:".Length)));
+
+            args.Where(s => s.StartsWith("/EEfilters:"))
+                .Iter(s => Options.eeFilters = s.Substring("/timeoutEE:".Length));
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -1208,6 +1215,9 @@ namespace AngelicVerifierNull
         private const int MAX_ASSERT_BLOCK_COUNT = 3; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
+
+        private static bool filterFileHasBeenRead = false;
+
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
             CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines)
         {
@@ -1215,6 +1225,31 @@ namespace AngelicVerifierNull
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
             // else if (ee is SUCCESS(e)) Block(e); 
             // else //inconclusive/timeout/.. Suppress
+
+            /////////
+            //read the filter file
+
+            if (!filterFileHasBeenRead)
+            {
+                var filterFileLines = File.ReadLines(Options.eeFilters);
+
+                string templateVariables;
+                List<string> negativeFilterStrings;
+                List<string> positiveFilterStrings;
+                PropertyParser.ParseProperty(filterFileLines, out templateVariables, out negativeFilterStrings,
+                    out positiveFilterStrings);
+
+                var negativeFilters = new List<Expr>();
+                var positiveFilters = new List<Expr>();
+                negativeFilterStrings.Iter(nfs => negativeFilters.Add(createFilterFromString(templateVariables, nfs)));
+                positiveFilterStrings.Iter(nfs => positiveFilters.Add(createFilterFromString(templateVariables, nfs)));
+
+                ExplainError.Toplevel.negativeFilters = negativeFilters;
+                ExplainError.Toplevel.positiveFilters = positiveFilters;
+
+                filterFileHasBeenRead = true;
+            }
+            /////////
 
             eeSlicedSourceLines = null;
             var status = Tuple.Create(REFINE_ACTIONS.SUPPRESS, (Expr)Expr.True); //default is SUPPRESS (angelic)
@@ -1314,6 +1349,27 @@ namespace AngelicVerifierNull
             CommandLineOptions.Install(clo);
             return status;
         }
+
+        private static Expr createFilterFromString(string templateVariables, string nfs)
+        {
+            Expr filterExpr = null;
+
+            //string templateString = "{0}\n {1}\n procedure foo() {{\n assume {2};\n }}\n";
+            string templateString = "{0}\n procedure foo() {{\n assume {1};\n }}\n";
+            try
+            {
+                Program dummyProg;
+                var progString = string.Format(templateString, templateVariables, nfs);
+                Parser.Parse(progString, "dummy.bpl", out dummyProg);
+                BoogieUtil.ResolveProgram(dummyProg, "dummy.bpl");
+                filterExpr = ((AssumeCmd) dummyProg.Implementations.First().Blocks.First().Cmds.First()).Expr;
+            }
+            catch (Exception)
+            {
+            }
+            return filterExpr;
+        }
+
         private static Expr MkBlockExprFromExplainError(Program  nprog, Expr expr, Dictionary<string, int> allocConsts)
         {
             //- given expr, allocConsts (string)
