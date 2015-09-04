@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="GlobalConstants.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PropertyParser.cs" />
     <Compile Include="PropInstUtils.cs" />
     <Compile Include="Visitors.cs" />
   </ItemGroup>

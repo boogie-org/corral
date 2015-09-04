@@ -13,8 +13,7 @@ namespace PropInst
     {
         public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
 
-        private enum ReadMode { Toplevel, RuleLhs, RuleRhs, Decls, BoogieCode, RuleArrow };
-
+      
         //TODO: collect some stats about the instrumentation, mb some debugging output??
 
         private static void Main(string[] args)
@@ -36,7 +35,7 @@ namespace PropInst
             var propLines = File.ReadLines(args[0]);
             string globalDeclarations;
             List<Rule> rules;
-            ParseProperty(propLines, out globalDeclarations, out rules);
+            CreateRulesFromProperty(propLines, out globalDeclarations, out rules);
 
             // GlobalDeclarations: add the global declarations from the property to the Boogie program
             Program dummyProg;
@@ -55,105 +54,11 @@ namespace PropInst
             Stats.printStats();
         }
 
-        private static void ParseProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Rule> rules)
+        private static void CreateRulesFromProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Rule> rules)
         {
-            var ruleTriples = new List<Tuple<string, string, string>>();
-
-            string templateVariables = "";
-            globalDeclarations = "";
-
-            var pCounter = 0;
-            var boogieLines = "";
-            var mode = ReadMode.Toplevel;
-            string ruleLhs = "";
-            string currentRuleOrDecl = "";
-
-            foreach (var line1 in propLines)
-            {
-                //deal with the curly braces that belong to the property language (not to Boogie)
-                var line = line1;
-                if (pCounter == 0 && line.LastIndexOf('{') != -1)
-                    line = line.Substring(line.IndexOf('{') + 1);
-                pCounter += CountChar(line1, '{') - CountChar(line1, '}');
-                if (pCounter == 0 && line.LastIndexOf('}') != -1)
-                    line = line.Substring(0, line.LastIndexOf('}'));
-
-                // allow line comments on the top level (inside the parentheses, Boogie parsing is used anyway..)
-                if (pCounter == 0 && line.Contains("//"))
-                    line = line.Substring(0, line.IndexOf("//", System.StringComparison.Ordinal));
-
-                switch (mode)
-                {
-                    case ReadMode.Toplevel:
-                        currentRuleOrDecl = line.Trim();
-                        if (line.Trim() == "GlobalDeclarations")
-                        {
-                            mode = ReadMode.Decls;
-                        }
-                        if (line.Trim() == "TemplateVariables")
-                        {
-                            mode = ReadMode.Decls;
-                        }
-                        if (line.Trim() == "CmdRule")
-                        {
-                            mode = ReadMode.RuleLhs;
-                        }
-                        if (line.Trim() == "InsertAtBeginningRule")
-                        {
-                            mode = ReadMode.RuleLhs;
-                        }
-                        break;
-                    case ReadMode.RuleLhs:
-                        boogieLines += line + "\n";
-                        if (pCounter == 0)
-                        {
-                            mode = ReadMode.RuleArrow;
-                            ruleLhs = boogieLines;
-                            boogieLines = "";
-                            continue;
-                        }
-                        break;
-                    case ReadMode.RuleArrow:
-                        Debug.Assert(line.Trim() == "-->");
-                        mode = ReadMode.RuleRhs;
-                        break;
-                    case ReadMode.RuleRhs:
-                        boogieLines += line + "\n";
-                        if (pCounter == 0)
-                        {
-                            mode = ReadMode.Toplevel;
-                            var ruleRhs = boogieLines;
-                            ruleTriples.Add(new Tuple<string, string, string>(currentRuleOrDecl, ruleLhs, ruleRhs));
-                            boogieLines = "";
-                            continue;
-                        }
-                        break;
-                    case ReadMode.Decls:
-                        boogieLines += line + "\n";
-                        if (pCounter == 0)
-                        {
-                            switch (currentRuleOrDecl)
-                            {
-                                case "GlobalDeclarations":
-                                    mode = ReadMode.Toplevel;
-                                    globalDeclarations = boogieLines;
-                                    break;
-                                case "TemplateVariables":
-                                    mode = ReadMode.Toplevel;
-                                    templateVariables = boogieLines;
-                                    break;
-                            }
-                            boogieLines = "";
-                            continue;
-                        }
-                        break;
-                    case ReadMode.BoogieCode:
-                        boogieLines += line + "\n";
-                        break;
-                    default:
-                        throw new Exception();
-                }
-            }
+            List<Tuple<string, string, string>> ruleTriples;
+            string templateVariables;
+            PropertyParser.ParseProperty(propLines, out globalDeclarations, out ruleTriples, out templateVariables);
 
             rules = new List<Rule>();
             foreach (var triple in ruleTriples)
@@ -171,14 +76,6 @@ namespace PropInst
             }
         }
 
-        private static int CountChar(string line, char p1)
-        {
-            var result = 0;
-            foreach (var c in line)
-                if (c == p1)
-                    result++;
-            return result;
-        }
     }
 
     class InstrumentProcedureRule
