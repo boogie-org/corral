@@ -742,7 +742,7 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
-                if (LiteralNotInVocabulary(c)) continue;
+                if (!LiteralInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
             if (toDisplay.Count == 0) { return false; }
@@ -1542,127 +1542,23 @@ namespace ExplainError
             return false;
         }
 
-        private static bool LiteralNotInVocabulary(Expr c)
+        private static bool LiteralInVocabulary(Expr c)
         {
-//            string tv =
-//                @"TemplateVariables
-//{
-// var {:propertyMap} pm : [int] bool;
-// var i : int;
-//
-// var {:typestatevar} tsv : int; 
-// function f(int) : int;
-//
-// var {:#LiteralExpr} c : int;
-// var e : int;
-//}";
-
-//            //displayPropertyMaps
-//            String displayPropertyMaps_String =
-//                @"Filter
-//{ !pm[i] }";
-
-//            //displayTypeStateVariables
-//            String displayTypeStateVariables =
-//                @"Filter
-//{ tsv }
-//Filter
-//{ f(tsv) }
-//";
-//            //.. and so on? --> or we need something for matching all expressions that contain something..
-
-//            //displayGuardVariables
-//            //.. analogous to typeState??
-
-//            String dontDisplayComparisonWithConsts_String =
-//            @"Filter
-//{ e == c }
-//Filter
-//{ e != c }
-//Filter
-//{ e <= c }
-//Filter
-//{ e >= c }
-//Filter
-//{ e < c }
-//Filter
-//{ e > c }
-//Filter
-//{ c == e }
-//Filter
-//{ c != e }
-//Filter
-//{ c <= e }
-//Filter
-//{ c >= e }
-//Filter
-//{ c < e }
-//Filter
-//{ c > e }
-//";
-
-            //string filterString = tv
-            //                      + displayPropertyMaps_String
-            //                      + displayTypeStateVariables
-            //                      + dontDisplayComparisonWithConsts_String
-            //    ;
-
-            //TODO: in ExprMatchVisitor: is the propertyMap attribute, as given above, checked?
-
-            var match = false;
             foreach (var nf in negativeFilters)
             {
                 var emv = new ExprMatchVisitor(nf);
                 emv.Visit(c);
                 if (emv.Matches)
-                {
                     return false;
-                }
             }
             foreach (var pf in positiveFilters)
             {
                 var emv = new ExprMatchVisitor(pf);
                 emv.Visit(c);
                 if (emv.Matches)
-                {
-                    return false;
-                }
+                    return true;
             }
-
             return false;
-            //string globalDeclarations;
-            //List<Tuple<string, string, string>> ruleTriples;
-            //string templateVariables;
-            //List<string> filters;
-            //PropertyParser.ParseProperty(filterString.Split(new[] {'\n'}), out globalDeclarations, out ruleTriples, out templateVariables, out filters);
-
-            //var match = false;
-            //foreach (var filter in filters)
-            //{
-            //Expr filterExpr = null;
-
-            //string templateString = "{0}\n {1}\n procedure foo() {{\n assume {2};\n }}\n";
-            //try
-            //{
-            //    Program dummyProg;
-            //    var progString = string.Format(templateString, globalDeclarations, templateVariables, filter);
-            //    Parser.Parse(progString, "dummy.bpl", out dummyProg);
-            //    BoogieUtil.ResolveProgram(dummyProg, "dummy.bpl");
-            //    filterExpr = ((AssumeCmd)dummyProg.Implementations.First().Blocks.First().Cmds.First()).Expr;
-            //}
-            //catch (Exception)
-            //{
-
-            //}
-
-            //    var emv = new ExprMatchVisitor(filterExpr);
-            //    emv.Visit(c);
-            //    if (emv.Matches)
-            //    {
-            //        match = true;
-            //        break;
-            //    }
-            //}
         }
 
         #endregion
@@ -1715,14 +1611,14 @@ namespace ExplainError
             var expr = e as NAryExpr;
             if (expr == null)
             {
-                if (LiteralNotInVocabulary(e)) return Expr.True; //default
+                if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
             {
-                if (LiteralNotInVocabulary(e)) return Expr.True; //default
+                if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
