@@ -354,7 +354,7 @@ namespace PropInst
 
                 foreach (var arg in cmd.Ins)
                 {
-                    var emv = new ExprMatchVisitor(new List<Expr>() {anyArgsExpr});
+                    var emv = new ExprMatchVisitor(anyArgsExpr);
                     emv.VisitExpr(arg);
 
                     if (emv.Matches)
@@ -392,7 +392,7 @@ namespace PropInst
                 return match;
             }
 
-            var mv = new ExprMatchVisitor(new List<Expr>() {toMatch.Expr});
+            var mv = new ExprMatchVisitor(toMatch.Expr);
             mv.VisitExpr(cmd.Expr);
 
             if (mv.Matches)
@@ -421,11 +421,11 @@ namespace PropInst
             for (int i = 0; i < cmd.Lhss.Count; i++)
             {
                 var lhs = cmd.Lhss[i].AsExpr;
-                var lEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Lhss[0].AsExpr});
+                var lEmv = new ExprMatchVisitor(toMatchCmd.Lhss[0].AsExpr);
                 lEmv.VisitExpr(lhs);
 
                 var rhs = cmd.Rhss[i];
-                var rEmv = new ExprMatchVisitor(new List<Expr> {toMatchCmd.Rhss[0]});
+                var rEmv = new ExprMatchVisitor(toMatchCmd.Rhss[0]);
                 rEmv.VisitExpr(rhs);
 
                 if (lEmv.Matches && rEmv.Matches)

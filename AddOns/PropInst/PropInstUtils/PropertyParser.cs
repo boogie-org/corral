@@ -18,7 +18,16 @@ namespace PropInstUtils
             ParseProperty(propLines, out globalDeclarations, out ruleTriples, out templateVariables, out negativeFilters, out positiveFilters);
         }
 
-        public static void ParseProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Tuple<string, string, string>> ruleTriples,
+        public static void ParseProperty(IEnumerable<string> propLines, out string globalDeclarations,
+            out List<Tuple<string, string, string>> ruleTriples,
+            out string templateVariables)
+        {
+            List<string> negativeFilters;
+            List<string> positiveFilters;
+            ParseProperty(propLines, out globalDeclarations, out ruleTriples, out templateVariables, out negativeFilters, out positiveFilters);
+        }
+
+        private static void ParseProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Tuple<string, string, string>> ruleTriples,
             out string templateVariables, out List<string> negativeFilters, out List<string> positiveFilters)
         {
             ruleTriples = new List<Tuple<string, string, string>>();

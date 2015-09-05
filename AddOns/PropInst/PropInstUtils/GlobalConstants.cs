@@ -13,6 +13,8 @@ namespace PropInstUtils
         // arbitrary list of arguments (at a procedure call)
         // may be used as a function: argument is an expression, we choose those where the expression matches
         public const string AnyArgs = "#AnyArguments";
+
+        public const string AnyExpr = "#AnyExpr";
         //arbitrary list of results of a call
         // these are always IdentifierExprs
         //public const string AnyResults = "$$ANYRESULTS";
@@ -27,6 +29,6 @@ namespace PropInstUtils
         // procedure must be declared but not implemented
         public const string NoImplementation = "#NoImplementation";
 
-        public static string[] AllKeywords = new string[] { AnyParams, AnyArgs, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation };
+        public static string[] AllKeywords = { AnyParams, AnyArgs, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation, AnyExpr };
     }
 }

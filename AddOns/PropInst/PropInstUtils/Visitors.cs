@@ -190,17 +190,20 @@ namespace PropInstUtils
 
     public class ExprMatchVisitor : FixedVisitor
     {
-        private List<Expr> _toConsume;
+        private readonly Stack<Expr> _toConsume;
         public bool Matches = true;
         public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
         public readonly Dictionary<Declaration, Expr> Substitution = new Dictionary<Declaration, Expr>();
 
+        private bool _anyExprMode = false;
+
         public ExprMatchVisitor(Expr pToConsume)
         {
-            _toConsume = new List<Expr>() { pToConsume };
+            _toConsume = new Stack<Expr>();
+            _toConsume.Push(pToConsume);
         }
 
-        public ExprMatchVisitor(List<Expr> pToConsume)
+        public ExprMatchVisitor(Stack<Expr> pToConsume)
         {
             _toConsume = pToConsume;
         }
@@ -215,23 +218,52 @@ namespace PropInstUtils
                 return base.VisitNAryExpr(node);
             }
 
-            if (!(_toConsume.First() is NAryExpr))
+            //idea: if in anyExprMode, toConsume does not change --> we eat up and NaryExpr
+            // if any of the  arguments matches, the whole thing matches
+            // nothing fancier now, because we only need IdentifierExpr and LiteralExpr
+            if (_anyExprMode)
+            {
+                var anyMatches = false;
+                var dispatched = new List<Expr>();
+                foreach (var a in node.Args)
+                {
+                    Matches = true;
+                    dispatched.Add(VisitExpr(a));
+                    anyMatches |= Matches;
+                }
+                Matches = anyMatches;
+                return new NAryExpr(node.tok, node.Fun, dispatched);
+            }
+
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
+                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+            {
+                _anyExprMode = true;
+
+                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
+
+                ((NAryExpr) _toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                return VisitNAryExpr(node);
+            }
+
+            if (!(_toConsume.Peek() is NAryExpr))
             {
                 //may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr
-                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.First()).Decl.Attributes))
+                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
                 {
-                    Substitution.Add(((IdentifierExpr)_toConsume.First()).Decl, node);
-                    _toConsume.RemoveAt(0);
+                    Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
+                    _toConsume.Pop();
                     return node;
                 }
                 Matches = false;
                 return base.VisitNAryExpr(node);
             }
 
-            var naeToConsume = (NAryExpr)_toConsume.First();
+            var naeToConsume = (NAryExpr)_toConsume.Peek();
 
-            if (((NAryExpr)_toConsume.First()).Args.Count != node.Args.Count)
+            if (((NAryExpr)_toConsume.Peek()).Args.Count != node.Args.Count)
             {
                 Matches = false;
                 return base.VisitNAryExpr(node);
@@ -240,7 +272,8 @@ namespace PropInstUtils
             // now the positive cases
             if (naeToConsume.Fun.Equals(node.Fun))
             {
-                _toConsume = new List<Expr>(naeToConsume.Args);
+                //_toConsume = new List<Expr>(naeToConsume.Args);
+                naeToConsume.Args.Iter(arg => _toConsume.Push(arg));
                 return base.VisitNAryExpr(node);
             }
             if (naeToConsume.Fun is FunctionCall
@@ -250,7 +283,8 @@ namespace PropInstUtils
 
                 FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
 
-                _toConsume = new List<Expr>(naeToConsume.Args);
+                //_toConsume = new List<Expr>(naeToConsume.Args);
+                naeToConsume.Args.Iter(arg => _toConsume.Push(arg));
                 return base.VisitNAryExpr(node);
             }
             Matches = false;
@@ -265,18 +299,37 @@ namespace PropInstUtils
                 Matches = false;
                 return base.VisitIdentifierExpr(node);
             }
-            if (!(_toConsume.First() is IdentifierExpr))
+
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
+                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+            {
+                _anyExprMode = true;
+
+                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
+                ((NAryExpr)_toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                return VisitIdentifierExpr(node);
+            }
+
+            if (!(_toConsume.Peek() is IdentifierExpr))
             {
                 Matches = false;
                 return base.VisitIdentifierExpr(node);
             }
 
-            var idexToConsume = (IdentifierExpr)_toConsume.First();
+            var idexToConsume = (IdentifierExpr)_toConsume.Peek();
 
             if (idexToConsume.Decl != null)
             {
-                Substitution.Add(idexToConsume.Decl, node);
-                _toConsume.RemoveAt(0);
+                if (PropInstUtils.AreAttributesASubset(idexToConsume.Decl.Attributes, node.Decl.Attributes))
+                {
+                    Substitution.Add(idexToConsume.Decl, node);
+                    _toConsume.Pop();
+                }
+                else
+                {
+                    Matches = false;
+                }
                 return base.VisitIdentifierExpr(node);
             }
             if (idexToConsume.Name == node.Name)
@@ -296,19 +349,30 @@ namespace PropInstUtils
                 return base.VisitLiteralExpr(node);
             }
 
-            if (!(_toConsume.First() is LiteralExpr))
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
+                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
             {
-                if (_toConsume.First() is IdentifierExpr)
+                _anyExprMode = true;
+
+                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
+                ((NAryExpr) _toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                return VisitLiteralExpr(node);
+            }
+
+            if (!(_toConsume.Peek() is LiteralExpr))
+            {
+                if (_toConsume.Peek() is IdentifierExpr)
                 {
                     //TODO add check for the corresponding attribute which says it may match anything
-                    Substitution.Add(((IdentifierExpr)_toConsume.First()).Decl, node);
-                    _toConsume.RemoveAt(0);
+                    Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
+                    _toConsume.Pop();
                     return node;
                 }
                 Matches = false;
                 return base.VisitLiteralExpr(node);
             }
-            if (node.Val.Equals(((LiteralExpr)_toConsume.First()).Val))
+            if (node.Val.Equals(((LiteralExpr)_toConsume.Peek()).Val))
             {
                 return base.VisitLiteralExpr(node);
             }
