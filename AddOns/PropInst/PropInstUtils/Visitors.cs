@@ -218,7 +218,7 @@ namespace PropInstUtils
                 return base.VisitNAryExpr(node);
             }
 
-            //idea: if in anyExprMode, toConsume does not change --> we eat up and NaryExpr
+            //idea: if in anyExprMode, toConsume does not change --> we eat up any NaryExpr
             // if any of the  arguments matches, the whole thing matches
             // nothing fancier now, because we only need IdentifierExpr and LiteralExpr
             if (_anyExprMode)
@@ -244,7 +244,11 @@ namespace PropInstUtils
 
                 _toConsume.Pop();
                 ((NAryExpr) _toConsume.Peek()).Args.Reverse().Iter(arg => _toConsume.Push(arg));
-                return VisitNAryExpr(node);
+                var result =  VisitNAryExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
             }
 
             if (!(_toConsume.Peek() is NAryExpr))
@@ -285,7 +289,7 @@ namespace PropInstUtils
                      ((FunctionCall)naeToConsume.Fun).Func.Attributes,
                      ((FunctionCall)node.Fun).Func.Attributes))
             {
-                var func = ((FunctionCall)naeToConsume.Fun).Func; //TODO: use attributes..
+                var func = ((FunctionCall)naeToConsume.Fun).Func;
 
                 FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
 
@@ -306,6 +310,7 @@ namespace PropInstUtils
                 return base.VisitIdentifierExpr(node);
             }
 
+            // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
                 && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
@@ -314,7 +319,11 @@ namespace PropInstUtils
 
                 _toConsume.Pop();
                 ((NAryExpr)_toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
-                return VisitIdentifierExpr(node);
+                var result = VisitIdentifierExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
             }
 
             if (!(_toConsume.Peek() is IdentifierExpr))
@@ -355,6 +364,7 @@ namespace PropInstUtils
                 return base.VisitLiteralExpr(node);
             }
 
+            // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
                 && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
@@ -363,7 +373,11 @@ namespace PropInstUtils
 
                 _toConsume.Pop();
                 ((NAryExpr) _toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
-                return VisitLiteralExpr(node);
+                var result =  VisitLiteralExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
             }
 
             if (!(_toConsume.Peek() is LiteralExpr))
