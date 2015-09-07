@@ -202,7 +202,6 @@ namespace AngelicVerifierNull
                 //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
                 Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
                 Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
-
             }
             finally
             {
@@ -1228,10 +1227,18 @@ namespace AngelicVerifierNull
 
             /////////
             //read the filter file
-
-            if (!filterFileHasBeenRead)
+            if (!filterFileHasBeenRead && Options.eeFilters != "")
             {
-                var filterFileLines = File.ReadLines(Options.eeFilters);
+                IEnumerable<string> filterFileLines;
+                try
+                {
+                    filterFileLines = File.ReadLines(Options.eeFilters);
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("--- Error reading filter file! ---");
+                    throw;
+                }
 
                 string templateVariables;
                 List<string> negativeFilterStrings;
@@ -1239,11 +1246,16 @@ namespace AngelicVerifierNull
                 PropertyParser.ParseProperty(filterFileLines, out templateVariables, out negativeFilterStrings,
                     out positiveFilterStrings);
 
+                Console.WriteLine("Succeeded parsing filter file");
+                Console.WriteLine("negative filters: " + String.Join(" ", negativeFilterStrings));
+                Console.WriteLine("positive filters: " + String.Join(" ", positiveFilterStrings));
+
                 var negativeFilters = new List<Expr>();
                 var positiveFilters = new List<Expr>();
                 negativeFilterStrings.Iter(nfs => negativeFilters.Add(createFilterFromString(templateVariables, nfs)));
                 positiveFilterStrings.Iter(nfs => positiveFilters.Add(createFilterFromString(templateVariables, nfs)));
 
+                ExplainError.Toplevel.useFiltersFromFile = true;
                 ExplainError.Toplevel.negativeFilters = negativeFilters;
                 ExplainError.Toplevel.positiveFilters = positiveFilters;
 

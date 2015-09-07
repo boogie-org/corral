@@ -60,6 +60,7 @@ namespace ExplainError
         private static bool diplayPropertyMaps = true; //hack: added for filtering valid
 
         //the Exprs to filter by
+        public static bool useFiltersFromFile = false;
         public static List<Expr> negativeFilters;
         public static List<Expr> positiveFilters;
 
@@ -1526,9 +1527,22 @@ namespace ExplainError
         }
 
         #region LiteralNotInVocabulary reworked
-        private static bool LiteralNotInVocabularyOld(Expr c)
+
+
+        private static bool LiteralInVocabulary(Expr c)
         {
             Console.Write("Atom:{0}\t", c);
+            if (useFiltersFromFile)
+            {
+                return LiteralInVocabularyNew(c);
+            }
+            else
+                return !LiteralNotInVocabularyOld(c);
+        }
+
+        private static bool LiteralNotInVocabularyOld(Expr c)
+        {
+            //Console.Write("Atom:{0}\t", c);
             //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
             //TODO: separate positive and negative filters
             if (noFilters) return false; //anything matches
@@ -1542,7 +1556,7 @@ namespace ExplainError
             return false;
         }
 
-        private static bool LiteralInVocabulary(Expr c)
+        private static bool LiteralInVocabularyNew(Expr c)
         {
             foreach (var nf in negativeFilters)
             {
