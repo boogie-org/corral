@@ -235,15 +235,15 @@ namespace PropInstUtils
                 return new NAryExpr(node.tok, node.Fun, dispatched);
             }
 
+            // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
                 && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
             {
                 _anyExprMode = true;
 
-                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
-
-                ((NAryExpr) _toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                _toConsume.Pop();
+                ((NAryExpr) _toConsume.Peek()).Args.Reverse().Iter(arg => _toConsume.Push(arg));
                 return VisitNAryExpr(node);
             }
 
@@ -251,6 +251,7 @@ namespace PropInstUtils
             {
                 //may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr
+                    && ((IdentifierExpr) _toConsume.Peek()).Decl != null
                     && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
                 {
                     Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
@@ -273,18 +274,23 @@ namespace PropInstUtils
             if (naeToConsume.Fun.Equals(node.Fun))
             {
                 //_toConsume = new List<Expr>(naeToConsume.Args);
-                naeToConsume.Args.Iter(arg => _toConsume.Push(arg));
+                _toConsume.Pop();
+                naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));
                 return base.VisitNAryExpr(node);
             }
             if (naeToConsume.Fun is FunctionCall
-                && ((FunctionCall)naeToConsume.Fun).Func != null)
+                && ((FunctionCall)naeToConsume.Fun).Func != null
+                && node.Fun is FunctionCall
+                && PropInstUtils.AreAttributesASubset(
+                     ((FunctionCall)naeToConsume.Fun).Func.Attributes,
+                     ((FunctionCall)node.Fun).Func.Attributes))
             {
                 var func = ((FunctionCall)naeToConsume.Fun).Func; //TODO: use attributes..
 
                 FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
 
-                //_toConsume = new List<Expr>(naeToConsume.Args);
-                naeToConsume.Args.Iter(arg => _toConsume.Push(arg));
+                _toConsume.Pop();
+                naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));
                 return base.VisitNAryExpr(node);
             }
             Matches = false;
@@ -306,7 +312,7 @@ namespace PropInstUtils
             {
                 _anyExprMode = true;
 
-                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
+                _toConsume.Pop();
                 ((NAryExpr)_toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
                 return VisitIdentifierExpr(node);
             }
@@ -355,16 +361,17 @@ namespace PropInstUtils
             {
                 _anyExprMode = true;
 
-                //_toConsume = new List<Expr>(((NAryExpr) _toConsume.First()).Args);
+                _toConsume.Pop();
                 ((NAryExpr) _toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
                 return VisitLiteralExpr(node);
             }
 
             if (!(_toConsume.Peek() is LiteralExpr))
             {
-                if (_toConsume.Peek() is IdentifierExpr)
+                if (_toConsume.Peek() is IdentifierExpr
+                    && ((IdentifierExpr) _toConsume.Peek()).Decl != null
+                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
                 {
-                    //TODO add check for the corresponding attribute which says it may match anything
                     Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
                     _toConsume.Pop();
                     return node;
