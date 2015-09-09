@@ -63,12 +63,12 @@ namespace PropInst
             rules = new List<Rule>();
             foreach (var triple in ruleTriples)
             {
-                if (triple.Item1 == "CmdRule")
+                if (triple.Item1 == PropertyKeyWords.CmdRule)
                 {
                     rules.Add(new CmdRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
                     Stats.count("No CmdRule");
                 }
-                if (triple.Item1 == "InsertAtBeginningRule")
+                if (triple.Item1 == PropertyKeyWords.ProcedureRule)
                 {
                     rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations));
                     Stats.count("No InsertAtBeginningRule");
@@ -117,8 +117,10 @@ namespace PropInst
                 {
                     int anyParamsPosition;
                     QKeyValue anyParamsAttributes;
+                    int anyParamsPositionOut;
+                    QKeyValue anyParamsAttributesOut;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out paramSubstitution))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out anyParamsAttributesOut, out anyParamsPositionOut, out paramSubstitution))
                     {
                         Implementation impl = null;
                         if (dwf is Implementation)
@@ -141,7 +143,7 @@ namespace PropInst
 
                             _program.AddTopLevelDeclaration(impl);
                         }
-                        InjectCode(impl, anyParamsPosition, anyParamsAttributes, procSig, rule, paramSubstitution);
+                        InjectCode(impl, anyParamsPosition, anyParamsAttributes, anyParamsPositionOut, anyParamsAttributesOut, procSig, rule, paramSubstitution);
                         Stats.count("Times InsertAtBeginningRule injected code");
                         //only take the first match
                         return;
@@ -150,9 +152,10 @@ namespace PropInst
             }
         }
 
-        private static void InjectCode(Implementation impl, int anyParamsPosition, QKeyValue anyParamsAttributes,
+        private static void InjectCode(Implementation impl, int anyParamsPosition, QKeyValue anyParamsAttributes, int anyParamsPositionOut, QKeyValue anyParamsAttributesOut,
             Implementation procSig, InsertAtBeginningRule rule, Dictionary<Declaration, Expr> paramSubstitution)
         {
+            //TODO handle anyParams in the OutParam case
             var doesAnyParamOccurInRhs = false;
             if (anyParamsPosition != int.MaxValue)
             {
@@ -302,7 +305,7 @@ namespace PropInst
 
             #region match procedure name
 
-            //if (toMatch.callee == KeyWords.AnyProcedure)
+            //if (toMatch.callee == BoogieKeyWords.AnyProcedure)
             var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
             if (matchCallee != null)
             {
@@ -327,7 +330,7 @@ namespace PropInst
             #region match out parameters ("the things assigned to")
 
             //if (toMatch.Outs.Count == 1
-            //    && toMatch.Outs[0].Name == KeyWords.AnyLhss)
+            //    && toMatch.Outs[0].Name == BoogieKeyWords.AnyLhss)
             //{
             //    //matches anything --> do nothing/go on
             //}
@@ -345,7 +348,7 @@ namespace PropInst
 
             #region match arguments
 
-            if (BoogieUtil.checkAttrExists(KeyWords.AnyArgs, matchCallee.Attributes))
+            if (BoogieUtil.checkAttrExists(BoogieKeyWords.AnyArgs, matchCallee.Attributes))
             {
                 var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 

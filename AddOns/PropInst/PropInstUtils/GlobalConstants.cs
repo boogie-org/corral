@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PropInstUtils
 {
-    public class KeyWords
+    public class BoogieKeyWords
     {
         // arbitrary list of parameters (at a procedure declaration)
         public const string AnyParams = "#AnyParameters";
@@ -29,6 +29,16 @@ namespace PropInstUtils
         // procedure must be declared but not implemented
         public const string NoImplementation = "#NoImplementation";
 
-        public static string[] AllKeywords = { AnyParams, AnyArgs, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation, AnyExpr };
+        public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation };
+    }
+
+    public class PropertyKeyWords
+    {
+        public const string CmdRule = "CmdRule";
+        public const string ProcedureRule = "ProcedureRule";
+        public const string GlobalDeclarations = "GlobalDeclarations";
+        public const string TemplateVariables = "TemplateVariables";
+        public const string NegativeFilter = "NegativeFilter";
+        public const string PositiveFilter = "PositiveFilter";
     }
 }

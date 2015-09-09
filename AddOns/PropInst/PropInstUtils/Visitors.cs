@@ -238,7 +238,7 @@ namespace PropInstUtils
             // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
-                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
             {
                 _anyExprMode = true;
 
@@ -256,7 +256,7 @@ namespace PropInstUtils
                 //may still be an IdentifierExp intended to match any exp
                 if (_toConsume.First() is IdentifierExpr
                     && ((IdentifierExpr) _toConsume.Peek()).Decl != null
-                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
+                    && !BoogieUtil.checkAttrExists(BoogieKeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
                 {
                     Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
                     _toConsume.Pop();
@@ -313,7 +313,7 @@ namespace PropInstUtils
             // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
-                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
             {
                 _anyExprMode = true;
 
@@ -367,7 +367,7 @@ namespace PropInstUtils
             // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
                 && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
-                && BoogieUtil.checkAttrExists(KeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
             {
                 _anyExprMode = true;
 
@@ -384,7 +384,7 @@ namespace PropInstUtils
             {
                 if (_toConsume.Peek() is IdentifierExpr
                     && ((IdentifierExpr) _toConsume.Peek()).Decl != null
-                    && !BoogieUtil.checkAttrExists(KeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
+                    && !BoogieUtil.checkAttrExists(BoogieKeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
                 {
                     Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
                     _toConsume.Pop();
@@ -406,10 +406,12 @@ namespace PropInstUtils
 
     public class ProcedureSigMatcher
     {
-        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out Dictionary<Declaration, Expr> paramSubstitution)
+        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution)
         {
             toMatchAnyParamsAttributes = null;
             anyParamsPosition = int.MaxValue;
+            toMatchAnyParamsAttributesOut = null;
+            anyParamsPositionOut = int.MaxValue;
             paramSubstitution = new Dictionary<Declaration, Expr>();
 
             if (!PropInstUtils.AreAttributesASubset(toMatch.Attributes, dwf.Attributes))
@@ -419,13 +421,13 @@ namespace PropInstUtils
 
             // match procedure name
 
-            if (BoogieUtil.checkAttrExists(KeyWords.AnyProcedure, toMatch.Attributes))
+            if (BoogieUtil.checkAttrExists(BoogieKeyWords.AnyProcedure, toMatch.Attributes))
             {
                 //do nothing
             }
-            else if (BoogieUtil.checkAttrExists(KeyWords.NameMatches, toMatch.Attributes))
+            else if (BoogieUtil.checkAttrExists(BoogieKeyWords.NameMatches, toMatch.Attributes))
             {
-                var nmAttrParams = BoogieUtil.getAttr(KeyWords.NameMatches, toMatch.Attributes);
+                var nmAttrParams = BoogieUtil.getAttr(BoogieKeyWords.NameMatches, toMatch.Attributes);
                 var regex = nmAttrParams.First().ToString();
                 var m = Regex.Match(dwf.Name, regex);
                 if (m.Success)
@@ -443,29 +445,35 @@ namespace PropInstUtils
             }
 
             // if the procedure name is matched, it may still be that we are looking only for stubs
-            if (BoogieUtil.checkAttrExists(KeyWords.NoImplementation, toMatch.Attributes))
+            if (BoogieUtil.checkAttrExists(BoogieKeyWords.NoImplementation, toMatch.Attributes))
             {
                 foreach (var i in boogieProgram.Implementations)
                     if (i.Name == dwf.Name)
                         return false;
             }
 
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams)) return false;
 
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams)) return false;
+
+            return true;
+        }
+
+        private static bool MatchParams(ref QKeyValue toMatchAnyParamsAttributes, ref int anyParamsPosition,
+            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams)
+        {
             // match procedure parameters
-            for (var i = 0; i < toMatch.InParams.Count; i++)
+            for (var i = 0; i < toMatchInParams.Count; i++)
             {
-                if (i >= dwf.InParams.Count)
-                    return false;
-
-                if (i == toMatch.InParams.Count - 1
-                        && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.InParams[i].Attributes))
+                if (i == toMatchInParams.Count - 1
+                    && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyParams, toMatchProcInParams[i].Attributes))
                 {
-                    toMatchAnyParamsAttributes = toMatch.InParams[i].Attributes;
+                    toMatchAnyParamsAttributes = toMatchInParams[i].Attributes;
                     if (toMatchAnyParamsAttributes != null)
-                        toMatchAnyParamsAttributes.Next = toMatch.Proc.InParams[i].Attributes;
+                        toMatchAnyParamsAttributes.Next = toMatchProcInParams[i].Attributes;
                     else
-                        toMatchAnyParamsAttributes = toMatch.Proc.InParams[i].Attributes;
-                    toMatchAnyParamsAttributes = BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
+                        toMatchAnyParamsAttributes = toMatchProcInParams[i].Attributes;
+                    toMatchAnyParamsAttributes = BoogieUtil.removeAttr(BoogieKeyWords.AnyParams, toMatchAnyParamsAttributes);
 
                     //TODO the type may also be constrained
 
@@ -473,36 +481,15 @@ namespace PropInstUtils
                     //don't add it to the substitution
                     continue;
                 }
-                if (!toMatch.InParams[i].TypedIdent.Type.Equals(dwf.InParams[i].TypedIdent.Type))
+
+                // not anyParams and param counts don't match..
+                if (i >= dwfInParams.Count)
+                    return false;
+                // param types don't match
+                if (!toMatchInParams[i].TypedIdent.Type.Equals(dwfInParams[i].TypedIdent.Type))
                     return false;
 
-                paramSubstitution.Add(toMatch.InParams[i], new IdentifierExpr(Token.NoToken, dwf.InParams[i]));
-            }
-
-            // match procedure out parameters
-            for (var i = 0; i < toMatch.OutParams.Count; i++)
-            {
-                if (i == toMatch.OutParams.Count - 1
-                        && BoogieUtil.checkAttrExists(KeyWords.AnyParams, toMatch.Proc.OutParams[i].Attributes))
-                {
-                    //TODO: do the same stuff as for inparams?..
-
-                    //toMatchAnyParamsAttributes = toMatch.OutParams[i].Attributes;
-                    //if (toMatchAnyParamsAttributes != null)
-                    //    toMatchAnyParamsAttributes.Next = toMatch.Proc.OutParams[i].Attributes;
-                    //else
-                    //    toMatchAnyParamsAttributes = toMatch.Proc.OutParams[i].Attributes;
-                    //BoogieUtil.removeAttr(KeyWords.AnyParams, toMatchAnyParamsAttributes);
-
-                    //TODO the type may also be constrained
-
-                    //anyParamsPosition = i;
-                }
-                else if (!toMatch.OutParams[i].TypedIdent.Type.Equals(dwf.OutParams[i].TypedIdent.Type))
-                {
-                    return false;
-                }
-                paramSubstitution.Add(toMatch.OutParams[i], new IdentifierExpr(Token.NoToken, dwf.OutParams[i]));
+                paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
             }
             return true;
         }

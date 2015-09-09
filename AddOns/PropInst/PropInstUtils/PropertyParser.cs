@@ -45,45 +45,48 @@ namespace PropInstUtils
 
             foreach (var line1 in propLines)
             {
-                //deal with the curly braces that belong to the property language (not to Boogie)
                 var line = line1;
+                // allow line comments on the top level (inside the parentheses, Boogie parsing is used anyway..)
+                if (pCounter == 0 && line.Contains("//"))
+                    line = line.Substring(0, line.IndexOf("//", System.StringComparison.Ordinal));
+
+                // just skip empty lines
+                if (line.Trim() == "")
+                    continue;
+
+                //deal with the curly braces that belong to the property language (not to Boogie)
                 if (pCounter == 0 && line.LastIndexOf('{') != -1)
                     line = line.Substring(line.IndexOf('{') + 1);
                 pCounter += CountChar(line1, '{') - CountChar(line1, '}');
                 if (pCounter == 0 && line.LastIndexOf('}') != -1)
                     line = line.Substring(0, line.LastIndexOf('}'));
 
-                // allow line comments on the top level (inside the parentheses, Boogie parsing is used anyway..)
-                if (pCounter == 0 && line.Contains("//"))
-                    line = line.Substring(0, line.IndexOf("//", System.StringComparison.Ordinal));
-
                 switch (mode)
                 {
                     case ReadMode.Toplevel:
                         currentRuleOrDecl = line.Trim();
-                        if (line.Trim() == "GlobalDeclarations")
+                        switch (line.Trim())
                         {
-                            mode = ReadMode.SingleItem;
-                        }
-                        if (line.Trim() == "TemplateVariables")
-                        {
-                            mode = ReadMode.SingleItem;
-                        }
-                        if (line.Trim() == "NegativeFilter")
-                        {
-                            mode = ReadMode.SingleItem;
-                        }
-                        if (line.Trim() == "PositiveFilter")
-                        {
-                            mode = ReadMode.SingleItem;
-                        }
-                        if (line.Trim() == "CmdRule")
-                        {
-                            mode = ReadMode.RuleLhs;
-                        }
-                        if (line.Trim() == "InsertAtBeginningRule")
-                        {
-                            mode = ReadMode.RuleLhs;
+                            case PropertyKeyWords.GlobalDeclarations:
+                                mode = ReadMode.SingleItem;
+                                break;
+                            case PropertyKeyWords.TemplateVariables:
+                                mode = ReadMode.SingleItem;
+                                break;
+                            case PropertyKeyWords.NegativeFilter:
+                                mode = ReadMode.SingleItem;
+                                break;
+                            case PropertyKeyWords.PositiveFilter:
+                                mode = ReadMode.SingleItem;
+                                break;
+                            case PropertyKeyWords.CmdRule:
+                                mode = ReadMode.RuleLhs;
+                                break;
+                            case PropertyKeyWords.ProcedureRule:
+                                mode = ReadMode.RuleLhs;
+                                break;
+                            default:
+                                throw new Exception("ERROR: keyword " + line.Trim() + " is not known in line: " + line1);
                         }
                         break;
                     case ReadMode.RuleLhs:
@@ -115,16 +118,16 @@ namespace PropInstUtils
                         {
                             switch (currentRuleOrDecl)
                             {
-                                case "GlobalDeclarations":
+                                case PropertyKeyWords.GlobalDeclarations:
                                     globalDeclarations = boogieLines;
                                     break;
-                                case "TemplateVariables":
+                                case PropertyKeyWords.TemplateVariables:
                                     templateVariables = boogieLines;
                                     break;
-                                case "NegativeFilter":
+                                case PropertyKeyWords.NegativeFilter:
                                     negativeFilters.Add(boogieLines.Trim());
                                     break;
-                                case "PositiveFilter":
+                                case PropertyKeyWords.PositiveFilter:
                                     positiveFilters.Add(boogieLines.Trim());
                                     break;
                             }

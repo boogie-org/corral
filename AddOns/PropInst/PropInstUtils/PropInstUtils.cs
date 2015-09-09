@@ -16,7 +16,7 @@ namespace PropInstUtils
             for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
             {
                 //need to filter out keyword attributes
-                if (KeyWords.AllKeywords.Contains(left.Key))
+                if (BoogieKeyWords.AllKeywords.Contains(left.Key))
                 {
                     continue;
                 }
