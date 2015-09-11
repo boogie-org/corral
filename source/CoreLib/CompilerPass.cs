@@ -1280,7 +1280,7 @@ namespace cba
             foreach(Ensures e in ensures) {
                 Debug.Assert(e.Free);
                 var expr = substOld.VisitExpr(e.Condition);
-                ensCmds.Add(new AssumeCmd(Token.NoToken, expr));
+                ensCmds.Add(new AssumeCmd(Token.NoToken, expr, e.Attributes));
             }
 
             foreach(Requires r in requires) {
@@ -1288,7 +1288,7 @@ namespace cba
                 var vu = new VarsUsed();
                 vu.VisitRequires(r);
                 Debug.Assert(vu.oldVarsUsed.Count == 0);
-                reqCmds.Add(new AssumeCmd(Token.NoToken, r.Condition));
+                reqCmds.Add(new AssumeCmd(Token.NoToken, r.Condition, r.Attributes));
             }
 
             reqCmds.AddRange(substOld.initLocVars);

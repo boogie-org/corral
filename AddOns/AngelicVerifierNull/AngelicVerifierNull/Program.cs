@@ -1068,7 +1068,7 @@ namespace AngelicVerifierNull
             {
                 iter++;
                 cba.ErrorTrace cex = null;
-                var pprog = new PersistentProgram(program, main, 1); // pprog.writeToFile("rl.bpl");
+                var pprog = new PersistentProgram(program, main, 1);  //pprog.writeToFile("rl.bpl");
                 corralState = new cba.CorralState();
                 if(ap != null) corralState.TrackedVariables.Add(ap);
 
