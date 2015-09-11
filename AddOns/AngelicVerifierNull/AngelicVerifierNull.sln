@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AngelicVerifierNull", "AngelicVerifierNull\AngelicVerifierNull.csproj", "{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorralUtil", "..\..\source\Util\CorralUtil.csproj", "{186DE4BD-014D-47C7-A914-831EA98116A9}"
@@ -22,6 +24,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvHarnessInstrumentation", "AvHarnessInstrumentation\AvHarnessInstrumentation.csproj", "{E2C5B356-6D38-406D-A074-1185834634DD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvUtil", "AvUtil\AvUtil.csproj", "{04D1EBFE-F934-44D2-86C6-407BC99AE00A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInstUtils", "..\PropInst\PropInstUtils\PropInstUtils.csproj", "{D2FE84CF-A502-4941-877E-5F82DAFE4D57}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -259,6 +263,26 @@ Global
 		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{04D1EBFE-F934-44D2-86C6-407BC99AE00A}.Release|Win32.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.HWSW|Any CPU.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.HWSW|Any CPU.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.HWSW|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.HWSW|Mixed Platforms.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.HWSW|Win32.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Internal|Any CPU.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Internal|Any CPU.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Internal|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Internal|Mixed Platforms.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Internal|Win32.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{D2FE84CF-A502-4941-877E-5F82DAFE4D57}.Release|Win32.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -8,6 +8,7 @@ using System.IO;
 using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
+using PropInstUtils;
 using VC;
 using Microsoft.Basetypes;
 using BType = Microsoft.Boogie.Type;
@@ -57,6 +58,11 @@ namespace ExplainError
         private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
         private static bool noFilters = false; //if true, then matches any atom
         private static bool diplayPropertyMaps = true; //hack: added for filtering valid
+
+        //the Exprs to filter by
+        public static bool useFiltersFromFile = false;
+        public static List<Expr> negativeFilters;
+        public static List<Expr> positiveFilters;
 
         //flags to define Boolean structure on the cover
         private static COVERMODE eeCoverOpt = COVERMODE.FULL_IF_NO_MONOMIAL;
@@ -737,7 +743,7 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
-                if (LiteralNotInVocabulary(c)) continue;
+                if (!LiteralInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
             if (toDisplay.Count == 0) { return false; }
@@ -1519,9 +1525,24 @@ namespace ExplainError
 
             return false;
         }
-        private static bool LiteralNotInVocabulary(Expr c)
+
+        #region LiteralNotInVocabulary reworked
+
+
+        private static bool LiteralInVocabulary(Expr c)
         {
             Console.Write("Atom:{0}\t", c);
+            if (useFiltersFromFile)
+            {
+                return LiteralInVocabularyNew(c);
+            }
+            else
+                return !LiteralNotInVocabularyOld(c);
+        }
+
+        private static bool LiteralNotInVocabularyOld(Expr c)
+        {
+            //Console.Write("Atom:{0}\t", c);
             //TODO: currently, the order matters (otherwise {typestate}x != c will get filtered by aliasingConstarint)
             //TODO: separate positive and negative filters
             if (noFilters) return false; //anything matches
@@ -1534,6 +1555,27 @@ namespace ExplainError
             if (!onlyDisplayAliasingInPre) return true;
             return false;
         }
+
+        private static bool LiteralInVocabularyNew(Expr c)
+        {
+            foreach (var nf in negativeFilters)
+            {
+                var emv = new ExprMatchVisitor(nf);
+                emv.Visit(c);
+                if (emv.Matches)
+                    return false;
+            }
+            foreach (var pf in positiveFilters)
+            {
+                var emv = new ExprMatchVisitor(pf);
+                emv.Visit(c);
+                if (emv.Matches)
+                    return true;
+            }
+            return false;
+        }
+
+        #endregion
 
         /// <summary>
         /// Splits a conjunction into its components
@@ -1583,14 +1625,14 @@ namespace ExplainError
             var expr = e as NAryExpr;
             if (expr == null)
             {
-                if (LiteralNotInVocabulary(e)) return Expr.True; //default
+                if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
             {
-                if (LiteralNotInVocabulary(e)) return Expr.True; //default
+                if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
             }
@@ -1857,4 +1899,5 @@ namespace ExplainError
         #endregion
 
     }
+
 }
