@@ -66,12 +66,12 @@ namespace PropInst
                 if (triple.Item1 == PropertyKeyWords.CmdRule)
                 {
                     rules.Add(new CmdRule(triple.Item2, triple.Item3, globalDeclarations + templateVariables));
-                    Stats.count("No CmdRule");
+                    Stats.count("No " + PropertyKeyWords.CmdRule);
                 }
                 if (triple.Item1 == PropertyKeyWords.ProcedureRule)
                 {
                     rules.Add(new InsertAtBeginningRule(triple.Item2, triple.Item3, globalDeclarations));
-                    Stats.count("No InsertAtBeginningRule");
+                    Stats.count("No " + PropertyKeyWords.ProcedureRule);
                 }
             }
         }
@@ -144,7 +144,7 @@ namespace PropInst
                             _program.AddTopLevelDeclaration(impl);
                         }
                         InjectCode(impl, anyParamsPosition, anyParamsAttributes, anyParamsPositionOut, anyParamsAttributesOut, procSig, rule, paramSubstitution);
-                        Stats.count("Times InsertAtBeginningRule injected code");
+                        Stats.count("Times " + PropertyKeyWords.ProcedureRule + " injected code");
                         //only take the first match
                         return;
                     }
@@ -287,7 +287,7 @@ namespace PropInst
                             ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
                         }
                         //the rule yielded a match --> done
-                        Stats.count("Times CmdRule injected code");
+                        Stats.count("Times " + PropertyKeyWords.CmdRule + " injected code");
                         return ret;
                     }
                 }
