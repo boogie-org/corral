@@ -276,21 +276,44 @@ namespace PropInstUtils
             }
 
             // now the positive cases
+
+            // the same function is used
             if (naeToConsume.Fun.Equals(node.Fun))
             {
-                //_toConsume = new List<Expr>(naeToConsume.Args);
                 _toConsume.Pop();
                 naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));
                 return base.VisitNAryExpr(node);
             }
+            // the function in toConsume has a declaration in TemplateVariables
             if (naeToConsume.Fun is FunctionCall
                 && ((FunctionCall)naeToConsume.Fun).Func != null
+                && naeToConsume.Fun.ArgumentCount == node.Fun.ArgumentCount
+                && ((FunctionCall)naeToConsume.Fun).Func.InParams.Count == ((FunctionCall)node.Fun).Func.InParams.Count
+                && ((FunctionCall)naeToConsume.Fun).Func.OutParams.Count == ((FunctionCall)node.Fun).Func.OutParams.Count
                 && node.Fun is FunctionCall
                 && PropInstUtils.AreAttributesASubset(
                      ((FunctionCall)naeToConsume.Fun).Func.Attributes,
                      ((FunctionCall)node.Fun).Func.Attributes))
             {
-                var func = ((FunctionCall)naeToConsume.Fun).Func;
+                // do the argument types match?
+                var tcFunc = ((FunctionCall)naeToConsume.Fun).Func;
+                var nodeFunc = ((FunctionCall)node.Fun).Func;
+                for (var i = 0; i < tcFunc.InParams.Count; i++)
+                {
+                    if (Equals(tcFunc.InParams[i].TypedIdent.Type, nodeFunc.InParams[i].TypedIdent.Type))
+                    {
+                        Matches = false;
+                        return base.VisitNAryExpr(node);
+                    }
+                }
+                for (var i = 0; i < tcFunc.OutParams.Count; i++)
+                {
+                    if (Equals(tcFunc.OutParams[i].TypedIdent.Type, nodeFunc.OutParams[i].TypedIdent.Type)) {
+                        Matches = false;
+                        return base.VisitNAryExpr(node);
+                    }
+                }
+
 
                 FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
 
@@ -337,7 +360,8 @@ namespace PropInstUtils
 
             if (idexToConsume.Decl != null)
             {
-                if (PropInstUtils.AreAttributesASubset(idexToConsume.Decl.Attributes, node.Decl.Attributes))
+                if (Equals(node.Decl.TypedIdent.Type, idexToConsume.Decl.TypedIdent.Type) 
+                    && PropInstUtils.AreAttributesASubset(idexToConsume.Decl.Attributes, node.Decl.Attributes))
                 {
                     Substitution.Add(idexToConsume.Decl, node);
                     _toConsume.Pop();

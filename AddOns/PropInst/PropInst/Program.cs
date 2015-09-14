@@ -281,10 +281,18 @@ namespace PropInst
                     if (match)
                     {
                         var ret = new List<Cmd>();
-                        foreach (var subsPair in substitutions)
+                        if (substitutions.Count == 0)
                         {
-                            var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                            var sv = new SubstitionVisitor(new Dictionary<Declaration, Expr>(), new Dictionary<string, IAppliable>(), cmd);
                             ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                        }
+                        else
+                        {
+                            foreach (var subsPair in substitutions)
+                            {
+                                var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                                ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                            }
                         }
                         //the rule yielded a match --> done
                         Stats.count("Times " + PropertyKeyWords.CmdRule + " injected code");
@@ -301,7 +309,6 @@ namespace PropInst
             // answer:      the reason (right now) is AnyArgs: many arguments may match, the current semantics 
             //              is that we want to make the insertion for every match (example: memory accesses)
             substitutions = new List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>>();
-            var match = false;
 
             #region match procedure name
 
@@ -318,7 +325,7 @@ namespace PropInst
             else
             {
                 //no match
-                return match;
+                return false;
             }
 
             #endregion
@@ -362,23 +369,44 @@ namespace PropInst
                         substitutions.Add(
                             new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
                                 emv.Substitution, emv.FunctionSubstitution));
-                        match = true;
                     }
                 }
                 if (!atLeastOneMatch)
-                    return match;
+                    return false;
             }
             else
             {
-                //match them one by one
-                //TODO
-                //if they don't match:
-                return match;
+                if (toMatch.Ins.Count != cmd.Ins.Count)
+                    return false;
+
+
+                for (var i = 0; i < cmd.Ins.Count; i++)
+                {
+                    var arg = cmd.Ins[i];
+
+                    var emv = new ExprMatchVisitor(toMatch.Ins[i]);
+
+                    emv.VisitExpr(arg);
+                    if (emv.Matches)
+                    {
+                        if (substitutions.Count == 0) {
+                            substitutions.Add(new Tuple<Dictionary<Declaration,Expr>,Dictionary<string,IAppliable>>(new Dictionary<Declaration,Expr>(), new Dictionary<string,IAppliable>()));
+                        }
+                        foreach (var kvp in emv.Substitution)
+                            substitutions.First().Item1.Add(kvp.Key, kvp.Value);
+                        foreach (var kvp in emv.FunctionSubstitution)
+                            substitutions.First().Item2.Add(kvp.Key, kvp.Value);
+                    }
+                    else 
+                    { 
+                        return false;
+                    }
+                }
             }
 
             #endregion
 
-            return match;
+            return true;
         }
 
         private static bool MatchPredicateCmd(PredicateCmd cmd, PredicateCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
