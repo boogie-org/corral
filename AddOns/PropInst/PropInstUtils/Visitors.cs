@@ -237,8 +237,9 @@ namespace PropInstUtils
 
             // check if we need to switch to anyExprMode
             if (_toConsume.Peek() is NAryExpr
-                && (((NAryExpr) _toConsume.Peek()).Fun) is FunctionCall
-                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall) ((NAryExpr) _toConsume.Peek()).Fun).Func.Attributes))
+                && (((NAryExpr)_toConsume.Peek()).Fun) is FunctionCall
+                && ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func != null
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func.Attributes))
             {
                 _anyExprMode = true;
 

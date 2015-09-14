@@ -306,18 +306,14 @@ namespace PropInst
             #region match procedure name
 
             //if (toMatch.callee == BoogieKeyWords.AnyProcedure)
-            var matchCallee = rule.Prog.Procedures.First(p => p.Name == toMatch.callee);
+            var matchCallee = rule.Prog.Procedures.FirstOrDefault(p => p.Name == toMatch.callee);
             if (matchCallee != null)
             {
-                // do nothing
-            }
-            else if (toMatch.callee.StartsWith("##"))
-            {
-                //TODO: implement, probably: remember the real identifier..
+                // procedure is declared in TemplateVariables
             }
             else if (toMatch.callee == cmd.Proc.Name)
             {
-                // do nothing
+                // procedure matches by name
             }
             else
             {
@@ -327,7 +323,7 @@ namespace PropInst
 
             #endregion
 
-            #region match out parameters ("the things assigned to")
+            #region match out parameters
 
             //if (toMatch.Outs.Count == 1
             //    && toMatch.Outs[0].Name == BoogieKeyWords.AnyLhss)
@@ -348,7 +344,7 @@ namespace PropInst
 
             #region match arguments
 
-            if (BoogieUtil.checkAttrExists(BoogieKeyWords.AnyArgs, matchCallee.Attributes))
+            if (matchCallee != null && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyArgs, matchCallee.Attributes))
             {
                 var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
