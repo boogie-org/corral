@@ -300,7 +300,7 @@ namespace PropInstUtils
                 var nodeFunc = ((FunctionCall)node.Fun).Func;
                 for (var i = 0; i < tcFunc.InParams.Count; i++)
                 {
-                    if (Equals(tcFunc.InParams[i].TypedIdent.Type, nodeFunc.InParams[i].TypedIdent.Type))
+                    if (!Equals(tcFunc.InParams[i].TypedIdent.Type, nodeFunc.InParams[i].TypedIdent.Type))
                     {
                         Matches = false;
                         return base.VisitNAryExpr(node);
@@ -308,7 +308,7 @@ namespace PropInstUtils
                 }
                 for (var i = 0; i < tcFunc.OutParams.Count; i++)
                 {
-                    if (Equals(tcFunc.OutParams[i].TypedIdent.Type, nodeFunc.OutParams[i].TypedIdent.Type)) {
+                    if (!Equals(tcFunc.OutParams[i].TypedIdent.Type, nodeFunc.OutParams[i].TypedIdent.Type)) {
                         Matches = false;
                         return base.VisitNAryExpr(node);
                     }
