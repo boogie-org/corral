@@ -98,7 +98,7 @@ namespace CoreLib
 
             // Instrument to record stuff
             p.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
-                impl.Blocks.Iter(instrument));
+                impl.Blocks.Iter(b => instrument(b)));
 
             // Name clash if this assert fails
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
@@ -136,6 +136,12 @@ namespace CoreLib
 
             // Build a map of where the alloc constants are from
             allocConstants = rt.concretizeConstantToCall;
+
+            // Add symbolic constants for angelic map havocs
+            var newDecls = new List<Constant>();
+            rtprog.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
+                impl.Blocks.Iter(b => instrumentMapHavocs(b, allocConstants, newDecls)));
+            rtprog.AddTopLevelDeclarations(newDecls);
 
             /*
             foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())
@@ -212,12 +218,60 @@ namespace CoreLib
 
                 var retVal = ccmd.Outs[0];
 
-                if (retVal == null) continue;
+                if (retVal == null || retVal.Type.IsMap) continue;
 
                 newCmds.Add(makeRecordCall(retVal));
+                                    
             }
             block.Cmds = newCmds;
         }
+
+        private void instrumentMapHavocs(Block block, Dictionary<string, int> allocConstants, List<Constant> newDecls)
+        {
+            var newCmds = new List<Cmd>();
+            foreach (Cmd cmd in block.Cmds)
+            {
+                newCmds.Add(cmd);
+
+                if (!(cmd is CallCmd))
+                {
+                    continue;
+                }
+
+                var ccmd = cmd as CallCmd;
+
+                if (ccmd.Outs.Count != 1)
+                {
+                    continue;
+                }
+
+                if (!procsWithoutBody.Contains(ccmd.Proc.Name))
+                {
+                    continue;
+                }
+
+                var retVal = ccmd.Outs[0];
+
+                if (retVal == null) continue;
+
+                if (retVal.Type.IsMap)
+                {
+                    // new constant
+                    var mapconst = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "mapconst" + newDecls.Count,
+                        retVal.Type), false);
+                    newDecls.Add(mapconst);
+
+                    var id = QKeyValue.FindIntAttribute(ccmd.Attributes, RestrictToTrace.ConcretizeCallIdAttr, -1);
+                    allocConstants.Add(mapconst.Name, id);
+
+                    newCmds.Add(BoogieAstFactory.MkVarEqVar(retVal.Decl, mapconst));
+                }
+
+
+            }
+            block.Cmds = newCmds;
+        }
+
 
         private CallCmd makeRecordCall(IdentifierExpr v)
         {

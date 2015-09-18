@@ -4,15 +4,16 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{D2FE84CF-A502-4941-877E-5F82DAFE4D57}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <ProjectGuid>{22E2F850-4673-4E8A-8AD2-4A190FA19A7D}</ProjectGuid>
+    <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>PropInstUtils</RootNamespace>
-    <AssemblyName>PropInstUtils</AssemblyName>
+    <RootNamespace>RunEE</RootNamespace>
+    <AssemblyName>RunEE</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -22,6 +23,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -31,43 +33,43 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AbsInt">
-      <HintPath>..\..\references\AbsInt.dll</HintPath>
+      <HintPath>..\..\..\references\AbsInt.dll</HintPath>
     </Reference>
     <Reference Include="Basetypes">
-      <HintPath>..\..\references\Basetypes.dll</HintPath>
+      <HintPath>..\..\..\references\Basetypes.dll</HintPath>
     </Reference>
     <Reference Include="CodeContractsExtender">
-      <HintPath>..\..\references\CodeContractsExtender.dll</HintPath>
+      <HintPath>..\..\..\references\CodeContractsExtender.dll</HintPath>
     </Reference>
     <Reference Include="Concurrency">
-      <HintPath>..\..\references\Concurrency.dll</HintPath>
+      <HintPath>..\..\..\references\Concurrency.dll</HintPath>
     </Reference>
     <Reference Include="Core">
-      <HintPath>..\..\references\Core.dll</HintPath>
+      <HintPath>..\..\..\references\Core.dll</HintPath>
     </Reference>
     <Reference Include="Doomed">
-      <HintPath>..\..\references\Doomed.dll</HintPath>
+      <HintPath>..\..\..\references\Doomed.dll</HintPath>
     </Reference>
     <Reference Include="ExecutionEngine">
-      <HintPath>..\..\references\ExecutionEngine.dll</HintPath>
+      <HintPath>..\..\..\references\ExecutionEngine.dll</HintPath>
     </Reference>
     <Reference Include="Graph">
-      <HintPath>..\..\references\Graph.dll</HintPath>
+      <HintPath>..\..\..\references\Graph.dll</HintPath>
     </Reference>
     <Reference Include="Houdini">
-      <HintPath>..\..\references\Houdini.dll</HintPath>
+      <HintPath>..\..\..\references\Houdini.dll</HintPath>
     </Reference>
     <Reference Include="Model">
-      <HintPath>..\..\references\Model.dll</HintPath>
+      <HintPath>..\..\..\references\Model.dll</HintPath>
     </Reference>
     <Reference Include="ParserHelper">
-      <HintPath>..\..\references\ParserHelper.dll</HintPath>
+      <HintPath>..\..\..\references\ParserHelper.dll</HintPath>
     </Reference>
     <Reference Include="Predication">
-      <HintPath>..\..\references\Predication.dll</HintPath>
+      <HintPath>..\..\..\references\Predication.dll</HintPath>
     </Reference>
     <Reference Include="Provers.SMTLib">
-      <HintPath>..\..\references\Provers.SMTLib.dll</HintPath>
+      <HintPath>..\..\..\references\Provers.SMTLib.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -77,21 +79,29 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="VCExpr">
-      <HintPath>..\..\references\VCExpr.dll</HintPath>
+      <HintPath>..\..\..\references\VCExpr.dll</HintPath>
     </Reference>
     <Reference Include="VCGeneration">
-      <HintPath>..\..\references\VCGeneration.dll</HintPath>
+      <HintPath>..\..\..\references\VCGeneration.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="GlobalConstants.cs" />
+    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="PropertyParser.cs" />
-    <Compile Include="PropInstUtils.cs" />
-    <Compile Include="Visitors.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Util\CorralUtil.csproj">
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
+      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
+      <Name>ExplainError</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
+      <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
+      <Name>ProgTransformation</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
     </ProjectReference>
