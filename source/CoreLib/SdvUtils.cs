@@ -97,10 +97,8 @@ namespace CoreLib
             var modInpProg = fd.VisitProgram(p);
 
             // Instrument to record stuff
-            var newDecls = new List<Constant>();
             p.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
-                impl.Blocks.Iter(b => instrument(b, newDecls)));
-            //p.AddTopLevelDeclarations(newDecls);
+                impl.Blocks.Iter(b => instrument(b)));
 
             // Name clash if this assert fails
             Debug.Assert(BoogieUtil.findProcedureDecl(p.TopLevelDeclarations, recordProcNameInt) == null);
@@ -136,12 +134,14 @@ namespace CoreLib
 
             var rtprog = rt.getProgram();
 
-            p.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
-                impl.Blocks.Iter(b => instrumentMapHavocs(b, newDecls)));
-            p.AddTopLevelDeclarations(newDecls);
-
             // Build a map of where the alloc constants are from
             allocConstants = rt.concretizeConstantToCall;
+
+            // Add symbolic constants for angelic map havocs
+            var newDecls = new List<Constant>();
+            rtprog.TopLevelDeclarations.OfType<Implementation>().Iter(impl =>
+                impl.Blocks.Iter(b => instrumentMapHavocs(b, allocConstants, newDecls)));
+            rtprog.AddTopLevelDeclarations(newDecls);
 
             /*
             foreach (var impl in rtprog.TopLevelDeclarations.OfType<Implementation>())
@@ -179,7 +179,7 @@ namespace CoreLib
         }
 
 
-        private void instrument(Block block, List<Constant> newDecls)
+        private void instrument(Block block)
         {
             var newCmds = new List<Cmd>();
             foreach (Cmd cmd in block.Cmds)
@@ -218,25 +218,15 @@ namespace CoreLib
 
                 var retVal = ccmd.Outs[0];
 
-                if (retVal == null) continue;
+                if (retVal == null || retVal.Type.IsMap) continue;
 
-                if (!retVal.Type.IsMap)
-                    newCmds.Add(makeRecordCall(retVal));
-                else
-                {
-                    // new constant
-                    var mapconst = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "mapconst" + newDecls.Count,
-                        retVal.Type), false);
-                    newDecls.Add(mapconst);
-                    //newCmds.Add(BoogieAstFactory.MkVarEqVar(retVal.Decl, mapconst));
-                }
-                        
-                
+                newCmds.Add(makeRecordCall(retVal));
+                                    
             }
             block.Cmds = newCmds;
         }
 
-        private void instrumentMapHavocs(Block block, List<Constant> newDecls)
+        private void instrumentMapHavocs(Block block, Dictionary<string, int> allocConstants, List<Constant> newDecls)
         {
             var newCmds = new List<Cmd>();
             foreach (Cmd cmd in block.Cmds)
@@ -270,6 +260,9 @@ namespace CoreLib
                     var mapconst = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "mapconst" + newDecls.Count,
                         retVal.Type), false);
                     newDecls.Add(mapconst);
+
+                    var id = QKeyValue.FindIntAttribute(ccmd.Attributes, RestrictToTrace.ConcretizeCallIdAttr, -1);
+                    allocConstants.Add(mapconst.Name, id);
 
                     newCmds.Add(BoogieAstFactory.MkVarEqVar(retVal.Decl, mapconst));
                 }
