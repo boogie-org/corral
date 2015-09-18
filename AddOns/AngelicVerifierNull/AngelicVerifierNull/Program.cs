@@ -7,12 +7,12 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using Microsoft.Boogie;
-using PropInstUtils;
 using btype = Microsoft.Boogie.Type;
 using cba.Util;
 using PersistentProgram = cba.PersistentCBAProgram;
 using SimpleHoudini = cba.SimpleHoudini;
 using AvUtil;
+using PropInstUtils;
 
 namespace AngelicVerifierNull
 {

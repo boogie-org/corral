@@ -8,7 +8,6 @@ using System.IO;
 using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
-using PropInstUtils;
 using VC;
 using Microsoft.Basetypes;
 using BType = Microsoft.Boogie.Type;

@@ -85,7 +85,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\source\PropInstUtils\PropInstUtils.csproj">
+    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj">
       <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
       <Name>PropInstUtils</Name>
     </ProjectReference>

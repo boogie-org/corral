@@ -87,10 +87,11 @@
     <Compile Include="GlobalConstants.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PropertyParser.cs" />
+    <Compile Include="PropInstUtils.cs" />
     <Compile Include="Visitors.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Util\CorralUtil.csproj">
+    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
     </ProjectReference>

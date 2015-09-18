@@ -25,7 +25,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvHarnessInstrumentation", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvUtil", "AvUtil\AvUtil.csproj", "{04D1EBFE-F934-44D2-86C6-407BC99AE00A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInstUtils", "..\..\source\PropInstUtils\PropInstUtils.csproj", "{D2FE84CF-A502-4941-877E-5F82DAFE4D57}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInstUtils", "..\PropInst\PropInstUtils\PropInstUtils.csproj", "{D2FE84CF-A502-4941-877E-5F82DAFE4D57}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

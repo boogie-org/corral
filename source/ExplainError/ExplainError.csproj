@@ -85,10 +85,6 @@
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj">
-      <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
-      <Name>PropInstUtils</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Util\CorralUtil.csproj">
       <Project>{186DE4BD-014D-47C7-A914-831EA98116A9}</Project>
       <Name>CorralUtil</Name>

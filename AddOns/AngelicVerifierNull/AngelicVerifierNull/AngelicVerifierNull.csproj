@@ -112,10 +112,6 @@
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
       <Name>ProgTransformation</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\source\PropInstUtils\PropInstUtils.csproj">
-      <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
-      <Name>PropInstUtils</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
@@ -123,6 +119,10 @@
     <ProjectReference Include="..\..\AliasAnalysis\AliasAnalysis\AliasAnalysis.csproj">
       <Project>{584822a6-f933-484f-aff3-5d3cc2337198}</Project>
       <Name>AliasAnalysis</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\PropInst\PropInstUtils\PropInstUtils.csproj">
+      <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
+      <Name>PropInstUtils</Name>
     </ProjectReference>
     <ProjectReference Include="..\AvUtil\AvUtil.csproj">
       <Project>{04d1ebfe-f934-44d2-86c6-407bc99ae00a}</Project>

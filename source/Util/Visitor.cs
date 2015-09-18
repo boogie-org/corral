@@ -1029,4 +1029,287 @@ namespace cba.Util
 
     }
 
+    public class ExprMatchVisitor : FixedVisitor
+    {
+        private readonly Stack<Expr> _toConsume;
+        public bool Matches = true;
+        public readonly Dictionary<string, IAppliable> FunctionSubstitution = new Dictionary<string, IAppliable>();
+        public readonly Dictionary<Declaration, Expr> Substitution = new Dictionary<Declaration, Expr>();
+
+        private bool _anyExprMode = false;
+
+        public ExprMatchVisitor(Expr pToConsume)
+        {
+            _toConsume = new Stack<Expr>();
+            _toConsume.Push(pToConsume);
+        }
+
+        public ExprMatchVisitor(Stack<Expr> pToConsume)
+        {
+            _toConsume = pToConsume;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            //start with some negative cases
+            if (!Matches
+                || _toConsume.Count == 0)
+            {
+                Matches = false;
+                return base.VisitNAryExpr(node);
+            }
+
+            //idea: if in anyExprMode, toConsume does not change --> we eat up any NaryExpr
+            // if any of the  arguments matches, the whole thing matches
+            // nothing fancier now, because we only need IdentifierExpr and LiteralExpr
+            if (_anyExprMode)
+            {
+                var anyMatches = false;
+                var dispatched = new List<Expr>();
+                foreach (var a in node.Args)
+                {
+                    Matches = true;
+                    dispatched.Add(VisitExpr(a));
+                    anyMatches |= Matches;
+                }
+                Matches = anyMatches;
+                return new NAryExpr(node.tok, node.Fun, dispatched);
+            }
+
+            // check if we need to switch to anyExprMode
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr)_toConsume.Peek()).Fun) is FunctionCall
+                && ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func != null
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func.Attributes))
+            {
+                _anyExprMode = true;
+
+                _toConsume.Pop();
+                ((NAryExpr)_toConsume.Peek()).Args.Reverse().Iter(arg => _toConsume.Push(arg));
+                var result = VisitNAryExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
+            }
+
+            if (!(_toConsume.Peek() is NAryExpr))
+            {
+                //may still be an IdentifierExp intended to match any exp
+                if (_toConsume.First() is IdentifierExpr
+                    && ((IdentifierExpr)_toConsume.Peek()).Decl != null
+                    && !BoogieUtil.checkAttrExists(BoogieKeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
+                {
+                    Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
+                    _toConsume.Pop();
+                    return node;
+                }
+                Matches = false;
+                return base.VisitNAryExpr(node);
+            }
+
+            var naeToConsume = (NAryExpr)_toConsume.Peek();
+
+            if (((NAryExpr)_toConsume.Peek()).Args.Count != node.Args.Count)
+            {
+                Matches = false;
+                return base.VisitNAryExpr(node);
+            }
+
+            // now the positive cases
+
+            // the same function is used
+            if (naeToConsume.Fun.Equals(node.Fun))
+            {
+                _toConsume.Pop();
+                naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));
+                return base.VisitNAryExpr(node);
+            }
+            // the function in toConsume has a declaration in TemplateVariables
+            if (naeToConsume.Fun is FunctionCall
+                && ((FunctionCall)naeToConsume.Fun).Func != null
+                && naeToConsume.Fun.ArgumentCount == node.Fun.ArgumentCount
+                && ((FunctionCall)naeToConsume.Fun).Func.InParams.Count == ((FunctionCall)node.Fun).Func.InParams.Count
+                && ((FunctionCall)naeToConsume.Fun).Func.OutParams.Count == ((FunctionCall)node.Fun).Func.OutParams.Count
+                && node.Fun is FunctionCall
+                && AreAttributesASubset(
+                     ((FunctionCall)naeToConsume.Fun).Func.Attributes,
+                     ((FunctionCall)node.Fun).Func.Attributes))
+            {
+                // do the argument types match?
+                var tcFunc = ((FunctionCall)naeToConsume.Fun).Func;
+                var nodeFunc = ((FunctionCall)node.Fun).Func;
+                for (var i = 0; i < tcFunc.InParams.Count; i++)
+                {
+                    if (!Equals(tcFunc.InParams[i].TypedIdent.Type, nodeFunc.InParams[i].TypedIdent.Type))
+                    {
+                        Matches = false;
+                        return base.VisitNAryExpr(node);
+                    }
+                }
+                for (var i = 0; i < tcFunc.OutParams.Count; i++)
+                {
+                    if (!Equals(tcFunc.OutParams[i].TypedIdent.Type, nodeFunc.OutParams[i].TypedIdent.Type))
+                    {
+                        Matches = false;
+                        return base.VisitNAryExpr(node);
+                    }
+                }
+
+
+                FunctionSubstitution.Add(naeToConsume.Fun.FunctionName, node.Fun);
+
+                _toConsume.Pop();
+                naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));
+                return base.VisitNAryExpr(node);
+            }
+            Matches = false;
+            return base.VisitNAryExpr(node);
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            if (!Matches
+                || _toConsume.Count == 0)
+            {
+                Matches = false;
+                return base.VisitIdentifierExpr(node);
+            }
+
+            // check if we need to switch to anyExprMode
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr)_toConsume.Peek()).Fun) is FunctionCall
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func.Attributes))
+            {
+                _anyExprMode = true;
+
+                _toConsume.Pop();
+                ((NAryExpr)_toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                var result = VisitIdentifierExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
+            }
+
+            if (!(_toConsume.Peek() is IdentifierExpr))
+            {
+                Matches = false;
+                return base.VisitIdentifierExpr(node);
+            }
+
+            var idexToConsume = (IdentifierExpr)_toConsume.Peek();
+
+            if (idexToConsume.Decl != null)
+            {
+                if (Equals(node.Decl.TypedIdent.Type, idexToConsume.Decl.TypedIdent.Type)
+                    && AreAttributesASubset(idexToConsume.Decl.Attributes, node.Decl.Attributes))
+                {
+                    Substitution.Add(idexToConsume.Decl, node);
+                    _toConsume.Pop();
+                }
+                else
+                {
+                    Matches = false;
+                }
+                return base.VisitIdentifierExpr(node);
+            }
+            if (idexToConsume.Name == node.Name)
+            {
+                return base.VisitIdentifierExpr(node);
+            }
+
+            Matches = false;
+            return base.VisitIdentifierExpr(node);
+        }
+        public override Expr VisitLiteralExpr(LiteralExpr node)
+        {
+            if (!Matches
+                || _toConsume.Count == 0)
+            {
+                Matches = false;
+                return base.VisitLiteralExpr(node);
+            }
+
+            // check if we need to switch to anyExprMode
+            if (_toConsume.Peek() is NAryExpr
+                && (((NAryExpr)_toConsume.Peek()).Fun) is FunctionCall
+                && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyExpr, ((FunctionCall)((NAryExpr)_toConsume.Peek()).Fun).Func.Attributes))
+            {
+                _anyExprMode = true;
+
+                _toConsume.Pop();
+                ((NAryExpr)_toConsume.Peek()).Args.Iter(arg => _toConsume.Push(arg));
+                var result = VisitLiteralExpr(node);
+
+                _anyExprMode = false;
+
+                return result;
+            }
+
+            if (!(_toConsume.Peek() is LiteralExpr))
+            {
+                if (_toConsume.Peek() is IdentifierExpr
+                    && ((IdentifierExpr)_toConsume.Peek()).Decl != null
+                    && !BoogieUtil.checkAttrExists(BoogieKeyWords.IdExpr, ((IdentifierExpr)_toConsume.Peek()).Decl.Attributes))
+                {
+                    Substitution.Add(((IdentifierExpr)_toConsume.Peek()).Decl, node);
+                    _toConsume.Pop();
+                    return node;
+                }
+                Matches = false;
+                return base.VisitLiteralExpr(node);
+            }
+            if (node.Val.Equals(((LiteralExpr)_toConsume.Peek()).Val))
+            {
+                return base.VisitLiteralExpr(node);
+            }
+            Matches = false;
+            return base.VisitLiteralExpr(node);
+        }
+
+        public static bool AreAttributesASubset(QKeyValue left, QKeyValue right)
+        {
+            for (; left != null; left = left.Next) //TODO: make a reference copy of left to work on??
+            {
+                //need to filter out keyword attributes
+                if (BoogieKeyWords.AllKeywords.Contains(left.Key))
+                {
+                    continue;
+                }
+
+                if (!BoogieUtil.checkAttrExists(left.Key, right))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public class BoogieKeyWords
+        {
+            // arbitrary list of parameters (at a procedure declaration)
+            public const string AnyParams = "#AnyParameters";
+            // arbitrary list of arguments (at a procedure call)
+            // may be used as a function: argument is an expression, we choose those where the expression matches
+            public const string AnyArgs = "#AnyArguments";
+
+            public const string AnyExpr = "#AnyExpr";
+            //arbitrary list of results of a call
+            // these are always IdentifierExprs
+            //public const string AnyResults = "$$ANYRESULTS";
+            //nicer instead of AnyResults:
+            public const string AnyLhss = "$$ANYLEFTHANDSIDES";
+            public const string AnyType = "$$ANYTYPE";
+            public const string AnyProcedure = "#AnyProcedure";
+            // any IdentifierExpr
+            public const string IdExpr = "#IdentifierExpr";
+            // matching a name with a regex
+            public const string NameMatches = "#NameMatches";
+            // procedure must be declared but not implemented
+            public const string NoImplementation = "#NoImplementation";
+
+            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation };
+        }
+    }
 }

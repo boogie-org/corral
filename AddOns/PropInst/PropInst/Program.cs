@@ -174,7 +174,7 @@ namespace PropInst
                     // with matching (subset) attributes
                     // we look both in the implementation's and the procedure declaration's signature
                     if (anyParamsAttributes == null
-                        || PropInstUtils.PropInstUtils.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
+                        || ExprMatchVisitor.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
                     {
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
                         var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
@@ -351,7 +351,7 @@ namespace PropInst
 
             #region match arguments
 
-            if (matchCallee != null && BoogieUtil.checkAttrExists(BoogieKeyWords.AnyArgs, matchCallee.Attributes))
+            if (matchCallee != null && BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.AnyArgs, matchCallee.Attributes))
             {
                 var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
 
@@ -414,7 +414,7 @@ namespace PropInst
             var match = false;
             substitutions = null;
 
-            if (!PropInstUtils.PropInstUtils.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
+            if (!ExprMatchVisitor.AreAttributesASubset(toMatch.Attributes, cmd.Attributes))
             {
                 return match;
             }

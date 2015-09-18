@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInst", "PropInst\PropIn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorralUtil", "..\..\source\Util\CorralUtil.csproj", "{186DE4BD-014D-47C7-A914-831EA98116A9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInstUtils", "..\..\source\PropInstUtils\PropInstUtils.csproj", "{D2FE84CF-A502-4941-877E-5F82DAFE4D57}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropInstUtils", "PropInstUtils\PropInstUtils.csproj", "{D2FE84CF-A502-4941-877E-5F82DAFE4D57}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
