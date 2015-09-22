@@ -49,16 +49,15 @@ namespace AvHarnessInstrumentation
                 entrypoints = new HashSet<string>();
                 stubs = new HashSet<string>();
             }
-            public void DoInstrument()
+            public void DoInstrument(bool addMain = true)
             {
                 FindUnknown();
                 FindNULL();
                 var reach = FindReachableStatesFunc(prog);
 
-                CreateMainProcedure(reach);
+                if(addMain) CreateMainProcedure(reach);
                 ChangeStubsIntoUnkowns();
             }
-
             private void CreateMainProcedure(Function reach)
             {
                 //blocks 
@@ -252,6 +251,18 @@ namespace AvHarnessInstrumentation
                         // Avoid using Havoc -- we'll let this fall on the floor as an
                         // uninitialized variable. AVN will take care of concretizing it
                         //cmds.Add(BoogieAstFactory.MkHavocVar(op)); 
+                    }
+                }
+                foreach (var v in p.Modifies.Select(ie => ie.Decl))
+                {
+                    if (IsPointerVariable(v))
+                    {
+                        cmds.Add(AllocatePointerAsUnknown(v));
+                    }
+                    else
+                    {
+                        // unsupported
+                        Console.WriteLine("Warning: demonic havoc of globals; probably unsupported");
                     }
                 }
                 foreach (var ip in p.InParams)

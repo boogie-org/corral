@@ -45,9 +45,11 @@ namespace AvHarnessInstrumentation
         public static int inlineDepth = -1;
         // unroll depth for bounding fixpoint depth
         public static int unrollDepth = -1;
+        // stubs file
+        public static string stubsfile = null;
     }
 
-    class Driver
+    public class Driver
     {
         // Globals
         static Dictionary<int, HashSet<int>> DeadCodeBranchesDependencyInfo = null; // unknown -> set of affected branches
@@ -67,7 +69,7 @@ namespace AvHarnessInstrumentation
             return;
         }
 
-        public static Program GetInputProgram(string filename, string stubs)
+        public static Program GetInputProgram(string filename)
         {
             Program init = BoogieUtil.ParseProgram(filename);
             //Instrumentations.RemoveAssertNonNull ra = new Instrumentations.RemoveAssertNonNull();
@@ -76,11 +78,11 @@ namespace AvHarnessInstrumentation
             CheckInputProgramRequirements(init);
 
             // Adding impl for stubs
-            if (stubs != null)
+            if (Options.stubsfile != null)
             {
                 try
                 {
-                    Program stubProg = BoogieUtil.ParseProgram(stubs);
+                    Program stubProg = BoogieUtil.ParseProgram(Options.stubsfile);
 
                     var procs = new Dictionary<string, Procedure>();
                     init.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procs.Add(proc.Name, proc));
@@ -102,7 +104,7 @@ namespace AvHarnessInstrumentation
                 }
                 catch (System.IO.FileNotFoundException)
                 {
-                    Utils.Print(string.Format("Stub file not found : {0}", stubs));
+                    Utils.Print(string.Format("Stub file not found : {0}", Options.stubsfile));
                 }
             }
 
@@ -339,9 +341,9 @@ namespace AvHarnessInstrumentation
             return mallocProcedureFull;
         }
 
-        static Program GetProgram(string filename, string stubsfile)
+        static Program GetProgram(string filename)
         {
-            var init = GetInputProgram(filename, stubsfile);
+            var init = GetInputProgram(filename);
 
             if (Options.addInitialization) ComputeandInitializeUninitializedLocals(init);
 
@@ -411,19 +413,8 @@ namespace AvHarnessInstrumentation
             return init;
         }
 
-
-        static void Main(string[] args)
+        public static void SetOptions(string[] args)
         {
-            System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Batch;
-
-            if (args.Length < 2 || !args[0].EndsWith(".bpl") || !args[1].EndsWith(".bpl"))
-            {
-                Console.WriteLine("Usage: AvHarnessInstrumentation infile.bpl outfile.bpl [options]");
-                return;
-            }
-
-            string stubsfile = null;
-
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
 
@@ -475,11 +466,11 @@ namespace AvHarnessInstrumentation
             args.Where(s => s.StartsWith("/unrollDepth:"))
                 .Iter(s => Options.unrollDepth = int.Parse(s.Substring("/unrollDepth:".Length)));
 
-            if(args.Any(s => s == "/markAssumesAsSlic"))
+            if (args.Any(s => s == "/markAssumesAsSlic"))
                 Options.markAssumesAsSlic = true;
 
             args.Where(s => s.StartsWith("/stubPath:"))
-                .Iter(s => stubsfile = s.Substring("/stubPath:".Length));
+                .Iter(s => Options.stubsfile = s.Substring("/stubPath:".Length));
 
             args.Where(s => s.StartsWith("/unknownType:"))
                 .Iter(s => Options.unknownTypes.Add(s.Substring("/unknownType:".Length)));
@@ -489,6 +480,20 @@ namespace AvHarnessInstrumentation
 
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");
+        }
+
+
+        static void Main(string[] args)
+        {
+            System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Batch;
+
+            if (args.Length < 2 || !args[0].EndsWith(".bpl") || !args[1].EndsWith(".bpl"))
+            {
+                Console.WriteLine("Usage: AvHarnessInstrumentation infile.bpl outfile.bpl [options]");
+                return;
+            }            
+
+            SetOptions(args);
 
             // Initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -502,7 +507,7 @@ namespace AvHarnessInstrumentation
             try
             {
                 // Get the program, install the harness and do basic instrumentation
-                var inprog = GetProgram(args[0], stubsfile);
+                var inprog = GetProgram(args[0]);
                 var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
 
                 Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);

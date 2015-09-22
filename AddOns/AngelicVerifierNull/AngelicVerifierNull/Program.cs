@@ -77,6 +77,76 @@ namespace AngelicVerifierNull
                 return;
             }
 
+            SetOptions(args);
+
+            // Initialize Boogie and Corral
+            corralConfig = InitializeCorral();
+            
+            try
+            {
+                Stats.resume("Cpu");
+
+                // Get input program with the harness
+                Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
+
+                var prog = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                GlobalCorralSpecificPass(prog);
+                Debug.Assert(corralConfig.mainProcName != null);
+
+                // Print Stats
+                Utils.Print(string.Format("#Procs : {0}",prog.TopLevelDeclarations.OfType<Implementation>().Count()),Utils.PRINT_TAG.AV_STATS);
+                Utils.Print(string.Format("#Asserts : {0}",AssertCountVisitor.Count(prog)),Utils.PRINT_TAG.AV_STATS);
+
+                // Install unknownTriggers
+                mallocInstrumentation = new Instrumentations.MallocInstrumentation(prog);
+                mallocInstrumentation.DoInstrument();
+
+                // remove Ebasic
+                if (!Options.useEbasic)
+                {
+                    // strip out {:Ebasic}
+                    prog.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => impl.Blocks
+                            .Iter(blk =>
+                                blk.Cmds.RemoveAll(c => (c is AssumeCmd &&
+                                    QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
+                }
+
+                var program = new PersistentProgram(prog, corralConfig.mainProcName, 0);
+
+                // hook to run the control flow slicing static analysis pre pass
+                if (Options.TraceSlicing)
+                {
+                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(prog);
+                    controlFlowDependencyInformation.Run();
+
+                    // package up the program
+                    program = new PersistentProgram(prog, program.mainProcName, program.contextBound);
+                    
+                }
+                program.writeToFile(args[0].Substring(0, args[0].Length - ".bpl".Length) + "_inst.bpl");
+
+                //Analyze
+                RunCorralForAnalysis(program);
+
+                Stats.stop("Cpu");
+            }
+            catch (Exception e)
+            {
+                //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
+                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
+            }
+            finally
+            {
+                Stats.printStats();
+                Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+                if (ResultsFile != null) ResultsFile.Close();
+            }
+        }
+
+        public static void SetOptions(string[] args)
+        {
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
 
@@ -144,72 +214,8 @@ namespace AngelicVerifierNull
                 ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status"); // result file header
                 ResultsFile.Flush();
             }
-            
-            // Initialize Boogie and Corral
-            corralConfig = InitializeCorral();
-            
-            try
-            {
-                Stats.resume("Cpu");
-
-                // Get input program with the harness
-                Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
-
-                var prog = BoogieUtil.ReadAndOnlyResolve(args[0]);
-                GlobalCorralSpecificPass(prog);
-                Debug.Assert(corralConfig.mainProcName != null);
-
-                // Print Stats
-                Utils.Print(string.Format("#Procs : {0}",prog.TopLevelDeclarations.OfType<Implementation>().Count()),Utils.PRINT_TAG.AV_STATS);
-                Utils.Print(string.Format("#Asserts : {0}",AssertCountVisitor.Count(prog)),Utils.PRINT_TAG.AV_STATS);
-
-                // Install unknownTriggers
-                mallocInstrumentation = new Instrumentations.MallocInstrumentation(prog);
-                mallocInstrumentation.DoInstrument();
-
-                // remove Ebasic
-                if (!Options.useEbasic)
-                {
-                    // strip out {:Ebasic}
-                    prog.TopLevelDeclarations.OfType<Implementation>()
-                        .Iter(impl => impl.Blocks
-                            .Iter(blk =>
-                                blk.Cmds.RemoveAll(c => (c is AssumeCmd &&
-                                    QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
-                }
-
-                var program = new PersistentProgram(prog, corralConfig.mainProcName, 0);
-
-                // hook to run the control flow slicing static analysis pre pass
-                if (Options.TraceSlicing)
-                {
-                    controlFlowDependencyInformation = new ExplainError.ControlFlowDependency(prog);
-                    controlFlowDependencyInformation.Run();
-
-                    // package up the program
-                    program = new PersistentProgram(prog, program.mainProcName, program.contextBound);
-                    
-                }
-                program.writeToFile(args[0].Substring(0, args[0].Length - ".bpl".Length) + "_inst.bpl");
-
-                //Analyze
-                RunCorralForAnalysis(program);
-
-                Stats.stop("Cpu");
-            }
-            catch (Exception e)
-            {
-                //stacktrace containts source locations, confuses regressions that looks for AV_OUTPUT
-                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message), Utils.PRINT_TAG.AV_OUTPUT); 
-                Utils.Print(String.Format("AngelicVerifier failed with: {0}", e.Message + e.StackTrace), Utils.PRINT_TAG.AV_DEBUG);
-            }
-            finally
-            {
-                Stats.printStats();
-                Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
-                if (ResultsFile != null) ResultsFile.Close();
-            }
         }
+
 
         //globals
         static Instrumentations.MallocInstrumentation mallocInstrumentation = null;
