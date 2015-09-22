@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.Boogie;
 using cba.Util;
 using System.IO;
+using System.Diagnostics;
 
 namespace ProgTransformation
 {
@@ -85,6 +86,7 @@ namespace ProgTransformation
     public class PersistentProgramIO : PersistentProgramAbs
     {
         public static bool useFiles = false;
+        public static bool useStrings = false;
 
         public static bool useDuplicator = false;
 
@@ -98,7 +100,7 @@ namespace ProgTransformation
         private string fileName;
         // A presistent version of the program
         // TODO: Dispose this in the destructor?
-        private Stream programStream;
+        private object programStream;
 
         // It is OK to make copies of unresolved programs
         private Program unresolved_program;
@@ -143,9 +145,18 @@ namespace ProgTransformation
                 p.fileName = "temp_corral_file" + count.ToString();
                 count++;
 
-                var fs = new FileStream(p.fileName, FileMode.Create);
-                fs.Write((p.programStream as MemoryStream).GetBuffer(), 0, (int)p.programStream.Length);
-                p.programStream = fs;
+                if (p.programStream is MemoryStream)
+                {
+                    var fs = new FileStream(p.fileName, FileMode.Create);
+                    fs.Write((p.programStream as MemoryStream).GetBuffer(), 0, (int)(p.programStream as MemoryStream).Length);
+                    p.programStream = fs;
+                }
+                else
+                {
+                    Debug.Assert(p.programStream is string);
+                    System.IO.File.WriteAllText(p.fileName, (string)p.programStream);
+                    p.programStream = new FileStream(p.fileName, FileMode.Open);
+                }
                 stat++;
             }
 
@@ -167,17 +178,30 @@ namespace ProgTransformation
                 fileName = "temp_corral_file" + count.ToString();
                 programStream = new FileStream(fileName, FileMode.Create);
                 count++;
+
+                StreamWriter writer = new StreamWriter(programStream as FileStream);
+                p.Emit(new TokenTextWriter(writer));
+                writer.Flush();
+            }
+            else if (useStrings)
+            {
+                fileName = "";
+                var sw = new StringWriter();
+                p.Emit(new TokenTextWriter(sw));
+                sw.Flush();
+                programStream = sw.ToString();
             }
             else
             {
                 fileName = "";
                 programStream = new MemoryStream();
+
+                StreamWriter writer = new StreamWriter(programStream as MemoryStream);
+                p.Emit(new TokenTextWriter(writer));
+                writer.Flush();
             }
 
-            StreamWriter writer = new StreamWriter(programStream);
-            p.Emit(new TokenTextWriter(writer));
-            writer.Flush();
-            
+
             persistenceCost += (DateTime.Now - startTime);
         }
 
@@ -189,12 +213,17 @@ namespace ProgTransformation
                 System.Diagnostics.Debug.Assert(fname != fileName);
                 System.IO.File.Copy(fileName, fname, true);
             }
-            else
+            else if (programStream is MemoryStream)
             {
-                System.Diagnostics.Debug.Assert(programStream is MemoryStream);
+                
                 FileStream fs = new FileStream(fname, FileMode.Create);
-                fs.Write((programStream as MemoryStream).GetBuffer(), 0, (int)programStream.Length);
+                fs.Write((programStream as MemoryStream).GetBuffer(), 0, (int)(programStream as MemoryStream).Length);
                 fs.Close();
+            }
+            else 
+            {
+                System.Diagnostics.Debug.Assert(programStream is string);
+                System.IO.File.WriteAllText(fname, (string)programStream);
             }
             
         }
@@ -212,10 +241,20 @@ namespace ProgTransformation
             }
             else
             {
-                programStream.Seek(0, SeekOrigin.Begin);
+                var progStr = "";
+                if (programStream is FileStream || programStream is MemoryStream)
+                {
+                    var stream = programStream as Stream;
+                    stream.Seek(0, SeekOrigin.Begin);
+                    progStr = ParserHelper.Fill(stream, new List<string>());
+                }
+                else
+                {
+                    Debug.Assert(programStream is string);
+                    progStr = (string)programStream;
+                }
 
-                var s = ParserHelper.Fill(programStream, new List<string>());
-                var v = Parser.Parse(s, "PersistentProgram", out ret);
+                var v = Parser.Parse(progStr, "PersistentProgram", out ret);
 
                 if (v != 0)
                 {
