@@ -331,6 +331,11 @@ namespace AvHarnessInstrumentation
                 program.AddTopLevelDeclaration(ret);
                 return ret;
             }
+            private string SanitizeTypeName(btype type)
+            {
+                return type.ToString().Replace("[", "$$").Replace("]", "$$");
+            }
+
             private void FindUnknown()
             {
                 // Which {:unknown} already exist?
@@ -344,23 +349,30 @@ namespace AvHarnessInstrumentation
 
 
                 foreach (var ty in Options.unknownTypes)
-                {
-                    if (unknownGenProcs.ContainsKey(ty)) continue;
-                    
+                {                    
                     // Find the type
                     btype type = null;
-                    if(ty == "int") type = btype.Int;
-                    else if(ty == "bool") type = btype.Bool;
-                    else {
+                    if (ty == "int") type = btype.Int;
+                    else if (ty == "bool") type = btype.Bool;
+                    else if (ty == "[int]int") type = new MapType(Token.NoToken, new List<TypeVariable>(), new List<btype> { btype.Int }, btype.Int);
+                    else
+                    {
                         // lookup user types
                         type = prog.TopLevelDeclarations.OfType<TypeCtorDecl>()
                             .Where(t => t.Name == ty)
                             .Select(t => new CtorType(Token.NoToken, t, new List<btype>()))
                             .FirstOrDefault();
                     }
+                    if (type == null)
+                    {
+                        Console.WriteLine("Error: type {0} not found", type);
+                        throw new InputProgramDoesNotMatchExn("Invalid unknown type given");
+                    }
+
+                    if (unknownGenProcs.ContainsKey(ty)) continue;
 
                     // create a new procedure
-                    var proc = new Procedure(Token.NoToken, "unknown_" + ty, new List<TypeVariable>(), new List<Variable>(),
+                    var proc = new Procedure(Token.NoToken, "unknown_" + SanitizeTypeName(type), new List<TypeVariable>(), new List<Variable>(),
                         new List<Variable> { new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", type), false) },
                         new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
                     proc.AddAttribute(AvnAnnotations.AngelicUnknownCall);

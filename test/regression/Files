@@ -34,11 +34,11 @@ loop\seq.bpl b
 loop\conc.bpl b
 loop\assert.bpl b
 smack\a.bpl b
-codeexpr\f1.bpl c
-codeexpr\f2.bpl c
 stackdepth\f1.bpl c
 cex\twoasserts.bpl b
 cex\loopassert.bpl b
 cex\skipasserts1.bpl b
 cex\skipasserts2.bpl b
 trace\a.bpl b
+codeexpr\f1.bpl c
+codeexpr\f2.bpl c
