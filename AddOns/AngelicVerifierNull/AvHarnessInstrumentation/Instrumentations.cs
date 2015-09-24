@@ -343,7 +343,8 @@ namespace AvHarnessInstrumentation
                     .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, AvnAnnotations.AngelicUnknownCall)))
                 {
                     if (proc.OutParams.Count != 1 || proc.InParams.Count != 0)
-                        throw new InputProgramDoesNotMatchExn(string.Format("Unknown-generating procs should have exactly one out parameter and no input parameters: {0}", proc.Name));
+                        continue;
+                        //throw new InputProgramDoesNotMatchExn(string.Format("Unknown-generating procs should have exactly one out parameter and no input parameters: {0}", proc.Name));
                     unknownGenProcs.Add(proc.OutParams[0].TypedIdent.Type.ToString(), proc);
                 }
 
