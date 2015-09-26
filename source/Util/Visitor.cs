@@ -1029,6 +1029,65 @@ namespace cba.Util
 
     }
 
+    public class RemoveVarsFromAttributes : FixedVisitor
+    {
+        HashSet<string> globals;
+        HashSet<string> locals;
+        HashSet<string> declared;
+
+        RemoveVarsFromAttributes()
+        {
+            globals = new HashSet<string>();
+            locals = new HashSet<string>();
+            declared = null;
+        }
+
+        public static void Prune(Program program)
+        {
+            var rv = new RemoveVarsFromAttributes();
+
+            // Find declared globals
+            program.TopLevelDeclarations.OfType<Variable>()
+                .Iter(v => rv.globals.Add(v.Name));
+
+            rv.VisitProgram(program);
+        }
+
+        public override Declaration VisitDeclaration(Declaration node)
+        {
+            node.Attributes = Remove(node.Attributes, globals);
+            return base.VisitDeclaration(node);
+        }
+
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            locals = new HashSet<string>();
+            node.LocVars.Iter(v => locals.Add(v.Name));
+            
+            declared = new HashSet<string>(globals);
+            declared.UnionWith(locals);
+
+            return base.VisitImplementation(node);
+        }
+
+        public override Cmd VisitCallCmd(CallCmd node)
+        {
+            node.Attributes = Remove(node.Attributes, declared);
+            return base.VisitCallCmd(node);
+        }
+
+        private QKeyValue Remove(QKeyValue attr, HashSet<string> vars)
+        {
+            if (attr == null) return null;
+            var vu = new VarsUsed();
+            attr.Params.Where(e => e is Expr).Iter(e => vu.VisitExpr(e as Expr));
+            if (!vu.varsUsed.IsSubsetOf(vars))
+                return attr.Next;
+            attr.Next = Remove(attr.Next, vars);
+            return attr;
+        }
+    }
+
     public class ExprMatchVisitor : FixedVisitor
     {
         private readonly Stack<Expr> _toConsume;

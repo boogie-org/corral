@@ -2339,6 +2339,9 @@ namespace cba
             // Eliminate dead variables -- does not change the program.
             UnusedVarEliminator.Eliminate(p); 
             
+            // Remove annotations that won't parse because of dropped variables
+            RemoveVarsFromAttributes.Prune(p);
+
             // Compress basic blocks
             if(compressBlocks!=null)
               compressBlocks.VisitProgram(p);

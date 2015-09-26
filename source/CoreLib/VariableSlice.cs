@@ -163,6 +163,10 @@ namespace cba
             {
                 Log.WriteLine(Log.Warning, "Slicing away (non-free) requires condition");
             }
+
+            // Remove annotations that won't parse because of dropped variables
+            RemoveVarsFromAttributes.Prune(node);
+
             return node;
         }
 
