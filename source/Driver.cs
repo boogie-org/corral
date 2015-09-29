@@ -550,9 +550,10 @@ namespace cba
                 var rstatus = BoogieVerify.Verify(init, out err, true);
                 Console.WriteLine("Return status: {0}", rstatus);
                 if (err == null || err.Count == 0)
-                    Console.WriteLine("All entrypoints verified");
+                    Console.WriteLine("No bugs found");
                 else
                 {
+                    Console.WriteLine("Program has bugs");
                     foreach (var trace in err.OfType<BoogieAssertErrorTrace>())
                     {
                         Console.WriteLine("{0} did not verify", trace.impl.Name);
@@ -560,8 +561,8 @@ namespace cba
                     }
                 }
 
-                Console.WriteLine(string.Format("Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
-                Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+                Console.WriteLine(string.Format("Number of procedures inlined: {0}", BoogieVerify.CallTreeSize));
+                Console.WriteLine(string.Format("Total Time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
                 throw new NormalExit("Done");
             }

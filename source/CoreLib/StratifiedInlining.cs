@@ -726,7 +726,7 @@ namespace CoreLib
                     foreach (var scs in reporter.callSitesToExpand)
                     {
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs);
+                        var svc = Expand(scs, null, true, true);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                     }

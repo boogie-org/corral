@@ -10,7 +10,7 @@ namespace RunEE
 {
     class Driver
     {
-        public static int ExplainErrorTimeout = 0;
+        public static int ExplainErrorTimeout = 1000000;
         public static int ExplainErrorFilters = 0;
 
         static void Main(string[] args)
@@ -32,7 +32,14 @@ namespace RunEE
 
             var flags = "";
             for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "/break")
+                {
+                    System.Diagnostics.Debugger.Launch();
+                    continue;
+                }
                 flags += args[i] + " ";
+            }
 
             ExplainError.STATUS status;
             Dictionary<string, string> complexObj;
