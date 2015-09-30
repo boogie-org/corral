@@ -81,7 +81,8 @@ namespace AngelicVerifierNull
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
-            
+            ProgTransformation.PersistentProgramIO.useStrings = true; 
+
             try
             {
                 Stats.resume("Cpu");
@@ -198,7 +199,7 @@ namespace AngelicVerifierNull
                 .Iter(s => Options.EEflags.Add("/" + s.Substring("/EE:".Length)));
 
             args.Where(s => s.StartsWith("/EEfilters:"))
-                .Iter(s => Options.eeFilters = s.Substring("/timeoutEE:".Length));
+                .Iter(s => Options.eeFilters = s.Substring("/EEfilters:".Length));
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -279,6 +280,10 @@ namespace AngelicVerifierNull
 
             addIds = new cba.AddUniqueCallIds();
             addIds.VisitProgram(init);
+
+            var extraVars = cba.Driver.findTemplates(init, corralConfig);
+            corralConfig.trackedVars.UnionWith(extraVars);
+            cba.GlobalConfig.InferPass.printHoudiniQuery = corralConfig.houdiniQuery;
         }
 
         class ErrorTraceInfo
@@ -319,8 +324,6 @@ namespace AngelicVerifierNull
             while (true)
             {
                 var prog = instr.GetCurrProgram();
-
-                //prog.writeToFile("c" + iterCount + ".bpl");
 
                 // Don't reuse the call-tree 
                 if(corralState != null)
@@ -844,6 +847,18 @@ namespace AngelicVerifierNull
             // Rewrite program to a more convinient form
             var rc = new cba.RewriteCallCmdsPass(true);
             prog = rc.run(prog);
+
+            // prune
+            var prune = new cba.PruneProgramPass();
+            prog = prune.run(prog);
+
+            // Run Houdini
+            if (cba.GlobalConfig.InferPass != null)
+            {
+                //Console.WriteLine("Running Houdini");
+                prog = cba.GlobalConfig.InferPass.run(prog);
+                cba.GlobalConfig.InferPass = null;
+            }
 
             // TODO: populate the set of stubs
             var instr = new AvnInstrumentation(new HashSet<string>());

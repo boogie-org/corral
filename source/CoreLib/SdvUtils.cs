@@ -245,7 +245,7 @@ namespace CoreLib
                     continue;
                 }
 
-                if (!procsWithoutBody.Contains(ccmd.Proc.Name))
+                if (!procsWithoutBody.Contains(ccmd.callee))
                 {
                     continue;
                 }

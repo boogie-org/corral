@@ -1305,7 +1305,7 @@ namespace cba
             return newMainImpl.Name;
         }
 
-        private static HashSet<string> findTemplates(Program program, Configs config)
+        public static HashSet<string> findTemplates(Program program, Configs config)
         {
             var templateVarNames = new HashSet<Variable>();
             List<Ensures> ens = new List<Ensures>();
