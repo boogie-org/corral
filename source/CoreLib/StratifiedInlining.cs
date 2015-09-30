@@ -633,7 +633,7 @@ namespace CoreLib
                 // Lets split when the tree has become big enough
                 var size = di.ComputeSize(); 
                 
-                if ( (treesize == 0 && size > 20) || (treesize != 0 && size > treesize + 20))
+                if ( (treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                 {
                     var st = DateTime.Now;
 
