@@ -1059,6 +1059,15 @@ namespace cba.Util
             return base.VisitDeclaration(node);
         }
 
+        public override Procedure VisitProcedure(Procedure node)
+        {
+            node.Attributes = Remove(node.Attributes, globals);
+            declared = globals;
+            node.InParams = this.VisitVariableSeq(node.InParams);
+            node.OutParams = this.VisitVariableSeq(node.OutParams);
+            return base.VisitProcedure(node);
+        }
+
         public override Implementation VisitImplementation(Implementation node)
         {
             locals = new HashSet<string>();
@@ -1068,6 +1077,12 @@ namespace cba.Util
             declared.UnionWith(locals);
 
             return base.VisitImplementation(node);
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            node.Attributes = Remove(node.Attributes, declared);
+            return base.VisitVariable(node);
         }
 
         public override Cmd VisitCallCmd(CallCmd node)
