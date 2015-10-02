@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using cba.Util;
 
 namespace ProofMinimization
 {
@@ -264,20 +265,20 @@ namespace ProofMinimization
     class K1BreadthMinimizer : Minimizer
     {
 
+        static HashSet<string> identifiers = new HashSet<string>();
+
         public K1BreadthMinimizer(MinimizerData mdata) : base(mdata)
         {
         }
 
         public override HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
         {
-            Console.WriteLine("\n\n");
             var files = mdata.fileToProg.Keys.ToList();
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
                 computeMinimalTemplate(file, mdata.fileToProg[file]);
             }
-
 
             templateToPerfDelta = new Dictionary<int,int>();
             return new HashSet<int>();
@@ -286,9 +287,7 @@ namespace ProofMinimization
 
         void computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
         {
-
             var fileTempIds = mdata.fileToTempIds[file];
-            //fileTempIds = fileTempIds.ToList();
             List<Expr> templates = new List<Expr>();
 
             Console.WriteLine("Found the following templates for program {0}.", file);
@@ -313,22 +312,97 @@ namespace ProofMinimization
                 Console.WriteLine("Now listing its instantiations.");
 
                 var insts = instantiateTemplate(simple, program);
-                foreach (var proc in insts.Keys)
-                {
-                    Console.WriteLine("Instantiations for procedure {0}", proc.Name);
-
-                    foreach (var inst in insts[proc]) 
-                    {
-                        Console.WriteLine(inst.ToString());
-                    }
-                }
-                Console.WriteLine("");
+                computeCost(program, insts);   
 
             }
-            
-
         }
 
+
+        int computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
+        {
+            var allconstants = new Dictionary<string, Constant>();
+            var prog = program.getProgram();
+            prog.TopLevelDeclarations.OfType<Constant>()
+                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                .Iter(c => allconstants.Add(c.Name, c));
+            MinControl.DropConstants(prog, new HashSet<string>(allconstants.Keys));
+
+            
+            foreach (var proc in instantiation.Keys)
+            {
+                var procedure = prog.FindProcedure(proc.Name);
+                foreach(var expr in instantiation[proc])
+                {
+                    string ident = createRandomIdentifier();
+                    var tident = new TypedIdent(Token.NoToken, ident, Microsoft.Boogie.BasicType.Bool);
+                    Constant c = new Constant(Token.NoToken, tident, false);
+                    c.AddAttribute("existential", new object[1] { Microsoft.Boogie.Expr.True });
+                    prog.AddTopLevelDeclaration(c);
+                    
+                    var identExp = new IdentifierExpr(Token.NoToken, tident.Name, tident.Type);
+                    var impl = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, BinaryOperator.Opcode.Imp), new List<Expr> { identExp, expr});
+                    var ens = new Ensures(false, impl);
+                    procedure.Ensures.Add(ens);
+                }
+            }
+
+            var pcopy1 = BoogieUtil.ReResolveInMem(prog);
+            var pcopy2 = BoogieUtil.ReResolveInMem(prog);
+            cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
+
+            var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
+            CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
+            var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
+            cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
+
+
+            // Run SI
+            var err = new List<BoogieErrorTrace>();
+            // Set bound to infinity.
+            BoogieVerify.options.maxInlinedBound = 0;
+
+            var rstatus = BoogieVerify.Verify(pcopy3, out err, true);
+            //Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
+            //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+
+            var procs_inlined = BoogieVerify.CallTreeSize + 1;
+            BoogieVerify.options.CallTree = new HashSet<string>();
+            BoogieVerify.CallTreeSize = 0;
+            BoogieVerify.verificationTime = TimeSpan.Zero;
+
+            Console.WriteLine(rstatus);
+            Console.WriteLine(procs_inlined);
+            Console.WriteLine(err.Count);
+
+            Environment.Exit(0);
+
+            return 0;
+        } 
+
+        string createRandomIdentifier()
+        {
+            string letters = "abcdefghijklmnopqrstuvxwzABCDEFGHIJKLMNOPQRSTUVWXZ";
+            string numbers = "0123456789";
+
+            string ident = null;
+            while(true)
+            {
+                ident = "";
+                var random = new Random();
+                for (int i = 0; i < 5; i++)
+                {
+                    ident += letters[random.Next(0, letters.Length - 1)];
+                    ident += numbers[random.Next(0, numbers.Length - 1)];
+                }
+
+                if (!identifiers.Contains(ident))
+                {
+                    identifiers.Add(ident);
+                    break;
+                }
+            }
+            return ident;
+        }
 
         Dictionary<Procedure, List<Expr>> instantiateTemplate(TemplateAnnotations tanns, ProgTransformation.PersistentProgram program)
         {
