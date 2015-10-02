@@ -277,7 +277,8 @@ namespace ProofMinimization
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
-                computeMinimalTemplate(file, mdata.fileToProg[file]);
+                var minTemplate = computeMinimalTemplate(file, mdata.fileToProg[file]);
+                Console.WriteLine(minTemplate);
             }
 
             templateToPerfDelta = new Dictionary<int,int>();
@@ -285,12 +286,12 @@ namespace ProofMinimization
         }
 
 
-        void computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
+        TemplateAnnotations computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
         {
             var fileTempIds = mdata.fileToTempIds[file];
-            List<Expr> templates = new List<Expr>();
 
-            Console.WriteLine("Found the following templates for program {0}.", file);
+            Console.WriteLine("Found the following templates for program {0}:", file);
+            List<Expr> templates = new List<Expr>();
             foreach (var tid in fileTempIds)
             {
                 Console.WriteLine(tid);
@@ -298,25 +299,64 @@ namespace ProofMinimization
                 Console.WriteLine("\t{0}", template.ToString());
                 templates.Add(template);
             }
+
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
             Console.WriteLine("Indexed template ({0}):", templates.Count);
             Console.WriteLine("\t{0}", icnf.ToString());
 
-            Console.WriteLine("Listing k1 simplified templates");
-            SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(icnf);
-
-            TemplateAnnotations simple;
-            while((simple = iter.next()) != null)
+            int initialCost = mdata.fileToPerf[file];
+            TemplateAnnotations bestTemplate = icnf;
+            while (true)
             {
-                Console.WriteLine("Subtemplate: {0}", simple.ToString());
-                Console.WriteLine("Now listing its instantiations.");
-
-                var insts = instantiateTemplate(simple, program);
-                computeCost(program, insts);   
-
+                var t = getBetterTemplate(program, bestTemplate, initialCost);
+                if (t == null)
+                {
+                    break;
+                }
+                else
+                {
+                    bestTemplate = t;
+                }
             }
+
+            return bestTemplate;
         }
 
+
+        bool isMinimalTemplateTemplateAnnotations (ProgTransformation.PersistentProgram program, TemplateAnnotations template, int initialCost)
+        {
+            var t = getBetterTemplate(program, template, initialCost);
+            if (t == null)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, int initialCost)
+        {
+            Console.WriteLine("Creating k1 simplified templates iterator...");
+            SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
+
+            TemplateAnnotations simple;
+            while ((simple = iter.next()) != null)
+            {
+                Console.WriteLine("Checking subtemplate: {0}", simple.ToString());
+
+                Console.WriteLine("Computing instantiations.");
+                var insts = instantiateTemplate(simple, program);
+
+                Console.WriteLine("Computing the cost");
+                int cost = computeCost(program, insts);
+
+                if (cost < initialCost)
+                {
+                    return simple;
+                }
+            }
+
+            return null;
+        }
 
         int computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
         {
@@ -348,12 +388,12 @@ namespace ProofMinimization
 
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
-            cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
+            //cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
 
             var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
-            cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
+            //cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
 
 
             // Run SI
