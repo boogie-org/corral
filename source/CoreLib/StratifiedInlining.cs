@@ -1671,7 +1671,8 @@ namespace CoreLib
             }
             else
             {
-                int currRecursionBound = 1;
+                int currRecursionBound = BoogieVerify.options.extraFlags.Contains("MaxRec") ? CommandLineOptions.Clo.RecursionBound :
+                    1;
                 while (true)
                 {
                     outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
