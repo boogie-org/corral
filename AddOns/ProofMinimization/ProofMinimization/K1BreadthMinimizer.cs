@@ -40,10 +40,15 @@ namespace ProofMinimization
         {
             List<List<Expr>> indexedCnf = new List<List<Expr>>();
             List<Expr> conjucts = SimplifyExpr.GetExprConjunctions(cnf);
+            HashSet<string> uniqueConjucts = new HashSet<string>();
             for (int i = 0; i < conjucts.Count; i++)
             {
-                // Preserves order of disjuncts.
-                indexedCnf.Add(SimplifyExpr.GetExprDisjuncts(conjucts[i]));
+                if (!uniqueConjucts.Contains(conjucts[i].ToString()))
+                {
+                    uniqueConjucts.Add(conjucts[i].ToString());
+                    // Preserves order of disjuncts.
+                    indexedCnf.Add(SimplifyExpr.GetExprDisjuncts(conjucts[i]));
+                }
             }
             return indexedCnf;
         }
@@ -278,7 +283,6 @@ namespace ProofMinimization
             {
                 var file = files[i];
                 var minTemplate = computeMinimalTemplate(file, mdata.fileToProg[file]);
-                Console.WriteLine(minTemplate);
             }
 
             templateToPerfDelta = new Dictionary<int,int>();
@@ -300,11 +304,13 @@ namespace ProofMinimization
                 templates.Add(template);
             }
 
+            Console.WriteLine("Creating indexed template {0}", templates.Count);
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
-            Console.WriteLine("Indexed template ({0}):", templates.Count);
             Console.WriteLine("\t{0}", icnf.ToString());
 
-            int initialCost = mdata.fileToPerf[file];
+            int initialCost = getInitialCost(program, icnf);
+            Console.WriteLine("Initial cost constructed: {0}", initialCost);
+
             TemplateAnnotations bestTemplate = icnf;
             while (true)
             {
@@ -331,6 +337,12 @@ namespace ProofMinimization
                 return true;
             }
             return false;
+        }
+
+        int getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        {
+            var insts = instantiateTemplate(template, program);
+            return computeCost(program, insts);
         }
 
         TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, int initialCost)
@@ -367,34 +379,36 @@ namespace ProofMinimization
                 .Iter(c => allconstants.Add(c.Name, c));
             MinControl.DropConstants(prog, new HashSet<string>(allconstants.Keys));
 
-            
+            int instCnt = 0;
             foreach (var proc in instantiation.Keys)
             {
                 var procedure = prog.FindProcedure(proc.Name);
-                foreach(var expr in instantiation[proc])
+                foreach (var expr in instantiation[proc])
                 {
                     string ident = createRandomIdentifier();
                     var tident = new TypedIdent(Token.NoToken, ident, Microsoft.Boogie.BasicType.Bool);
                     Constant c = new Constant(Token.NoToken, tident, false);
                     c.AddAttribute("existential", new object[1] { Microsoft.Boogie.Expr.True });
                     prog.AddTopLevelDeclaration(c);
-                    
+
                     var identExp = new IdentifierExpr(Token.NoToken, tident.Name, tident.Type);
-                    var impl = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, BinaryOperator.Opcode.Imp), new List<Expr> { identExp, expr});
+                    var impl = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, BinaryOperator.Opcode.Imp), new List<Expr> { identExp, expr });
                     var ens = new Ensures(false, impl);
                     procedure.Ensures.Add(ens);
+                    instCnt++;
                 }
             }
 
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
-            //cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
+            cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
 
             var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
-            //cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
+            cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
 
+            int houdiniCost = instCnt - assignment.Count;
 
             // Run SI
             var err = new List<BoogieErrorTrace>();
@@ -410,13 +424,15 @@ namespace ProofMinimization
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
-            Console.WriteLine(rstatus);
-            Console.WriteLine(procs_inlined);
-            Console.WriteLine(err.Count);
-
-            Environment.Exit(0);
-
-            return 0;
+            if (rstatus != BoogieVerify.ReturnStatus.OK)
+            { 
+                Console.WriteLine(rstatus);
+                Console.WriteLine(procs_inlined);
+                Console.WriteLine(err.Count);
+                Environment.Exit(0);
+            }
+            //Environment.Exit(0);
+            return houdiniCost * procs_inlined;
         } 
 
         string createRandomIdentifier()
@@ -469,7 +485,7 @@ namespace ProofMinimization
                     .Iter(f => formals.Add(f.Name, f));
                 proc.OutParams.OfType<Formal>()
                     .Iter(f => formals.Add(f.Name, f));
-
+        
                 List<Expr> procInsts = new List<Expr>();
                 for (int i = 0; i < annots.Count; i++) 
                 {
@@ -477,16 +493,55 @@ namespace ProofMinimization
                     var insts = instantiateProcTemplates(annot, globals, formals);
                     procInsts.AddRange(insts);
                 }
-
                 procToInsts[proc] = procInsts;
             }
 
             return procToInsts;
         }
 
-        List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, Dictionary<string, Variable> formals)
+        List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, 
+                                            Dictionary<string, Variable> formals)
         {
-            return MinControl.InstantiateTemplate(template, SimplifyExpr.templateVars, globals, formals);
+            HashSet<Variable> templateVars = new HashSet<Variable>();
+            var unqVarTemplate = toUniqueVarExpr(template, templateVars);
+            return MinControl.InstantiateTemplate(unqVarTemplate, templateVars, globals, formals);
+        }
+
+        Expr toUniqueVarExpr(Expr expr, HashSet<Variable> templateVars)
+        {
+            Dictionary<Microsoft.Boogie.Type, int> inTypeIndices = new Dictionary<Microsoft.Boogie.Type, int>();
+            Dictionary<Microsoft.Boogie.Type, int> outTypeIndices = new Dictionary<Microsoft.Boogie.Type, int>();
+            var ret =
+                Substituter.Apply(new Substitution(v =>
+                {
+                    if (v is Formal && (v as Formal).InComing)
+                    {
+                        var typ = v.TypedIdent.Type;
+                        if (!inTypeIndices.ContainsKey(typ))
+                        {
+                            inTypeIndices[typ] = -1;
+                        }
+                        inTypeIndices[typ] += 1;
+                        var nVar = BoogieAstFactory.MkFormal(v.Name + "_" + inTypeIndices[typ], typ, true);
+                        templateVars.Add(nVar);
+                        return Expr.Ident(nVar);
+                    }
+                    if (v is Formal && !(v as Formal).InComing)
+                    {
+                        var typ = v.TypedIdent.Type;
+                        if (!outTypeIndices.ContainsKey(typ))
+                        {
+                            outTypeIndices[typ] = -1;
+                        }
+                        outTypeIndices[typ] += 1;
+                        var nVar = BoogieAstFactory.MkFormal(v.Name + "_" + outTypeIndices[typ], typ, false);
+                        templateVars.Add(nVar);
+                        return Expr.Ident(nVar);
+                    }
+                    return Expr.Ident(v);
+                }), expr);
+
+            return ret;
         }
 
     }

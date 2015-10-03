@@ -351,7 +351,9 @@ namespace ProofMinimization
         {
             HashSet<string> templateVarNames = new HashSet<string>();
             templateVars.Iter(v => templateVarNames.Add(v.Name));
-            
+            Dictionary<string, Variable> templateNameToVar = new Dictionary<string, Variable>();
+            templateVars.Iter(v => templateNameToVar.Add(v.Name, v));
+
             var ret = new List<Expr>();
 
             var dup = new FixedDuplicator();
@@ -366,7 +368,6 @@ namespace ProofMinimization
                 return ret;
             }
                 
-
             var subst = new Dictionary<string, Variable>();
 
             var templateVarUsed = used.varsUsed.Intersection(templateVarNames);
@@ -412,9 +413,17 @@ namespace ProofMinimization
                     if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
                     if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
                     if (!includeGlobals && kvp.Value is GlobalVariable) continue;
+                    
+                    var v = templateNameToVar[tvName];
+                    if (v is Formal && kvp.Value is Formal)
+                    {
+                        if ((v as Formal).InComing != (kvp.Value as Formal).InComing)
+                        {
+                            continue;
+                        }
+                    }
 
                     matches[tvName].Add(kvp.Value);
-
                 }
             }
 

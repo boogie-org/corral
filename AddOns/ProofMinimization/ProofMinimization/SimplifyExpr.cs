@@ -95,7 +95,7 @@ namespace ProofMinimization
              var GetFin = new Func<btype, Variable>(ty =>
                 BoogieAstFactory.MkFormal("v_fin_" + ty.ToString(), ty, true));
             var GetFout = new Func<btype, Variable>(ty =>
-                BoogieAstFactory.MkFormal("v_fout_" + ty.ToString(), ty, true));
+                BoogieAstFactory.MkFormal("v_fout_" + ty.ToString(), ty, false));
 
             var ret =
                 Substituter.Apply(new Substitution(v =>
