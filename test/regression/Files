@@ -40,5 +40,6 @@ cex\loopassert.bpl b
 cex\skipasserts1.bpl b
 cex\skipasserts2.bpl b
 trace\a.bpl b
+inline\simple.bpl c
 codeexpr\f1.bpl c
 codeexpr\f2.bpl c

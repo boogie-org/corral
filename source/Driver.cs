@@ -641,12 +641,11 @@ namespace cba
             foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
             {
                 if (BoogieUtil.checkAttrExists("inline", impl.Attributes) || BoogieUtil.checkAttrExists("inline", impl.Proc.Attributes))
-                {
                     impl.AddAttribute(CoreLib.StratifiedInlining.ForceInlineAttr);
-                    impl.Attributes = BoogieUtil.removeAttr("inline", impl.Attributes);
-                    impl.Proc.Attributes = BoogieUtil.removeAttr("inline", impl.Proc.Attributes);
-                }
             }
+
+            foreach(var decl in init.TopLevelDeclarations)
+                    decl.Attributes = BoogieUtil.removeAttr("inline", decl.Attributes);
 
             // Add unique ids on calls -- necessary for reusing call trees
             // across stratified inlining queries. The unique ids are used
