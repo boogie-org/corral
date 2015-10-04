@@ -311,12 +311,6 @@ namespace CoreLib
             }
         }
 
-        ~StratifiedInlining()
-        {
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
-                stats.print();
-        }
-
         /* depth in the call tree */
         public int StackDepth(StratifiedCallSite cs)
         {
@@ -1549,7 +1543,7 @@ namespace CoreLib
                 return DepthFirstStyle(impl, callback);
             }
 
-            MacroSI.PRINT_DETAIL("Starting forward approach...");
+            MacroSI.PRINT_DEBUG("Starting forward approach...");
 
             di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
 
@@ -1684,7 +1678,8 @@ namespace CoreLib
                     // reached bound?
                     if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
                     {
-                        //Console.WriteLine("Exhausted recursion bound of {0}", currRecursionBound);
+                        if(CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                            Console.WriteLine("SI: Exhausted recursion bound of {0}", currRecursionBound);
                         currRecursionBound++;
                         continue;
                     }
@@ -1708,6 +1703,9 @@ namespace CoreLib
             if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 || 
                 BoogieVerify.options.extraFlags.Contains("DumpDag"))
                 di.Dump("ct" + (dumpCnt++) + ".dot");
+
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
+                stats.print();
 
             #region Stash call tree
             if (cba.Util.BoogieVerify.options.CallTree != null)
