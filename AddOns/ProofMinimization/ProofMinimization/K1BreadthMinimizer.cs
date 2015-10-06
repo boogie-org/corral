@@ -378,6 +378,7 @@ namespace ProofMinimization
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Iter(c => allconstants.Add(c.Name, c));
             MinControl.DropConstants(prog, new HashSet<string>(allconstants.Keys));
+            cba.Util.BoogieUtil.PrintProgram(prog, "interim0.txt");
 
             int instCnt = 0;
             foreach (var proc in instantiation.Keys)
@@ -431,7 +432,7 @@ namespace ProofMinimization
                 Console.WriteLine(err.Count);
                 Environment.Exit(0);
             }
-            //Environment.Exit(0);
+            Environment.Exit(0);
             return houdiniCost * procs_inlined;
         } 
 
