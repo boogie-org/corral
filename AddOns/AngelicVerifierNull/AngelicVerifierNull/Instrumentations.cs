@@ -563,8 +563,17 @@ namespace AngelicVerifierNull
                 cba.PrintSdvPath.failingLocation = null;
                 cba.PrintSdvPath.failStatus = failStatus;
 
+                
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", filename + "stack.txt");
+
+                if (cba.PrintSdvPath.abortMessage != null)
+                {
+                    var am = new TokenTextWriter(filename + ".txt");
+                    am.WriteLine(cba.PrintSdvPath.abortMessage);
+                    am.Close();
+                }
+
 
                 if (cba.PrintSdvPath.lastDriverLocation == null)
                     return null;
@@ -572,6 +581,13 @@ namespace AngelicVerifierNull
 
                 cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
                     filename + ".tt", filename + "stack.txt");
+
+                if (cba.PrintSdvPath.abortMessage != null)
+                {
+                    var am = new TokenTextWriter(filename + ".txt");
+                    am.WriteLine(cba.PrintSdvPath.abortMessage);
+                    am.Close();
+                }
 
                 cba.PrintSdvPath.relevantLines = null;
                 cba.PrintSdvPath.failingLocation = null;

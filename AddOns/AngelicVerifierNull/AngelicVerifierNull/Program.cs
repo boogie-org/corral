@@ -34,6 +34,10 @@ namespace AngelicVerifierNull
         public static int eeTimeout = 1000;
         // Flag for generalization
         public static bool generalize = true;
+        // Max num. of attempts at blocking
+        public static int MAX_REPEATED_BLOCK_EXPR = 2;
+        // Remove axioms on alloc constants
+        public static bool RemoveAllocConstantAxioms = true;
         // disable optimized deadcode detection
         public static bool disbleDeadcodeOpt = false;
         // Flag for reporting assertion when MAX_ASSERT_BLOCK_COUNT is reached
@@ -91,6 +95,7 @@ namespace AngelicVerifierNull
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
 
                 var prog = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                cba.PrintSdvPath.SaveSourceInfo(prog);
                 GlobalCorralSpecificPass(prog);
                 Debug.Assert(corralConfig.mainProcName != null);
 
@@ -140,6 +145,7 @@ namespace AngelicVerifierNull
             }
             finally
             {
+                Console.WriteLine("Final tracked vars: {0}", corralState.TrackedVariables.Print());
                 Stats.printStats();
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
@@ -180,6 +186,9 @@ namespace AngelicVerifierNull
             if (args.Any(s => s == "/dontGeneralize"))
                 Options.generalize = false;
 
+            if (args.Any(s => s == "/retainAxioms"))
+                Options.RemoveAllocConstantAxioms = false;
+
             if (args.Any(s => s == "/reportOnMaxBlock"))
                 Options.reportOnMaxBlockCount = true;
 
@@ -200,6 +209,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/EEfilters:"))
                 .Iter(s => Options.eeFilters = s.Substring("/EEfilters:".Length));
+
+            args.Where(s => s.StartsWith("/maxTries:"))
+                .Iter(s => Options.MAX_REPEATED_BLOCK_EXPR = int.Parse(s.Substring("/maxTries:".Length)));
 
             string resultsfilename = null;
             args.Where(s => s.StartsWith("/dumpResults:"))
@@ -665,6 +677,7 @@ namespace AngelicVerifierNull
                 if (traceInfos.Count() == 1)
                 {
                     System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + ".tt", true);
+                    System.IO.File.Copy(traceInfos.First().TraceName + ".txt", "Angelic" + AngelicCount + ".txt", true);
                     System.IO.File.Copy(traceInfos.First().TraceName + "stack.txt", "Angelic" + AngelicCount + "stack.txt", true);
                 }
                 else
@@ -673,6 +686,7 @@ namespace AngelicVerifierNull
                     foreach (var t in traceInfos)
                     {
                         System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + "." + (c) + ".tt", true);
+                        System.IO.File.Copy(traceInfos.First().TraceName + ".txt", "Angelic" + AngelicCount + "." + (c) + ".txt", true);
                         System.IO.File.Copy(traceInfos.First().TraceName + "stack.txt", "Angelic" + AngelicCount + "." + (c) + "stack.txt", true);
                         c++;
                     }
@@ -1235,7 +1249,6 @@ namespace AngelicVerifierNull
         #region ExplainError related
         private enum REFINE_ACTIONS { SHOW_AND_SUPPRESS, SUPPRESS, BLOCK_PATH };
         private const int MAX_REPEATED_FIELDS_IN_BLOCKS = 4;
-        private const int MAX_REPEATED_BLOCK_EXPR = 2; // maximum number of repeated block expr
         private const int MAX_ASSERT_BLOCK_COUNT = 3; // maximum times we try to block an assertion
         private static Dictionary<string, int> fieldInBlockCount = new Dictionary<string, int>();
         private static Dictionary<Tuple<string, string>, int> blockExprCount = new Dictionary<Tuple<string, string>, int>(); // count repeated block expr
@@ -1303,7 +1316,8 @@ namespace AngelicVerifierNull
                     return true;
                 return false;
             });
-            nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
+            if(Options.RemoveAllocConstantAxioms)
+                nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
 
             // Add these flags by default (nothing right now)
             var eeflags = new List<string>(); // {"/onlySlicAssumes+", "/ignoreAllAssumes-"};
@@ -1367,7 +1381,7 @@ namespace AngelicVerifierNull
                             /*HACK: supress the assertion when it cannot be blocked*/
                             if (blockExprCount.ContainsKey(Tuple.Create(blockExpr.ToString(), entrypoint_name)))
                             {
-                                if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > MAX_REPEATED_BLOCK_EXPR)
+                                if (blockExprCount[Tuple.Create(blockExpr.ToString(), entrypoint_name)]++ > Options.MAX_REPEATED_BLOCK_EXPR)
                                     throw new Exception("Repeating block expression detected. Not able to block!");
                             }
                             else
