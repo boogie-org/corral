@@ -56,55 +56,22 @@ namespace CoreLib
         }
     }
 
+    public class DualHoudiniFail : Exception
+    {
+        public DualHoudiniFail(string msg) : base(msg) { }
+    }
+
     public class HoudiniInlining : StratifiedInlining
     {
         public static readonly string CandidateFuncPrefix = "HoudiniLiteFunc$";
         public static readonly string CandidateFuncAssertedPrefix = "HoudiniLiteFuncAsserted$";
         static bool RobustAgainstEvaluate = false; // usually this is not needed
+        public static bool DualHoudini = false;
         public static bool dbg = false;
 
         public HoudiniInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
             base(program, logFilePath, appendLogFile, PassiveImplInstrumentation)
         {
-        }
-
-        public static Program RewriteEnsuresToConstants(Program program)
-        {
-            var CandidateConstants = new Dictionary<string, Constant>();
-            program.TopLevelDeclarations.OfType<Constant>()
-                .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
-                .Iter(c => CandidateConstants.Add(c.Name, c));
-
-
-            var impls = program.TopLevelDeclarations.OfType<Implementation>().ToList();
-            foreach (var impl in impls)
-            {
-                var newens = new List<Ensures>();
-                foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free ))
-                {
-                    string constantName = null;
-                    Expr expr = null;
-
-                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
-                        ens.Condition, CandidateConstants.Keys, out constantName, out expr);
-
-                    if (!match)
-                        throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
-
-                    var constant = Expr.Ident(new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "hl_rw_" + (InstrumentEnsuresCounter++),
-                        Microsoft.Boogie.Type.Bool), false));
-
-                    impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd)
-                        .Iter(blk => blk.Cmds.Add(new AssumeCmd(Token.NoToken, Expr.Imp(expr, constant))));
-
-                    ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), constant);
-                    newens.Add(new Ensures(true, Expr.Imp(constant, expr)));
-                    program.AddTopLevelDeclaration(constant.Decl);
-                }
-                impl.Proc.Ensures.AddRange(newens);
-            }
-
-            return BoogieUtil.ReResolveInMem(program);
         }
 
         public static HashSet<string> RunHoudini(Program program, bool RobustAgainstEvaluate = false)
@@ -168,7 +135,7 @@ namespace CoreLib
                     }
                 }
 
-                //impl.Emit(new TokenTextWriter(Console.Out), 0);
+                impl.Emit(new TokenTextWriter(Console.Out), 0);
             });
 
             program.AddTopLevelDeclarations(CandidateFuncsAssumed.Values);
@@ -224,7 +191,7 @@ namespace CoreLib
                 while (true)
                 {
                     // Part 1: over-approximate
-                    var proved = ProveCandidates(prover, hvc.constantToAssertedExpr, candidates.Difference(provedTrue.Union(provedFalse)));
+                    var proved = ProveCandidates(prover, hvc.constantToAssertedExpr, hvc.constantToAssumedExpr, candidates.Difference(provedTrue.Union(provedFalse)));
                     provedTrue.UnionWith(proved);
                     if(dbg) Console.WriteLine("Proved {0} candiates at depth {1}", proved.Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
@@ -236,7 +203,7 @@ namespace CoreLib
                         prover.Assert(cs.callSiteExpr, false);
 
                     var remaining = candidates.Difference(provedTrue.Union(provedFalse));
-                    proved = ProveCandidates(prover, hvc.constantToAssertedExpr, remaining);
+                    proved = ProveCandidates(prover, hvc.constantToAssertedExpr, hvc.constantToAssumedExpr, remaining);
                     provedFalse.UnionWith(remaining.Difference(proved));
                     if(dbg) Console.WriteLine("Disproved {0} candiates at depth {1}", remaining.Difference(proved).Count, CommandLineOptions.Clo.InlineDepth - idepth);
 
@@ -267,8 +234,16 @@ namespace CoreLib
                 if (failed.Count != 0)
                 {
                     // add dependencies back into the worklist
-                    foreach (var caller in callgraph.Predecessors(implName))
-                        worklist.Add(Tuple.Create(impl2Priority[caller], caller));
+                    if (!DualHoudini)
+                    {
+                        foreach (var caller in callgraph.Predecessors(implName))
+                            worklist.Add(Tuple.Create(impl2Priority[caller], caller));
+                    }
+                    else
+                    {
+                        foreach (var caller in callgraph.Successors(implName))
+                            worklist.Add(Tuple.Create(impl2Priority[caller], caller));
+                    }
                 }
             }
 
@@ -333,7 +308,7 @@ namespace CoreLib
 
         // Prove candidates that hold (using an over-approximation, at the current inline depth).
         // Return the set of candidates proved correct
-        static HashSet<string> ProveCandidates(ProverInterface prover, Dictionary<string, VCExpr> constantToAssertedExpr, HashSet<string> candidates)
+        static HashSet<string> ProveCandidates(ProverInterface prover, Dictionary<string, VCExpr> constantToAssertedExpr, List<Tuple<string, VCExpr>> constantToAssumedExpr, HashSet<string> candidates)
         {
             var remaining = new HashSet<string>(candidates);
             var reporter = new EmptyErrorReporter();
@@ -351,12 +326,27 @@ namespace CoreLib
 
                 prover.Push();
 
-                // assert them all
-                VCExpr toassert = VCExpressionGenerator.True;
-                foreach (var k in remaining)
-                    toassert = prover.VCExprGen.And(toassert, constantToAssertedExpr[k]);
+                var nameToCallSiteVar = new Dictionary<string, VCExprVar>();
+                var callSiteVarToConstantToExpr = new Dictionary<string, Dictionary<string, VCExpr>>();
 
-                prover.Assert(toassert, false);
+                if (!DualHoudini)
+                {
+                    // assert post
+                    VCExpr toassert = VCExpressionGenerator.True;
+                    foreach (var k in remaining)
+                        toassert = prover.VCExprGen.And(toassert, constantToAssertedExpr[k]);
+
+                    prover.Assert(toassert, false);
+                }
+                else
+                {
+                    // assume post of callees
+                    foreach (var tup in constantToAssumedExpr)
+                    {
+                        if (!remaining.Contains(tup.Item1)) continue;
+                        Debug.Assert(false);
+                    }
+                }
 
                 Dictionary<string, VCExprVar> recordingBool = null;
                 if (RobustAgainstEvaluate)
@@ -379,17 +369,39 @@ namespace CoreLib
                 if (outcome == ProverInterface.Outcome.Invalid || outcome == ProverInterface.Outcome.Undetermined)
                 {
                     var removed = 0;
-                    foreach (var k in remaining)
+                    if (!DualHoudini)
                     {
-                        var b = recordingBool == null ? (bool)prover.Evaluate(constantToAssertedExpr[k])
-                            : (bool)prover.Evaluate(recordingBool[k]);
-
-                        if (!b)
+                        foreach (var k in remaining)
                         {
-                            failed.Add(k);
-                            if(dbg) Console.WriteLine("Failed: {0}", k);
-                            removed++;
+                            var b = recordingBool == null ? (bool)prover.Evaluate(constantToAssertedExpr[k])
+                                : (bool)prover.Evaluate(recordingBool[k]);
+
+                            if (!b)
+                            {
+                                failed.Add(k);
+                                if (dbg) Console.WriteLine("Failed: {0}", k);
+                                removed++;
+                            }
                         }
+                    }
+                    else
+                    {
+                        foreach (var tup in callSiteVarToConstantToExpr)
+                        {
+                            if (!(bool)prover.Evaluate(nameToCallSiteVar[tup.Key]))
+                                continue;
+                            // call site taken
+                            foreach (var tup2 in tup.Value)
+                            {
+                                if ((bool)prover.Evaluate(tup2.Value))
+                                {
+                                    failed.Add(tup2.Key);
+                                    if (dbg) Console.WriteLine("Failed: {0}", tup2.Key);
+                                    removed++;
+                                }
+                            }
+                        }
+                        if (removed == 0) throw new DualHoudiniFail("Nothing to drop");
                     }
                     Debug.Assert(removed != 0);
                     //if(dbg) Console.WriteLine("Query {0}: Invalid, {1} removed", HoudiniStats.ProverCount, removed);
@@ -401,6 +413,7 @@ namespace CoreLib
 
                 if (outcome == ProverInterface.Outcome.TimeOut || outcome == ProverInterface.Outcome.OutOfMemory)
                 {
+                    if (DualHoudini) throw new DualHoudiniFail("Timeout");
                     failed.UnionWith(remaining);
                     break;
                 }
@@ -425,8 +438,8 @@ namespace CoreLib
                 .Iter(impl => impls.Add(impl.Name));
 
             var sccs = new StronglyConnectedComponents<string>(callgraph.Nodes,
-                new Adjacency<string>(n => callgraph.Predecessors(n)),
-                new Adjacency<string>(n => callgraph.Successors(n)));
+                new Adjacency<string>(n => DualHoudini ? callgraph.Successors(n) : callgraph.Predecessors(n)),
+                new Adjacency<string>(n => DualHoudini ? callgraph.Predecessors(n) : callgraph.Successors(n)));
             sccs.Compute();
 
             // impl -> priority
@@ -464,7 +477,6 @@ namespace CoreLib
             return null;
         }
 
-        static int InstrumentEnsuresCounter = 0;
         static void InstrumentEnsures(Program program, Implementation impl, Function CandidateFunc, Dictionary<string, Constant> CandidateConstants)
         {
             if (impl.Proc.Requires.Any(r => !r.Free))
@@ -474,25 +486,79 @@ namespace CoreLib
             var newens = new List<Ensures>();
             foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free))
             {
-                string constantName = null;
-                Expr expr = null;
+                if (!DualHoudini)
+                {
+                    string constantName = null;
+                    Expr expr = null;
 
-                var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
-                    ens.Condition, CandidateConstants.Keys, out constantName, out expr);
+                    var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                        ens.Condition, CandidateConstants.Keys, out constantName, out expr);
 
-                if (!match)
-                    throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported");
+                    if (!match)
+                        throw new Exception("HoudiniLite: Ensures without a candidate implication not yet supported: " + ens.Condition.ToString());
 
-                var constant = CandidateConstants[constantName];
+                    var constant = CandidateConstants[constantName];
 
-                // ensures f(true, constant, expr);
-                newens.Add(new Ensures(false,
-                    new NAryExpr(Token.NoToken, new FunctionCall(CandidateFunc),
-                        new List<Expr> { Expr.True, Expr.Ident(constant), expr })));
+                    // ensures f(true, constant, expr);
+                    newens.Add(new Ensures(false,
+                        new NAryExpr(Token.NoToken, new FunctionCall(CandidateFunc),
+                            new List<Expr> { Expr.True, Expr.Ident(constant), expr })));
+                }
+                else
+                {
+                    var exprs = GetCandidateWithoutConstantDualHoudini(ens.Condition, s => CandidateConstants.ContainsKey(s));
+                    if(exprs == null || exprs.Count() == 0)
+                        throw new Exception("DualHoudiniLite: Ensures without proper candidate structure not yet supported: " + ens.Condition.ToString());
+                    
+                    // ensures f(true, constant, expr);
+                    foreach(var tup in exprs)
+                        newens.Add(new Ensures(false, new NAryExpr(Token.NoToken, new FunctionCall(CandidateFunc),
+                            new List<Expr> { Expr.True, Expr.Ident(tup.Item1), tup.Item2 })));
+                }
             }
 
             impl.Proc.Ensures.RemoveAll(e => !e.Free);
             impl.Proc.Ensures.AddRange(newens);
+        }
+
+        private static IEnumerable<Tuple<Constant, Expr>> GetCandidateWithoutConstantDualHoudini(Expr expr, Predicate<string> ValidConstant)
+        {
+            var ret = new List<Tuple<Constant, Expr>>();
+            var disj = GetSubExprs(expr, BinaryOperator.Opcode.Or);
+            foreach (var d in disj)
+            {
+                if (d is NAryExpr && (d as NAryExpr).Fun is BinaryOperator &&
+                    ((d as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
+                {
+                    var constant = (d as NAryExpr).Args[0] as IdentifierExpr;
+                    var e = (d as NAryExpr).Args[1];
+                    if (constant == null || !ValidConstant(constant.Name))
+                        return new List<Tuple<Constant, Expr>>();
+                    ret.Add(Tuple.Create(constant.Decl as Constant, e));
+                }
+                else
+                    return new List<Tuple<Constant, Expr>>();
+            }
+            return ret;
+        }
+
+        static List<Expr> GetSubExprs(Expr expr, BinaryOperator.Opcode op)
+        {
+            var conjuncts = new List<Expr>();
+            if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
+                ((expr as NAryExpr).Fun as BinaryOperator).Op == op)
+            {
+                var c0 = GetSubExprs((expr as NAryExpr).Args[0], op);
+                var c1 = GetSubExprs((expr as NAryExpr).Args[1], op);
+                conjuncts.AddRange(c0);
+                conjuncts.AddRange(c1);
+            }
+            else
+            {
+                conjuncts.Add(expr);
+            }
+
+            return conjuncts;
         }
 
         public VCExpr GetSummary(string proc)
@@ -559,7 +625,7 @@ namespace CoreLib
 
     class HoudiniVC : StratifiedVC
     {
-        List<Tuple<string, VCExpr>> constantToAssumedExpr;
+        public List<Tuple<string, VCExpr>> constantToAssumedExpr;
         public Dictionary<string, VCExpr> constantToAssertedExpr;
 
         public HoudiniVC(StratifiedInliningInfo siInfo, HashSet<string> procCalls, HashSet<string> currentAssignment)
@@ -572,11 +638,25 @@ namespace CoreLib
             this.constantToAssumedExpr = fsp.constantToAssumedExpr;
             this.constantToAssertedExpr = fsp.constantToAssertedExpr;
 
-            // Assume current summaries of callees
-            foreach(var tup in constantToAssumedExpr)
+            
+            if (!HoudiniInlining.DualHoudini)
             {
-                if (!currentAssignment.Contains(tup.Item1)) continue;
-                vcexpr = gen.And(vcexpr, tup.Item2);
+                // Assume current summaries of callees
+                foreach (var tup in constantToAssumedExpr)
+                {
+                    if (!currentAssignment.Contains(tup.Item1)) continue;
+                    vcexpr = gen.And(vcexpr, tup.Item2);
+                }
+            }
+            else
+            {
+                // Assert current post
+                foreach (var tup in constantToAssertedExpr)
+                {
+                    if (!currentAssignment.Contains(tup.Key)) continue;
+                    vcexpr = gen.And(vcexpr, gen.Not(tup.Value));
+                }
+
             }
         }
 

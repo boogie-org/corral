@@ -26,6 +26,7 @@ namespace HoudiniLite
             var file = args[0];
             var boogieArgs = "";
             var check = false;
+            var dual = false;
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "/break")
@@ -38,15 +39,28 @@ namespace HoudiniLite
                     check = true;
                     continue;
                 }
-
+                if (args[i] == "/dual")
+                {
+                    dual = true;
+                    continue;
+                }
                 boogieArgs += args[i] + " ";
             }
             Initalize(boogieArgs);
+            if (dual) HoudiniInlining.DualHoudini = true;
 
             var sw = new Stopwatch();
             sw.Start();
 
-            var assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), true);
+            var assignment = new HashSet<string>();
+            try
+            {
+                assignment = HoudiniInlining.RunHoudini(BoogieUtil.ReadAndResolve(file), true);
+            }
+            catch (DualHoudiniFail e)
+            {
+                Console.WriteLine("DualHoudini failed to prove anything useful: {0}", e.Message);
+            }
 
             sw.Stop();
 
