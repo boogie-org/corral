@@ -77,7 +77,7 @@ namespace CoreLib
         public static HashSet<string> RunHoudini(Program program, bool RobustAgainstEvaluate = false)
         {
             HoudiniStats.Reset();
-            HoudiniInlining.RobustAgainstEvaluate = RobustAgainstEvaluate;
+            HoudiniInlining.RobustAgainstEvaluate = DualHoudini? false : RobustAgainstEvaluate;
 
             // Gather existential constants
             var CandidateConstants = new Dictionary<string, Constant>();
@@ -135,7 +135,7 @@ namespace CoreLib
                     }
                 }
 
-                impl.Emit(new TokenTextWriter(Console.Out), 0);
+                //impl.Emit(new TokenTextWriter(Console.Out), 0);
             });
 
             program.AddTopLevelDeclarations(CandidateFuncsAssumed.Values);
@@ -182,7 +182,9 @@ namespace CoreLib
                 var openCallSites = new HashSet<StratifiedCallSite>(hvc.CallSites);
                 prover.Assert(hvc.vcexpr, true);
 
-                var candidates = new HashSet<string>(hvc.constantToAssertedExpr.Keys.Where(k => assignment.Contains(k)));
+                var candidates = !DualHoudini ? new HashSet<string>(hvc.constantToAssertedExpr.Keys.Where(k => assignment.Contains(k))) :
+                    new HashSet<string>(hvc.constantToAssumedExpr.Select(t => t.Item1).Where(k => assignment.Contains(k)));
+
                 var provedTrue = new HashSet<string>();
                 var provedFalse = new HashSet<string>();
                 var idepth = Math.Max(0, CommandLineOptions.Clo.InlineDepth);
@@ -308,18 +310,27 @@ namespace CoreLib
 
         // Prove candidates that hold (using an over-approximation, at the current inline depth).
         // Return the set of candidates proved correct
-        static HashSet<string> ProveCandidates(ProverInterface prover, Dictionary<string, VCExpr> constantToAssertedExpr, List<Tuple<string, VCExpr>> constantToAssumedExpr, HashSet<string> candidates)
+        static HashSet<string> ProveCandidates(ProverInterface prover, Dictionary<string, VCExpr> constantToAssertedExpr, List<Tuple<string, VCExpr, VCExpr>> constantToAssumedExpr, HashSet<string> candidates)
         {
             var remaining = new HashSet<string>(candidates);
             var reporter = new EmptyErrorReporter();
             var failed = new HashSet<string>();
 
+            // for dual houdini, we have to iterate once around to the loop
+            // even if remaining is empty
+            bool secondtry = false; 
+
             while (true)
             {
                 remaining.ExceptWith(failed);
 
-                if (remaining.Count == 0)
+                if (remaining.Count == 0 && (!DualHoudini || secondtry))
                     break;
+
+                if (remaining.Count == 0)
+                    secondtry = true;
+                else
+                    secondtry = false;
 
                 HoudiniStats.ProverCount++;
                 HoudiniStats.Start("ProverTime");
@@ -344,8 +355,24 @@ namespace CoreLib
                     foreach (var tup in constantToAssumedExpr)
                     {
                         if (!remaining.Contains(tup.Item1)) continue;
-                        Debug.Assert(false);
+                        
+                        var csVar = tup.Item2 as VCExprVar;
+                        Debug.Assert(csVar != null);
+                        if(!nameToCallSiteVar.ContainsKey(csVar.ToString()))
+                            nameToCallSiteVar.Add(csVar.ToString(), csVar);
+
+                        if (!callSiteVarToConstantToExpr.ContainsKey(csVar.ToString()))
+                            callSiteVarToConstantToExpr.Add(csVar.ToString(), new Dictionary<string, VCExpr>());
+                        callSiteVarToConstantToExpr[csVar.ToString()].Add(tup.Item1, tup.Item3);                        
                     }
+
+                    foreach (var tup in callSiteVarToConstantToExpr)
+                    {
+                        var expr = VCExpressionGenerator.False;
+                        tup.Value.Values.Iter(e => expr = prover.VCExprGen.Or(expr, e));
+                        prover.Assert(prover.VCExprGen.Implies(nameToCallSiteVar[tup.Key], expr), true);
+                    }
+
                 }
 
                 Dictionary<string, VCExprVar> recordingBool = null;
@@ -625,7 +652,7 @@ namespace CoreLib
 
     class HoudiniVC : StratifiedVC
     {
-        public List<Tuple<string, VCExpr>> constantToAssumedExpr;
+        public List<Tuple<string, VCExpr, VCExpr>> constantToAssumedExpr;
         public Dictionary<string, VCExpr> constantToAssertedExpr;
 
         public HoudiniVC(StratifiedInliningInfo siInfo, HashSet<string> procCalls, HashSet<string> currentAssignment)
@@ -645,7 +672,7 @@ namespace CoreLib
                 foreach (var tup in constantToAssumedExpr)
                 {
                     if (!currentAssignment.Contains(tup.Item1)) continue;
-                    vcexpr = gen.And(vcexpr, tup.Item2);
+                    vcexpr = gen.And(vcexpr, gen.Implies(tup.Item2, tup.Item3));
                 }
             }
             else
@@ -662,13 +689,13 @@ namespace CoreLib
 
         class FindSummaryPred : MutatingVCExprVisitor<bool>
         {
-            public List<Tuple<string, VCExpr>> constantToAssumedExpr;
+            public List<Tuple<string, VCExpr, VCExpr>> constantToAssumedExpr;
             public Dictionary<string, VCExpr> constantToAssertedExpr;
 
             public FindSummaryPred(VCExpressionGenerator gen)
                 : base(gen)
             {
-                constantToAssumedExpr = new List<Tuple<string, VCExpr>>();
+                constantToAssumedExpr = new List<Tuple<string, VCExpr, VCExpr>>();
                 constantToAssertedExpr = new Dictionary<string, VCExpr>();
             }
 
@@ -709,7 +736,7 @@ namespace CoreLib
                 {
                     var lt = retnary[1] as VCExprConstant;
                     Debug.Assert(lt != null);
-                    constantToAssumedExpr.Add(Tuple.Create(lt.Name, Gen.Implies(retnary[0], retnary[2])));
+                    constantToAssumedExpr.Add(Tuple.Create(lt.Name, retnary[0], retnary[2]));
                     return VCExpressionGenerator.True;
                 }
 
