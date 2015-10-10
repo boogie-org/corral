@@ -78,6 +78,8 @@ namespace CoreLib
         {
             HoudiniStats.Reset();
             HoudiniInlining.RobustAgainstEvaluate = DualHoudini? false : RobustAgainstEvaluate;
+            if (DualHoudini && CommandLineOptions.Clo.InlineDepth > 0)
+                throw new DualHoudiniFail("InlineDepth not supported");
 
             // Gather existential constants
             var CandidateConstants = new Dictionary<string, Constant>();
