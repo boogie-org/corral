@@ -13,6 +13,7 @@ namespace ProofMinimization
     // indexed CNF formula, i.e., a CNF formula thought of as a list. 
     class TemplateAnnotations
     {
+        double cst = 0;
         List<List<Expr>> icnf;
 
         // Constructors
@@ -127,6 +128,16 @@ namespace ProofMinimization
                 ms = clause.Count > ms? clause.Count : ms;
             }
             return ms;
+        }
+
+        public double cost()
+        {
+            return cst;
+        }
+
+        public void setCost(double c)
+        {
+            this.cst = c;
         }
     }
 
@@ -269,8 +280,12 @@ namespace ProofMinimization
 
     class K1BreadthMinimizer : Minimizer
     {
-
+        int call = 0;
+        
         static HashSet<string> identifiers = new HashSet<string>();
+        static Dictionary<string, double> costMemoization = new Dictionary<string, double>();
+        double hbalance = 0.1;
+
 
         public K1BreadthMinimizer(MinimizerData mdata) : base(mdata)
         {
@@ -278,12 +293,78 @@ namespace ProofMinimization
 
         public override HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            Dictionary<string, TemplateAnnotations> results = new Dictionary<string, TemplateAnnotations>();
             var files = mdata.fileToProg.Keys.ToList();
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
-                var minTemplate = computeMinimalTemplate(file, mdata.fileToProg[file]);
+                Console.WriteLine("Working on file :" + file);
+                var prog = mdata.fileToProg[file];
+
+                foreach (var f in results.Keys)
+                {
+                    var t = results[f];
+                    try
+                    {
+                        if (isMinimalTemplate(prog, t))
+                        {
+                            results[file] = t;
+                            Console.WriteLine("Found minimal one in results:" + t.ToString());
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Minimality check failed {0}. Investigate!", f);
+                    }
+                }
+
+                if (results.ContainsKey(file))
+                {
+                    continue;
+                }
+
+                Console.WriteLine("Computing my own minimal.");
+
+                try {
+                    var minTemplate = computeMinimalTemplate(file, prog);
+                    results[file] = minTemplate;
+                    foreach (var f in results.Keys)
+                    {
+                        try
+                        {
+                            Console.WriteLine("Updating " + f);
+                            if (isMinimalTemplate(prog, minTemplate))
+                            {
+                                results[f] = minTemplate;
+                                Console.WriteLine("Updated!");
+                                break;
+                            }
+                            Console.WriteLine("No need for updating");
+                        }
+                        catch
+                        {
+                            Console.WriteLine("Minimality check failed {0}. Investigate!", f);
+                        }
+                    }
+                } catch (Exception e)
+                {
+                    Console.WriteLine("Something went wrong with program {0}. Investigate!", file);
+                }
             }
+
+            stopwatch.Stop();
+            TimeSpan ts = stopwatch.Elapsed;
+
+            Console.WriteLine("\r\nPrinting minimal templates:");
+            foreach (var k in results.Keys)
+            {
+                Console.WriteLine(results[k].ToString());
+            }
+            Console.WriteLine("Learning time is {0}", ts.ToString("mm\\:ss\\.ff"));
 
             templateToPerfDelta = new Dictionary<int,int>();
             return new HashSet<int>();
@@ -293,6 +374,7 @@ namespace ProofMinimization
         TemplateAnnotations computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
         {
             var fileTempIds = mdata.fileToTempIds[file];
+            costMemoization = new Dictionary<string, double>();
 
             Console.WriteLine("Found the following templates for program {0}:", file);
             List<Expr> templates = new List<Expr>();
@@ -304,48 +386,54 @@ namespace ProofMinimization
                 templates.Add(template);
             }
 
-            Console.WriteLine("Creating indexed template {0}", templates.Count);
+            Console.WriteLine("\nCreating indexed template {0}", templates.Count);
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
-            Console.WriteLine("\t{0}", icnf.ToString());
-
-            int initialCost = getInitialCost(program, icnf);
-            Console.WriteLine("Initial cost constructed: {0}", initialCost);
 
             TemplateAnnotations bestTemplate = icnf;
+            Console.WriteLine("Creating initial cost...");
+            bestTemplate.setCost(getInitialCost(program, icnf));
+            Console.WriteLine("Initial cost constructed: {0}", bestTemplate.cost());
             while (true)
             {
-                var t = getBetterTemplate(program, bestTemplate, initialCost);
+                call++;
+                Console.WriteLine("Currently best template: \n{0}", bestTemplate.ToString());
+                 
+                var t = getBetterTemplate(program, bestTemplate);
                 if (t == null)
                 {
                     break;
                 }
                 else
                 {
+                    Console.WriteLine("Best template just changed.\n");
                     bestTemplate = t;
                 }
             }
 
+            Console.WriteLine("COST: {0} \n MINIMAL TEMPLATE: {1}\n", bestTemplate.cost(), bestTemplate.ToString());
             return bestTemplate;
         }
 
 
-        bool isMinimalTemplateTemplateAnnotations (ProgTransformation.PersistentProgram program, TemplateAnnotations template, int initialCost)
+        bool isMinimalTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
-            var t = getBetterTemplate(program, template, initialCost);
-            if (t == null)
+            var t = template.DeepCopy();
+            t.setCost(getInitialCost(program, t));
+            var better = getBetterTemplate(program, t);
+            if (better == null)
             {
                 return true;
             }
             return false;
         }
 
-        int getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        double getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var insts = instantiateTemplate(template, program);
             return computeCost(program, insts);
         }
 
-        TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, int initialCost)
+        TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             Console.WriteLine("Creating k1 simplified templates iterator...");
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
@@ -355,13 +443,24 @@ namespace ProofMinimization
             {
                 Console.WriteLine("Checking subtemplate: {0}", simple.ToString());
 
-                Console.WriteLine("Computing instantiations.");
-                var insts = instantiateTemplate(simple, program);
+                double cost;
+                if (costMemoization.ContainsKey(simple.ToString()))
+                {
+                    Console.WriteLine("Subtemplate already processed before; taking cost from there.");
+                    cost = costMemoization[simple.ToString()];
+                } else { 
+                    Console.WriteLine("Computing instantiations...");
+                    var insts = instantiateTemplate(simple, program);
 
-                Console.WriteLine("Computing the cost");
-                int cost = computeCost(program, insts);
+                    Console.WriteLine("Computing the cost...");
+                    cost = computeCost(program, insts);
+                    simple.setCost(cost);
+                    costMemoization[simple.ToString()] = cost;
+                }
+                
+                Console.WriteLine("Cost is {0}", cost);
 
-                if (cost < initialCost)
+                if (cost < template.cost())
                 {
                     return simple;
                 }
@@ -370,7 +469,7 @@ namespace ProofMinimization
             return null;
         }
 
-        int computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
+        double computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
         {
             var allconstants = new Dictionary<string, Constant>();
             var prog = program.getProgram();
@@ -378,7 +477,7 @@ namespace ProofMinimization
                 .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
                 .Iter(c => allconstants.Add(c.Name, c));
             MinControl.DropConstants(prog, new HashSet<string>(allconstants.Keys));
-            cba.Util.BoogieUtil.PrintProgram(prog, "interim0.txt");
+            //cba.Util.BoogieUtil.PrintProgram(prog, "interim0_" + call + ".bpl");
 
             int instCnt = 0;
             foreach (var proc in instantiation.Keys)
@@ -399,67 +498,46 @@ namespace ProofMinimization
                     instCnt++;
                 }
             }
+            Console.WriteLine("Created {0} instantiations.", instCnt);
 
+            // Running Houdini and Corral must be done on fresh program instances.
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
-            cba.Util.BoogieUtil.PrintProgram(prog, "interim1.txt");
+            //cba.Util.BoogieUtil.PrintProgram(prog, "interim1_" + call + ".bpl");
 
             var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
+            // Cost of Houdini is currently the number of thrown candidates.
+            // This roughly corresponds to the number of solver calls, which
+            // is what we ideally want.
+            long houdiniCost = instCnt - assignment.Count;
+
+            // Take a fresh copy for corral, just in case.
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
-            cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2.txt");
-
-            int houdiniCost = instCnt - assignment.Count;
-
-            // Run SI
-            var err = new List<BoogieErrorTrace>();
-            // Set bound to infinity.
+            //cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2_" + call + ".bpl");
+            // Run SI but first set bound to infinity.
             BoogieVerify.options.maxInlinedBound = 0;
-
+            var err = new List<BoogieErrorTrace>();
             var rstatus = BoogieVerify.Verify(pcopy3, out err, true);
-            //Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
-            //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
             var procs_inlined = BoogieVerify.CallTreeSize + 1;
             BoogieVerify.options.CallTree = new HashSet<string>();
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
-            if (rstatus != BoogieVerify.ReturnStatus.OK)
-            { 
-                Console.WriteLine(rstatus);
-                Console.WriteLine(procs_inlined);
-                Console.WriteLine(err.Count);
-                Environment.Exit(0);
-            }
-            Environment.Exit(0);
-            return houdiniCost * procs_inlined;
-        } 
-
-        string createRandomIdentifier()
-        {
-            string letters = "abcdefghijklmnopqrstuvxwzABCDEFGHIJKLMNOPQRSTUVWXZ";
-            string numbers = "0123456789";
-
-            string ident = null;
-            while(true)
+            if (rstatus == BoogieVerify.ReturnStatus.NOK)
             {
-                ident = "";
-                var random = new Random();
-                for (int i = 0; i < 5; i++)
-                {
-                    ident += letters[random.Next(0, letters.Length - 1)];
-                    ident += numbers[random.Next(0, numbers.Length - 1)];
-                }
-
-                if (!identifiers.Contains(ident))
-                {
-                    identifiers.Add(ident);
-                    break;
-                }
+                throw new Exception("Corral returned NOT OK, we don't expect such benchmarks!");
+            } else if (rstatus == BoogieVerify.ReturnStatus.ReachedBound)
+            {
+                return Double.MaxValue;
+            } else
+            {
+                Console.WriteLine("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost);
+                Console.WriteLine((1 - (assignment.Count / instCnt)));
+                return hbalance * houdiniCost + procs_inlined;
             }
-            return ident;
-        }
+        } 
 
         Dictionary<Procedure, List<Expr>> instantiateTemplate(TemplateAnnotations tanns, ProgTransformation.PersistentProgram program)
         {
@@ -543,6 +621,31 @@ namespace ProofMinimization
                 }), expr);
 
             return ret;
+        }
+
+        string createRandomIdentifier()
+        {
+            string letters = "abcdefghijklmnopqrstuvxwzABCDEFGHIJKLMNOPQRSTUVWXZ";
+            string numbers = "0123456789";
+
+            string ident = null;
+            while (true)
+            {
+                ident = "";
+                var random = new Random();
+                for (int i = 0; i < 5; i++)
+                {
+                    ident += letters[random.Next(0, letters.Length - 1)];
+                    ident += numbers[random.Next(0, numbers.Length - 1)];
+                }
+
+                if (!identifiers.Contains(ident))
+                {
+                    identifiers.Add(ident);
+                    break;
+                }
+            }
+            return ident;
         }
 
     }

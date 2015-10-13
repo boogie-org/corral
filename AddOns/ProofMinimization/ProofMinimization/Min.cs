@@ -171,6 +171,8 @@ namespace ProofMinimization
                         if (templateId != -1)
                         {
                             addTemplate(templateId, f, constantName);
+                            fileToTempIds[f].Add(templateId);
+                            tempIdToExpr[templateId] = SimplifyExpr.ExprToTemplateExpr(expr);
                             if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
                             {
                                 strToTemplate.Add(SimplifyExpr.ExprToTemplate(expr), templateId);
@@ -189,8 +191,8 @@ namespace ProofMinimization
                                 // create new template
                                 var tid = TemplateCounterStart + strToTemplate.Count;
                                 strToTemplate.Add(temp, tid);
-                                addTemplate(strToTemplate[temp], f, constantName);
-                                tempIdToExpr[strToTemplate[temp]] = SimplifyExpr.ExprToTemplateExpr(expr);
+                                addTemplate(tid, f, constantName);
+                                tempIdToExpr[tid] = SimplifyExpr.ExprToTemplateExpr(expr);
                                 fileToTempIds[f].Add(tid);
                             }
                         }
@@ -204,7 +206,7 @@ namespace ProofMinimization
 
             templateToStr = new Dictionary<int, string>();
             strToTemplate.Iter(tup => templateToStr.Add(tup.Value, tup.Key));
-
+            
             Console.WriteLine("Found {0} templates", templateMap.Count);
 
             if (dbg)
