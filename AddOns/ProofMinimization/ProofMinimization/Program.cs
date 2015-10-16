@@ -258,8 +258,7 @@ namespace ProofMinimization
                         var c = GetExistentialConstant();
                         added.Add(c);
                         newens.Add(new Ensures(false, Expr.Imp(Expr.Ident(c), elem)));
-                    }
-                    
+                    }    
                 }
 
                 proc.Ensures.AddRange(newens);

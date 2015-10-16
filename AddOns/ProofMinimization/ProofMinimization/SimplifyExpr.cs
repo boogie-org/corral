@@ -349,7 +349,8 @@ namespace ProofMinimization
 
         public static Expr Reduce(List<Expr> exprs, BinaryOperator.Opcode op)
         {
-            if (exprs.Count == 0) {
+            if (exprs.Count == 0)
+            {
                 return null;
             }
             else if (exprs.Count == 1)

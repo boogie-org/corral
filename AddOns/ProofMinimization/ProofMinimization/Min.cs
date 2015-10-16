@@ -226,16 +226,26 @@ namespace ProofMinimization
 
         public static HashSet<int> Minimize(MinimizerData data, out  Dictionary<int, int> templateToPerfDelta)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            HashSet<int> result = null;
             if (method == 1)
             {
                 K1BreadthMinimizer minimizer = new K1BreadthMinimizer(data);
-                return minimizer.FindMin(out templateToPerfDelta);
+                result = minimizer.FindMin(out templateToPerfDelta);
             }
             else
             {
                 ConjuctMinimizer minimizer = new ConjuctMinimizer(data);
-                return minimizer.FindMin(out templateToPerfDelta);
+                result =  minimizer.FindMin(out templateToPerfDelta);
             }
+
+            stopwatch.Stop();
+            TimeSpan ts = stopwatch.Elapsed;
+            Console.WriteLine("LEARNING TIME IS {0}", ts.ToString("hh\\:mm\\:ss\\.ff"));
+
+            return result;
         }
 
 
