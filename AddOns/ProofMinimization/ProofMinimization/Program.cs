@@ -131,10 +131,15 @@ namespace ProofMinimization
             var files = new HashSet<string>();
             foreach (var fp in filePatterns)
             {
-                if (System.IO.Path.IsPathRooted(fp))
-                    files.Add(fp);
-                else
-                    files.UnionWith(System.IO.Directory.GetFiles(".", fp));
+                //if (System.IO.Path.IsPathRooted(fp))
+                //    files.Add(fp);
+                //else
+                //    files.UnionWith(System.IO.Directory.GetFiles(".", fp));
+
+                var fname = System.IO.Path.GetFileName(fp);
+                var dirname = System.IO.Path.GetDirectoryName(fp);
+                if (dirname == "") dirname = ".";
+                files.UnionWith(System.IO.Directory.GetFiles(dirname, fname));
             }
 
             if (files.Count == 0)
