@@ -741,6 +741,7 @@ namespace cba
             else if (flag == "/useDuality")
             {
                 useDuality = true;
+                newStratifiedInlining = false;
             }
             else
             {
