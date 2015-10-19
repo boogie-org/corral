@@ -1082,6 +1082,8 @@ namespace cba
             DoStaticAnalysis(program);
             var info = Instantiate(program);
 
+            if (printHoudiniQuery != null) PrintProofMinQuery(program, "pm_" + printHoudiniQuery);
+
             if (!runAbsHoudini && info.Count == 0 && summaries.Count == 0) return program;
 
             if (runHoudini)
