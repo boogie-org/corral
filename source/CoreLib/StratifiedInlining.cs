@@ -1225,6 +1225,7 @@ namespace CoreLib
                 MacroSI.PRINT_DEBUG("  - overapprox");
                 // overapproximate query
                 Push();
+                var softAssumptions = new List<VCExpr>();
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     // Stop if we've reached the recursion bound or
@@ -1237,11 +1238,15 @@ namespace CoreLib
                         //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
                         boundHit = true;
                     }
+                    // Non-uniform unfolding
+                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                        softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
                 MacroSI.PRINT_DEBUG("    - check");
                 reporter.reportTrace = false;
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = CheckVC(reporter);
+                outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
+                    CheckVC(reporter);
                 Pop();
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                 if (outcome != Outcome.Errors)
@@ -1517,12 +1522,6 @@ namespace CoreLib
         {
             startTime = DateTime.UtcNow;
 
-            // Sanity checking
-            if (cba.Util.BoogieVerify.options.NonUniformUnfolding)
-            {
-                Console.WriteLine("Warning: newSI doesn't support non-uniform procedure inlining");
-            }
-
             // Find all procedures that are "forced inline"
             forceInlineProcs.UnionWith(program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(p => BoogieUtil.checkAttrExists(ForceInlineAttr, p.Attributes) || BoogieUtil.checkAttrExists(ForceInlineAttr, p.Proc.Attributes))
@@ -1665,7 +1664,7 @@ namespace CoreLib
             }
             else
             {
-                int currRecursionBound = BoogieVerify.options.extraFlags.Contains("MaxRec") ? CommandLineOptions.Clo.RecursionBound :
+                int currRecursionBound = (BoogieVerify.options.extraFlags.Contains("MaxRec") || BoogieVerify.options.NonUniformUnfolding) ? CommandLineOptions.Clo.RecursionBound :
                     1;
                 while (true)
                 {
@@ -1876,6 +1875,18 @@ namespace CoreLib
             prover.Check();
             stats.time += stopwatch.ElapsedTicks;
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
+            return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
+        }
+
+        private Outcome CheckVC(List<VCExpr> softAssumptions, ProverInterface.ErrorHandler reporter)
+        {
+            List<int> unsatCore;
+
+            stats.calls++;
+            var stopwatch = Stopwatch.StartNew();
+            ProverInterface.Outcome outcome = 
+                prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
+            stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
