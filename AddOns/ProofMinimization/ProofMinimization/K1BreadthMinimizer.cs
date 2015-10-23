@@ -293,6 +293,7 @@ namespace ProofMinimization
         static Dictionary<string, double> costMemoization = new Dictionary<string, double>();
         double hbalance = 0.1;
 
+        static string ART_VAR_PREFIX = "ART_";
 
         public K1BreadthMinimizer(MinimizerData mdata) : base(mdata)
         {
@@ -310,7 +311,7 @@ namespace ProofMinimization
 
                 var prog = mdata.fileToProg[file];
 
-                // Check if any of the templates so far is minimal for prog.
+                Console.WriteLine("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
                 {
                     var t = minTemplates[f];
@@ -319,7 +320,7 @@ namespace ProofMinimization
                         if (isMinimalTemplate(prog, t))
                         {
                             minTemplates[file] = t;
-                            Console.WriteLine("Found minimal template in current results:" + t.ToString());
+                            Console.WriteLine("Found minimal template in existing results:" + t.ToString());
                             break;
                         }
                     }
@@ -339,7 +340,6 @@ namespace ProofMinimization
 
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
-                    minTemplates[file] = minTemplate;
                     Console.WriteLine("Now updating previous results");
                     foreach (var f in minTemplates.Keys)
                     {
@@ -359,6 +359,8 @@ namespace ProofMinimization
                             Console.WriteLine("ERROR: Minimality check failed {0}. Investigate!", f);
                         }
                     }
+                    minTemplates[file] = minTemplate;
+                    Console.WriteLine("Done updating.");
                 } catch (Exception e)
                 {
                     Console.WriteLine("ERROR: Something went wrong with program {0}. Investigate!", file);
@@ -398,13 +400,15 @@ namespace ProofMinimization
             }
 
             costMemoization = new Dictionary<string, double>();
+
             Console.WriteLine("\nCreating indexed template {0}", templates.Count);
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
-
+            
             TemplateAnnotations bestTemplate = icnf;
             Console.WriteLine("Creating initial cost...");
-            bestTemplate.SetCost(getInitialCost(program, icnf));
+            bestTemplate.SetCost(getInitialCost(program, icnf)); 
             Console.WriteLine("Initial cost constructed: {0}", bestTemplate.Cost());
+
             while (true)
             {
                 //call++;
@@ -491,7 +495,7 @@ namespace ProofMinimization
                 .Iter(c => allconstants.Add(c.Name, c));
             MinControl.DropConstants(prog, new HashSet<string>(allconstants.Keys));
             //cba.Util.BoogieUtil.PrintProgram(prog, "interim0_" + call + ".bpl");
-
+            
             int instCnt = 0;
             foreach (var proc in instantiation.Keys)
             {
@@ -511,7 +515,6 @@ namespace ProofMinimization
                     instCnt++;
                 }
             }
-            Console.WriteLine("Created {0} instantiations.", instCnt);
 
             // Running Houdini and Corral must be done on fresh program instances.
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
@@ -640,25 +643,18 @@ namespace ProofMinimization
 
         string createRandomIdentifier()
         {
-            string letters = "abcdefghijklmnopqrstuvxwzABCDEFGHIJKLMNOPQRSTUVWXZ";
-            string numbers = "0123456789";
-
             string ident = null;
             while (true)
             {
-                ident = "";
-                var random = new Random();
-                for (int i = 0; i < 5; i++)
-                {
-                    ident += letters[random.Next(0, letters.Length - 1)];
-                    ident += numbers[random.Next(0, numbers.Length - 1)];
-                }
+                ident = ART_VAR_PREFIX + Guid.NewGuid().ToString();
+                ident = ident.Replace("-", "_");
 
                 if (!identifiers.Contains(ident))
                 {
                     identifiers.Add(ident);
                     break;
                 }
+                
             }
             return ident;
         }
