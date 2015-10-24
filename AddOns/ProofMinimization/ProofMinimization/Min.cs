@@ -228,6 +228,12 @@ namespace ProofMinimization
             return tokeep;
         }
 
+        // minimize disjunctions in the templates
+        static void PruneDisjuncts(int template, HashSet<int> allTemplates)
+        {
+            var expr = SimplifyExpr.ToExpr(templateToStr[template]);
+        }
+
 
         // Prune away non-candidates, verify using the rest
         static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf, out HashSet<string> filesVerified, out string fileFailed)
