@@ -217,5 +217,46 @@ namespace ProofMinimization
             return ret;
         }
 
+        public static Expr ToExpr(string str)
+        {
+            Program program;
+
+            // parse str as an unresolved expr
+            var programText = string.Format("procedure foo(); ensures {0};", str);
+            Parser.Parse(programText, "dummy.bpl", out program);
+
+            // get variables
+            var gv = (new GatherVariables());
+            gv.Visit(program);
+            foreach (var v in gv.variables)
+            {
+                programText += Environment.NewLine + string.Format("var {0}: int;", v);
+            }
+
+            // try parsing again
+            Parser.Parse(programText, "dummy.bpl", out program);
+            // resolve
+            program.Resolve();
+
+            return program.TopLevelDeclarations.OfType<Procedure>()
+                .First().Ensures.First().Condition;
+        }
+    }
+
+    // Gather variables in an unresolved program
+    public class GatherVariables : StandardVisitor
+    {
+        public HashSet<string> variables;
+
+        public GatherVariables()
+        {
+            variables = new HashSet<string>();
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            variables.Add(node.Name);
+            return node;
+        }
     }
 }
