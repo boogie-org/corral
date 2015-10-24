@@ -167,12 +167,10 @@ namespace ProofMinimization
         {
             this.annots = annots;
 
-            for (int i = 1; i <= this.annots.ClauseMaxSize(); i++)
+            for (int i = 0; i <= this.annots.ClauseMaxSize(); i++)
             {
                 simplificationSizes.Add(i);
             }
-            // 0 is the last since clauses of size 0 make the formula weaker.
-            simplificationSizes.Add(0);
         }
 
         // Gimme the next simplified annotation set.
@@ -314,6 +312,7 @@ namespace ProofMinimization
                 Console.WriteLine("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
                 {
+                    Console.WriteLine("Checking existing result for {0}", f);
                     var t = minTemplates[f];
                     try
                     {
@@ -336,7 +335,7 @@ namespace ProofMinimization
                     continue;
                 }
 
-                Console.WriteLine("No minimal template found in current results. Computing my own minimal.");
+                Console.WriteLine("\r\nNo minimal template found in current results. Computing my own minimal.");
 
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
@@ -434,7 +433,9 @@ namespace ProofMinimization
         bool isMinimalTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var t = template.DeepCopy();
+            Console.WriteLine("Creating initial cost...");
             t.SetCost(getInitialCost(program, t));
+            Console.WriteLine("Initial cost constructed: {0}", t.Cost());         
             var better = getBetterTemplate(program, t, false);
             if (better == null)
             {
@@ -550,9 +551,9 @@ namespace ProofMinimization
             } else
             {
                 Console.WriteLine("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost);
-                var cost =  ((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined;
+                //var cost =  ((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined;
                 //var cost =  hbalance * houdiniCost + procs_inlined;
-                //var cost = procs_inlined;
+                var cost = procs_inlined;
                 return cost;
             }
         } 
