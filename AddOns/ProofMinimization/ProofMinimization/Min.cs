@@ -281,8 +281,11 @@ namespace ProofMinimization
                     BoogieVerify.options.maxInlinedBound = PerfMetric(fileToPerf[file]);
 
                 var rstatus = BoogieVerify.Verify(program, out err, true);
-                //Console.WriteLine(string.Format("  >> Procedures Inlined: {0}", BoogieVerify.CallTreeSize));
-                //Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+                if (dbg)
+                {
+                    Console.WriteLine(string.Format("  >> Procedures Inlined: {0} / {1}", BoogieVerify.CallTreeSize, BoogieVerify.options.maxInlinedBound));
+                    Console.WriteLine(string.Format("Boogie verification time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
+                }
 
                 var procs_inlined = BoogieVerify.CallTreeSize + 1;
                 BoogieVerify.options.CallTree = new HashSet<string>();

@@ -34,10 +34,14 @@ namespace ProofMinimization
 
         public static Expr Simplify(Expr e)
         {
+            Console.WriteLine("Before: {0}", e);
             var vs = new SimplifyExpr();
             var e1 = vs.VisitExpr(e);
-            var e2 = NormalizeExpr(e1);
-            return e2;
+            var e2 = Expr.And(MakeCNF(e1));
+            var e3 = NormalizeExpr(e2);
+
+            Console.WriteLine("Afte: {0}", e3);
+            return e3;
         }
 
         public override Expr VisitNAryExpr(NAryExpr node)
@@ -101,6 +105,38 @@ namespace ProofMinimization
                 }), expr);
 
             return ret.ToString();
+        }
+
+        // Returns clauses of the CNF formula
+        static List<Expr> MakeCNF(Expr expr)
+        {
+            var nary = expr as NAryExpr;
+            if (nary == null)
+                return new List<Expr>{expr};
+
+            if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
+            {
+                var c1 = MakeCNF(nary.Args[0]);
+                var c2 = MakeCNF(nary.Args[1]);
+                return new List<Expr>(c1.Concat(c2));
+            }
+
+            if (nary.Fun is BinaryOperator && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
+            {
+                var c1 = MakeCNF(nary.Args[0]);
+                var c2 = MakeCNF(nary.Args[1]);
+                var ret = new List<Expr>();
+                foreach (var a in c1)
+                {
+                    foreach (var b in c2)
+                    {
+                        ret.Add(Expr.Or(a, b));
+                    }
+                }
+                return ret;
+            }
+
+            return new List<Expr> { expr };
         }
 
         static Expr NormalizeExpr(Expr expr)
