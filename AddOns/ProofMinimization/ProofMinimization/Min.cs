@@ -34,16 +34,15 @@ namespace ProofMinimization
         // file -> perf
         static Dictionary<string, int> fileToPerf = new Dictionary<string, int>();
 
+        static void addTemplate(int templateId, string file, string constant)
+        {
+            if (!templateMap.ContainsKey(templateId)) templateMap.Add(templateId, new Dictionary<string, HashSet<string>>());
+            if (!templateMap[templateId].ContainsKey(file)) templateMap[templateId].Add(file, new HashSet<string>());
+            templateMap[templateId][file].Add(constant);
+        }
 
         public static void ReadFiles(IEnumerable<string> files, HashSet<string> keepPatterns)
         {
-            var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
-                {
-                    if (!templateMap.ContainsKey(templateId)) templateMap.Add(templateId, new Dictionary<string, HashSet<string>>());
-                    if (!templateMap[templateId].ContainsKey(file)) templateMap[templateId].Add(file, new HashSet<string>());
-                    templateMap[templateId][file].Add(constant);
-                });
-
             foreach (var f in files)
             {
                 var program = BoogieUtil.ReadAndResolve(f);
@@ -228,10 +227,82 @@ namespace ProofMinimization
             return tokeep;
         }
 
+        static int NewConstCounter = 0;
+
         // minimize disjunctions in the templates
-        static void PruneDisjuncts(int template, HashSet<int> allTemplates)
+        public static void PruneDisjuncts(int template)
         {
-            var expr = SimplifyExpr.ToExpr(templateToStr[template]);
+            Console.WriteLine("Breaking down template {0}: {1}", template, templateToStr[template]);
+
+            var files = new HashSet<string>(fileToProg.Keys);
+            foreach (var file in files)
+            {
+                if (!templateMap[template].ContainsKey(file))
+                    continue;
+                var constants = templateMap[template][file].Difference(fileToKeepConstants[file]);
+                if (constants.Count == 0) continue;
+
+                var program = fileToProg[file].getProgram();
+
+                var newconstants = new List<Constant>();
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    var newEnsures = new List<Ensures>();
+                    foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free))
+                    {
+                        string constantName = null;
+                        Expr expr = null;
+
+                        var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                            ens.Condition, constants, out constantName, out expr);
+
+                        if (!match) continue;
+
+                        var disjuncts = SimplifyExpr.GetExprDisjuncts(expr);
+                        if (disjuncts.Count == 1) continue;
+                        foreach (var d in disjuncts)
+                        {
+                            var conjuncts = SimplifyExpr.GetExprConjunctions(d);
+                            foreach (var c in conjuncts)
+                            {
+                                var nc = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "PMnewConst" + (NewConstCounter++),
+                                    btype.Bool), false);
+                                nc.AddAttribute("existential");
+                                newconstants.Add(nc);
+                                templateMap[template][file].Add(nc.Name);
+                                Console.WriteLine("  New constant created: {0}", nc.Name);
+
+                                var e = Expr.Imp(Expr.Ident(nc), c);
+                                newEnsures.Add(new Ensures(false, e));
+
+                                // Add template
+                                var temp = SimplifyExpr.ExprToTemplate(e);
+                                if (strToTemplate.ContainsKey(temp))
+                                {
+                                    // template for it exists
+                                    addTemplate(strToTemplate[temp], file, nc.Name);
+                                }
+                                else
+                                {
+                                    // create new template
+                                    int v = TemplateCounterStart + strToTemplate.Count;
+                                    strToTemplate.Add(temp, v);
+                                    templateToStr.Add(v, temp);
+                                    addTemplate(strToTemplate[temp], file, nc.Name);
+
+                                    Console.WriteLine("  New template created: {0}", temp);
+                                }
+                                
+                            }
+                        }
+                    }
+                    impl.Proc.Ensures.AddRange(newEnsures);
+                }
+                program.AddTopLevelDeclarations(newconstants);
+
+                fileToProg[file] = new PersistentProgram(program);
+            }
+
         }
 
 

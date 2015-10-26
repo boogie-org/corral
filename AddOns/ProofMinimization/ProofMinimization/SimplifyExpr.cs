@@ -34,13 +34,10 @@ namespace ProofMinimization
 
         public static Expr Simplify(Expr e)
         {
-            Console.WriteLine("Before: {0}", e);
             var vs = new SimplifyExpr();
             var e1 = vs.VisitExpr(e);
-            var e2 = Expr.And(MakeCNF(e1));
-            var e3 = NormalizeExpr(e2);
-
-            Console.WriteLine("Afte: {0}", e3);
+            //var e2 = Expr.And(MakeCNF(e1));
+            var e3 = NormalizeExpr(e1);
             return e3;
         }
 

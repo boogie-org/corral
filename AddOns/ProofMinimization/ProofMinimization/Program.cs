@@ -129,57 +129,30 @@ namespace ProofMinimization
             Dictionary<int, int> templateToPerfDelta;
             var min = Minimize.FindMin(out templateToPerfDelta);
 
-            var t2str = new Dictionary<int, string>();
-            Minimize.strToTemplate.Iter(tup => t2str.Add(tup.Value, tup.Key));
-
             foreach (var c in min)
             {
-                Console.WriteLine("Additional contract required: {0}", t2str[c]);
+                Console.WriteLine("Additional contract required: {0}", Minimize.templateToStr[c]);
             }
             foreach (var tup in templateToPerfDelta)
             {
                 if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, t2str[tup.Key]);
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, Minimize.templateToStr[tup.Key]);
             }
 
-            /*
-             
-            // Lets see if we can break down things further
-            program = inprog.getProgram();
-            // drop ones that we don't need anymore
-            DropConstants(program, dropped);
-            // break the rest into smaller parts
-            var kept = BreakDownInvariants(program, candidates);
-            if (kept.Count != candidates.Count)
+            // Try again
+            var templates = new HashSet<int>(Minimize.templateToStr.Keys);
+            templates.Iter(Minimize.PruneDisjuncts);
+            min = Minimize.FindMin(out templateToPerfDelta);
+
+            foreach (var c in min)
             {
-                inprog = new PersistentProgram(program);
-                proofmin = new ProofMin(inprog, usePerf);
-
-                HashSet<string> candidates2;
-                Dictionary<string, int> constantToPerfDelta2;
-                HashSet<string> dropped2;
-                var contracts2 = proofmin.GetContracts();
-
-                ret = proofmin.Run(out candidates2, out dropped2, out constantToPerfDelta2);
-                Debug.Assert(ret, "This cannot happen because we just started from a proof");
-
-                // merge results
-                candidates = candidates2.Union(kept);
-                constantToPerfDelta2.Iter(tup => constantToPerfDelta.Add(tup.Key, tup.Value));
-                contracts2.Where(tup => !contracts.ContainsKey(tup.Key)).Iter(tup => contracts.Add(tup.Key, tup.Value));
+                Console.WriteLine("Additional contract required: {0}", Minimize.templateToStr[c]);
             }
-            
-            //Log(0);
-            foreach (var c in candidates)
-            {
-                Console.WriteLine("Additional contract required: {0}", NormalizeExpr(contracts[c]));
-            }
-            foreach (var tup in constantToPerfDelta)
+            foreach (var tup in templateToPerfDelta)
             {
                 if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, NormalizeExpr(contracts[tup.Key]));
+                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, Minimize.templateToStr[tup.Key]);
             }
-             */
         }
 
 
