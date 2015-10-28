@@ -20,6 +20,9 @@ namespace cba.Util
         // Verification options
         public static BoogieVerifyOptions options;
 
+        // Unrolling for irreducible loops (default behavior: recursion bound)
+        public static int irreducibleLoopUnroll = -1;
+
         // Stats or debugging flags
         public static TimeSpan verificationTime = TimeSpan.Zero;
         public static TimeSpan tempTime = TimeSpan.Zero;
@@ -105,8 +108,16 @@ namespace cba.Util
             // Set options
             options.Set();
 
+            // save RB
+            var rb = CommandLineOptions.Clo.RecursionBound;
+            if (BoogieVerify.irreducibleLoopUnroll >= 0)
+                CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
+
             // Do loop extraction
             var extractionInfo = program.ExtractLoops();
+
+            // restore RB
+            CommandLineOptions.Clo.RecursionBound = rb;
 
             // set bounds
             if (options.extraRecBound != null)

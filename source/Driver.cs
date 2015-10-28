@@ -111,6 +111,7 @@ namespace cba
 
             GeneralRefinementScheme.printStats = config.printProgress;
             ContractInfer.runHoudini = !config.summaryComputation;
+            BoogieVerify.irreducibleLoopUnroll = config.irreducibleLoopUnroll;
             GlobalConfig.addInvariants = 2; // AL
 
             GlobalConfig.cadeTiming = config.cadeTiming;

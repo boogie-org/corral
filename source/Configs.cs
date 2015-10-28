@@ -153,6 +153,8 @@ namespace cba
 
         public HashSet<string> extraFlags { get; private set; }
 
+        public int irreducibleLoopUnroll { get; private set; }
+
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -340,6 +342,7 @@ namespace cba
             NumCex = 1;
 
             extraFlags = new HashSet<string>();
+            irreducibleLoopUnroll = -1;
         }
 
 
@@ -412,6 +415,11 @@ namespace cba
             else if (flag == "/staticInlining")
             {
                 staticInlining = 1;
+            }
+            else if (flag.StartsWith("/irreducibleLoopUnroll:"))
+            {
+                var split = flag.Split(sep);
+                irreducibleLoopUnroll = Int32.Parse(split[1]);
             }
             else if (flag.StartsWith("/special"))
             {

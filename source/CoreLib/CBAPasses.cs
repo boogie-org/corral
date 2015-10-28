@@ -1108,7 +1108,7 @@ namespace cba
             : base(n)
         {
             info = null;
-            addUniqueCallLabels = false;
+            this.addUniqueCallLabels = false;
         }
 
         public override CBAProgram runCBAPass(CBAProgram p)
@@ -1123,8 +1123,16 @@ namespace cba
                 impl.PruneUnreachableBlocks();
             }
 
+            // save RB
+            var rb = CommandLineOptions.Clo.RecursionBound;
+            if (BoogieVerify.irreducibleLoopUnroll >= 0)
+                CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
+
             var procsWithIrreducibleLoops = new HashSet<string>();
             var passInfo = p.ExtractLoops(out procsWithIrreducibleLoops);
+
+            // restore RB
+            CommandLineOptions.Clo.RecursionBound = rb;
 
             // no loops found, then this transformation is identity
             if (passInfo.Count == 0 && procsWithIrreducibleLoops.Count == 0)
