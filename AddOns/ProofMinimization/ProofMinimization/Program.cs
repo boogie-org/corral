@@ -126,8 +126,55 @@ namespace ProofMinimization
 
             Minimize.ReadFiles(files, keepPatterns);
 
-            Dictionary<int, int> templateToPerfDelta;
-            var min = Minimize.FindMin(out templateToPerfDelta);
+            Dictionary<int, int> templateToPerfDelta = new Dictionary<int,int>();
+            HashSet<int> min = new HashSet<int>();
+            
+            var dropped = new HashSet<int>();
+
+            do
+            {
+                Dictionary<int, int> t2d;
+                var min2 = Minimize.FindMin(dropped, out t2d);
+
+                // dropped
+                var templates = new HashSet<int>(Minimize.templateToStr.Keys);
+                dropped = templates.Difference(min2);                
+
+                // merge perf
+                foreach (var tup in t2d)
+                {
+                    if (!templateToPerfDelta.ContainsKey(tup.Key))
+                        templateToPerfDelta.Add(tup.Key, tup.Value);
+                    else
+                        templateToPerfDelta[tup.Key] += tup.Value;
+                }
+
+                Console.WriteLine("Obtained minimal templates, at size {0}", min2.Count);
+
+                if (min.SetEquals(min2))
+                {
+                    Console.WriteLine("Reached fixpoint; we're done");
+                    break;
+                }
+
+                min = min2;
+
+                Console.WriteLine("Contemplating re-running with broken down templates");
+
+                var rerun = false;
+                Minimize.candidateToCost = new Dictionary<int, int>();
+                var newTemplates = new HashSet<int>();
+                min2.Iter(t => { var b = Minimize.PruneDisjuncts(t, ref newTemplates); rerun |= b; });
+
+                if (!rerun)
+                {
+                    Console.WriteLine("Nothing to break; we're done");
+                    break;
+                }
+
+                dropped.ExceptWith(newTemplates);
+                Console.WriteLine("Rerunning Minimization");
+            } while (true);
 
             foreach (var c in min)
             {
@@ -138,21 +185,7 @@ namespace ProofMinimization
                 if (tup.Value <= 2) continue;
                 Console.WriteLine("Contract to pref: {0} {1}", tup.Value, Minimize.templateToStr[tup.Key]);
             }
-
-            // Try again
-            var templates = new HashSet<int>(Minimize.templateToStr.Keys);
-            templates.Iter(Minimize.PruneDisjuncts);
-            min = Minimize.FindMin(out templateToPerfDelta);
-
-            foreach (var c in min)
-            {
-                Console.WriteLine("Additional contract required: {0}", Minimize.templateToStr[c]);
-            }
-            foreach (var tup in templateToPerfDelta)
-            {
-                if (tup.Value <= 2) continue;
-                Console.WriteLine("Contract to pref: {0} {1}", tup.Value, Minimize.templateToStr[tup.Key]);
-            }
+            
         }
 
 
@@ -372,7 +405,7 @@ namespace ProofMinimization
         HashSet<string> keep;
         HashSet<string> dropped;
 
-        Stopwatch sw;
+        public static Stopwatch sw = new Stopwatch();
         
         Random rand;
         PersistentProgram inprog;
