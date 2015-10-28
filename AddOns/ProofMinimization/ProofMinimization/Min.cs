@@ -28,6 +28,8 @@ namespace ProofMinimization
         // identifier string -> template ID 
         public static Dictionary<string, int> strToTemplate = new Dictionary<string, int>();
         public static Dictionary<int, string> templateToStr = new Dictionary<int, string>();
+        // templates -> cost (lowest cost picked first)
+        public static Dictionary<int, int> candidateToCost = new Dictionary<int, int>();
 
         // file -> constants to keep always
         static Dictionary<string, HashSet<string>> fileToKeepConstants = new Dictionary<string, HashSet<string>>();
@@ -167,7 +169,7 @@ namespace ProofMinimization
         }
 
         // Minimize
-        public static HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
+        public static HashSet<int> FindMin(HashSet<int> templatesAlreadyDropped, out Dictionary<int, int> templateToPerfDelta)
         {
             templateToPerfDelta = new Dictionary<int, int>();
 
@@ -178,12 +180,17 @@ namespace ProofMinimization
             
             sw.Start();
 
+            templates.ExceptWith(templatesAlreadyDropped);
+            templates.Where(t => !candidateToCost.ContainsKey(t))
+                .Iter(t => candidateToCost.Add(t, 0));
+
             while (templates.Count != 0)
             {
                 Console.WriteLine("------ ITER {0} -------", iter++);
 
                 // Drop one and re-run
                 var c = PickRandom(templates);
+
                 templates.Remove(c);
 
                 Console.WriteLine("  >> Trying {0} :: {1}", c, templateToStr[c]);
@@ -230,9 +237,12 @@ namespace ProofMinimization
         static int NewConstCounter = 0;
 
         // minimize disjunctions in the templates
-        public static void PruneDisjuncts(int template)
+        // Returns true if new constants were created
+        // Add new templates (and existing ones for which new constants were created) to newTemplates
+        public static bool PruneDisjuncts(int template, ref HashSet<int> newTemplates)
         {
             Console.WriteLine("Breaking down template {0}: {1}", template, templateToStr[template]);
+            var newConstantsCreated = false;
 
             var files = new HashSet<string>(fileToProg.Keys);
             foreach (var file in files)
@@ -260,7 +270,8 @@ namespace ProofMinimization
 
                         var disjuncts = SimplifyExpr.GetExprDisjuncts(expr);
                         if (disjuncts.Count == 1) continue;
-                        foreach (var d in disjuncts)
+                        var pow = SimplifyExpr.GetPowSetDisjunctions(disjuncts);
+                        foreach (var d in pow)
                         {
                             var conjuncts = SimplifyExpr.GetExprConjunctions(d);
                             foreach (var c in conjuncts)
@@ -270,17 +281,18 @@ namespace ProofMinimization
                                 nc.AddAttribute("existential");
                                 newconstants.Add(nc);
                                 templateMap[template][file].Add(nc.Name);
-                                Console.WriteLine("  New constant created: {0}", nc.Name);
+                                //Console.WriteLine("  New constant created: {0}", nc.Name);
+                                newConstantsCreated = true;
 
                                 var e = Expr.Imp(Expr.Ident(nc), c);
                                 newEnsures.Add(new Ensures(false, e));
 
                                 // Add template
-                                var temp = SimplifyExpr.ExprToTemplate(e);
+                                var temp = SimplifyExpr.ExprToTemplate(c);
                                 if (strToTemplate.ContainsKey(temp))
                                 {
                                     // template for it exists
-                                    addTemplate(strToTemplate[temp], file, nc.Name);
+                                    addTemplate(strToTemplate[temp], file, nc.Name);                                    
                                 }
                                 else
                                 {
@@ -288,11 +300,13 @@ namespace ProofMinimization
                                     int v = TemplateCounterStart + strToTemplate.Count;
                                     strToTemplate.Add(temp, v);
                                     templateToStr.Add(v, temp);
-                                    addTemplate(strToTemplate[temp], file, nc.Name);
-
-                                    Console.WriteLine("  New template created: {0}", temp);
+                                    addTemplate(strToTemplate[temp], file, nc.Name);                                                           
                                 }
-                                
+
+                                if(!candidateToCost.ContainsKey(strToTemplate[temp]))
+                                    candidateToCost.Add(strToTemplate[temp], conjuncts.Count > 1 ? disjuncts.Count : disjuncts.Count - SimplifyExpr.GetExprDisjuncts(d).Count);
+                                Console.WriteLine("  Template revived or created {0} :: {1} (cost = {2})", strToTemplate[temp], temp, candidateToCost[strToTemplate[temp]]);
+                                newTemplates.Add(strToTemplate[temp]);
                             }
                         }
                     }
@@ -302,7 +316,7 @@ namespace ProofMinimization
 
                 fileToProg[file] = new PersistentProgram(program);
             }
-
+            return newConstantsCreated;
         }
 
 
@@ -442,7 +456,7 @@ namespace ProofMinimization
         static Random rand = null;
 
         // pick one with max cost randomly
-        static T PickRandom<T>(HashSet<T> set)
+        static int PickRandom(HashSet<int> set)
         {
             Debug.Assert(set.Count != 0);
 
@@ -451,9 +465,9 @@ namespace ProofMinimization
                 rand = new Random((int)DateTime.Now.Ticks);
             }
 
-            //var max = set.Select(c => candidateToCost[c]).Max();
-            //var selected = set.Where(s => candidateToCost[s] == max);
-            var selected = set;
+            var min = set.Select(c => candidateToCost[c]).Min();
+            var selected = set.Where(s => candidateToCost[s] == min);
+            //var selected = set;
 
             var ind = rand.Next(selected.Count());
             return selected.ToList()[ind];

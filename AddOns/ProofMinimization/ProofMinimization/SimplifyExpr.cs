@@ -210,6 +210,49 @@ namespace ProofMinimization
             }
         }
 
+        // returns all possible sub-disjunctions, except empty and all
+        public static List<Expr> GetPowSetDisjunctions(List<Expr> disjuncts)
+        {
+            var n = disjuncts.Count;
+            var count = new int[n];
+            for (int i = 0; i < n; i++) count[i] = 0;
+            count[0] = 1; // exclude empty
+
+            var Next = new Func<bool>(() =>
+                {
+                    // find the first 0 (while flipping 1s)
+                    int i = 0;
+                    while (i < n && count[i] == 1)
+                    {
+                        count[i] = 0;
+                        i++;
+                    }
+                    if (i >= n)
+                        return false;
+                    count[i] = 1;
+                    return true;
+                });
+
+            var ret = new List<Expr>();
+            do
+            {
+                Expr curr = Expr.False;
+                var all = true;
+                for (int i = 0; i < n; i++)
+                {
+                    if (count[i] == 1)
+                    {
+                        curr = Expr.Or(curr, disjuncts[i]);
+                    }
+                    else
+                    {
+                        all = false;
+                    }
+                }
+                if(!all) ret.Add(curr);
+            } while (Next());
+            return ret;
+        }
 
         public static List<Expr> GetExprConjunctions(Expr expr)
         {
