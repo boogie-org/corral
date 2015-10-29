@@ -415,7 +415,8 @@ namespace ProofMinimization
                 System.Text.RegularExpressions.Regex matchRegEx = null;
                 if (onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
 
-                foreach (var kvp in globals.Concat(formals))
+                // TODO: globals are not used now any more. Usually, this was globals.Concat(formals)
+                foreach (var kvp in formals)
                 {
                     if (tv.TypedIdent.Type.ToString() != kvp.Value.TypedIdent.Type.ToString())
                         continue;

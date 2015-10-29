@@ -297,6 +297,22 @@ namespace ProofMinimization
         {
         }
 
+        private void log(String message)
+        {
+            try
+            {
+                System.IO.StreamWriter file = new System.IO.StreamWriter("k1-trace.txt", true);
+                file.WriteLine(message);
+                file.Close();
+            } catch(Exception e)
+            {
+                Console.WriteLine("WARNING: logger failed for --- {0}", e.Message);
+            }
+        }
+
+
+
+
         public override HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
         {
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
@@ -305,27 +321,27 @@ namespace ProofMinimization
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
-                Console.WriteLine("\r\n\r\nWorking on file :" + file);
+                log("\r\n\r\nWorking on file :" + file);
 
                 var prog = mdata.fileToProg[file];
 
-                Console.WriteLine("Checking for minimal template in existing results.");
+                log("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
                 {
-                    Console.WriteLine("Checking existing result for {0}", f);
+                    log("Checking existing result for " + f);
                     var t = minTemplates[f];
                     try
                     {
                         if (isMinimalTemplate(prog, t))
                         {
                             minTemplates[file] = t;
-                            Console.WriteLine("Found minimal template in existing results:" + t.ToString());
+                            log("Found minimal template in existing results:" + t.ToString());
                             break;
                         }
                     }
                     catch
                     {
-                        Console.WriteLine("ERROR: Minimality check failed {0}. Investigate!", f);
+                        log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
                     }
                 }
 
@@ -335,50 +351,57 @@ namespace ProofMinimization
                     continue;
                 }
 
-                Console.WriteLine("\r\nNo minimal template found in current results. Computing my own minimal.");
+                log("\r\nNo minimal template found in current results. Computing my own minimal.");
 
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
-                    Console.WriteLine("Now updating previous results");
+                    log("Now updating previous results");
                     foreach (var f in minTemplates.Keys)
                     {
                         try
                         {
-                            Console.WriteLine("Updating " + f);
+                            log("Updating " + f);
                             if (isMinimalTemplate(prog, minTemplate))
                             {
                                 minTemplates[f] = minTemplate;
-                                Console.WriteLine("Updated!");
+                                log("Updated!");
                                 break;
                             }
-                            Console.WriteLine("No need for updating");
+                            log("No need for updating");
                         }
                         catch
                         {
-                            Console.WriteLine("ERROR: Minimality check failed {0}. Investigate!", f);
+                            log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
                         }
                     }
                     minTemplates[file] = minTemplate;
-                    Console.WriteLine("Done updating.");
+                    log("Done updating.");
                 } catch (Exception e)
                 {
-                    Console.WriteLine("ERROR: Something went wrong with program {0}. Investigate!", file);
+                    log(string.Format("ERROR: Something went wrong with program {0}: {1}", file, e.Message));
                 }
-                Console.WriteLine();
+                log("");
             }
 
 
-            Console.WriteLine("\r\nPRINTING MINIMAL TEMPLATES");
-            HashSet<string> uniqueTemplates = new HashSet<string>();
+            log("\r\nPRINTING MINIMAL TEMPLATE ANNOTATIONS");
+            HashSet<string> uniqueAnnots = new HashSet<string>();
             foreach (var k in minTemplates.Keys)
             {
-                uniqueTemplates.Add(minTemplates[k].ToString());          
+                var t = minTemplates[k];
+                log(t.ToString());
+                List<Expr> annots = SimplifyExpr.GetExprConjunctions(t.ToCnfExpression());
+                foreach (var annot in annots)
+                {
+                    uniqueAnnots.Add(annot.ToString());
+                }        
             }
-            foreach (var tempStr in uniqueTemplates)
+            foreach (var annotStr in uniqueAnnots)
             {
-                Console.WriteLine(tempStr);
+                Console.WriteLine("Additional contract required: {0}", annotStr);
             }
 
+            //TODO: this is currently bogus as it used only for Akash's debugging.
             templateToPerfDelta = new Dictionary<int,int>();
             return new HashSet<int>();
         }
@@ -388,30 +411,35 @@ namespace ProofMinimization
         {
             var fileTempIds = mdata.fileToTempIds[file];
 
-            Console.WriteLine("Found the following templates for program {0}:", file);
+            log(string.Format("Found the following templates for program {0}:", file));
             List<Expr> templates = new List<Expr>();
             foreach (var tid in fileTempIds)
             {
-                Console.WriteLine(tid);
+                log(tid.ToString());
                 var template = mdata.tempIdToExpr[tid];
-                Console.WriteLine("\t{0}", template.ToString());
+                log(string.Format("\t{0}", template.ToString()));
                 templates.Add(template);
             }
 
             costMemoization = new Dictionary<string, double>();
 
-            Console.WriteLine("\nCreating indexed template {0}", templates.Count);
+            log(string.Format("\nCreating indexed template {0}", templates.Count));
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
             
             TemplateAnnotations bestTemplate = icnf;
-            Console.WriteLine("Creating initial cost...");
+            log("Creating initial cost...");
             bestTemplate.SetCost(getInitialCost(program, icnf)); 
-            Console.WriteLine("Initial cost constructed: {0}", bestTemplate.Cost());
+            log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost()));
+
+            if (bestTemplate.Cost() == Double.MaxValue)
+            {
+                throw new Exception("ERROR: initial template cost does not verify the program!");
+            }
 
             while (true)
             {
                 //call++;
-                Console.WriteLine("Currently best template: \r\n{0}", bestTemplate.ToString());
+                log(string.Format("Currently best template: \r\n{0}", bestTemplate.ToString()));
                  
                 var t = getBetterTemplate(program, bestTemplate);
                 if (t == null)
@@ -420,12 +448,12 @@ namespace ProofMinimization
                 }
                 else
                 {
-                    Console.WriteLine("Best template just changed.\n");
+                    log("Best template just changed.\n");
                     bestTemplate = t;
                 }
             }
 
-            Console.WriteLine("COST: {0} \r\n MINIMAL TEMPLATE: {1}\r\n", bestTemplate.Cost(), bestTemplate.ToString());
+            log(string.Format("COST: {0} \r\n MINIMAL TEMPLATE: {1}\r\n", bestTemplate.Cost(), bestTemplate.ToString()));
             return bestTemplate;
         }
 
@@ -433,9 +461,16 @@ namespace ProofMinimization
         bool isMinimalTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var t = template.DeepCopy();
-            Console.WriteLine("Creating initial cost...");
+            log("Creating initial cost...");
             t.SetCost(getInitialCost(program, t));
-            Console.WriteLine("Initial cost constructed: {0}", t.Cost());         
+
+            if (t.Cost() == Double.MaxValue)
+            {
+                log("Template does not even verify the program.");
+                return false;
+            }
+
+            log(string.Format("Initial cost constructed: {0}", t.Cost()));         
             var better = getBetterTemplate(program, t, false);
             if (better == null)
             {
@@ -452,31 +487,31 @@ namespace ProofMinimization
 
         TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, bool useMemo = true)
         {
-            Console.WriteLine("Creating k1 simplified templates iterator...");
+            log("Creating k1 simplified templates iterator...");
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
 
             TemplateAnnotations simple;
             while ((simple = iter.next()) != null)
             {
-                Console.WriteLine("Checking subtemplate: {0}", simple.ToString());
+                log(string.Format("Checking subtemplate: {0}", simple.ToString()));
 
                 double cost;
                 if (useMemo && costMemoization.ContainsKey(simple.ToString()))
                 {
-                    Console.WriteLine("Subtemplate already processed before; taking cost from there.");
+                    log("Subtemplate already processed before; taking cost from there.");
                     cost = costMemoization[simple.ToString()];
                     simple.SetCost(cost);
                 } else { 
-                    Console.WriteLine("Computing instantiations...");
+                    log("Computing instantiations...");
                     var insts = instantiateTemplate(simple, program);
 
-                    Console.WriteLine("Computing the cost...");
+                    log("Computing the cost...");
                     cost = computeCost(program, insts);
                     simple.SetCost(cost);
                     costMemoization[simple.ToString()] = cost;
                 }
                 
-                Console.WriteLine("Cost is {0}", cost);
+                log(string.Format("Cost is {0}", cost));
 
                 if (cost < template.Cost())
                 {
@@ -517,6 +552,7 @@ namespace ProofMinimization
                 }
             }
 
+            log(string.Format("Annotated the program with {0} candidate instantitions.", instCnt));
             // Running Houdini and Corral must be done on fresh program instances.
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
@@ -550,10 +586,10 @@ namespace ProofMinimization
                 return Double.MaxValue;
             } else
             {
-                Console.WriteLine("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost);
-                //var cost =  ((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined;
+                log(string.Format("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost));
+                var cost =  ((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined;
                 //var cost =  hbalance * houdiniCost + procs_inlined;
-                var cost = procs_inlined;
+                //var cost = procs_inlined;
                 return cost;
             }
         } 
@@ -601,11 +637,11 @@ namespace ProofMinimization
                                             Dictionary<string, Variable> formals)
         {
             HashSet<Variable> templateVars = new HashSet<Variable>();
-            var unqVarTemplate = toUniqueVarExpr(template, templateVars);
+            var unqVarTemplate = toUniqueVarTemplate(template, templateVars);
             return MinControl.InstantiateTemplate(unqVarTemplate, templateVars, globals, formals);
         }
 
-        Expr toUniqueVarExpr(Expr expr, HashSet<Variable> templateVars)
+        Expr toUniqueVarTemplate(Expr expr, HashSet<Variable> templateVars)
         {
             Dictionary<Microsoft.Boogie.Type, int> inTypeIndices = new Dictionary<Microsoft.Boogie.Type, int>();
             Dictionary<Microsoft.Boogie.Type, int> outTypeIndices = new Dictionary<Microsoft.Boogie.Type, int>();
