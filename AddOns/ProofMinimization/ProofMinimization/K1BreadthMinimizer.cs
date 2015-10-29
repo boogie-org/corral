@@ -346,36 +346,39 @@ namespace ProofMinimization
                 }
 
                 // Basically, if the previous loop ended in a break.
-                if (minTemplates.ContainsKey(file))
-                {
-                    continue;
-                }
+                if (minTemplates.ContainsKey(file)) continue;
 
                 log("\r\nNo minimal template found in current results. Computing my own minimal.");
 
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
-                    log("Now updating previous results");
+                    minTemplates[file] = minTemplate;
+                    
+                    log("Now updating previous results...");
                     foreach (var f in minTemplates.Keys)
                     {
+                        if (f == file) continue;
+
                         try
                         {
-                            log("Updating " + f);
-                            if (isMinimalTemplate(prog, minTemplate))
+                            log(string.Format("Updating {0} ...", f));
+                            var prg = mdata.fileToProg[f];
+                            if (isMinimalTemplate(prg, minTemplate))
                             {
                                 minTemplates[f] = minTemplate;
                                 log("Updated!");
-                                break;
                             }
-                            log("No need for updating");
+                            else
+                            {
+                                log("No need for updating");
+                            }
                         }
-                        catch
+                        catch (Exception e)
                         {
-                            log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
+                            log(string.Format("ERROR: Minimality check failed {0}: {1}.", f, e.Message));
                         }
                     }
-                    minTemplates[file] = minTemplate;
-                    log("Done updating.");
+                    log("Done updating!");
                 } catch (Exception e)
                 {
                     log(string.Format("ERROR: Something went wrong with program {0}: {1}", file, e.Message));
