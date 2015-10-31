@@ -226,9 +226,19 @@ namespace cba
                 LBoptions.NonUniformUnfolding = false;
                 LBoptions.extraFlags = new HashSet<string>();
                 LBoptions.newStratifiedInliningAlgo = "";
-                var bounds = LoopBound.Compute(lprog.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
                 ConfigManager.progVerifyOptions.extraRecBound = new Dictionary<string, int>();
-                bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
+
+                try
+                {
+                    var bounds = LoopBound.Compute(lprog.getCBAProgram(), config.maxStaticLoopBound, GlobalConfig.annotations, LBoptions);
+                    bounds.Iter(kvp => ConfigManager.progVerifyOptions.extraRecBound.Add(kvp.Key, kvp.Value));
+                }
+                catch (CoreLib.InsufficientDetailsToConstructCexPath e)
+                {
+                    Console.WriteLine("Exception: {0}", e.Message);
+                    Console.WriteLine("Skipping LB inferrence");
+                }
+
                 Console.WriteLine("LB: Took {0} s", LoopBound.timeTaken.TotalSeconds.ToString("F2"));
             }
 

@@ -4081,6 +4081,12 @@ namespace CoreLib
         public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) { }
     }
 
+    public class InsufficientDetailsToConstructCexPath : Exception
+    {
+        public InsufficientDetailsToConstructCexPath(string msg) : base(msg) { }
+
+    }
+
     public class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
     {
         StratifiedInlining si;
@@ -4179,6 +4185,9 @@ namespace CoreLib
                         break;
                     }
                 }
+                if (next == null)
+                    throw new InsufficientDetailsToConstructCexPath("StratifiedInliningErrorReporter: Must find a successor");
+
                 Debug.Assert(next != null, "Must find a successor");
                 Debug.Assert(!ret.Contains(next), "CFG cannot be cyclic");
                 block = next;
