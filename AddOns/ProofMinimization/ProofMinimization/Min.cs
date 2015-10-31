@@ -17,7 +17,8 @@ namespace ProofMinimization
     {
         public static bool dbg = false;
         static readonly int TemplateCounterStart = 1000;
-        static int IterCnt = 0;
+        public static int IterCnt = 0;
+        public static int CacheHit = 0;
         public static bool usePerf = false;
         public static bool useSI = true;
 
@@ -84,6 +85,9 @@ namespace ProofMinimization
                 HashSet<string> consts = new HashSet<string>(allconstants.Keys);
                 HashSet<string> assignment;
                 int perf = 0;
+
+                if (Driver.InitBound > 0)
+                    perf = Driver.InitBound;
 
                 var ret = PruneAndRun(new PersistentProgram(program), consts, out assignment, ref perf);
 
@@ -396,10 +400,25 @@ namespace ProofMinimization
             return BoogieVerify.ReturnStatus.OK;
         }
 
+        static Dictionary<PersistentProgram, Tuple<HashSet<string>, HashSet<string>>> PreviousRun
+            = new Dictionary<PersistentProgram, Tuple<HashSet<string>, HashSet<string>>>();
+
         // Prune away non-candidates, verify using the rest
         static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
         {
             IterCnt++;
+
+            if (PreviousRun.ContainsKey(inp))
+            {
+                var prev = PreviousRun[inp];
+                if (prev.Item1.SetEquals(candidates))
+                {
+                    CacheHit++;
+                    // same as last iteration
+                    assignment = prev.Item2;
+                    return BoogieVerify.ReturnStatus.OK;
+                }
+            }
 
             var program = inp.getProgram();
             program.Typecheck();
@@ -441,6 +460,11 @@ namespace ProofMinimization
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
 
+            if (rstatus == BoogieVerify.ReturnStatus.OK)
+            {
+                // cache
+                PreviousRun[inp] = Tuple.Create(new HashSet<string>(candidates), new HashSet<string>(assignment));
+            }
 
             return rstatus;
         }

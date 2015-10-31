@@ -19,6 +19,7 @@ namespace ProofMinimization
         public static readonly string CostAttr = "pm_cost";
         
         //static Program ForLogging = null;
+        public static int InitBound = 0;
 
         public static bool dbg = false;
 
@@ -84,6 +85,12 @@ namespace ProofMinimization
                 if (args[i].StartsWith("/keep:"))
                 {
                     keepPatterns.Add(args[i].Substring("/keep:".Length));
+                    continue;
+                }
+
+                if (args[i].StartsWith("/initBound:"))
+                {
+                    InitBound = Int32.Parse(args[i].Substring("/initBound:".Length));
                     continue;
                 }
 
@@ -185,7 +192,8 @@ namespace ProofMinimization
                 if (tup.Value <= 2) continue;
                 Console.WriteLine("Contract to pref: {0} {1}", tup.Value, Minimize.templateToStr[tup.Key]);
             }
-            
+
+            Console.WriteLine("Cache hits on calls to PruneAndRun: {0} / {1}", Minimize.CacheHit, Minimize.IterCnt);
         }
 
 
