@@ -324,6 +324,9 @@ namespace ProofMinimization
         }
 
 
+        static Dictionary<PersistentProgram, Tuple<HashSet<string>, int>> PreviousRun
+            = new Dictionary<PersistentProgram, Tuple<HashSet<string>, int>>();
+
         // Prune away non-candidates, verify using the rest
         static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf, out HashSet<string> filesVerified, out string fileFailed)
         {
@@ -352,6 +355,23 @@ namespace ProofMinimization
 
                 // to keep
                 var keep = fileToKeepConstants[file].Intersection(allconstants);
+
+                var cache_try = new HashSet<string>(candidates.Concat(keep));
+
+                IterCnt++;
+
+                if (PreviousRun.ContainsKey(tup.Value))
+                {
+                    var cache_entry = PreviousRun[tup.Value];
+                    if (cache_try.Count == cache_entry.Item1.Count && 
+                        cache_entry.Item1.SetEquals(cache_try))
+                    {
+                        CacheHit++;
+                        filesVerified.Add(file);
+                        perf[file] = cache_entry.Item2;
+                        continue;
+                    }
+                }
 
                 // drop
                 DropConstants(program, allconstants.Difference(candidates.Union(keep)));
@@ -395,31 +415,20 @@ namespace ProofMinimization
 
                 perf[file] = procs_inlined;
                 filesVerified.Add(file);
+
+                // cache
+                if (rstatus == BoogieVerify.ReturnStatus.OK)
+                {
+                    PreviousRun[tup.Value] = Tuple.Create(cache_try, procs_inlined);
+                }
             }
 
             return BoogieVerify.ReturnStatus.OK;
         }
 
-        static Dictionary<PersistentProgram, Tuple<HashSet<string>, HashSet<string>>> PreviousRun
-            = new Dictionary<PersistentProgram, Tuple<HashSet<string>, HashSet<string>>>();
-
         // Prune away non-candidates, verify using the rest
         static BoogieVerify.ReturnStatus PruneAndRun(PersistentProgram inp, HashSet<string> candidates, out HashSet<string> assignment, ref int inlined)
         {
-            IterCnt++;
-
-            if (PreviousRun.ContainsKey(inp))
-            {
-                var prev = PreviousRun[inp];
-                if (prev.Item1.SetEquals(candidates))
-                {
-                    CacheHit++;
-                    // same as last iteration
-                    assignment = prev.Item2;
-                    return BoogieVerify.ReturnStatus.OK;
-                }
-            }
-
             var program = inp.getProgram();
             program.Typecheck();
 
@@ -459,12 +468,6 @@ namespace ProofMinimization
             BoogieVerify.options.CallTree = new HashSet<string>();
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
-
-            if (rstatus == BoogieVerify.ReturnStatus.OK)
-            {
-                // cache
-                PreviousRun[inp] = Tuple.Create(new HashSet<string>(candidates), new HashSet<string>(assignment));
-            }
 
             return rstatus;
         }
