@@ -753,6 +753,13 @@ namespace cba
             return e;
         }
 
+        private bool usesTemplateVars(Expr template, HashSet<string> vars)
+        {
+            var gused = new GlobalVarsUsed();
+            gused.VisitExpr(template);
+            return gused.globalsUsed.Intersection(vars).Any();
+        }
+
         private List<Expr> InstantiateTemplate(Expr template,
             Dictionary<string, Variable> globals, Dictionary<string, Variable> formals, Dictionary<string, Function> funcs)
         {
@@ -778,6 +785,7 @@ namespace cba
 
             // Set of matches for each template variable
             var matches = new Dictionary<string, HashSet<Variable>>();
+            var loopVars = new HashSet<string>();
 
             foreach (var tvName in templateVarUsed)
             {
@@ -787,13 +795,21 @@ namespace cba
                 var includeFormalIn = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalIn");
                 var includeFormalOut = QKeyValue.FindBoolAttribute(tv.Attributes, "includeFormalOut");
                 var includeGlobals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeGlobals");
+                var includeLoopLocals = QKeyValue.FindBoolAttribute(tv.Attributes, "includeLoopLocals");
 
-                if (!includeFormalIn && !includeFormalOut && !includeGlobals)
+                if (!includeFormalIn && !includeFormalOut && !includeGlobals && !includeLoopLocals)
                 {
+                    // default configuration
                     includeFormalIn = true;
                     includeFormalOut = true;
                     includeGlobals = true;
                 }
+
+                if (includeLoopLocals && (includeFormalIn || includeFormalOut || includeGlobals))
+                    throw new InvalidInput("ContractInfer: a template variable cannot have other includes with includeLoopLocals");
+
+                if (includeLoopLocals)
+                    loopVars.Add(tvName);
 
                 var onlyMatchVar = QKeyValue.FindStringAttribute(tv.Attributes, "match");
                 System.Text.RegularExpressions.Regex matchRegEx = null;
@@ -806,12 +822,22 @@ namespace cba
 
                     if (kvp.Value is Constant) continue;
                     if (matchRegEx != null && !matchRegEx.IsMatch(kvp.Key)) continue;
+                    if (includeLoopLocals)
+                    {
+                        if (kvp.Value is GlobalVariable) continue;
+                        
+                        // Just store formal ins 
+                        // Assumption: there are more formal ins of loops than formal outs
+                        if (kvp.Value is Formal && (kvp.Value as Formal).InComing)
+                            matches[tvName].Add(kvp.Value);
+
+                        continue;
+                    }
                     if (!includeFormalIn && kvp.Value is Formal && (kvp.Value as Formal).InComing) continue;
                     if (!includeFormalOut && kvp.Value is Formal && !(kvp.Value as Formal).InComing) continue;
                     if (!includeGlobals && kvp.Value is GlobalVariable) continue;
 
                     matches[tvName].Add(kvp.Value);
-
                 }
             }
 
@@ -855,14 +881,69 @@ namespace cba
                     return true;
                 });
 
+            var inToOutMap = new Dictionary<Variable, Variable>();
+            if (loopVars.Count > 0)
+            {
+                // for each formal In in_v, map in_v -> v
+                var inMap = new Dictionary<Variable, string>();
+                formals.Values
+                    .Select(f => f as Formal)
+                    .Where(f => f.InComing && f.Name.StartsWith("in_"))
+                    .Iter(f => inMap.Add(f, f.Name.Substring("in_".Length)));
+
+                // for each formal Out out_v, map v -> out_v
+                var outMap = new Dictionary<string, Variable>();
+                formals.Values
+                    .Select(f => f as Formal)
+                    .Where(f => !f.InComing && f.Name.StartsWith("out_"))
+                    .Iter(f => outMap.Add(f.Name.Substring("out_".Length), f));
+
+                foreach (var tup in inMap)
+                {
+                    if (!outMap.ContainsKey(tup.Value)) continue;
+                    inToOutMap.Add(tup.Key, outMap[tup.Value]);
+                }
+            }
+
             do
             {
                 subst = new Dictionary<string, Variable>();
                 for (int i = 0; i < tvars.Count; i++)
                     subst.Add(tvars[i], matchArr[i][counter[i]]);
                 var e = dup.VisitExpr(template);
-                e = (new VarSubstituter(subst, globals)).VisitExpr(e);
-                ret.Add(e);
+                var substituter = new VarSubstituter(subst, globals);
+
+                if (loopVars.Count > 0)
+                {
+                    // Fix for loop locals
+                    // current, lloc -> in_v, change this to
+                    // lloc -> out_v and old(lloc) -> in_v
+                    var oldVarSubst = new Dictionary<string, Variable>();
+                    var valid = true;
+                    foreach (var lloc in loopVars)
+                    {
+                        if (!inToOutMap.ContainsKey(subst[lloc]))
+                        {
+                            valid = false;
+                            break;
+                        }
+                        oldVarSubst.Add(lloc, subst[lloc]);
+                        subst[lloc] = inToOutMap[subst[lloc]];                        
+                    }
+
+                    if (valid)
+                    {
+                        substituter.SetOldVarSubst(oldVarSubst);
+                        e = substituter.VisitExpr(e);
+                        ret.Add(e);
+                    }
+                }
+                else
+                {
+                    e = substituter.VisitExpr(e);
+                    ret.Add(e);
+                }
+
             } while (GetNext());
 
             return ret;
@@ -895,10 +976,14 @@ namespace cba
 
             var templateCounter = 0;
 
+            // loop vars
+            var loopTemplateVars = new HashSet<string>(templateVars.Where(v => QKeyValue.FindBoolAttribute(v.Attributes, "includeLoopLocals")).Select(v => v.Name));
+
             // Iterate over templates
             foreach (var template in templates)
             {
                 templateCounter++;
+                var forLoopOnly = usesTemplateVars(template.expr, loopTemplateVars);
 
                 foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 {
@@ -906,6 +991,7 @@ namespace cba
                     if (QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")) continue;
                     var nocandidates = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "nohoudini");
                     if (!template.Match(proc)) continue;
+                    if (forLoopOnly && !QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure")) continue;
 
                     if (!ret.ContainsKey(proc.Name)) ret.Add(proc.Name, new Dictionary<string, EExpr>());
 

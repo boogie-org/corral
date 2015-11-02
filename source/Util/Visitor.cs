@@ -322,6 +322,7 @@ namespace cba.Util
         private Dictionary<string, Variable> defl;
         private Dictionary<string, Variable> subst;
         private Dictionary<string, Function> funcs;
+        private Dictionary<string, Variable> oldVarSubst;
 
         public VarSubstituter(Dictionary<string, Variable> subst, Dictionary<string, Variable> defl)
         {
@@ -335,6 +336,24 @@ namespace cba.Util
             this.subst = subst;
             this.defl = defl;
             this.funcs = funcs;
+        }
+
+        public void SetOldVarSubst(Dictionary<string, Variable> oldVarSubst)
+        {
+            this.oldVarSubst = oldVarSubst;
+        }
+
+        public override Expr VisitOldExpr(OldExpr node)
+        {
+            if(oldVarSubst == null)
+                return base.VisitOldExpr(node);
+
+            if (node.Expr is IdentifierExpr && oldVarSubst.ContainsKey((node.Expr as IdentifierExpr).Name))
+            {
+                return Expr.Ident(oldVarSubst[(node.Expr as IdentifierExpr).Name]);
+            }
+
+            return base.VisitOldExpr(node);
         }
 
         public override Expr VisitIdentifierExpr(IdentifierExpr node)
