@@ -13,7 +13,7 @@ namespace ProofMinimization
     // indexed CNF formula, i.e., a CNF formula thought of as a list. 
     class TemplateAnnotations
     {
-        double cst = 0;
+        List<double> cst = null;
         List<List<Expr>> icnf;
 
         // Constructors
@@ -137,12 +137,12 @@ namespace ProofMinimization
             return ms;
         }
 
-        public double Cost()
+        public List<double> Cost()
         {
             return cst;
         }
 
-        public void SetCost(double c)
+        public void SetCost(List<double> c)
         {
             this.cst = c;
         }
@@ -288,7 +288,7 @@ namespace ProofMinimization
         //int call = 0;
         
         static HashSet<string> identifiers = new HashSet<string>();
-        static Dictionary<string, double> costMemoization = new Dictionary<string, double>();
+        static Dictionary<string, List<double>> costMemoization = new Dictionary<string, List<double>>();
         double hbalance = 0.1;
 
         static string ART_VAR_PREFIX = "ART_";
@@ -350,13 +350,16 @@ namespace ProofMinimization
 
                 log("\r\nNo minimal template found in current results. Computing my own minimal.");
 
+
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
                     minTemplates[file] = minTemplate;
                     
                     log("Now updating previous results...");
-                    foreach (var f in minTemplates.Keys)
+                    List<string> keys = minTemplates.Keys.ToList();
+                    for (int k = 0; k < keys.Count; k++)
                     {
+                        var f = keys[k];
                         if (f == file) continue;
 
                         try
@@ -424,7 +427,7 @@ namespace ProofMinimization
                 templates.Add(template);
             }
 
-            costMemoization = new Dictionary<string, double>();
+            costMemoization = new Dictionary<string, List<double>>();
 
             log(string.Format("\nCreating indexed template {0}", templates.Count));
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
@@ -432,9 +435,9 @@ namespace ProofMinimization
             TemplateAnnotations bestTemplate = icnf;
             log("Creating initial cost...");
             bestTemplate.SetCost(getInitialCost(program, icnf)); 
-            log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost()));
+            log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost() == null ? "null" : string.Join(", ",  bestTemplate.Cost())));
 
-            if (bestTemplate.Cost() == Double.MaxValue)
+            if (bestTemplate.Cost() == null)
             {
                 throw new Exception("ERROR: initial template cost does not verify the program!");
             }
@@ -456,7 +459,7 @@ namespace ProofMinimization
                 }
             }
 
-            log(string.Format("COST: {0} \r\n MINIMAL TEMPLATE: {1}\r\n", bestTemplate.Cost(), bestTemplate.ToString()));
+            log(string.Format("COST: {0} \r\n MINIMAL TEMPLATE: {1}\r\n", bestTemplate.Cost() == null? "null": string.Join(", ", bestTemplate.Cost()), bestTemplate.ToString()));
             return bestTemplate;
         }
 
@@ -467,13 +470,13 @@ namespace ProofMinimization
             log("Creating initial cost...");
             t.SetCost(getInitialCost(program, t));
 
-            if (t.Cost() == Double.MaxValue)
+            if (t.Cost() == null)
             {
                 log("Template does not even verify the program.");
                 return false;
             }
 
-            log(string.Format("Initial cost constructed: {0}", t.Cost()));         
+            log(string.Format("Initial cost constructed: {0}", t.Cost() == null? "null": string.Join(", ", t.Cost())));         
             var better = getBetterTemplate(program, t, false);
             if (better == null)
             {
@@ -482,7 +485,7 @@ namespace ProofMinimization
             return false;
         }
 
-        double getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        List<double> getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var insts = instantiateTemplate(template, program);
             return computeCost(program, insts);
@@ -498,7 +501,7 @@ namespace ProofMinimization
             {
                 log(string.Format("Checking subtemplate: {0}", simple.ToString()));
 
-                double cost;
+                List<double> cost;
                 if (useMemo && costMemoization.ContainsKey(simple.ToString()))
                 {
                     log("Subtemplate already processed before; taking cost from there.");
@@ -514,9 +517,9 @@ namespace ProofMinimization
                     costMemoization[simple.ToString()] = cost;
                 }
                 
-                log(string.Format("Cost is {0}", cost));
+                log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
 
-                if (cost < template.Cost())
+                if (costCompare(template.Cost(), cost))
                 {
                     return simple;
                 }
@@ -525,7 +528,36 @@ namespace ProofMinimization
             return null;
         }
 
-        double computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
+
+        bool costCompare(List<double> c1, List<double> c2)
+        {
+            if (c1 == null && c2 == null)
+            {
+                return false;
+            } else if (c1 == null)
+            {
+                return true;
+            } else if (c2 == null)
+            {
+                return false;
+            }
+
+            int smindex = c1.Count < c2.Count ? c1.Count: c2.Count;
+            for(int i = 0; i < smindex; i++)
+            {
+                if (c2[i] < c1[i])
+                {
+                    return true;
+                } else if (c1[i] < c2[i])
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        List<double> computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
         {
             var allconstants = new Dictionary<string, Constant>();
             var prog = program.getProgram();
@@ -555,7 +587,7 @@ namespace ProofMinimization
                 }
             }
 
-            log(string.Format("Annotated the program with {0} candidate instantitions.", instCnt));
+            log(string.Format("Annotated the program with {0} candidate instantiations.", instCnt));
             // Running Houdini and Corral must be done on fresh program instances.
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
@@ -586,13 +618,15 @@ namespace ProofMinimization
                 throw new Exception("Corral returned NOT OK, we don't expect such benchmarks!");
             } else if (rstatus == BoogieVerify.ReturnStatus.ReachedBound)
             {
-                return Double.MaxValue;
+                return null;
             } else
             {
+                List<double> cost = new List<double>();
                 log(string.Format("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost));
-                var cost =  ((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined;
-                //var cost =  hbalance * houdiniCost + procs_inlined;
-                //var cost = procs_inlined;
+                //cost.Add(((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined);
+                //cost.Add(hbalance * houdiniCost + procs_inlined);
+                cost.Add(procs_inlined);
+                cost.Add(houdiniCost);
                 return cost;
             }
         } 
