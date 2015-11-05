@@ -1447,7 +1447,7 @@ namespace cba
 
         private void addSummaries(Program program)
         {
-            QKeyValue attr = null; // new QKeyValue(Token.NoToken, "va_keep", new List<object>(), null);
+            QKeyValue attr = new QKeyValue(Token.NoToken, "va_keep", new List<object>(), null);
 
             // Insert summaries
             foreach (var decl in program.TopLevelDeclarations)
