@@ -232,9 +232,13 @@ namespace ProofMinimization
             HashSet<int> result = null;
             if (method == 1)
             {
-                K1BreadthMinimizer minimizer = new K1BreadthMinimizer(data);
+                K1BreadthMinimizer minimizer = new K1BreadthMinimizer(data, true);
                 result = minimizer.FindMin(out templateToPerfDelta);
-            }
+            } else if (method == 2)
+            {
+                K1BreadthMinimizer minimizer = new K1BreadthMinimizer(data, false);
+                result = minimizer.FindMin(out templateToPerfDelta);
+            } 
             else
             {
                 ConjuctMinimizer minimizer = new ConjuctMinimizer(data);

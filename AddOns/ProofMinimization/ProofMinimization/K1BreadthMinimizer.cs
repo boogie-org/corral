@@ -293,15 +293,19 @@ namespace ProofMinimization
 
         static string ART_VAR_PREFIX = "ART_";
 
-        public K1BreadthMinimizer(MinimizerData mdata) : base(mdata)
+        bool baseTechnique;
+
+        public K1BreadthMinimizer(MinimizerData mdata,bool baseTechnique) : base(mdata)
         {
+            this.baseTechnique = baseTechnique;
         }
 
         private void log(String message)
         {
+            string fname = "k1-trace-" + (baseTechnique? "base": "redef") + ".txt";
             try
             {
-                System.IO.StreamWriter file = new System.IO.StreamWriter("k1-trace.txt", true);
+                System.IO.StreamWriter file = new System.IO.StreamWriter(fname, true);
                 file.WriteLine(message);
                 file.Close();
             } catch(Exception e)
@@ -311,9 +315,172 @@ namespace ProofMinimization
         }
 
 
-
-
         public override HashSet<int> FindMin(out Dictionary<int, int> templateToPerfDelta)
+        {
+            templateToPerfDelta = new Dictionary<int, int>();
+            if (baseTechnique)
+            {
+                return FindMinBase(out templateToPerfDelta);
+            }
+            else
+            {
+                return FindMinRedef(out templateToPerfDelta);
+            }
+        }
+
+
+
+        HashSet<int> FindMinRedef(out Dictionary<int, int> templateToPerfDelta)
+        {
+            Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
+
+            var files = mdata.fileToProg.Keys.ToList();
+            for (int i = 0; i < files.Count; i++)
+            { 
+                var file = files[i];
+                log("Working on file " + file);
+
+                log("Checking for minimal template in existing results...");
+                foreach (var f in minTemplates.Keys)
+                {
+                    log("Checking existing result of " + f);
+                    var t = minTemplates[f];
+                    try
+                    {
+                        if (isMinimalTemplate(mdata.fileToProg[f], t))
+                        {
+                            minTemplates[file] = t;
+                            log("Found minimal template in existing results:" + t.ToString());
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
+                    }
+                }
+
+                if (minTemplates.ContainsKey(file)) continue;
+
+                log("Computing my own minimal template...");
+                try
+                {
+                    log("\r\n\r\nComputing minimal template for file :" + file);
+                    var prog = mdata.fileToProg[file];
+                    var minTemplate = computeMinimalTemplate(file, prog);
+                    minTemplates[file] = minTemplate;
+                    log("Done computing minimal tempalte");
+                } catch
+                {
+                    log(string.Format("ERROR: Minimality computation failed {0}. Investigate!", file));
+                }
+            }
+
+            Dictionary<string, Expr> uannots = new Dictionary<string, Expr>();
+            foreach (var k in minTemplates.Keys)
+            {
+                var t = minTemplates[k];
+                var tannots = SimplifyExpr.GetExprConjunctions(t.ToCnfExpression());
+                foreach (var tannot in tannots)
+                {
+                    if (!uannots.ContainsKey(tannot.ToString())) {
+                        uannots[tannot.ToString()] = tannot;
+                    }
+                }
+            }
+
+            log("Template union C is of size " + uannots.Count);
+            TemplateAnnotations C = new TemplateAnnotations(uannots.Values.ToList<Expr>());
+            TemplateAnnotations best = computeMinimalUnionTemplate(C);
+
+            var annots = SimplifyExpr.GetExprConjunctions(best.ToCnfExpression());
+            foreach (var annot in annots)
+            {
+                Console.WriteLine("Additional contact required: {0}", annot.ToString());
+            }
+
+            //TODO: this is currently bogus as it used only for Akash's debugging.
+            templateToPerfDelta = new Dictionary<int, int>();
+            return new HashSet<int>();
+        }
+
+        TemplateAnnotations computeMinimalUnionTemplate(TemplateAnnotations template)
+        {
+            log("Computing best costs...");
+            Dictionary<string, List<double>> bestCost = new Dictionary<string, List<double>>();
+            var files = mdata.fileToProg.Keys.ToList();
+            for (int i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+                try
+                {
+                    var cost = getTemplateCost(mdata.fileToProg[file], template);
+                    if (cost == null)
+                    {
+                        throw new Exception("Initial cost null?");
+                    }
+
+                    bestCost[file] = cost;
+                } catch (Exception e)
+                {
+                    log(string.Format("ERROR: computing initial cost failed {0} {1}", file, e.Message));
+                }
+            }
+            log("Done computing best costs...");
+            TemplateAnnotations bestTemplate = template;
+
+            while (true)
+            {
+                SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(bestTemplate);
+                bool b = false;
+
+                log("Computing the minimal union template...");
+                log("Currently best union template " + bestTemplate.ToString());
+                TemplateAnnotations simple;
+                while ((simple = iter.next()) != null)
+                {
+                    log("Considering simpler union template " + simple.ToString());
+
+                    Dictionary<string, List<double>> newCost = new Dictionary<string, List<double>>();
+
+                    bool hit = true;
+                    foreach (var file in bestCost.Keys)
+                    {
+                        try {
+                            log("Computing cost for " + file);
+                            var nCost = getTemplateCost(mdata.fileToProg[file], simple);
+                            newCost[file] = nCost;
+                            log("Cost is " + string.Join(", ", nCost));
+
+                            if (!costCompare(bestCost[file], nCost))
+                            {
+                                hit = false;
+                                break;
+                            }
+                        } catch (Exception e)
+                        {
+                            log(string.Format("ERROR: computing union cost failed {0} {1}", file, e.Message));
+                        }
+                    }
+
+                    if (hit)
+                    {
+                        log("Found better union template.");
+                        bestCost = newCost;
+                        bestTemplate = simple;
+                        b = true;
+                        break;
+                    }
+                }
+
+                if (!b) break;
+            }
+            return bestTemplate;
+        }
+
+
+
+        HashSet<int> FindMinBase(out Dictionary<int, int> templateToPerfDelta)
         {
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
 
@@ -349,7 +516,6 @@ namespace ProofMinimization
                 if (minTemplates.ContainsKey(file)) continue;
 
                 log("\r\nNo minimal template found in current results. Computing my own minimal.");
-
 
                 try {
                     var minTemplate = computeMinimalTemplate(file, prog);
@@ -434,7 +600,7 @@ namespace ProofMinimization
             
             TemplateAnnotations bestTemplate = icnf;
             log("Creating initial cost...");
-            bestTemplate.SetCost(getInitialCost(program, icnf)); 
+            bestTemplate.SetCost(getTemplateCost(program, icnf)); 
             log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost() == null ? "null" : string.Join(", ",  bestTemplate.Cost())));
 
             if (bestTemplate.Cost() == null)
@@ -468,7 +634,7 @@ namespace ProofMinimization
         {
             var t = template.DeepCopy();
             log("Creating initial cost...");
-            t.SetCost(getInitialCost(program, t));
+            t.SetCost(getTemplateCost(program, t));
 
             if (t.Cost() == null)
             {
@@ -485,7 +651,7 @@ namespace ProofMinimization
             return false;
         }
 
-        List<double> getInitialCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        List<double> getTemplateCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var insts = instantiateTemplate(template, program);
             return computeCost(program, insts);

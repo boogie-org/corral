@@ -105,9 +105,9 @@ namespace ProofMinimization
                     try
                     {
                         int m = Int32.Parse(method);
-                        if (m < 0 || m > 1)
+                        if (m < 0 || m > 2)
                         {
-                            Console.WriteLine("Method not supported! Supported methods are 0 and 1.");
+                            Console.WriteLine("Method not supported! Supported methods are 0, 1, and 2.");
                             return;
                         }
 
