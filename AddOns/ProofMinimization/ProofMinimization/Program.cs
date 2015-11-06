@@ -137,50 +137,65 @@ namespace ProofMinimization
             HashSet<int> min = new HashSet<int>();
             
             var dropped = new HashSet<int>();
+            var ApplyTemplatesDone = false;
 
             do
             {
-                Dictionary<int, int> t2d;
-                var min2 = Minimize.FindMin(dropped, out t2d);
-
-                // dropped
-                var templates = new HashSet<int>(Minimize.templateToStr.Keys);
-                dropped = templates.Difference(min2);                
-
-                // merge perf
-                foreach (var tup in t2d)
+                do
                 {
-                    if (!templateToPerfDelta.ContainsKey(tup.Key))
-                        templateToPerfDelta.Add(tup.Key, tup.Value);
-                    else
-                        templateToPerfDelta[tup.Key] += tup.Value;
-                }
+                    Dictionary<int, int> t2d;
+                    var min2 = Minimize.FindMin(dropped, out t2d);
 
-                Console.WriteLine("Obtained minimal templates, at size {0}", min2.Count);
+                    // dropped
+                    var templates = new HashSet<int>(Minimize.templateToStr.Keys);
+                    dropped = templates.Difference(min2);
 
-                if (min.SetEquals(min2))
-                {
-                    Console.WriteLine("Reached fixpoint; we're done");
-                    break;
-                }
+                    // merge perf
+                    foreach (var tup in t2d)
+                    {
+                        if (!templateToPerfDelta.ContainsKey(tup.Key))
+                            templateToPerfDelta.Add(tup.Key, tup.Value);
+                        else
+                            templateToPerfDelta[tup.Key] += tup.Value;
+                    }
 
-                min = min2;
+                    Console.WriteLine("Obtained minimal templates, at size {0}", min2.Count);
 
-                Console.WriteLine("Contemplating re-running with broken down templates");
+                    if (min.SetEquals(min2))
+                    {
+                        Console.WriteLine("Reached fixpoint; we're done");
+                        break;
+                    }
 
-                var rerun = false;
-                Minimize.candidateToCost = new Dictionary<int, int>();
-                var newTemplates = new HashSet<int>();
-                min2.Iter(t => { var b = Minimize.PruneDisjuncts(t, ref newTemplates); rerun |= b; });
+                    min = min2;
 
-                if (!rerun)
-                {
-                    Console.WriteLine("Nothing to break; we're done");
-                    break;
-                }
+                    Console.WriteLine("Contemplating re-running with broken down templates");
 
-                dropped.ExceptWith(newTemplates);
-                Console.WriteLine("Rerunning Minimization");
+                    var rerun = false;
+                    Minimize.candidateToCost = new Dictionary<int, int>();
+                    var newTemplates = new HashSet<int>();
+                    min2.Iter(t => { var b = Minimize.PruneDisjuncts(t, ref newTemplates); rerun |= b; });
+
+                    if (!rerun)
+                    {
+                        Console.WriteLine("Nothing to break; we're done");
+                        break;
+                    }
+
+                    dropped.ExceptWith(newTemplates);
+                    Console.WriteLine("Rerunning Minimization");
+                } while (true);
+
+                if (ApplyTemplatesDone) break;
+                ApplyTemplatesDone = true;
+
+                // compute common set of globals
+                HashSet<string> commonGlobals = Minimize.FindCommonGlobals();
+
+                var rr = false;
+                min.Iter(t => { var b = Minimize.ApplyTemplate(t, commonGlobals); rr |= b; });
+                if(!rr) break;
+
             } while (true);
 
             foreach (var c in min)

@@ -216,6 +216,35 @@ namespace cba.Util
 
     }
 
+    // Gather variables that don't appear inside old
+    public class GatherNonOldVariables : StandardVisitor
+    {
+        public HashSet<string> variables;
+
+        public GatherNonOldVariables()
+        {
+            variables = new HashSet<string>();
+        }
+
+        public override Expr VisitOldExpr(OldExpr node)
+        {
+            return node;
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            variables.Add(node.Name);
+            return node;
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            variables.Add(node.Name);
+            return node;
+        }
+
+    }
+
     public class usesUserType : FixedVisitor
     {
         public bool hasUserType { get; private set; }

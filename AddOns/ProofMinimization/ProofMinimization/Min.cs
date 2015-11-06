@@ -37,6 +37,22 @@ namespace ProofMinimization
         // file -> perf
         static Dictionary<string, int> fileToPerf = new Dictionary<string, int>();
 
+        public static HashSet<string> FindCommonGlobals()
+        {
+            HashSet<string> ret = null;
+
+            foreach (var p in fileToProg.Values)
+            {
+                var program = p.getProgram();
+                var globals = new HashSet<string>(program.TopLevelDeclarations.OfType<GlobalVariable>().Select(g => g.Name));
+                if (ret == null) ret = globals;
+                else ret.IntersectWith(globals);
+            }
+
+            if (ret == null) ret = new HashSet<string>();
+            return ret;
+        }
+
         static void addTemplate(int templateId, string file, string constant)
         {
             if (!templateMap.ContainsKey(templateId)) templateMap.Add(templateId, new Dictionary<string, HashSet<string>>());
@@ -239,6 +255,52 @@ namespace ProofMinimization
         }
 
         static int NewConstCounter = 0;
+
+        public static bool ApplyTemplate(int template, HashSet<string> commonGlobals)
+        {
+            // Does it have any non-keep constants
+            if (templateMap[template].All(tup => tup.Value.SetEquals(fileToKeepConstants[tup.Key])))
+                return false;
+
+            var expr = SimplifyExpr.ToExpr(templateToStr[template]);
+            // What variables does it talk about?
+            var vu = new GlobalVarsUsed();
+            vu.VisitExpr(expr);
+            if (!vu.globalsUsed.IsSubsetOf(commonGlobals))
+                return false;
+            
+            Console.WriteLine("Applying template {0}: {1}", template, templateToStr[template]);
+
+            var nonold = new GatherNonOldVariables();
+            nonold.VisitExpr(expr);
+
+            var mustmod = new HashSet<string>(nonold.variables);
+            foreach (var tup in fileToProg)
+            {
+                var program = tup.Value.getProgram();
+                BoogieUtil.DoModSetAnalysis(program);
+                var newconstants = new HashSet<Constant>();
+
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    var mod = new HashSet<string>(impl.Proc.Modifies.Select(ie => ie.Name));
+                    if (!mustmod.IsSubsetOf(mod)) continue;
+                    
+                    // create new constant
+                    var nc = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "PMnewConst" + (NewConstCounter++),
+                        btype.Bool), false);
+                    nc.AddAttribute("existential");
+                    newconstants.Add(nc);
+                    templateMap[template][tup.Key].Add(nc.Name);
+                }
+
+                program.AddTopLevelDeclarations(newconstants);
+                fileToProg[tup.Key] = new PersistentProgram(program);
+            }
+
+
+            return true;
+        }
 
         // minimize disjunctions in the templates
         // Returns true if new constants were created
