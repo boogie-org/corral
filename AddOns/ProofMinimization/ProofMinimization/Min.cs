@@ -194,6 +194,23 @@ namespace ProofMinimization
             }
         }
 
+        static void AssignDefaultCost(HashSet<int> templates)
+        {
+            templates.Where(t => !candidateToCost.ContainsKey(t))
+                .Iter(t => candidateToCost.Add(t, 0));
+
+            foreach (var t in templates)
+            {
+                var cnt = templateToStr[t].Split(new string[] { "v_fin_int", "v_fout_int" }, StringSplitOptions.None).Length;
+                if (cnt == 0) continue;
+                foreach (var tp in templates)
+                {
+                    if (t == tp) continue;
+                    candidateToCost[tp] += cnt;
+                }
+            }
+        }
+
         // Minimize
         public static HashSet<int> FindMin(HashSet<int> templatesAlreadyDropped, out Dictionary<int, int> templateToPerfDelta)
         {
@@ -204,8 +221,7 @@ namespace ProofMinimization
             var templates = new HashSet<int>(templateMap.Keys);
 
             templates.ExceptWith(templatesAlreadyDropped);
-            templates.Where(t => !candidateToCost.ContainsKey(t))
-                .Iter(t => candidateToCost.Add(t, 0));
+            AssignDefaultCost(templates);
 
             while (templates.Count != 0)
             {
