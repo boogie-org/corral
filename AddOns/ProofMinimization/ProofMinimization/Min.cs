@@ -433,8 +433,11 @@ namespace ProofMinimization
         }
 
 
-        static Dictionary<PersistentProgram, Tuple<HashSet<string>, int>> PreviousRun
-            = new Dictionary<PersistentProgram, Tuple<HashSet<string>, int>>();
+        static Dictionary<string, Tuple<HashSet<string>, int>> PreviousRun
+            = new Dictionary<string, Tuple<HashSet<string>, int>>();
+
+        static HashSet<string> PreviousRunFailures
+            = new HashSet<string>();
 
         // Prune away non-candidates, verify using the rest
         static BoogieVerify.ReturnStatus PruneAndRun(HashSet<int> candidateTemplates, out Dictionary<string, int> perf, out HashSet<string> filesVerified, out string fileFailed)
@@ -444,11 +447,12 @@ namespace ProofMinimization
             filesVerified = new HashSet<string>();
             fileFailed = null;
 
-            foreach (var tup in fileToProg)
-            {
-                var file = tup.Key;
+            var rest = new HashSet<string>(fileToProg.Keys);
+            rest.ExceptWith(PreviousRunFailures);
 
-                var program = tup.Value.getProgram();
+            foreach (var file in PreviousRunFailures.Concat<string>(rest))
+            {
+                var program = fileToProg[file].getProgram();
                 program.Typecheck();
 
                 // all constants
@@ -469,9 +473,9 @@ namespace ProofMinimization
 
                 IterCnt++;
 
-                if (PreviousRun.ContainsKey(tup.Value))
+                if (PreviousRun.ContainsKey(file))
                 {
-                    var cache_entry = PreviousRun[tup.Value];
+                    var cache_entry = PreviousRun[file];
                     if (cache_try.Count == cache_entry.Item1.Count && 
                         cache_entry.Item1.SetEquals(cache_try))
                     {
@@ -490,7 +494,7 @@ namespace ProofMinimization
                 //Console.WriteLine("  >> Contracts: {0}", assignment.Count);
 
                 // Read the program again, add contracts
-                program = tup.Value.getProgram();
+                program = fileToProg[file].getProgram();
                 program.Typecheck();
 
                 // Enforce the assignment back into the program
@@ -519,6 +523,7 @@ namespace ProofMinimization
                 if (rstatus != BoogieVerify.ReturnStatus.OK)
                 {
                     fileFailed = file;
+                    PreviousRunFailures.Add(file);
                     return BoogieVerify.ReturnStatus.NOK;
                 }
 
@@ -528,7 +533,7 @@ namespace ProofMinimization
                 // cache
                 if (rstatus == BoogieVerify.ReturnStatus.OK)
                 {
-                    PreviousRun[tup.Value] = Tuple.Create(cache_try, procs_inlined);
+                    PreviousRun[file] = Tuple.Create(cache_try, procs_inlined);
                 }
             }
 
