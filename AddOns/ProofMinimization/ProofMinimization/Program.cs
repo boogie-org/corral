@@ -131,6 +131,7 @@ namespace ProofMinimization
                 return;
             }
 
+            Minimize.sw.Start();
             Minimize.ReadFiles(files, keepPatterns);
 
             Dictionary<int, int> templateToPerfDelta = new Dictionary<int,int>();
@@ -190,11 +191,8 @@ namespace ProofMinimization
                 ApplyTemplatesDone = true;
 
                 // compute common set of globals
-                HashSet<string> commonGlobals = Minimize.FindCommonGlobals();
-
-                var rr = false;
-                min.Iter(t => { var b = Minimize.ApplyTemplate(t, commonGlobals); rr |= b; });
-                if(!rr) break;
+                var rr = Minimize.ApplyTemplates(min.Difference(Minimize.priorFullyInstantiatedTemplates));
+                if (!rr) break;
 
             } while (true);
 
