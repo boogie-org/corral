@@ -295,6 +295,15 @@ namespace ProofMinimization
 
         public K1BreadthMinimizer(MinimizerData mdata) : base(mdata)
         {
+            try
+            {
+                System.IO.StreamWriter file = new System.IO.StreamWriter("k1-trace.txt", false);
+                file.Close();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("WARNING: logger creation failed.");
+            }
         }
 
         private void log(String message)
@@ -626,7 +635,7 @@ namespace ProofMinimization
                 //cost.Add(((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined);
                 //cost.Add(hbalance * houdiniCost + procs_inlined);
                 cost.Add(procs_inlined);
-                cost.Add(houdiniCost);
+                cost.Add((double)(houdiniCost) / instantiation.Keys.Count);
                 return cost;
             }
         } 
