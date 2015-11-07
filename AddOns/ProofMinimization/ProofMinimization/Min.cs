@@ -69,7 +69,15 @@ namespace ProofMinimization
         {
             foreach (var f in files)
             {
-                var program = BoogieUtil.ReadAndResolve(f);
+                Program program;
+                try
+                {
+                    program = BoogieUtil.ReadAndResolve(f);
+                }
+                catch (cba.Util.InvalidProg)
+                {
+                    continue;
+                }
                 CheckRMT(program);
 
                 fileToKeepConstants.Add(f, new HashSet<string>());
