@@ -777,19 +777,22 @@ namespace ProofMinimization
                 return false;
             }
 
+            var scales = new List<double> { pbalance };
             int smindex = c1.Count < c2.Count ? c1.Count: c2.Count;
             for(int i = 0; i < smindex; i++)
             {
-                if (c2[i] < c1[i])
+                var scale = i < scales.Count ? scales[i] : 1;
+                var c_2 = scale * c2[i];
+                if (c_2 < c1[i])
                 {
                     return true;
-                } else if (c1[i] < c2[i])
+                } else if (c1[i] < c_2)
                 {
                     return false;
                 }
             }
 
-            return true;
+            return false;
         }
 
         List<double> computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
@@ -860,7 +863,7 @@ namespace ProofMinimization
                 log(string.Format("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost));
                 //cost.Add(((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined);
                 //cost.Add(hbalance * houdiniCost + procs_inlined);
-                cost.Add(pbalance * procs_inlined);
+                cost.Add(procs_inlined);
                 cost.Add((int)((double)(houdiniCost) / instantiation.Keys.Count));
                 return cost;
             }
