@@ -13,8 +13,6 @@ namespace ProofMinimization
     // indexed CNF formula, i.e., a CNF formula thought of as a list. 
     class TemplateAnnotations
     {
-        // This is a field to store cost. Of course, the cost depends on 
-        // the program, but this is useful easily storing intermediate results. 
         List<double> cst = null;
         List<List<Expr>> icnf;
 
@@ -22,14 +20,8 @@ namespace ProofMinimization
         public TemplateAnnotations(List<Expr> cnfs)
         {
             //Debug.Assert(cnfs.All(exp => SimplifyExpr.IsCleanCNF(exp)));
-            if (cnfs.Count != 0)
-            {
-                Expr cnf = SimplifyExpr.Reduce(cnfs, BinaryOperator.Opcode.And);
-                icnf = makeItIndexed(cnf);
-            } else
-            {
-                icnf = new List<List<Expr>>();
-            }
+            Expr cnf = SimplifyExpr.Reduce(cnfs, BinaryOperator.Opcode.And);
+            icnf = makeItIndexed(cnf);
         }
 
         public TemplateAnnotations(Expr cnf)
@@ -37,6 +29,13 @@ namespace ProofMinimization
             //Debug.Assert(SimplifyExpr.IsCleanCNF(cnf));
             icnf = makeItIndexed(cnf);
         }
+
+        public TemplateAnnotations(List<List<Expr>> icnf)
+        {
+            //Debug.Assert(icnf.All(exp => (exp.All(e => SimplifyExpr.IsCleanCNF(e)))));
+            this.icnf = icnf; 
+        }
+
 
         static List<List<Expr>> makeItIndexed(Expr cnf)
         {
@@ -49,12 +48,7 @@ namespace ProofMinimization
                 // exactly the same. TODO: can we somehow recognize two
                 // equivalent templates as well as those that are tautologies?
                 // This just looks for string equivalence.
-                var conjuct = conjucts[i];
-
-                // We don't allow true or false as templates.
-                if (conjuct == Expr.True || conjuct == Expr.False) continue;
-
-                if (!uniqueConjucts.Contains(conjuct.ToString()))
+                if (!uniqueConjucts.Contains(conjucts[i].ToString()))
                 {
                     uniqueConjucts.Add(conjucts[i].ToString());
                     // Preserves order of disjuncts.
@@ -64,20 +58,32 @@ namespace ProofMinimization
             return indexedCnf;
         }
 
-        public int AnnotationCount()
+
+        public int ClauseCount()
         {
             return icnf.Count;
         }
 
-        public List<Expr> GetAnnotation(int i)
+        public List<Expr> GetClause(int i)
         {
             return icnf[i];
         }
 
         public TemplateAnnotations DeepCopy()
         {
-            var annotations = this.ToClauseAnnotations();
-            var t = new TemplateAnnotations(annotations);
+            List<List<Expr>> clauses = new List<List<Expr>>();
+            for (int i = 0; i < icnf.Count; i++)
+            {
+                List<Expr> clause = new List<Expr>();
+                for (int j = 0; j < icnf[i].Count; j++)
+                {
+                    clause.Add(icnf[i][j]);
+                }
+   
+                clauses.Add(clause);
+            }
+
+            var t = new TemplateAnnotations(clauses);
             t.SetCost(Cost());
             return t; 
         }
@@ -98,9 +104,9 @@ namespace ProofMinimization
             return str + "\r\n}";    
         }
 
-        public List<Expr> ToClauseAnnotations()
+        public Expr ToCnfExpression()
         {
-            List<Expr> annotations = new List<Expr>();
+            List<Expr> conjucts = new List<Expr>();
             for (int i = 0; i < icnf.Count; i++)
             {
                 var clause = icnf[i];
@@ -108,14 +114,21 @@ namespace ProofMinimization
                 {
                     // Order preserving.
                     var clauseExpr = SimplifyExpr.Reduce(clause, BinaryOperator.Opcode.Or);
-                    annotations.Add(clauseExpr);
+                    conjucts.Add(clauseExpr);
                 }
             }
-           
-            return annotations;
+
+            if (conjucts.Count == 0)
+            {
+                return Expr.True;
+            } 
+            else
+            {
+                return SimplifyExpr.Reduce(conjucts, BinaryOperator.Opcode.And);
+            }
         }
 
-        public int AnnotationMaxSize() {
+        public int ClauseMaxSize() {
             int ms = 0;
             foreach (var clause in icnf) 
             {
@@ -154,7 +167,7 @@ namespace ProofMinimization
         {
             this.annots = annots;
 
-            for (int i = 0; i <= this.annots.AnnotationMaxSize(); i++)
+            for (int i = 0; i <= this.annots.ClauseMaxSize(); i++)
             {
                 simplificationSizes.Add(i);
             }
@@ -164,7 +177,7 @@ namespace ProofMinimization
         public TemplateAnnotations next()
         {
             // True has no simplified versions. 
-            if (annots.ToClauseAnnotations().Count == 0)
+            if (annots.ToCnfExpression() == Expr.True)
             {
                 return null;
             }
@@ -177,7 +190,7 @@ namespace ProofMinimization
 
             // If we finished simplifying all clauses for the current simplification size.
             // NOTE: clauseIndex goes from 0 to annots.ClauseCount() - 1
-            if (clauseIndex >= annots.AnnotationCount())
+            if (clauseIndex >= annots.ClauseCount())
             {
                 clauseIndex = 0;
                 mask = -1;
@@ -204,9 +217,7 @@ namespace ProofMinimization
         TemplateAnnotations createSimplifiedFormula(HashSet<int> subset, int clIndex)
         {
             TemplateAnnotations canns = annots.DeepCopy();
-            Console.WriteLine(canns.AnnotationCount());
-            Console.WriteLine(clIndex);
-            var clause = canns.GetAnnotation(clIndex);
+            var clause = canns.GetClause(clIndex);
             List<Expr> newClause = new List<Expr>();
             for (int i = 0; i < clause.Count; i++)
             {
@@ -225,7 +236,7 @@ namespace ProofMinimization
             int simplifiedSize = simplificationSizes[simplSizeIndex];
             // This is probably not even necessary, but can save some time.
             // Simplified size always has to be strictly less than the clause size.
-            if (simplifiedSize >= annots.GetAnnotation(clauseIndex).Count)
+            if (simplifiedSize >= annots.GetClause(clauseIndex).Count)
             {
                 return null;
             }
@@ -233,7 +244,7 @@ namespace ProofMinimization
             while (true)
             {
                 mask++;
-                var cl = annots.GetAnnotation(clauseIndex);
+                var cl = annots.GetClause(clauseIndex);
                 // We are interested in strict subsets.
                 if (mask >= (Math.Pow(2, cl.Count) - 1))
                 {
@@ -277,36 +288,24 @@ namespace ProofMinimization
         //int call = 0;
         
         static HashSet<string> identifiers = new HashSet<string>();
-        static Dictionary<string, Dictionary<string, List<double>>> costMemoization = new Dictionary<string, Dictionary<string, List<double>>>();
+        static Dictionary<string, List<double>> costMemoization = new Dictionary<string, List<double>>();
         double hbalance = 0.1;
 
         static string ART_VAR_PREFIX = "ART_";
 
         bool baseTechnique;
-        string logName;
-        int houdiniTempleteLimit = 30;
-
 
         public K1BreadthMinimizer(MinimizerData mdata,bool baseTechnique) : base(mdata)
         {
             this.baseTechnique = baseTechnique;
-            logName = "k1-trace-" + (baseTechnique ? "base" : "redef") + ".txt";
-            try
-            {
-                System.IO.StreamWriter file = new System.IO.StreamWriter(logName, false);
-                file.Close();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("WARNING: logger fresh creation failed for --- {0}", e.Message);
-            }
         }
 
         private void log(String message)
         {
+            string fname = "k1-trace-" + (baseTechnique? "base": "redef") + ".txt";
             try
             {
-                System.IO.StreamWriter file = new System.IO.StreamWriter(logName, true);
+                System.IO.StreamWriter file = new System.IO.StreamWriter(fname, true);
                 file.WriteLine(message);
                 file.Close();
             } catch(Exception e)
@@ -348,17 +347,16 @@ namespace ProofMinimization
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(file, t))
+                        if (isMinimalTemplate(mdata.fileToProg[f], t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
                             break;
                         }
                     }
-                    catch (Exception e)
+                    catch
                     {
                         log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
-                        log(e.Message);
                     }
                 }
 
@@ -368,32 +366,34 @@ namespace ProofMinimization
                 try
                 {
                     log("\r\n\r\nComputing minimal template for file :" + file);
-                    var minTemplate = computeMinimalTemplate(file);
+                    var prog = mdata.fileToProg[file];
+                    var minTemplate = computeMinimalTemplate(file, prog);
                     minTemplates[file] = minTemplate;
                     log("Done computing minimal tempalte");
-                }
-                catch (Exception e)
+                } catch
                 {
                     log(string.Format("ERROR: Minimality computation failed {0}. Investigate!", file));
-                    log(e.Message);
                 }
             }
 
-
-            TemplateAnnotations C = new TemplateAnnotations(new List<Expr>());
-            List<string> fNames = minTemplates.Keys.ToList();
-            int index = 0;
-            while (index < fNames.Count)
+            Dictionary<string, Expr> uannots = new Dictionary<string, Expr>();
+            foreach (var k in minTemplates.Keys)
             {
-                var r = getSubRepositoryUnion(C, fNames, minTemplates, index);
-                C = r.Item1;
-                index = r.Item2;
-                log("Template union C is of size " + C.AnnotationCount());
-                log("Subrepository index ending in " + index);
-                C = computeMinimalUnionTemplate(C);
+                var t = minTemplates[k];
+                var tannots = SimplifyExpr.GetExprConjunctions(t.ToCnfExpression());
+                foreach (var tannot in tannots)
+                {
+                    if (!uannots.ContainsKey(tannot.ToString())) {
+                        uannots[tannot.ToString()] = tannot;
+                    }
+                }
             }
 
-            var annots = C.ToClauseAnnotations();
+            log("Template union C is of size " + uannots.Count);
+            TemplateAnnotations C = new TemplateAnnotations(uannots.Values.ToList<Expr>());
+            TemplateAnnotations best = computeMinimalUnionTemplate(C);
+
+            var annots = SimplifyExpr.GetExprConjunctions(best.ToCnfExpression());
             foreach (var annot in annots)
             {
                 Console.WriteLine("Additional contact required: {0}", annot.ToString());
@@ -403,46 +403,6 @@ namespace ProofMinimization
             templateToPerfDelta = new Dictionary<int, int>();
             return new HashSet<int>();
         }
-
-        Tuple<TemplateAnnotations, int> getSubRepositoryUnion(TemplateAnnotations C, List<string> fNames,
-                                                                Dictionary<string, TemplateAnnotations> minTemplates, int index)
-        {
-            Dictionary<string, Expr> annots = new Dictionary<string, Expr>();
-            var cannots = C.ToClauseAnnotations();
-            foreach (var cannot in cannots)
-            {
-                var s = cannot.ToString();
-                if (!annots.ContainsKey(s))
-                {
-                    annots[s] = cannot;
-                }
-            }
-
-            bool advanced = false;
-            for (; index < fNames.Count; index++)
-            {
-                if (annots.Count >= houdiniTempleteLimit && advanced)
-                {
-                    break;
-                }
-
-                var fname = fNames[index];
-                TemplateAnnotations ts = minTemplates[fname];
-                var ants = ts.ToClauseAnnotations();
-                foreach (var ant in ants)
-                {
-                    if (!annots.ContainsKey(ant.ToString()))
-                    {
-                        annots[ant.ToString()] = ant;
-                    }
-                }
-                advanced = true;
-            }
-
-            return new Tuple<TemplateAnnotations, int>(new TemplateAnnotations(annots.Values.ToList()), index);
-        }
-
-
 
         TemplateAnnotations computeMinimalUnionTemplate(TemplateAnnotations template)
         {
@@ -466,7 +426,6 @@ namespace ProofMinimization
                     log(string.Format("ERROR: computing initial cost failed {0} {1}", file, e.Message));
                 }
             }
-
             log("Done computing best costs...");
             TemplateAnnotations bestTemplate = template;
 
@@ -491,7 +450,7 @@ namespace ProofMinimization
                             log("Computing cost for " + file);
                             var nCost = getTemplateCost(mdata.fileToProg[file], simple);
                             newCost[file] = nCost;
-                            log("Cost is " + (nCost == null ? "null": string.Join(", ", nCost)));
+                            log("Cost is " + string.Join(", ", nCost));
 
                             if (!costCompare(bestCost[file], nCost))
                             {
@@ -521,9 +480,6 @@ namespace ProofMinimization
 
 
 
-
-
-
         HashSet<int> FindMinBase(out Dictionary<int, int> templateToPerfDelta)
         {
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
@@ -534,6 +490,8 @@ namespace ProofMinimization
                 var file = files[i];
                 log("\r\n\r\nWorking on file :" + file);
 
+                var prog = mdata.fileToProg[file];
+
                 log("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
                 {
@@ -541,7 +499,7 @@ namespace ProofMinimization
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(file, t))
+                        if (isMinimalTemplate(prog, t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
@@ -560,7 +518,7 @@ namespace ProofMinimization
                 log("\r\nNo minimal template found in current results. Computing my own minimal.");
 
                 try {
-                    var minTemplate = computeMinimalTemplate(file);
+                    var minTemplate = computeMinimalTemplate(file, prog);
                     minTemplates[file] = minTemplate;
                     
                     log("Now updating previous results...");
@@ -573,7 +531,8 @@ namespace ProofMinimization
                         try
                         {
                             log(string.Format("Updating {0} ...", f));
-                            if (isMinimalTemplate(f, minTemplate))
+                            var prg = mdata.fileToProg[f];
+                            if (isMinimalTemplate(prg, minTemplate))
                             {
                                 minTemplates[f] = minTemplate;
                                 log("Updated!");
@@ -596,20 +555,19 @@ namespace ProofMinimization
                 log("");
             }
 
-        
+
+            log("\r\nPRINTING MINIMAL TEMPLATE ANNOTATIONS");
             HashSet<string> uniqueAnnots = new HashSet<string>();
             foreach (var k in minTemplates.Keys)
             {
                 var t = minTemplates[k];
                 log(t.ToString());
-                List<Expr> annots = t.ToClauseAnnotations() ;
+                List<Expr> annots = SimplifyExpr.GetExprConjunctions(t.ToCnfExpression());
                 foreach (var annot in annots)
                 {
                     uniqueAnnots.Add(annot.ToString());
                 }        
             }
-
-            log("\r\nPRINTING MINIMAL TEMPLATE ANNOTATIONS");
             foreach (var annotStr in uniqueAnnots)
             {
                 Console.WriteLine("Additional contract required: {0}", annotStr);
@@ -621,7 +579,7 @@ namespace ProofMinimization
         }
 
 
-        TemplateAnnotations computeMinimalTemplate(string file)
+        TemplateAnnotations computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
         {
             var fileTempIds = mdata.fileToTempIds[file];
 
@@ -635,12 +593,13 @@ namespace ProofMinimization
                 templates.Add(template);
             }
 
+            costMemoization = new Dictionary<string, List<double>>();
+
             log(string.Format("\nCreating indexed template {0}", templates.Count));
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
             
             TemplateAnnotations bestTemplate = icnf;
             log("Creating initial cost...");
-            var program = mdata.fileToProg[file];
             bestTemplate.SetCost(getTemplateCost(program, icnf)); 
             log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost() == null ? "null" : string.Join(", ",  bestTemplate.Cost())));
 
@@ -654,7 +613,7 @@ namespace ProofMinimization
                 //call++;
                 log(string.Format("Currently best template: \r\n{0}", bestTemplate.ToString()));
                  
-                var t = getBetterTemplate(file, bestTemplate);
+                var t = getBetterTemplate(program, bestTemplate);
                 if (t == null)
                 {
                     break;
@@ -671,11 +630,10 @@ namespace ProofMinimization
         }
 
 
-        bool isMinimalTemplate(string file, TemplateAnnotations template)
+        bool isMinimalTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
         {
             var t = template.DeepCopy();
             log("Creating initial cost...");
-            var program = mdata.fileToProg[file];
             t.SetCost(getTemplateCost(program, t));
 
             if (t.Cost() == null)
@@ -685,7 +643,7 @@ namespace ProofMinimization
             }
 
             log(string.Format("Initial cost constructed: {0}", t.Cost() == null? "null": string.Join(", ", t.Cost())));         
-            var better = getBetterTemplate(file, t);
+            var better = getBetterTemplate(program, t, false);
             if (better == null)
             {
                 return true;
@@ -699,21 +657,21 @@ namespace ProofMinimization
             return computeCost(program, insts);
         }
 
-        TemplateAnnotations getBetterTemplate(string file, TemplateAnnotations template)
+        TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, bool useMemo = true)
         {
             log("Creating k1 simplified templates iterator...");
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
-            var program = mdata.fileToProg[file];
+
             TemplateAnnotations simple;
             while ((simple = iter.next()) != null)
             {
                 log(string.Format("Checking subtemplate: {0}", simple.ToString()));
 
                 List<double> cost;
-                if (costMemoization.ContainsKey(file) && costMemoization[file].ContainsKey(simple.ToString()))
+                if (useMemo && costMemoization.ContainsKey(simple.ToString()))
                 {
                     log("Subtemplate already processed before; taking cost from there.");
-                    cost = costMemoization[file][simple.ToString()];
+                    cost = costMemoization[simple.ToString()];
                     simple.SetCost(cost);
                 } else { 
                     log("Computing instantiations...");
@@ -722,13 +680,7 @@ namespace ProofMinimization
                     log("Computing the cost...");
                     cost = computeCost(program, insts);
                     simple.SetCost(cost);
-
-                    // Save the computed cost.
-                    if (!costMemoization.ContainsKey(file))
-                    {
-                        costMemoization[file] = new Dictionary<string, List<double>>();
-                    }
-                    costMemoization[file][simple.ToString()] = cost;
+                    costMemoization[simple.ToString()] = cost;
                 }
                 
                 log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
@@ -826,7 +778,7 @@ namespace ProofMinimization
             BoogieVerify.options.CallTree = new HashSet<string>();
             BoogieVerify.CallTreeSize = 0;
             BoogieVerify.verificationTime = TimeSpan.Zero;
-            
+
             if (rstatus == BoogieVerify.ReturnStatus.NOK)
             {
                 throw new Exception("Corral returned NOT OK, we don't expect such benchmarks!");
@@ -854,7 +806,9 @@ namespace ProofMinimization
                 .OfType<Variable>()
                 .Iter(c => globals.Add(c.Name, c));
 
-            var annots = tanns.ToClauseAnnotations(); 
+            // TODO: This should be done simpler???
+            var tannsCNF = tanns.ToCnfExpression();
+            var annots = SimplifyExpr.GetExprConjunctions(tannsCNF);
 
             Dictionary<Procedure, List<Expr>> procToInsts = new Dictionary<Procedure, List<Expr>>();
 
@@ -881,10 +835,6 @@ namespace ProofMinimization
 
             return procToInsts;
         }
-
-
-
-
 
         List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, 
                                             Dictionary<string, Variable> formals)
