@@ -19,9 +19,16 @@ namespace ProofMinimization
         // Constructors
         public TemplateAnnotations(List<Expr> cnfs)
         {
-            //Debug.Assert(cnfs.All(exp => SimplifyExpr.IsCleanCNF(exp)));
-            Expr cnf = SimplifyExpr.Reduce(cnfs, BinaryOperator.Opcode.And);
-            icnf = makeItIndexed(cnf);
+            if (cnfs.Count == 0)
+            {
+                icnf = new List<List<Expr>>();
+            }
+            else
+            {
+                //Debug.Assert(cnfs.All(exp => SimplifyExpr.IsCleanCNF(exp)));
+                Expr cnf = SimplifyExpr.Reduce(cnfs, BinaryOperator.Opcode.And);
+                icnf = makeItIndexed(cnf);
+            }
         }
 
         public TemplateAnnotations(Expr cnf)
@@ -289,15 +296,28 @@ namespace ProofMinimization
         
         static HashSet<string> identifiers = new HashSet<string>();
         static Dictionary<string, List<double>> costMemoization = new Dictionary<string, List<double>>();
-        double hbalance = 0.1;
+        double pbalance = 0.9;
 
         static string ART_VAR_PREFIX = "ART_";
 
+        int houdiniTempleteLimit = 25;
+
         bool baseTechnique;
 
-        public K1BreadthMinimizer(MinimizerData mdata,bool baseTechnique) : base(mdata)
+        public K1BreadthMinimizer(MinimizerData mdata, bool baseTechnique) : base(mdata)
         {
             this.baseTechnique = baseTechnique;
+
+            string fname = "k1-trace-" + (baseTechnique ? "base" : "redef") + ".txt";
+            try
+            {
+                System.IO.StreamWriter file = new System.IO.StreamWriter(fname, false);
+                file.Close();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("WARNING: logger creation failed --- {0}", e.Message);
+            }
         }
 
         private void log(String message)
@@ -330,13 +350,15 @@ namespace ProofMinimization
 
 
 
+
+
         HashSet<int> FindMinRedef(out Dictionary<int, int> templateToPerfDelta)
         {
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
 
             var files = mdata.fileToProg.Keys.ToList();
             for (int i = 0; i < files.Count; i++)
-            { 
+            {
                 var file = files[i];
                 log("Working on file " + file);
 
@@ -347,16 +369,17 @@ namespace ProofMinimization
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(mdata.fileToProg[f], t))
+                        if (isMinimalTemplate(mdata.fileToProg[file], t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
                             break;
                         }
                     }
-                    catch
+                    catch (Exception e)
                     {
                         log(string.Format("ERROR: Minimality check failed {0}. Investigate!", f));
+                        log(e.Message);
                     }
                 }
 
@@ -366,43 +389,83 @@ namespace ProofMinimization
                 try
                 {
                     log("\r\n\r\nComputing minimal template for file :" + file);
-                    var prog = mdata.fileToProg[file];
-                    var minTemplate = computeMinimalTemplate(file, prog);
+                    var minTemplate = computeMinimalTemplate(file, mdata.fileToProg[file]);
                     minTemplates[file] = minTemplate;
                     log("Done computing minimal tempalte");
-                } catch
+                }
+                catch (Exception e)
                 {
                     log(string.Format("ERROR: Minimality computation failed {0}. Investigate!", file));
+                    log(e.Message);
                 }
             }
 
-            Dictionary<string, Expr> uannots = new Dictionary<string, Expr>();
-            foreach (var k in minTemplates.Keys)
+
+            TemplateAnnotations C = new TemplateAnnotations(new List<Expr>());
+            List<string> fNames = minTemplates.Keys.ToList();
+            int index = 0;
+            while (index < fNames.Count)
             {
-                var t = minTemplates[k];
-                var tannots = SimplifyExpr.GetExprConjunctions(t.ToCnfExpression());
-                foreach (var tannot in tannots)
-                {
-                    if (!uannots.ContainsKey(tannot.ToString())) {
-                        uannots[tannot.ToString()] = tannot;
-                    }
-                }
+                var r = getSubRepositoryUnion(C, fNames, minTemplates, index);
+                C = r.Item1;
+                index = r.Item2;
+                log("Template union C is of size " + C.ClauseCount());
+                log("Subrepository index ending in " + index);
+                C = computeMinimalUnionTemplate(C);
             }
 
-            log("Template union C is of size " + uannots.Count);
-            TemplateAnnotations C = new TemplateAnnotations(uannots.Values.ToList<Expr>());
-            TemplateAnnotations best = computeMinimalUnionTemplate(C);
-
-            var annots = SimplifyExpr.GetExprConjunctions(best.ToCnfExpression());
+            var annots = SimplifyExpr.GetExprConjunctions(C.ToCnfExpression());
             foreach (var annot in annots)
             {
                 Console.WriteLine("Additional contact required: {0}", annot.ToString());
             }
-
+            
             //TODO: this is currently bogus as it used only for Akash's debugging.
             templateToPerfDelta = new Dictionary<int, int>();
             return new HashSet<int>();
         }
+
+
+        Tuple<TemplateAnnotations, int> getSubRepositoryUnion(TemplateAnnotations C, List<string> fNames,
+                                                               Dictionary<string, TemplateAnnotations> minTemplates, int index)
+        {
+            Dictionary<string, Expr> annots = new Dictionary<string, Expr>();
+            var cannots = SimplifyExpr.GetExprConjunctions(C.ToCnfExpression());
+            foreach (var cannot in cannots)
+            {
+                if (cannot == Expr.True) continue;
+
+                var s = cannot.ToString();
+                if (!annots.ContainsKey(s))
+                {
+                    annots[s] = cannot;
+                }
+            }
+
+            bool advanced = false;
+            for (; index < fNames.Count; index++)
+            {
+                if (annots.Count >= houdiniTempleteLimit && advanced)
+                {
+                    break;
+                }
+
+                var fname = fNames[index];
+                TemplateAnnotations ts = minTemplates[fname];
+                var ants = SimplifyExpr.GetExprConjunctions(ts.ToCnfExpression());
+                foreach (var ant in ants)
+                {
+                    if (!annots.ContainsKey(ant.ToString()))
+                    {
+                        annots[ant.ToString()] = ant;
+                    }
+                }
+                advanced = true;
+            }
+
+            return new Tuple<TemplateAnnotations, int>(new TemplateAnnotations(annots.Values.ToList()), index);
+        }
+
 
         TemplateAnnotations computeMinimalUnionTemplate(TemplateAnnotations template)
         {
@@ -421,11 +484,13 @@ namespace ProofMinimization
                     }
 
                     bestCost[file] = cost;
-                } catch (Exception e)
+                }
+                catch (Exception e)
                 {
                     log(string.Format("ERROR: computing initial cost failed {0} {1}", file, e.Message));
                 }
             }
+
             log("Done computing best costs...");
             TemplateAnnotations bestTemplate = template;
 
@@ -446,18 +511,20 @@ namespace ProofMinimization
                     bool hit = true;
                     foreach (var file in bestCost.Keys)
                     {
-                        try {
+                        try
+                        {
                             log("Computing cost for " + file);
                             var nCost = getTemplateCost(mdata.fileToProg[file], simple);
                             newCost[file] = nCost;
-                            log("Cost is " + string.Join(", ", nCost));
+                            log("Cost is " + (nCost == null ? "null" : string.Join(", ", nCost)));
 
                             if (!costCompare(bestCost[file], nCost))
                             {
                                 hit = false;
                                 break;
                             }
-                        } catch (Exception e)
+                        }
+                        catch (Exception e)
                         {
                             log(string.Format("ERROR: computing union cost failed {0} {1}", file, e.Message));
                         }
@@ -477,6 +544,8 @@ namespace ProofMinimization
             }
             return bestTemplate;
         }
+
+
 
 
 
@@ -720,7 +789,7 @@ namespace ProofMinimization
                 }
             }
 
-            return false;
+            return true;
         }
 
         List<double> computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
@@ -791,8 +860,8 @@ namespace ProofMinimization
                 log(string.Format("Procedures inlined: {0}\tHoudini solver calls: {1}", procs_inlined, houdiniCost));
                 //cost.Add(((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined);
                 //cost.Add(hbalance * houdiniCost + procs_inlined);
-                cost.Add(procs_inlined);
-                cost.Add(houdiniCost);
+                cost.Add(pbalance * procs_inlined);
+                cost.Add((int)((double)(houdiniCost) / instantiation.Keys.Count));
                 return cost;
             }
         } 
