@@ -289,7 +289,7 @@ namespace ProofMinimization
         
         static HashSet<string> identifiers = new HashSet<string>();
         static Dictionary<string, List<double>> costMemoization = new Dictionary<string, List<double>>();
-        double hbalance = 0.1;
+        double pbalance = 0.9;
 
         static string ART_VAR_PREFIX = "ART_";
 
@@ -551,13 +551,17 @@ namespace ProofMinimization
                 return false;
             }
 
+            var scales = new List<double>() { pbalance };
             int smindex = c1.Count < c2.Count ? c1.Count: c2.Count;
             for(int i = 0; i < smindex; i++)
             {
-                if (c2[i] < c1[i])
+                var scale = i < scales.Count ? scales[i] : 1;
+                var c_2 = c2[i] * scale;
+                if (c_2 < c1[i])
                 {
                     return true;
-                } else if (c1[i] < c2[i])
+                }
+                else if (c1[i] < c_2)
                 {
                     return false;
                 }
@@ -635,7 +639,7 @@ namespace ProofMinimization
                 //cost.Add(((double)(houdiniCost) / instantiation.Keys.Count) + procs_inlined);
                 //cost.Add(hbalance * houdiniCost + procs_inlined);
                 cost.Add(procs_inlined);
-                cost.Add((double)(houdiniCost) / instantiation.Keys.Count);
+                cost.Add((int)((double)(houdiniCost) / instantiation.Keys.Count));
                 return cost;
             }
         } 
