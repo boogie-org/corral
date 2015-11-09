@@ -21,6 +21,7 @@ namespace ProofMinimization
         public static int CacheHit = 0;
         public static bool usePerf = false;
         public static bool useSI = true;
+        public static int HoudiniTimeout = 60; // seconds
 
         // file name -> Program
         static Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
@@ -498,7 +499,10 @@ namespace ProofMinimization
                 DropConstants(program, allconstants.Difference(candidates.Union(keep)));
 
                 // Run Houdini
+                var ot = CommandLineOptions.Clo.ProverKillTime;
+                CommandLineOptions.Clo.ProverKillTime = HoudiniTimeout;
                 var assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
+                CommandLineOptions.Clo.ProverKillTime = ot;
                 //Console.WriteLine("  >> Contracts: {0}", assignment.Count);
 
                 // Read the program again, add contracts
@@ -564,7 +568,10 @@ namespace ProofMinimization
             //BoogieUtil.PrintProgram(program, "hi_query" + IterCnt + ".bpl");
 
             // Run Houdini
+            var ot = CommandLineOptions.Clo.ProverKillTime;
+            CommandLineOptions.Clo.ProverKillTime = HoudiniTimeout;
             assignment = CoreLib.HoudiniInlining.RunHoudini(program, true);
+            CommandLineOptions.Clo.ProverKillTime = ot;
             //Console.WriteLine("  >> Contracts: {0}", assignment.Count);
 
             // Read the program again, add contracts
