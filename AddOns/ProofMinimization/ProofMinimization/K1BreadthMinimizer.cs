@@ -295,10 +295,10 @@ namespace ProofMinimization
         //int call = 0;
         
         static HashSet<string> identifiers = new HashSet<string>();
-        static Dictionary<string, List<double>> costMemoization = new Dictionary<string, List<double>>();
+        static Dictionary<string, Dictionary<string, List<double>>> costCache = new Dictionary<string, Dictionary<string, List<double>>>();
         double pbalance = 0.9;
 
-        static string ART_VAR_PREFIX = "ART_";
+        static string ART_VAR_PREFIX = "ART_ZP_";
 
         int houdiniTempleteLimit = 25;
 
@@ -369,7 +369,7 @@ namespace ProofMinimization
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(mdata.fileToProg[file], t))
+                        if (isMinimalTemplate(file, t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
@@ -389,7 +389,7 @@ namespace ProofMinimization
                 try
                 {
                     log("\r\n\r\nComputing minimal template for file :" + file);
-                    var minTemplate = computeMinimalTemplate(file, mdata.fileToProg[file]);
+                    var minTemplate = computeMinimalTemplate(file);
                     minTemplates[file] = minTemplate;
                     log("Done computing minimal tempalte");
                 }
@@ -559,8 +559,6 @@ namespace ProofMinimization
                 var file = files[i];
                 log("\r\n\r\nWorking on file :" + file);
 
-                var prog = mdata.fileToProg[file];
-
                 log("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
                 {
@@ -568,11 +566,14 @@ namespace ProofMinimization
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(prog, t))
+                        if (isMinimalTemplate(file, t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
                             break;
+                        } else
+                        {
+                            log("Not a minimalte existing template");
                         }
                     }
                     catch
@@ -587,7 +588,7 @@ namespace ProofMinimization
                 log("\r\nNo minimal template found in current results. Computing my own minimal.");
 
                 try {
-                    var minTemplate = computeMinimalTemplate(file, prog);
+                    var minTemplate = computeMinimalTemplate(file);
                     minTemplates[file] = minTemplate;
                     
                     log("Now updating previous results...");
@@ -600,8 +601,7 @@ namespace ProofMinimization
                         try
                         {
                             log(string.Format("Updating {0} ...", f));
-                            var prg = mdata.fileToProg[f];
-                            if (isMinimalTemplate(prg, minTemplate))
+                            if (isMinimalTemplate(f, minTemplate))
                             {
                                 minTemplates[f] = minTemplate;
                                 log("Updated!");
@@ -648,8 +648,9 @@ namespace ProofMinimization
         }
 
 
-        TemplateAnnotations computeMinimalTemplate(string file, ProgTransformation.PersistentProgram program)
+        TemplateAnnotations computeMinimalTemplate(string file)
         {
+            var program = mdata.fileToProg[file];
             var fileTempIds = mdata.fileToTempIds[file];
 
             log(string.Format("Found the following templates for program {0}:", file));
@@ -661,8 +662,6 @@ namespace ProofMinimization
                 log(string.Format("\t{0}", template.ToString()));
                 templates.Add(template);
             }
-
-            costMemoization = new Dictionary<string, List<double>>();
 
             log(string.Format("\nCreating indexed template {0}", templates.Count));
             TemplateAnnotations icnf = new TemplateAnnotations(templates);
@@ -682,7 +681,7 @@ namespace ProofMinimization
                 //call++;
                 log(string.Format("Currently best template: \r\n{0}", bestTemplate.ToString()));
                  
-                var t = getBetterTemplate(program, bestTemplate);
+                var t = getBetterTemplate(file, bestTemplate);
                 if (t == null)
                 {
                     break;
@@ -699,8 +698,9 @@ namespace ProofMinimization
         }
 
 
-        bool isMinimalTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        bool isMinimalTemplate(string file, TemplateAnnotations template)
         {
+            var program = mdata.fileToProg[file];
             var t = template.DeepCopy();
             log("Creating initial cost...");
             t.SetCost(getTemplateCost(program, t));
@@ -712,7 +712,7 @@ namespace ProofMinimization
             }
 
             log(string.Format("Initial cost constructed: {0}", t.Cost() == null? "null": string.Join(", ", t.Cost())));         
-            var better = getBetterTemplate(program, t, false);
+            var better = getBetterTemplate(file, t);
             if (better == null)
             {
                 return true;
@@ -726,8 +726,9 @@ namespace ProofMinimization
             return computeCost(program, insts);
         }
 
-        TemplateAnnotations getBetterTemplate(ProgTransformation.PersistentProgram program, TemplateAnnotations template, bool useMemo = true)
+        TemplateAnnotations getBetterTemplate(string file, TemplateAnnotations template)
         {
+            var program = mdata.fileToProg[file];
             log("Creating k1 simplified templates iterator...");
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
 
@@ -737,10 +738,10 @@ namespace ProofMinimization
                 log(string.Format("Checking subtemplate: {0}", simple.ToString()));
 
                 List<double> cost;
-                if (useMemo && costMemoization.ContainsKey(simple.ToString()))
+                if (costCache.ContainsKey(file) && costCache[file].ContainsKey(simple.ToString()))
                 {
                     log("Subtemplate already processed before; taking cost from there.");
-                    cost = costMemoization[simple.ToString()];
+                    cost = costCache[file][simple.ToString()];
                     simple.SetCost(cost);
                 } else { 
                     log("Computing instantiations...");
@@ -749,13 +750,19 @@ namespace ProofMinimization
                     log("Computing the cost...");
                     cost = computeCost(program, insts);
                     simple.SetCost(cost);
-                    costMemoization[simple.ToString()] = cost;
+
+                    if (!costCache.ContainsKey(file))
+                    {
+                        costCache[file] = new Dictionary<string, List<double>>();
+                    }
+                    costCache[file][simple.ToString()] = cost;
                 }
                 
                 log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
 
                 if (costCompare(template.Cost(), cost))
                 {
+                    log("New cost is better.");
                     return simple;
                 }
             }
@@ -820,16 +827,17 @@ namespace ProofMinimization
                     var identExp = new IdentifierExpr(Token.NoToken, tident.Name, tident.Type);
                     var impl = new NAryExpr(Token.NoToken, new BinaryOperator(Token.NoToken, BinaryOperator.Opcode.Imp), new List<Expr> { identExp, expr });
                     var ens = new Ensures(false, impl);
+                    
                     procedure.Ensures.Add(ens);
                     instCnt++;
                 }
             }
 
-            log(string.Format("Annotated the program with {0} candidate instantiations.", instCnt));
+            log(string.Format("Annotated the program (of {0} methods) with {1} candidate instantiations.", instantiation.Keys.Count, instCnt));
             // Running Houdini and Corral must be done on fresh program instances.
             var pcopy1 = BoogieUtil.ReResolveInMem(prog);
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
-            //cba.Util.BoogieUtil.PrintProgram(prog, "interim1_" + call + ".bpl");
+            //cba.Util.BoogieUtil.PrintProgram(prog, "problem.bpl");
 
             var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
@@ -837,6 +845,7 @@ namespace ProofMinimization
             // This roughly corresponds to the number of solver calls, which
             // is what we ideally want.
             long houdiniCost = instCnt - assignment.Count;
+            log("The number of thrown instantiations by Houdini is " + houdiniCost + ".");
 
             // Take a fresh copy for corral, just in case.
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
