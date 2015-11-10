@@ -198,6 +198,16 @@ namespace ProofMinimization
 
             foreach (var c in min)
             {
+                Console.WriteLine("Template to origin info for {0} : {1}", c, Minimize.templateToStr[c]);
+                if (!Minimize.templateToOriginExpr.ContainsKey(c) || Minimize.templateToOriginExpr[c].Count == 0)
+                    continue;
+                foreach (var tup in Minimize.templateToOriginExpr[c])
+                    Console.WriteLine("  {0}{1}", tup.Item1 ? "{:loop} " : "", tup.Item2.ToString());
+            }
+
+
+            foreach (var c in min)
+            {
                 Console.WriteLine("Additional contract required: {0}", Minimize.templateToStr[c]);
             }
             foreach (var tup in templateToPerfDelta)
@@ -207,6 +217,11 @@ namespace ProofMinimization
             }
 
             Console.WriteLine("Cache hits on calls to PruneAndRun: {0} / {1}", Minimize.CacheHit, Minimize.IterCnt);
+
+            foreach (var c in min)
+            {
+
+            }
         }
 
 

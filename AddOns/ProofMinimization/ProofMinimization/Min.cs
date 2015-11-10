@@ -27,6 +27,8 @@ namespace ProofMinimization
         static Dictionary<string, PersistentProgram> fileToProg = new Dictionary<string, PersistentProgram>();
         // template ID -> file -> {constants}
         static Dictionary<int, Dictionary<string, HashSet<string>>> templateMap = new Dictionary<int, Dictionary<string, HashSet<string>>>();
+        // template ID -> <loop?,origin expr> list
+        public static Dictionary<int, List<Tuple<bool, Expr>>> templateToOriginExpr = new Dictionary<int, List<Tuple<bool, Expr>>>();
         // identifier string -> template ID 
         public static Dictionary<string, int> strToTemplate = new Dictionary<string, int>();
         public static Dictionary<int, string> templateToStr = new Dictionary<int, string>();
@@ -59,11 +61,15 @@ namespace ProofMinimization
             return ret;
         }
 
-        static void addTemplate(int templateId, string file, string constant)
+        static void addTemplate(int templateId, string file, string constant, Tuple<bool, Expr> originInfo = null)
         {
             if (!templateMap.ContainsKey(templateId)) templateMap.Add(templateId, new Dictionary<string, HashSet<string>>());
             if (!templateMap[templateId].ContainsKey(file)) templateMap[templateId].Add(file, new HashSet<string>());
             templateMap[templateId][file].Add(constant);
+
+            if (!templateToOriginExpr.ContainsKey(templateId))
+                templateToOriginExpr.Add(templateId, new List<Tuple<bool, Expr>>());
+            if(originInfo != null) templateToOriginExpr[templateId].Add(originInfo);
         }
 
         public static void ReadFiles(IEnumerable<string> files, HashSet<string> keepPatterns)
@@ -144,6 +150,7 @@ namespace ProofMinimization
                     {
                         string constantName = null;
                         Expr expr = null;
+                        var isloop = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "LoopProcedure");
 
                         var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
                             ens.Condition, allconstants.Keys, out constantName, out expr);
@@ -167,13 +174,13 @@ namespace ProofMinimization
                             if (strToTemplate.ContainsKey(temp))
                             {
                                 // template for it exists
-                                addTemplate(strToTemplate[temp], f, constantName);
+                                addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
                             }
                             else
                             {
                                 // create new template
                                 strToTemplate.Add(temp, TemplateCounterStart + strToTemplate.Count);
-                                addTemplate(strToTemplate[temp], f, constantName);
+                                addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
                             }
                         }
                     }
@@ -384,6 +391,7 @@ namespace ProofMinimization
                     {
                         string constantName = null;
                         Expr expr = null;
+                        var isloop = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "LoopProcedure");
 
                         var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
                             ens.Condition, constants, out constantName, out expr);
@@ -414,7 +422,7 @@ namespace ProofMinimization
                                 if (strToTemplate.ContainsKey(temp))
                                 {
                                     // template for it exists
-                                    addTemplate(strToTemplate[temp], file, nc.Name);                                    
+                                    addTemplate(strToTemplate[temp], file, nc.Name, Tuple.Create(isloop, c));                                    
                                 }
                                 else
                                 {
@@ -422,7 +430,7 @@ namespace ProofMinimization
                                     int v = TemplateCounterStart + strToTemplate.Count;
                                     strToTemplate.Add(temp, v);
                                     templateToStr.Add(v, temp);
-                                    addTemplate(strToTemplate[temp], file, nc.Name);                                                           
+                                    addTemplate(strToTemplate[temp], file, nc.Name, Tuple.Create(isloop, c));                                                           
                                 }
 
                                 if(!candidateToCost.ContainsKey(strToTemplate[temp]))

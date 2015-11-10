@@ -633,6 +633,10 @@ namespace cba
 
             public bool Match(Procedure proc)
             {
+                if (QKeyValue.FindBoolAttribute(annotations, "loop") &&
+                    !QKeyValue.FindBoolAttribute(proc.Attributes, "LoopProcedure"))
+                    return false;
+
                 var mods = new HashSet<string>();
                 proc.Modifies.OfType<IdentifierExpr>()
                     .Iter(ie => mods.Add(ie.Name));
