@@ -163,14 +163,14 @@ namespace ProofMinimization
                         {
                             addTemplate(templateId, f, constantName);
                             priorFullyInstantiatedTemplates.Add(templateId);
-                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
+                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplateGeneral(expr)))
                             {
-                                strToTemplate.Add(SimplifyExpr.ExprToTemplate(expr), templateId);
+                                strToTemplate.Add(SimplifyExpr.ExprToTemplateGeneral(expr), templateId);
                             }
                         }
                         else
                         {
-                            var temp = SimplifyExpr.ExprToTemplate(expr);
+                            var temp = SimplifyExpr.ExprToTemplateGeneral(expr);
                             if (strToTemplate.ContainsKey(temp))
                             {
                                 // template for it exists
@@ -418,7 +418,7 @@ namespace ProofMinimization
                                 newEnsures.Add(new Ensures(false, e));
 
                                 // Add template
-                                var temp = SimplifyExpr.ExprToTemplate(c);
+                                var temp = SimplifyExpr.ExprToTemplateGeneral(c);
                                 if (strToTemplate.ContainsKey(temp))
                                 {
                                     // template for it exists

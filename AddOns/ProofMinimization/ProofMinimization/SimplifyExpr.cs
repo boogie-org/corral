@@ -84,7 +84,7 @@ namespace ProofMinimization
         }
 
         // replace formal-ins and outs with a unique variable
-        public static string ExprToTemplate(Expr expr)
+        public static string ExprToTemplateGeneral(Expr expr)
         {
             var GetFin = new Func<btype, Variable>(ty =>
                 BoogieAstFactory.MkFormal("v_fin_" + ty.ToString(), ty, true));
@@ -103,6 +103,54 @@ namespace ProofMinimization
 
             return ret.ToString();
         }
+
+        public static string ExprToTemplateSpecific(Expr expr, bool loop)
+        {
+            int cnt = 0;
+            var inCache = new Dictionary<string, Expr>();
+            var outCache = new Dictionary<string, Expr>();
+
+            var GetFin = new Func<Variable, Expr>(v =>
+                {
+                    if (inCache.ContainsKey(v.Name))
+                        return inCache[v.Name];
+
+                    var prefix = loop ? "v_loop_" : "v_fin_";
+                    prefix += v.TypedIdent.Type.ToString();
+                    prefix += string.Format("_{0}", cnt++);
+                    var outv = BoogieAstFactory.MkFormal(prefix, v.TypedIdent.Type, true);
+                    var outexpr = loop ? (Expr)(new OldExpr(Token.NoToken, Expr.Ident(outv))) : Expr.Ident(outv);
+                    inCache[v.Name] = outexpr;
+                    return outexpr;
+                });
+
+            var GetFout = new Func<Variable, Expr>(v =>
+            {
+                if (outCache.ContainsKey(v.Name))
+                    return outCache[v.Name];
+
+                var prefix = loop ? "v_loop_" : "v_fout_";
+                prefix += v.TypedIdent.Type.ToString();
+                prefix += string.Format("_{0}", cnt++);
+                var outv = BoogieAstFactory.MkFormal(prefix, v.TypedIdent.Type, false);
+                var outexpr = Expr.Ident(outv);
+                outCache[v.Name] = outexpr;
+                return outexpr;
+            });
+
+            var ret =
+                Substituter.Apply(new Substitution(v =>
+                {
+                    if (v is Formal && (v as Formal).InComing)
+                        return GetFin(v);
+                    if (v is Formal && !(v as Formal).InComing)
+                        return GetFout(v);
+                    return Expr.Ident(v);
+                }), expr);
+
+            return ret.ToString();
+        }
+
 
         // Returns clauses of the CNF formula
         static List<Expr> MakeCNF(Expr expr)

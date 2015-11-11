@@ -208,8 +208,18 @@ namespace ProofMinimization
 
             foreach (var c in min)
             {
-                Console.WriteLine("Additional contract required: {0}", Minimize.templateToStr[c]);
+                var gen = Minimize.templateToStr[c];
+                string ret = gen;
+                if (Minimize.templateToOriginExpr.ContainsKey(c) && Minimize.templateToOriginExpr[c].Count != 0)
+                {
+                    var isloop = Minimize.templateToOriginExpr[c].All(tup => tup.Item1);
+                    var exprs = Minimize.templateToOriginExpr[c].Select(tup => SimplifyExpr.ExprToTemplateSpecific(tup.Item2, isloop));
+                    ret = exprs.First();
+                    ret = exprs.All(s => s == ret) ? ret : gen;
+                }
+                Console.WriteLine("Additional contract required: {0}", ret);
             }
+
             foreach (var tup in templateToPerfDelta)
             {
                 if (tup.Value <= 2) continue;
@@ -218,10 +228,6 @@ namespace ProofMinimization
 
             Console.WriteLine("Cache hits on calls to PruneAndRun: {0} / {1}", Minimize.CacheHit, Minimize.IterCnt);
 
-            foreach (var c in min)
-            {
-
-            }
         }
 
 
