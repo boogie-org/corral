@@ -903,12 +903,15 @@ namespace ProofMinimization
                     .Iter(f => formals.Add(f.Name, f));
                 proc.OutParams.OfType<Formal>()
                     .Iter(f => formals.Add(f.Name, f));
-        
+
+                HashSet<string> modifiesNames = new HashSet<string>();
+                proc.Modifies.All(v => modifiesNames.Add(v.Name.ToString()));
+
                 List<Expr> procInsts = new List<Expr>();
                 for (int i = 0; i < annots.Count; i++) 
                 {
                     var annot = annots[i];
-                    var insts = instantiateProcTemplates(annot, globals, formals);
+                    var insts = instantiateProcTemplates(annot, globals, formals, modifiesNames);
                     procInsts.AddRange(insts);
                 }
                 procToInsts[proc] = procInsts;
@@ -918,10 +921,29 @@ namespace ProofMinimization
         }
 
         List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, 
-                                            Dictionary<string, Variable> formals)
+                                            Dictionary<string, Variable> formals, HashSet<string> modifiesNames)
         {
             HashSet<Variable> templateVars = new HashSet<Variable>();
             var unqVarTemplate = toUniqueVarTemplate(template, templateVars);
+
+            // Get template variable names only.
+            HashSet<string> templateVarNames = new HashSet<string>();
+            templateVars.All(v => templateVarNames.Add(v.Name.ToString()));
+            // Compute all variables in template that are not wrapped in "old(*)".
+            var nonOldVisitor = new GatherNonOldVariables();
+            nonOldVisitor.Visit(unqVarTemplate);
+            HashSet<string> nonOldVarNames = nonOldVisitor.variables;
+            // Remove template variables. We now have (global) variables that
+            // are not wrapped with old.
+            HashSet<string> nonOldGlobalVarNames = nonOldVarNames.Difference(templateVarNames);
+            
+            // If there are some (global)) non-old variables and the method does not
+            // modify some of them, then this template is of little or no use.
+            if (!(nonOldGlobalVarNames.Count == 0) && !nonOldGlobalVarNames.IsSubsetOf(modifiesNames))
+            {
+                return new List<Expr>();
+            }
+
             return MinControl.InstantiateTemplate(unqVarTemplate, templateVars, globals, formals);
         }
 
