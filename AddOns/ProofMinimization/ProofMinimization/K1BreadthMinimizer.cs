@@ -478,7 +478,7 @@ namespace ProofMinimization
                 var file = files[i];
                 try
                 {
-                    var cost = getTemplateCost(mdata.fileToProg[file], template);
+                    var cost = getTemplateCost(file, mdata.fileToProg[file], template);
                     if (cost == null)
                     {
                         throw new Exception("Initial cost null?");
@@ -522,7 +522,7 @@ namespace ProofMinimization
                             int limit = tCost != null && tCost.Count > 0 ? (int)((1 / pbalance) * tCost[0]) + 1 : 1;
                             log("Setting Corral limit to " + limit);
 
-                            var nCost = getTemplateCost(mdata.fileToProg[file], simple, limit);
+                            var nCost = getTemplateCost(file, mdata.fileToProg[file], simple, limit);
                             newCost[file] = nCost;
                             log("Cost is " + (nCost == null ? "null" : string.Join(", ", nCost)));
 
@@ -678,7 +678,7 @@ namespace ProofMinimization
             
             TemplateAnnotations bestTemplate = icnf;
             log("Creating initial cost...");
-            bestTemplate.SetCost(getTemplateCost(program, icnf)); 
+            bestTemplate.SetCost(getTemplateCost(file, program, icnf)); 
             log(string.Format("Initial cost constructed: {0}", bestTemplate.Cost() == null ? "null" : string.Join(", ",  bestTemplate.Cost())));
 
             if (bestTemplate.Cost() == null)
@@ -713,7 +713,7 @@ namespace ProofMinimization
             var program = mdata.fileToProg[file];
             var t = template.DeepCopy();
             log("Creating initial cost...");
-            t.SetCost(getTemplateCost(program, t));
+            t.SetCost(getTemplateCost(file, program, t));
 
             if (t.Cost() == null)
             {
@@ -730,9 +730,9 @@ namespace ProofMinimization
             return false;
         }
 
-        List<double> getTemplateCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template, int limit = 0)
+        List<double> getTemplateCost(string file, ProgTransformation.PersistentProgram program, TemplateAnnotations template, int limit = 0)
         {
-            var insts = instantiateTemplate(template, program);
+            var insts = instantiateTemplate(file, template, program);
             return computeCost(program, insts, limit);
         }
 
@@ -756,7 +756,7 @@ namespace ProofMinimization
                     simple.SetCost(cost);
                 } else { 
                     log("Computing instantiations...");
-                    var insts = instantiateTemplate(simple, program);
+                    var insts = instantiateTemplate(file, simple, program);
 
                     log("Computing the cost...");
 
@@ -896,7 +896,7 @@ namespace ProofMinimization
             }
         } 
 
-        Dictionary<Procedure, List<Expr>> instantiateTemplate(TemplateAnnotations tanns, ProgTransformation.PersistentProgram program)
+        Dictionary<Procedure, List<Expr>> instantiateTemplate(string file, TemplateAnnotations tanns, ProgTransformation.PersistentProgram program)
         {
             // Get global variables.
             Program prog = program.getProgram();
@@ -929,7 +929,31 @@ namespace ProofMinimization
                 for (int i = 0; i < annots.Count; i++) 
                 {
                     var annot = annots[i];
-                    var insts = instantiateProcTemplates(annot, globals, formals, modifiesNames);
+
+                    // Get annotation with unique variable names.
+                    HashSet<Variable> uniqAnnotationVars = new HashSet<Variable>();
+                    var uniqVarAnnotation = toUniqueVarTemplate(annot, uniqAnnotationVars);
+
+                    // If there are multiple template variables... 
+                    if (uniqAnnotationVars.Count > 0)
+                    {
+                        var strannot = annot.ToString();
+                        // Then...
+                        if (mdata.annotsToOrigins.ContainsKey(strannot))
+                        {
+                            // We want to instantiate it only at the place of the origin.
+                            var d = mdata.annotsToOrigins[strannot];
+                            if (!d.ContainsKey(file) || !d[file].Contains(proc.Name))
+                            {
+                                continue;
+                            }
+                        } else
+                        {
+                            log(string.Format("ERROR: template {0} missing origin.", annot.ToString()));
+                        }
+                    }
+
+                    var insts = instantiateProcTemplates(uniqVarAnnotation, uniqAnnotationVars, globals, formals, modifiesNames);
                     procInsts.AddRange(insts);
                 }
                 procToInsts[proc] = procInsts;
@@ -938,31 +962,27 @@ namespace ProofMinimization
             return procToInsts;
         }
 
-        List<Expr> instantiateProcTemplates(Expr template, Dictionary<string, Variable> globals, 
+        List<Expr> instantiateProcTemplates(Expr annotation, HashSet<Variable> annotationVars, Dictionary<string, Variable> globals, 
                                             Dictionary<string, Variable> formals, HashSet<string> modifiesNames)
         {
-            HashSet<Variable> templateVars = new HashSet<Variable>();
-            var unqVarTemplate = toUniqueVarTemplate(template, templateVars);
-
             // Get template variable names only.
-            HashSet<string> templateVarNames = new HashSet<string>();
-            templateVars.Iter(v => templateVarNames.Add(v.Name.ToString()));
+            HashSet<string> annotationvarNames = new HashSet<string>();
+            annotationVars.Iter(v => annotationvarNames.Add(v.Name));
             // Compute all variables in template that are not wrapped in "old(*)".
             var nonOldVisitor = new GatherNonOldVariables();
-            nonOldVisitor.Visit(unqVarTemplate);
+            nonOldVisitor.Visit(annotation);
             HashSet<string> nonOldVarNames = nonOldVisitor.variables;
-            // Remove template variables. We now have (global) variables that
-            // are not wrapped with old.
-            HashSet<string> nonOldGlobalVarNames = nonOldVarNames.Difference(templateVarNames);
+            // Remove template variables. We now have (global) variables that are not wrapped with old.
+            HashSet<string> nonOldGlobalVarNames = nonOldVarNames.Difference(annotationvarNames);
             
             // If there are some (global)) non-old variables and the method does not
             // modify some of them, then this template is of little or no use.
-            if (!(nonOldGlobalVarNames.Count == 0) && !nonOldGlobalVarNames.IsSubsetOf(modifiesNames))
+            if (nonOldGlobalVarNames.Count > 0 && !nonOldGlobalVarNames.IsSubsetOf(modifiesNames))
             {
                 return new List<Expr>();
             }
 
-            return MinControl.InstantiateTemplate(unqVarTemplate, templateVars, globals, formals);
+            return MinControl.InstantiateTemplate(annotation, annotationVars, globals, formals);
         }
 
         Expr toUniqueVarTemplate(Expr expr, HashSet<Variable> templateVars)

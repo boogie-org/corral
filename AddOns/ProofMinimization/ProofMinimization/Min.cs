@@ -31,10 +31,12 @@ namespace ProofMinimization
 
         public Dictionary<string, HashSet<int>> fileToTempIds;
 
+        public Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins;
+
         public MinimizerData(Dictionary<string, PersistentProgram> fileToProg, Dictionary<string, int> fileToPerf,
                              Dictionary<string, HashSet<string>> fileToKeepConstants, Dictionary<int, Dictionary<string, HashSet<string>>> templateMap,
                              Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr,
-                             Dictionary<string, HashSet<int>> fileToTempIds) 
+                             Dictionary<string, HashSet<int>> fileToTempIds, Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins)  
         {
             this.fileToProg = fileToProg;
             this.fileToPerf = fileToPerf;
@@ -44,6 +46,7 @@ namespace ProofMinimization
             this.strToTemplate = strToTemplate;
             this.tempIdToExpr = tempIdToExpr;
             this.fileToTempIds = fileToTempIds;
+            this.annotsToOrigins = annotsToOrigins;
         }
     }
 
@@ -84,6 +87,8 @@ namespace ProofMinimization
             
             Dictionary<int, Expr> tempIdToExpr = new Dictionary<int, Expr>();
             Dictionary<string, HashSet<int>> fileToTempIds = new Dictionary<string, HashSet<int>>();
+
+            Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins = new Dictionary<string, Dictionary<string, HashSet<string>>>();
 
             var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
                 {
@@ -172,10 +177,14 @@ namespace ProofMinimization
                         {
                             addTemplate(templateId, f, constantName);
                             fileToTempIds[f].Add(templateId);
+
                             tempIdToExpr[templateId] = SimplifyExpr.ExprToTemplateExpr(expr);
+                            saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[templateId], annotsToOrigins);
+
                             if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
                             {
-                                strToTemplate.Add(SimplifyExpr.ExprToTemplate(expr), templateId);
+                                var templ = SimplifyExpr.ExprToTemplate(expr);
+                                strToTemplate.Add(templ, templateId);
                             }
                         }
                         else
@@ -193,6 +202,7 @@ namespace ProofMinimization
                                 strToTemplate.Add(temp, tid);
                                 addTemplate(tid, f, constantName);
                                 tempIdToExpr[tid] = SimplifyExpr.ExprToTemplateExpr(expr);
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[tid], annotsToOrigins);
                                 fileToTempIds[f].Add(tid);
                             }
                         }
@@ -221,8 +231,29 @@ namespace ProofMinimization
                     }
                 }
             }
-            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr, fileToTempIds);
+            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr, fileToTempIds, annotsToOrigins);
         }
+
+        static void saveTemplateOrigin(string fName, string procName, Expr template, Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins)
+        {
+            var annots = SimplifyExpr.GetExprConjunctions(template);
+            foreach (var annot in annots)
+            {
+                var strannot = annot.ToString();
+                if (!annotsToOrigins.ContainsKey(strannot))
+                {
+                    annotsToOrigins[strannot] = new Dictionary<string, HashSet<string>>();
+                }
+
+                if (!annotsToOrigins[strannot].ContainsKey(fName))
+                {
+                    annotsToOrigins[strannot][fName] = new HashSet<string>();
+                }
+
+                annotsToOrigins[strannot][fName].Add(procName);
+            }
+        }
+
 
         public static HashSet<int> Minimize(MinimizerData data, out  Dictionary<int, int> templateToPerfDelta)
         {
@@ -380,7 +411,7 @@ namespace ProofMinimization
 
             if (used.varsUsed.Any(g => !globals.ContainsKey(g) && !templateVarNames.Contains(g)))
             {
-                Console.WriteLine("UNINDENTIFED VARIABLE FOUND IN THE TEMPLATE: {0}", template.ToString());
+                Console.WriteLine("WARNING (ok): unidentified variable found in the template {0}", template.ToString());
                 return ret;
             }
                 
@@ -419,7 +450,7 @@ namespace ProofMinimization
                 System.Text.RegularExpressions.Regex matchRegEx = null;
                 if (onlyMatchVar != null) matchRegEx = new System.Text.RegularExpressions.Regex(onlyMatchVar);
 
-                // TODO: globals are not used now any more. Usually, this was globals.Concat(formals)
+                // TODO: globals are not used now any more. Before, this was globals.Concat(formals)
                 foreach (var kvp in formals)
                 {
                     if (tv.TypedIdent.Type.ToString() != kvp.Value.TypedIdent.Type.ToString())
@@ -438,6 +469,9 @@ namespace ProofMinimization
                         {
                             continue;
                         }
+                    } else
+                    {
+                        Console.WriteLine("ERROR: Template variable {0} and program variable {1} are not formals", tvName, kvp.Value.Name);
                     }
 
                     matches[tvName].Add(kvp.Value);
