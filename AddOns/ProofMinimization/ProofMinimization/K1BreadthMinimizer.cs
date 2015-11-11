@@ -515,7 +515,14 @@ namespace ProofMinimization
                         try
                         {
                             log("Computing cost for " + file);
-                            var nCost = getTemplateCost(mdata.fileToProg[file], simple);
+
+                            // Set the Corral limit to 1/pbalance times of the cost you are
+                            // trying to beat. Because everything above that limit is surely worse.
+                            var tCost = bestCost[file];
+                            int limit = tCost != null && tCost.Count > 0 ? (int)((1 / pbalance) * tCost[0]) + 1 : 1;
+                            log("Setting Corral limit to " + limit);
+
+                            var nCost = getTemplateCost(mdata.fileToProg[file], simple, limit);
                             newCost[file] = nCost;
                             log("Cost is " + (nCost == null ? "null" : string.Join(", ", nCost)));
 
@@ -723,10 +730,10 @@ namespace ProofMinimization
             return false;
         }
 
-        List<double> getTemplateCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template)
+        List<double> getTemplateCost(ProgTransformation.PersistentProgram program, TemplateAnnotations template, int limit = 0)
         {
             var insts = instantiateTemplate(template, program);
-            return computeCost(program, insts);
+            return computeCost(program, insts, limit);
         }
 
         TemplateAnnotations getBetterTemplate(string file, TemplateAnnotations template)
@@ -736,6 +743,7 @@ namespace ProofMinimization
             SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
 
             TemplateAnnotations simple;
+            var tCost = template.Cost();
             while ((simple = iter.next()) != null)
             {
                 log(string.Format("Checking subtemplate: {0}", simple.ToString()));
@@ -751,9 +759,15 @@ namespace ProofMinimization
                     var insts = instantiateTemplate(simple, program);
 
                     log("Computing the cost...");
-                    cost = computeCost(program, insts);
+
+                    // Set the Corral limit to 1/pbalance times of the cost you are
+                    // trying to beat. Because everything above that limit is surely worse.
+                    int limit = tCost != null && tCost.Count > 0 ? (int)((1/pbalance) * tCost[0]) + 1: 1;
+                    log("Setting Corral limit to " + limit); 
+                    cost = computeCost(program, insts, limit);
                     simple.SetCost(cost);
 
+                    // Save the computed cost.
                     if (!costCache.ContainsKey(file))
                     {
                         costCache[file] = new Dictionary<string, List<double>>();
@@ -763,7 +777,7 @@ namespace ProofMinimization
                 
                 log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
 
-                if (costCompare(template.Cost(), cost))
+                if (costCompare(tCost, cost))
                 {
                     log("New cost is better.");
                     return simple;
@@ -805,7 +819,7 @@ namespace ProofMinimization
             return false;
         }
 
-        List<double> computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation)
+        List<double> computeCost(ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation, int limit = 0)
         {
             var allconstants = new Dictionary<string, Constant>();
             var prog = program.getProgram();
@@ -854,7 +868,8 @@ namespace ProofMinimization
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
             //cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2_" + call + ".bpl");
             // Run SI but first set bound to infinity.
-            BoogieVerify.options.maxInlinedBound = 0;
+            limit = limit < 0 ? 0 : limit;
+            BoogieVerify.options.maxInlinedBound = limit;
             var err = new List<BoogieErrorTrace>();
             var rstatus = BoogieVerify.Verify(pcopy3, out err, true);
 
@@ -908,7 +923,7 @@ namespace ProofMinimization
                     .Iter(f => formals.Add(f.Name, f));
 
                 HashSet<string> modifiesNames = new HashSet<string>();
-                proc.Modifies.All(v => modifiesNames.Add(v.Name.ToString()));
+                proc.Modifies.Iter(v => modifiesNames.Add(v.Name.ToString()));
 
                 List<Expr> procInsts = new List<Expr>();
                 for (int i = 0; i < annots.Count; i++) 
@@ -931,7 +946,7 @@ namespace ProofMinimization
 
             // Get template variable names only.
             HashSet<string> templateVarNames = new HashSet<string>();
-            templateVars.All(v => templateVarNames.Add(v.Name.ToString()));
+            templateVars.Iter(v => templateVarNames.Add(v.Name.ToString()));
             // Compute all variables in template that are not wrapped in "old(*)".
             var nonOldVisitor = new GatherNonOldVariables();
             nonOldVisitor.Visit(unqVarTemplate);
