@@ -296,7 +296,7 @@ namespace ProofMinimization
         
         static HashSet<string> identifiers = new HashSet<string>();
         static Dictionary<string, Dictionary<string, List<double>>> costCache = new Dictionary<string, Dictionary<string, List<double>>>();
-        double pbalance = 0.9;
+        double pbalance = 0.5;
 
         static string ART_VAR_PREFIX = "ART_ZP_";
 
@@ -360,7 +360,7 @@ namespace ProofMinimization
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
-                log("Working on file " + file);
+                log("\r\n\r\nWorking on file (" + (i + 1) + ") :" + file);
 
                 log("Checking for minimal template in existing results...");
                 foreach (var f in minTemplates.Keys)
@@ -400,6 +400,7 @@ namespace ProofMinimization
                 }
             }
 
+            log((new HashSet<TemplateAnnotations>(minTemplates.Values.ToList()).Count) + " different minimal templates.");
 
             TemplateAnnotations C = new TemplateAnnotations(new List<Expr>());
             List<string> fNames = minTemplates.Keys.ToList();
@@ -557,7 +558,7 @@ namespace ProofMinimization
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
-                log("\r\n\r\nWorking on file :" + file);
+                log("\r\n\r\nWorking on file (" + (i+1) + ") :" + file);
 
                 log("Checking for minimal template in existing results.");
                 foreach (var f in minTemplates.Keys)
@@ -624,6 +625,8 @@ namespace ProofMinimization
                 log("");
             }
 
+
+            log((new HashSet<TemplateAnnotations>(minTemplates.Values.ToList()).Count) + " different minimal templates.");
 
             log("\r\nPRINTING MINIMAL TEMPLATE ANNOTATIONS");
             HashSet<string> uniqueAnnots = new HashSet<string>();
