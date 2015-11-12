@@ -193,6 +193,7 @@ namespace ProofMinimization
                             if (strToTemplate.ContainsKey(temp))
                             {
                                 // template for it exists
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], annotsToOrigins);
                                 addTemplate(strToTemplate[temp], f, constantName);
                             }
                             else
