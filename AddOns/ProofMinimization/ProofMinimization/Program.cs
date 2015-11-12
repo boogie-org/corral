@@ -216,6 +216,7 @@ namespace ProofMinimization
                     var exprs = Minimize.templateToOriginExpr[c].Select(tup => SimplifyExpr.ExprToTemplateSpecific(tup.Item2, isloop));
                     ret = exprs.First();
                     ret = exprs.All(s => s == ret) ? ret : gen;
+                    ret = isloop ? string.Format("{{:loop}} {0}", ret) : ret;
                 }
                 Console.WriteLine("Additional contract required: {0}", ret);
             }

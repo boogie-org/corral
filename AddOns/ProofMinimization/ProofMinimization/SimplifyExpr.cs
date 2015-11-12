@@ -109,11 +109,15 @@ namespace ProofMinimization
             int cnt = 0;
             var inCache = new Dictionary<string, Expr>();
             var outCache = new Dictionary<string, Expr>();
+            var inToOut = new Func<string, string>(s => s.StartsWith("in_") ? "out_" + s.Substring("in_".Length) : "");
+            var outToIn = new Func<string, string>(s => s.StartsWith("out_") ? "in_" + s.Substring("out_".Length) : "");
 
             var GetFin = new Func<Variable, Expr>(v =>
                 {
                     if (inCache.ContainsKey(v.Name))
                         return inCache[v.Name];
+                    if (loop && outCache.ContainsKey(inToOut(v.Name)))
+                        return new OldExpr(Token.NoToken, outCache[inToOut(v.Name)]);
 
                     var prefix = loop ? "v_loop_" : "v_fin_";
                     prefix += v.TypedIdent.Type.ToString();
@@ -128,6 +132,8 @@ namespace ProofMinimization
             {
                 if (outCache.ContainsKey(v.Name))
                     return outCache[v.Name];
+                if (loop && inCache.ContainsKey(outToIn(v.Name)) && inCache[outToIn(v.Name)] is OldExpr)
+                    return (inCache[outToIn(v.Name)] as OldExpr).Expr;
 
                 var prefix = loop ? "v_loop_" : "v_fout_";
                 prefix += v.TypedIdent.Type.ToString();
