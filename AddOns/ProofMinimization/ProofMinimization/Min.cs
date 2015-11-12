@@ -158,31 +158,21 @@ namespace ProofMinimization
                         if (!match) continue;
                         if (fileToKeepConstants[f].Contains(constantName)) continue;
 
-                        var templateId = QKeyValue.FindIntAttribute(ens.Attributes, "template", -1);
-                        if (templateId != -1)
+                        var priorTemplateId = QKeyValue.FindIntAttribute(ens.Attributes, "template", -1);
+                        var temp = SimplifyExpr.ExprToTemplateGeneral(expr);
+                        if (strToTemplate.ContainsKey(temp))
                         {
-                            addTemplate(templateId, f, constantName);
-                            priorFullyInstantiatedTemplates.Add(templateId);
-                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplateGeneral(expr)))
-                            {
-                                strToTemplate.Add(SimplifyExpr.ExprToTemplateGeneral(expr), templateId);
-                            }
+                            // template for it exists
+                            addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
                         }
                         else
                         {
-                            var temp = SimplifyExpr.ExprToTemplateGeneral(expr);
-                            if (strToTemplate.ContainsKey(temp))
-                            {
-                                // template for it exists
-                                addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
-                            }
-                            else
-                            {
-                                // create new template
-                                strToTemplate.Add(temp, TemplateCounterStart + strToTemplate.Count);
-                                addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
-                            }
+                            // create new template
+                            strToTemplate.Add(temp, TemplateCounterStart + strToTemplate.Count);
+                            addTemplate(strToTemplate[temp], f, constantName, Tuple.Create(isloop, expr));
                         }
+                        if(priorTemplateId != -1)
+                            priorFullyInstantiatedTemplates.Add(strToTemplate[temp]);
                     }
 
                 }
