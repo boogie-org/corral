@@ -531,7 +531,7 @@ namespace ProofMinimization
                             // Set the Corral limit to 1/pbalance times of the cost you are
                             // trying to beat. Because everything above that limit is surely worse.
                             var tCost = bestCost[file];
-                            int limit = tCost != null && tCost.Count > 0 ? (int)((1 / pbalance) * tCost[0]) + 1 : 1;
+                            int limit = tCost != null && tCost.Count > 0 ? (int)((1 / pbalance) * tCost[0]) + 1 : 0;
                             log("Setting Corral limit to " + limit);
 
                             var nCost = getTemplateCost(file, mdata.fileToProg[file], simple, limit);
@@ -564,9 +564,6 @@ namespace ProofMinimization
             }
             return bestTemplate;
         }
-
-
-
 
 
         HashSet<int> FindMinBase(out Dictionary<int, int> templateToPerfDelta)
@@ -766,56 +763,16 @@ namespace ProofMinimization
             {
                 log(string.Format("Checking subtemplate: {0}", simple.ToString()));
 
-                List<double> cost;
-                if (costCache.ContainsKey(file) && costCache[file].ContainsKey(simple.ToString()))
-                {
-                    log("Subtemplate already processed before; taking cost from there.");
-                    cost = costCache[file][simple.ToString()];
-                    simple.SetCost(cost);
-                    cacheHits++;
-                } else { 
-                    // Set the Corral limit to 1/pbalance times of the cost you are
-                    // trying to beat. Because everything above that limit is surely worse.
-                    int limit = tCost != null && tCost.Count > 0 ? (int)((1/pbalance) * tCost[0]) + 1: 0;
+                log("Computing instantiations...");
+                var insts = instantiateTemplate(file, simple, program);
 
-                    if (limit != 0 && costLimitCache.ContainsKey(file) && 
-                        costLimitCache[file].ContainsKey(simple.ToString()) && 
-                        costLimitCache[file][simple.ToString()] >= limit)
-                    {
-                        cacheHits++;
-                        log("Non-sufficient subtemplate already processed before; taking cost from there.");
-                        cost = null;
-                    }
-                    else
-                    {
-                        log("Computing instantiations...");
-                        var insts = instantiateTemplate(file, simple, program);
+                // Set the Corral limit to 1/pbalance times of the cost you are
+                // trying to beat. Because everything above that limit is surely worse.
+                int limit = tCost != null && tCost.Count > 0 ? (int)((1 / pbalance) * tCost[0]) + 1 : 0;
+                log("Running Corral with limit set to " + limit);
+                List<double> cost = computeCost(file, program, insts, limit);
+                simple.SetCost(cost);
 
-                        log("Setting Corral limit to " + limit);
-                        cost = computeCost(file, program, insts, limit);
-                        simple.SetCost(cost);
-
-                        if (limit > 0 && cost == null)
-                        {
-                            // Save the null limit cost.
-                            if (!costLimitCache.ContainsKey(file))
-                            {
-                                costLimitCache[file] = new Dictionary<string, int>();
-                            }
-                            costLimitCache[file][simple.ToString()] = limit;
-                        }
-                        else
-                        {
-                            // Save the computed cost.
-                            if (!costCache.ContainsKey(file))
-                            {
-                                costCache[file] = new Dictionary<string, List<double>>();
-                            }
-                            costCache[file][simple.ToString()] = cost;
-                        }
-                    }
-                }
-                
                 log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
 
                 if (costCompare(tCost, cost))
@@ -874,6 +831,7 @@ namespace ProofMinimization
 
             string instantiationKey = "";
             List<Procedure> procedures = instantiation.Keys.ToList();
+            // Unique enumeration of procedures.
             procedures.Sort((x, y) => string.Compare(x.Name, y.Name));
             for (int i = 0; i < procedures.Count; i++)
             {
@@ -881,11 +839,13 @@ namespace ProofMinimization
                 var procedure = prog.FindProcedure(proc.Name);
                 
                 List<Expr> procInsts = instantiation[proc];
+                // Unique enumeration of template instantiations.
                 procInsts.Sort((x, y) => string.Compare(x.ToString(), y.ToString()));
                 for (int j = 0; j < procInsts.Count; j++)
                 {
                     var expr = procInsts[j];
 
+                    // Create (deterministically) identifier
                     string ident = createIdentifier(proc.Name, expr.ToString(), i, j);
                     instantiationKey += "-" + ident;
 
@@ -904,18 +864,21 @@ namespace ProofMinimization
                 instantiationKey += "\n";
             }
 
+            // If we already computed the cost for this instantiation, no need to do it again.
             if (costCache.ContainsKey(file) && costCache[file].ContainsKey(instantiationKey))
             {
                 cacheHits++;
                 log("Template instantiation already processed before for this file; taking cost from there.");
                 return costCache[file][instantiationKey];
             }
+            // If we hit the bound for this instantiaton before, then it is ok to immediatelly
+            // return "bound hit" if the new limit is smaller or equal to the saved one.
             else if (limit != 0 && costLimitCache.ContainsKey(file) &&
                       costLimitCache[file].ContainsKey(instantiationKey) &&
                       costLimitCache[file][instantiationKey] >= limit)
             {
                 cacheHits++;
-                log("Non-sufficient subtemplate already processed before; taking cost from there.");
+                log("Non-sufficient template instantiation already processed before; taking cost from there.");
                 return null;
             }
             else
@@ -969,6 +932,7 @@ namespace ProofMinimization
             }
 
 
+            // If we hit the bound with an integer limit, then save this information separately.
             if (limit > 0 && cost == null)
             {
                 if (!costLimitCache.ContainsKey(file))
@@ -977,6 +941,7 @@ namespace ProofMinimization
                 }
                 costLimitCache[file][instantiationKey] = limit;
             }
+            // Else cache the cost.
             else
             {
                 if (!costCache.ContainsKey(file))
