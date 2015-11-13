@@ -298,6 +298,7 @@ namespace ProofMinimization
         int cacheHits = 0;
 
         static Dictionary<string, Dictionary<string, List<double>>> costCache = new Dictionary<string, Dictionary<string, List<double>>>();
+        static Dictionary<string, Dictionary<string, int>> costLimitCache = new Dictionary<string, Dictionary<string, int>>();
         double pbalance = 0.5;
 
         static string ART_VAR_PREFIX = "ART_ZP_";
@@ -773,24 +774,46 @@ namespace ProofMinimization
                     simple.SetCost(cost);
                     cacheHits++;
                 } else { 
-                    log("Computing instantiations...");
-                    var insts = instantiateTemplate(file, simple, program);
-
-                    log("Computing the cost...");
-
                     // Set the Corral limit to 1/pbalance times of the cost you are
                     // trying to beat. Because everything above that limit is surely worse.
-                    int limit = tCost != null && tCost.Count > 0 ? (int)((1/pbalance) * tCost[0]) + 1: 1;
-                    log("Setting Corral limit to " + limit); 
-                    cost = computeCost(file, program, insts, limit);
-                    simple.SetCost(cost);
+                    int limit = tCost != null && tCost.Count > 0 ? (int)((1/pbalance) * tCost[0]) + 1: 0;
 
-                    // Save the computed cost.
-                    if (!costCache.ContainsKey(file))
+                    if (limit != 0 && costLimitCache.ContainsKey(file) && 
+                        costLimitCache[file].ContainsKey(simple.ToString()) && 
+                        costLimitCache[file][simple.ToString()] >= limit)
                     {
-                        costCache[file] = new Dictionary<string, List<double>>();
+                        cacheHits++;
+                        log("Non-sufficient subtemplate already processed before; taking cost from there.");
+                        cost = null;
                     }
-                    costCache[file][simple.ToString()] = cost;
+                    else
+                    {
+                        log("Computing instantiations...");
+                        var insts = instantiateTemplate(file, simple, program);
+
+                        log("Setting Corral limit to " + limit);
+                        cost = computeCost(file, program, insts, limit);
+                        simple.SetCost(cost);
+
+                        if (limit > 0 && cost == null)
+                        {
+                            // Save the null limit cost.
+                            if (!costLimitCache.ContainsKey(file))
+                            {
+                                costLimitCache[file] = new Dictionary<string, int>();
+                            }
+                            costLimitCache[file][simple.ToString()] = limit;
+                        }
+                        else
+                        {
+                            // Save the computed cost.
+                            if (!costCache.ContainsKey(file))
+                            {
+                                costCache[file] = new Dictionary<string, List<double>>();
+                            }
+                            costCache[file][simple.ToString()] = cost;
+                        }
+                    }
                 }
                 
                 log(string.Format("Cost is {0}", (cost == null? "null": string.Join(", ", cost))));
@@ -863,7 +886,7 @@ namespace ProofMinimization
                 {
                     var expr = procInsts[j];
 
-                    string ident = createIdentifier(proc.Name, expr.ToString());
+                    string ident = createIdentifier(proc.Name, expr.ToString(), i, j);
                     instantiationKey += "-" + ident;
 
                     var tident = new TypedIdent(Token.NoToken, ident, Microsoft.Boogie.BasicType.Bool);
@@ -881,12 +904,21 @@ namespace ProofMinimization
                 instantiationKey += "\n";
             }
 
-            if (costCache.ContainsKey(file) && costCache[file].ContainsKey(instantiationKey)) 
+            if (costCache.ContainsKey(file) && costCache[file].ContainsKey(instantiationKey))
             {
                 cacheHits++;
                 log("Template instantiation already processed before for this file; taking cost from there.");
                 return costCache[file][instantiationKey];
-            } else
+            }
+            else if (limit != 0 && costLimitCache.ContainsKey(file) &&
+                      costLimitCache[file].ContainsKey(instantiationKey) &&
+                      costLimitCache[file][instantiationKey] >= limit)
+            {
+                cacheHits++;
+                log("Non-sufficient subtemplate already processed before; taking cost from there.");
+                return null;
+            }
+            else
             {
                 sdvCalls++;
             }
@@ -936,11 +968,23 @@ namespace ProofMinimization
                 cost.Add((int)((double)(houdiniCost) / instantiation.Keys.Count));
             }
 
-            if (!costCache.ContainsKey(file))
+
+            if (limit > 0 && cost == null)
             {
-                costCache[file] = new Dictionary<string, List<double>>();
+                if (!costLimitCache.ContainsKey(file))
+                {
+                    costLimitCache[file] = new Dictionary<string, int>();
+                }
+                costLimitCache[file][instantiationKey] = limit;
             }
-            costCache[file][instantiationKey] = cost;
+            else
+            {
+                if (!costCache.ContainsKey(file))
+                {
+                    costCache[file] = new Dictionary<string, List<double>>();
+                }
+                costCache[file][instantiationKey] = cost;
+            }
 
             return cost;
         } 
@@ -1070,10 +1114,11 @@ namespace ProofMinimization
             return ret;
         }
 
-        string createIdentifier(string procName, string annot)
+        string createIdentifier(string procName, string annot, int i, int j)
         {
-            string ident = ART_VAR_PREFIX + ("-" + procName + "-").GetHashCode();
-            ident += "_" + ("+" + annot + "+").GetHashCode();
+            string ident = ART_VAR_PREFIX + procName.GetHashCode();
+            ident += "_" + annot.GetHashCode();
+            ident += "_" + i + "_" + j;
             ident = ident.Replace('-', '_');
             return ident;
         }
