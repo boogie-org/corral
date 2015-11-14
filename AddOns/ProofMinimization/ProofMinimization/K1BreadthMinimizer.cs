@@ -368,11 +368,13 @@ namespace ProofMinimization
 
             var files = mdata.fileToProg.Keys.ToList();
             files = files.OrderBy(x => mdata.fileToProg[x].getProgram().Procedures.Count()).ToList();
+            //files.Reverse();
 
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
                 log("\r\n\r\nWorking on file (" + (i + 1) + ") :" + file);
+                log("The number of functions in the program is " + mdata.fileToProg[file].getProgram().Procedures.Count());
 
                 log("Checking for minimal template in existing results...");
                 for (int j = 0; j < i; j++)
