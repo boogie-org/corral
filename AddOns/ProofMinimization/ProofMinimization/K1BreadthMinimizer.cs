@@ -367,19 +367,22 @@ namespace ProofMinimization
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
 
             var files = mdata.fileToProg.Keys.ToList();
+            files = files.OrderBy(x => mdata.fileToProg[x].getProgram().Procedures.Count()).ToList();
+
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
                 log("\r\n\r\nWorking on file (" + (i + 1) + ") :" + file);
 
                 log("Checking for minimal template in existing results...");
-                foreach (var f in minTemplates.Keys)
+                for (int j = 0; j < i; j++)
                 {
+                    var f = files[j];
                     log("Checking existing result of " + f);
                     var t = minTemplates[f];
                     try
                     {
-                        if (isMinimalTemplate(file, t))
+                        if (isPotentialMinimal(f, t, file) && isMinimalTemplate(file, t))
                         {
                             minTemplates[file] = t;
                             log("Found minimal template in existing results:" + t.ToString());
@@ -560,10 +563,84 @@ namespace ProofMinimization
                     }
                 }
 
-                if (!b) break;
+                if (!b)
+                {
+                    log("Found the minimal union template!");
+                    break;
+                }
             }
             return bestTemplate;
         }
+
+
+        bool isPotentialMinimal(string oldFile, TemplateAnnotations minTemplate, string newFile)
+        {
+            log("Checking for minimality compliance...");
+
+            var fileTempIds = mdata.fileToTempIds[newFile];
+            List<Expr> templates = new List<Expr>();
+            foreach (var tid in fileTempIds)
+            {
+                var template = mdata.tempIdToExpr[tid];
+                templates.Add(template);
+            }
+
+            TemplateAnnotations maxTemplate = new TemplateAnnotations(templates);
+            
+            // First check wether maxTemplate ->* minTemplate.
+            for (int i = 0; i < minTemplate.ClauseCount(); i++)
+            {
+                var clause = new HashSet<string>();
+                minTemplate.GetClause(i).Iter(l => clause.Add(l.ToString()));
+                bool hit = false;
+                for (int j = 0; j < maxTemplate.ClauseCount(); j++)
+                {
+                    var bclause = new HashSet<string>();
+                    maxTemplate.GetClause(j).Iter(l => bclause.Add(l.ToString()));
+                    if (clause.IsSubsetOf(bclause))
+                    {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (!hit)
+                {
+                    log("Refusing minimality check since minimal template has nothing in common with the new program.");
+                    return false;
+                }
+            }
+
+            //List<double> oldCost = getTemplateCost(oldFile, mdata.fileToProg[oldFile], minTemplate);
+            //List<double> newCost = getTemplateCost(newFile, mdata.fileToProg[newFile], minTemplate);
+
+            //if (oldCost == null || newCost == null)
+            //{
+            //    log("Refusing minimality check since minimal template performs bad some of the given programs.");
+            //    return false;
+            //} 
+
+            //if (oldCost.Count == 0 || newCost.Count == 0)
+            //{
+            //    throw new Exception("Cost was an empty list. This should not happen.");
+            //}
+
+            //double nprocs = newCost[0];
+            //double oprocs = oldCost[0];
+
+            //// If the minimal template performs an order of magnitude worse than for the
+            //// original template, than it is probably not very useful for this program.
+            //if (nprocs >= 100 * oprocs)
+            //{
+            //    log(string.Format("Refusing minimality check since minimal template performs bad for the new program {0} {1}.", nprocs, oprocs));
+            //    return false;
+            //}
+
+            return true;
+        }
+
+
+
+
 
 
         HashSet<int> FindMinBase(out Dictionary<int, int> templateToPerfDelta)
