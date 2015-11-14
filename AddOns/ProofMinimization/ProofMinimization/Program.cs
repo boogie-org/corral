@@ -67,7 +67,7 @@ namespace ProofMinimization
                 if (args[i] == "/noSI")
                 {
                     Minimize.useSI = false;
-                    Minimize.usePerf = true;
+                    Minimize.usePerf = 2.0;
                     continue;
                 }
                 if (args[i] == "/dbg")
@@ -94,9 +94,15 @@ namespace ProofMinimization
                     continue;
                 }
 
-                if (args[i].StartsWith("/perf"))
+                if (args[i] == "/perf")
                 {
-                    Minimize.usePerf = true;
+                    Minimize.usePerf = 2.0;
+                    continue;
+                }
+
+                if (args[i].StartsWith("/perf:"))
+                {
+                    Minimize.usePerf = double.Parse(args[i].Substring("/perf:".Length));
                     continue;
                 }
 

@@ -19,7 +19,7 @@ namespace ProofMinimization
         static readonly int TemplateCounterStart = 1000;
         public static int IterCnt = 0;
         public static int CacheHit = 0;
-        public static bool usePerf = false;
+        public static double usePerf = -1;
         public static bool useSI = true;
         public static int HoudiniTimeout = 60; // seconds
 
@@ -601,10 +601,10 @@ namespace ProofMinimization
 
         static int PerfMetric(int n)
         {
-            if (!usePerf) return Int32.MaxValue;
+            if (usePerf < 0) return Int32.MaxValue;
             if (!useSI) return (n+1);
             if (n < 50) return (n + 100);
-            return 2 * n;
+            return (int)(usePerf * n + 0.5);
         }
 
         static Random rand = null;
