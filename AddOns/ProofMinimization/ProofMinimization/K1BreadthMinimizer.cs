@@ -367,6 +367,7 @@ namespace ProofMinimization
             Dictionary<string, TemplateAnnotations> minTemplates = new Dictionary<string, TemplateAnnotations>();
 
             var files = mdata.fileToProg.Keys.ToList();
+            // Order by code size increasingly.
             files = files.OrderBy(x => mdata.fileToProg[x].getProgram().Procedures.Count()).ToList();
             //files.Reverse();
 
@@ -416,11 +417,10 @@ namespace ProofMinimization
             log((new HashSet<TemplateAnnotations>(minTemplates.Values.ToList()).Count) + " different minimal templates computed.");
 
             TemplateAnnotations C = new TemplateAnnotations(new List<Expr>());
-            List<string> fNames = minTemplates.Keys.ToList();
             int index = 0;
-            while (index < fNames.Count)
+            while (index < files.Count)
             {
-                var r = getSubRepositoryUnion(C, fNames, minTemplates, index);
+                var r = getSubRepositoryUnion(C, files, minTemplates, index);
                 C = r.Item1;
                 index = r.Item2;
                 log("Template union C is of size " + C.ClauseCount());
