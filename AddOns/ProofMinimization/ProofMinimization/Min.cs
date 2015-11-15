@@ -31,12 +31,12 @@ namespace ProofMinimization
 
         public Dictionary<string, HashSet<int>> fileToTempIds;
 
-        public Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins;
+        public Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins;
 
         public MinimizerData(Dictionary<string, PersistentProgram> fileToProg, Dictionary<string, int> fileToPerf,
                              Dictionary<string, HashSet<string>> fileToKeepConstants, Dictionary<int, Dictionary<string, HashSet<string>>> templateMap,
                              Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr,
-                             Dictionary<string, HashSet<int>> fileToTempIds, Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins)  
+                             Dictionary<string, HashSet<int>> fileToTempIds, Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins)  
         {
             this.fileToProg = fileToProg;
             this.fileToPerf = fileToPerf;
@@ -88,7 +88,7 @@ namespace ProofMinimization
             Dictionary<int, Expr> tempIdToExpr = new Dictionary<int, Expr>();
             Dictionary<string, HashSet<int>> fileToTempIds = new Dictionary<string, HashSet<int>>();
 
-            Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins = new Dictionary<string, Dictionary<string, HashSet<string>>>();
+            Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins = new Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>>();
 
             var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
                 {
@@ -179,7 +179,7 @@ namespace ProofMinimization
                             fileToTempIds[f].Add(templateId);
 
                             tempIdToExpr[templateId] = SimplifyExpr.ExprToTemplateExpr(expr);
-                            saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[templateId], annotsToOrigins);
+                            saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[templateId], expr, annotsToOrigins);
 
                             if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
                             {
@@ -193,7 +193,7 @@ namespace ProofMinimization
                             if (strToTemplate.ContainsKey(temp))
                             {
                                 // template for it exists
-                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], annotsToOrigins);
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], expr, annotsToOrigins);
                                 addTemplate(strToTemplate[temp], f, constantName);
                             }
                             else
@@ -203,7 +203,7 @@ namespace ProofMinimization
                                 strToTemplate.Add(temp, tid);
                                 addTemplate(tid, f, constantName);
                                 tempIdToExpr[tid] = SimplifyExpr.ExprToTemplateExpr(expr);
-                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[tid], annotsToOrigins);
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[tid], expr, annotsToOrigins);
                                 fileToTempIds[f].Add(tid);
                             }
                         }
@@ -235,7 +235,7 @@ namespace ProofMinimization
             return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr, fileToTempIds, annotsToOrigins);
         }
 
-        static void saveTemplateOrigin(string fName, string procName, Expr template, Dictionary<string, Dictionary<string, HashSet<string>>> annotsToOrigins)
+        static void saveTemplateOrigin(string fName, string procName, Expr template, Expr ensures, Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins)
         {
             var annots = SimplifyExpr.GetExprConjunctions(template);
             foreach (var annot in annots)
@@ -243,15 +243,20 @@ namespace ProofMinimization
                 var strannot = annot.ToString();
                 if (!annotsToOrigins.ContainsKey(strannot))
                 {
-                    annotsToOrigins[strannot] = new Dictionary<string, HashSet<string>>();
+                    annotsToOrigins[strannot] = new Dictionary<string, Dictionary<string, List<Expr>>>();
                 }
 
                 if (!annotsToOrigins[strannot].ContainsKey(fName))
                 {
-                    annotsToOrigins[strannot][fName] = new HashSet<string>();
+                    annotsToOrigins[strannot][fName] = new Dictionary<string, List<Expr>>();
                 }
 
-                annotsToOrigins[strannot][fName].Add(procName);
+                if (!annotsToOrigins[strannot][fName].ContainsKey(procName)) 
+                {
+                    annotsToOrigins[strannot][fName][procName] = new List<Expr>();
+                }
+ 
+                annotsToOrigins[strannot][fName][procName].Add(ensures);
             }
         }
 

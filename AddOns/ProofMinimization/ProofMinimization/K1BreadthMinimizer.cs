@@ -1071,25 +1071,31 @@ namespace ProofMinimization
                     var uniqVarAnnotation = toUniqueVarTemplate(annot, uniqAnnotationVars);
 
                     // If there are multiple template variables... 
+                    List<Expr> insts = new List<Expr>();
                     if (uniqAnnotationVars.Count > 0)
                     {
                         var strannot = annot.ToString();
+
+                        if (!mdata.annotsToOrigins.ContainsKey(strannot))
+                        {
+                            log(string.Format("ERROR: template {0} origin missing postconditions.", annot.ToString()));
+                        }
+
                         // Then...
-                        if (mdata.annotsToOrigins.ContainsKey(strannot))
+                        if (mdata.annotsToOrigins.ContainsKey(strannot) && 
+                            mdata.annotsToOrigins[strannot].ContainsKey(file) &&
+                            mdata.annotsToOrigins[strannot][file].ContainsKey(proc.Name))
                         {
-                            // We want to instantiate it only at the place of the origin.
-                            var d = mdata.annotsToOrigins[strannot];
-                            if (!d.ContainsKey(file) || !d[file].Contains(proc.Name))
-                            {
-                                continue;
-                            }
-                        } else
-                        {
-                            log(string.Format("ERROR: template {0} missing origin.", annot.ToString()));
+                            // We want to instantiate it only at the place of the origin and
+                            // we want to take exactly the original annotation.
+                            List<Expr> exprs = mdata.annotsToOrigins[strannot][file][proc.Name];
+                            insts.AddRange(exprs);
                         }
                     }
-
-                    var insts = instantiateProcTemplates(uniqVarAnnotation, uniqAnnotationVars, globals, formals, modifiesNames);
+                    else
+                    {
+                        insts = instantiateProcTemplates(uniqVarAnnotation, uniqAnnotationVars, globals, formals, modifiesNames);
+                    }
                     procInsts.AddRange(insts);
                 }
                 procToInsts[proc] = procInsts;
@@ -1103,6 +1109,12 @@ namespace ProofMinimization
         {
             // Get template variable names only.
             HashSet<string> annotationvarNames = new HashSet<string>();
+
+            if (annotationvarNames.Count() > 0)
+            {
+                log(string.Format("ERROR: Annotation {0} should not have any non-global variables.", annotation.ToString()));
+            }
+
             annotationVars.Iter(v => annotationvarNames.Add(v.Name));
             // Compute all variables in template that are not wrapped in "old(*)".
             var nonOldVisitor = new GatherNonOldVariables();
@@ -1118,7 +1130,8 @@ namespace ProofMinimization
                 return new List<Expr>();
             }
 
-            return MinControl.InstantiateTemplate(annotation, annotationVars, globals, formals);
+            return new List<Expr>() { annotation };
+            //return MinControl.InstantiateTemplate(annotation, annotationVars, globals, formals);
         }
 
         Expr toUniqueVarTemplate(Expr expr, HashSet<Variable> templateVars)
