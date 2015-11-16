@@ -32,12 +32,68 @@ namespace ProofMinimization
             ens.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), Simplify(expr));
         }
 
+        static int SimplifyCnt = 0;
+
+        public static List<Ensures> SimplifyEnsures(List<Ensures> ens, Dictionary<string, Constant> CandidateConstants)
+        {
+            var ret = new List<Ensures>();
+            var newConstants = new List<Constant>();
+
+            var GetExistentialConstant = new Func<Constant>(() =>
+            {
+                var c = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+                    "CnfConst" + (SimplifyCnt++), Microsoft.Boogie.Type.Bool), false);
+                c.AddAttribute("existential");
+                newConstants.Add(c);
+                return c;
+            });
+
+            foreach (var en in ens)
+            {
+                if (en.Free)
+                {
+                    ret.Add(en);
+                    continue;
+                }
+
+                string constantName = null;
+                Expr expr = null;
+
+                var match = Microsoft.Boogie.Houdini.Houdini.GetCandidateWithoutConstant(
+                    en.Condition, CandidateConstants.Keys, out constantName, out expr);
+
+                if (!match)
+                {
+                    ret.Add(en);
+                    continue;
+                }
+
+                var conjs = GetExprConjunctions(Simplify(expr));
+                if (conjs.Count == 1)
+                {
+                    en.Condition = Expr.Imp(Expr.Ident(CandidateConstants[constantName]), conjs.First());
+                    ret.Add(en);
+                    continue;
+                }
+
+                foreach (var conj in conjs)
+                {
+                    var c = GetExistentialConstant();
+                    ret.Add(new Ensures(false, Expr.Imp(Expr.Ident(c), conj)));
+                }
+            }
+            newConstants.Iter(c => CandidateConstants.Add(c.Name, c));
+            return ret;
+        }
+
+        public static bool SimplifyToCNF = false;
+
         public static Expr Simplify(Expr e)
         {
             var vs = new SimplifyExpr();
             var e1 = vs.VisitExpr(e);
-            //var e2 = Expr.And(MakeCNF(e1));
-            var e3 = NormalizeExpr(e1);
+            var e2 = SimplifyToCNF ? Expr.And(MakeCNF(e1)) : e1;
+            var e3 = NormalizeExpr(e2);
             return e3;
         }
 

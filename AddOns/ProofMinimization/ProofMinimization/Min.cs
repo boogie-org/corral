@@ -114,9 +114,19 @@ namespace ProofMinimization
                     .Iter(c => allconstants.Add(c.Name, c));
 
                 // Normalize expressions
-                program.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Proc.Ensures.Iter(ens => SimplifyExpr.SimplifyEnsures(ens, allconstants)));
-
+                if (!SimplifyExpr.SimplifyToCNF)
+                {
+                    program.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => impl.Proc.Ensures.Iter(ens => SimplifyExpr.SimplifyEnsures(ens, allconstants)));
+                }
+                else
+                {
+                    var constants = new HashSet<string>(allconstants.Keys);
+                    program.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => impl.Proc.Ensures = SimplifyExpr.SimplifyEnsures(impl.Proc.Ensures, allconstants));
+                    allconstants.Where(tup => !constants.Contains(tup.Key))
+                        .Iter(tup => program.AddTopLevelDeclaration(tup.Value));
+                }
                 // Remove constants that don't hold -- optimization
                 HashSet<string> consts = new HashSet<string>(allconstants.Keys);
                 HashSet<string> assignment;

@@ -100,6 +100,12 @@ namespace ProofMinimization
                     continue;
                 }
 
+                if (args[i] == "/cnf")
+                {
+                    SimplifyExpr.SimplifyToCNF = true;
+                    continue;
+                }
+
                 if (args[i].StartsWith("/perf:"))
                 {
                     Minimize.usePerf = double.Parse(args[i].Substring("/perf:".Length));

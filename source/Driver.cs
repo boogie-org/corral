@@ -105,6 +105,7 @@ namespace cba
             GlobalConfig.printAllTraces = config.printAllTraces;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
             ContractInfer.useHoudiniLite = config.runHoudiniLite;
+            ContractInfer.disableStaticAnalysis = config.disableStaticAnalysis;
             if (config.FwdBckSearch == 1) ContractInfer.inferPreconditions = true;
             if (config.printData == 0 && config.NonUniformUnfolding)
                 config.printData = 1;
@@ -896,8 +897,6 @@ namespace cba
                 if (iterCnt == 1 && GlobalConfig.InferPass != null)
                 {
                     var tmp_abs = abs;
-                    if (config.disableStaticAnalysis)
-                        ContractInfer.disableStaticAnalysis = true;
 
                     ciPass = new ContractInfer(GlobalConfig.InferPass);
                     if (config.houdiniTimeout != -1) ContractInfer.HoudiniTimeout = config.houdiniTimeout; // milliseconds
