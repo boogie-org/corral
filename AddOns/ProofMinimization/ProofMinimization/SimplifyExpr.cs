@@ -90,6 +90,68 @@ namespace ProofMinimization
             return ExprToTemplateExpr(expr).ToString();
         }
 
+
+        public static string ExprToTemplateSpecific(Expr expr, bool loop)
+        {
+            return ExprToTemplateSpecificExpr(expr, loop).ToString();
+        }
+
+
+        public static Expr ExprToTemplateSpecificExpr(Expr expr, bool loop)
+        {
+            int cnt = 0;
+            var inCache = new Dictionary<string, Expr>();
+            var outCache = new Dictionary<string, Expr>();
+            var inToOut = new Func<string, string>(s => s.StartsWith("in_") ? "out_" + s.Substring("in_".Length) : "");
+            var outToIn = new Func<string, string>(s => s.StartsWith("out_") ? "in_" + s.Substring("out_".Length) : "");
+
+            var GetFin = new Func<Variable, Expr>(v =>
+            {
+                if (inCache.ContainsKey(v.Name))
+                    return inCache[v.Name];
+                if (loop && outCache.ContainsKey(inToOut(v.Name)))
+                    return new OldExpr(Token.NoToken, outCache[inToOut(v.Name)]);
+
+                var prefix = loop ? "v_loop_" : "v_fin_";
+                prefix += v.TypedIdent.Type.ToString();
+                prefix += string.Format("_{0}", cnt++);
+                var outv = BoogieAstFactory.MkFormal(prefix, v.TypedIdent.Type, true);
+                var outexpr = loop ? (Expr)(new OldExpr(Token.NoToken, Expr.Ident(outv))) : Expr.Ident(outv);
+                inCache[v.Name] = outexpr;
+                return outexpr;
+            });
+
+            var GetFout = new Func<Variable, Expr>(v =>
+            {
+                if (outCache.ContainsKey(v.Name))
+                    return outCache[v.Name];
+                if (loop && inCache.ContainsKey(outToIn(v.Name)) && inCache[outToIn(v.Name)] is OldExpr)
+                    return (inCache[outToIn(v.Name)] as OldExpr).Expr;
+
+                var prefix = loop ? "v_loop_" : "v_fout_";
+                prefix += v.TypedIdent.Type.ToString();
+                prefix += string.Format("_{0}", cnt++);
+                var outv = BoogieAstFactory.MkFormal(prefix, v.TypedIdent.Type, false);
+                var outexpr = Expr.Ident(outv);
+                outCache[v.Name] = outexpr;
+                return outexpr;
+            });
+
+            var ret =
+                Substituter.Apply(new Substitution(v =>
+                {
+                    if (v is Formal && (v as Formal).InComing)
+                        return GetFin(v);
+                    if (v is Formal && !(v as Formal).InComing)
+                        return GetFout(v);
+                    return Expr.Ident(v);
+                }), expr);
+
+            return ret;
+        }
+
+
+
         public static Expr ExprToTemplateExpr(Expr expr)
         {
              var GetFin = new Func<btype, Variable>(ty =>
@@ -396,4 +458,59 @@ namespace ProofMinimization
         }
 
     }
+
+
+    public class GatherTemplateVariables : StandardVisitor
+    {
+        public HashSet<Variable> variables;
+
+        public GatherTemplateVariables()
+        {
+            variables = new HashSet<Variable>();
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            var v = node.Decl;
+            if (v.Name.StartsWith("v_fin") || v.Name.StartsWith("v_fout") || v.Name.StartsWith("v_loop"))
+            {
+                variables.Add(v);
+            }
+
+            return node;
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            if (node.Name.StartsWith("v_fin") || node.Name.StartsWith("v_fout") || node.Name.StartsWith("v_loop"))
+            {
+                variables.Add(node);
+            }
+            return node;
+        }
+    }
+
+    public class GatherAllVariables : StandardVisitor
+    {
+        public HashSet<string> variables;
+
+        public GatherAllVariables()
+        {
+            variables = new HashSet<string>();
+        }
+
+        public override Expr VisitIdentifierExpr(IdentifierExpr node)
+        {
+            variables.Add(node.Decl.Name);
+
+            return node;
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            variables.Add(node.Name);
+            return node;
+        }
+    }
+    
 }

@@ -33,10 +33,13 @@ namespace ProofMinimization
 
         public Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins;
 
+        public HashSet<string> loopAnnotations;
+
         public MinimizerData(Dictionary<string, PersistentProgram> fileToProg, Dictionary<string, int> fileToPerf,
                              Dictionary<string, HashSet<string>> fileToKeepConstants, Dictionary<int, Dictionary<string, HashSet<string>>> templateMap,
                              Dictionary<int, string> templateToStr, Dictionary<string, int> strToTemplate, Dictionary<int, Expr> tempIdToExpr,
-                             Dictionary<string, HashSet<int>> fileToTempIds, Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins)  
+                             Dictionary<string, HashSet<int>> fileToTempIds, Dictionary<string, 
+                             Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins, HashSet<string> loopAnnotations)  
         {
             this.fileToProg = fileToProg;
             this.fileToPerf = fileToPerf;
@@ -47,6 +50,7 @@ namespace ProofMinimization
             this.tempIdToExpr = tempIdToExpr;
             this.fileToTempIds = fileToTempIds;
             this.annotsToOrigins = annotsToOrigins;
+            this.loopAnnotations = loopAnnotations;
         }
     }
 
@@ -89,6 +93,7 @@ namespace ProofMinimization
             Dictionary<string, HashSet<int>> fileToTempIds = new Dictionary<string, HashSet<int>>();
 
             Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins = new Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>>();
+            HashSet<string> loopAnnotations = new HashSet<string>();
 
             var addTemplate = new Action<int, string, string>((templateId, file, constant) =>
                 {
@@ -159,6 +164,8 @@ namespace ProofMinimization
                 // create template map
                 foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 {
+                    var isloop = QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "LoopProcedure");
+
                     foreach (var ens in impl.Proc.Ensures.Where(e => !e.Free))
                     {
                         string constantName = null;
@@ -178,32 +185,35 @@ namespace ProofMinimization
                             addTemplate(templateId, f, constantName);
                             fileToTempIds[f].Add(templateId);
 
-                            tempIdToExpr[templateId] = SimplifyExpr.ExprToTemplateExpr(expr);
-                            saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[templateId], expr, annotsToOrigins);
+                            tempIdToExpr[templateId] = SimplifyExpr.ExprToTemplateSpecificExpr(expr, isloop);
+                            saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[templateId], expr, annotsToOrigins, loopAnnotations, isloop);
 
-                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplate(expr)))
+                            if (!strToTemplate.ContainsKey(SimplifyExpr.ExprToTemplateSpecific(expr, isloop)))
                             {
-                                var templ = SimplifyExpr.ExprToTemplate(expr);
+                                var templ = SimplifyExpr.ExprToTemplateSpecific(expr, isloop);
                                 strToTemplate.Add(templ, templateId);
                             }
                         }
                         else
                         {
-                            var temp = SimplifyExpr.ExprToTemplate(expr);
+                            var temp = SimplifyExpr.ExprToTemplateSpecific(expr, isloop);
                             if (strToTemplate.ContainsKey(temp))
                             {
                                 // template for it exists
-                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], expr, annotsToOrigins);
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], expr, annotsToOrigins, loopAnnotations, isloop);
                                 addTemplate(strToTemplate[temp], f, constantName);
                             }
                             else
                             {
+
+
                                 // create new template
                                 var tid = TemplateCounterStart + strToTemplate.Count;
                                 strToTemplate.Add(temp, tid);
                                 addTemplate(tid, f, constantName);
-                                tempIdToExpr[tid] = SimplifyExpr.ExprToTemplateExpr(expr);
-                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[tid], expr, annotsToOrigins);
+                                tempIdToExpr[tid] = SimplifyExpr.ExprToTemplateSpecificExpr(expr, isloop);
+
+                                saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[tid], expr, annotsToOrigins, loopAnnotations, isloop);
                                 fileToTempIds[f].Add(tid);
                             }
                         }
@@ -232,15 +242,31 @@ namespace ProofMinimization
                     }
                 }
             }
-            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, strToTemplate, tempIdToExpr, fileToTempIds, annotsToOrigins);
+            return new MinimizerData(fileToProg, fileToPerf, fileToKeepConstants, templateMap, templateToStr, 
+                                     strToTemplate, tempIdToExpr, fileToTempIds, annotsToOrigins, loopAnnotations);
         }
 
-        static void saveTemplateOrigin(string fName, string procName, Expr template, Expr ensures, Dictionary<string, Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins)
+        static void saveTemplateOrigin(string fName, string procName, Expr template, Expr origPostcondition, Dictionary<string, 
+                                        Dictionary<string, Dictionary<string, List<Expr>>>> annotsToOrigins, 
+                                        HashSet<string> loopAnnotations, bool isloop)
         {
             var annots = SimplifyExpr.GetExprConjunctions(template);
-            foreach (var annot in annots)
+            var origAnnots = SimplifyExpr.GetExprConjunctions(origPostcondition);
+
+            int limit = annots.Count();
+            if (annots.Count() != origAnnots.Count())
             {
+                Console.WriteLine("WARNING: original annotation and template different: {0} - {1}, {2} {3}", 
+                                    annots.Count(), origAnnots.Count(), fName, procName);
+                limit = annots.Count() <= origAnnots.Count() ? annots.Count() : origAnnots.Count();
+            }
+
+            for (int i = 0; i < limit; i++)
+            {
+                var annot = annots[i];
                 var strannot = annot.ToString();
+                var origAnnot = origAnnots[i];
+
                 if (!annotsToOrigins.ContainsKey(strannot))
                 {
                     annotsToOrigins[strannot] = new Dictionary<string, Dictionary<string, List<Expr>>>();
@@ -256,7 +282,24 @@ namespace ProofMinimization
                     annotsToOrigins[strannot][fName][procName] = new List<Expr>();
                 }
  
-                annotsToOrigins[strannot][fName][procName].Add(ensures);
+                annotsToOrigins[strannot][fName][procName].Add(origAnnot);
+
+                if (isloop)
+                {
+                    GatherAllVariables allv = new GatherAllVariables();
+                    allv.Visit(annot);
+                    HashSet<string> allvars = allv.variables;
+
+                    // Loop annotation is that annotation that can have global but
+                    // (1) it should not have any general formal ins and outs and (2)
+                    // it should have loop variables starting with "v_loop".
+                    if (allvars.All(v => !v.StartsWith("v_fin") && !v.StartsWith("v_fout")) &&
+                        !allvars.All(v => !v.StartsWith("v_loop")))
+                    { 
+                        Console.WriteLine("INTERESTING: encountered loop annotation- " + strannot);
+                        loopAnnotations.Add(strannot);
+                    }
+                }
             }
         }
 

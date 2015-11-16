@@ -431,7 +431,16 @@ namespace ProofMinimization
             var annots = SimplifyExpr.GetExprConjunctions(C.ToCnfExpression());
             foreach (var annot in annots)
             {
-                Console.WriteLine("Additional contact required: {0}", annot.ToString());
+                if (mdata.loopAnnotations.Contains(annot.ToString()))
+                {
+                    Console.WriteLine("Additional contact required: {{:loop}} {0}", annot.ToString());
+                    log(string.Format("Additional contact required: {{:loop}} {0}", annot.ToString()));
+                }
+                else
+                {
+                    Console.WriteLine("Additional contact required: {0}", annot.ToString());
+                    log(string.Format("Additional contact required: {0}", annot.ToString()));
+                }
             }
 
             log("\r\n");
@@ -737,8 +746,16 @@ namespace ProofMinimization
             }
             foreach (var annotStr in uniqueAnnots)
             {
-                log(string.Format("Additional contract required: {0}", annotStr));
-                Console.WriteLine("Additional contract required: {0}", annotStr);
+                if (mdata.loopAnnotations.Contains(annotStr))
+                {
+                    Console.WriteLine("Additional contact required: {{:loop}} {0}", annotStr);
+                    log(string.Format("Additional contact required: {{:loop}} {0}", annotStr));
+                }
+                else
+                {
+                    log(string.Format("Additional contract required: {0}", annotStr));
+                    Console.WriteLine("Additional contract required: {0}", annotStr);
+                }
             }
 
             log("\r\n");
@@ -1064,15 +1081,22 @@ namespace ProofMinimization
                 List<Expr> procInsts = new List<Expr>();
                 for (int i = 0; i < annots.Count; i++) 
                 {
-                    var annot = annots[i];
+                    Expr annot = annots[i];
 
-                    // Get annotation with unique variable names.
-                    HashSet<Variable> uniqAnnotationVars = new HashSet<Variable>();
-                    var uniqVarAnnotation = toUniqueVarTemplate(annot, uniqAnnotationVars);
+                    // Get annotation with variable names.
+                    GatherTemplateVariables tcollector = new GatherTemplateVariables();
+                    tcollector.Visit(annot);
+                    HashSet<Variable> templateVariables = tcollector.variables;
+
+                    annot = isInstantationCandidate(annot, templateVariables, globals, formals, modifiesNames);
+                    if (annot == null)
+                    {
+                        continue;
+                    }
 
                     // If there are multiple template variables... 
                     List<Expr> insts = new List<Expr>();
-                    if (uniqAnnotationVars.Count > 0)
+                    if (templateVariables.Count > 0)
                     {
                         var strannot = annot.ToString();
 
@@ -1089,12 +1113,12 @@ namespace ProofMinimization
                             // We want to instantiate it only at the place of the origin and
                             // we want to take exactly the original annotation.
                             List<Expr> exprs = mdata.annotsToOrigins[strannot][file][proc.Name];
-                            insts.AddRange(exprs);
+                            insts.AddRange(exprs);            
                         }
                     }
                     else
                     {
-                        insts = instantiateProcTemplates(uniqVarAnnotation, uniqAnnotationVars, globals, formals, modifiesNames);
+                        insts.Add(annot);
                     }
                     procInsts.AddRange(insts);
                 }
@@ -1104,18 +1128,14 @@ namespace ProofMinimization
             return procToInsts;
         }
 
-        List<Expr> instantiateProcTemplates(Expr annotation, HashSet<Variable> annotationVars, Dictionary<string, Variable> globals, 
+
+        Expr isInstantationCandidate(Expr annotation, HashSet<Variable> annotationVars, Dictionary<string, Variable> globals, 
                                             Dictionary<string, Variable> formals, HashSet<string> modifiesNames)
         {
             // Get template variable names only.
             HashSet<string> annotationvarNames = new HashSet<string>();
-
-            if (annotationvarNames.Count() > 0)
-            {
-                log(string.Format("ERROR: Annotation {0} should not have any non-global variables.", annotation.ToString()));
-            }
-
             annotationVars.Iter(v => annotationvarNames.Add(v.Name));
+
             // Compute all variables in template that are not wrapped in "old(*)".
             var nonOldVisitor = new GatherNonOldVariables();
             nonOldVisitor.Visit(annotation);
@@ -1127,11 +1147,20 @@ namespace ProofMinimization
             // modify some of them, then this template is of little or no use.
             if (nonOldGlobalVarNames.Count > 0 && !nonOldGlobalVarNames.IsSubsetOf(modifiesNames))
             {
-                return new List<Expr>();
+                return null;
             }
 
-            return new List<Expr>() { annotation };
+            return annotation;
             //return MinControl.InstantiateTemplate(annotation, annotationVars, globals, formals);
+        }
+
+        string createIdentifier(string procName, string annot, int i, int j)
+        {
+            string ident = ART_VAR_PREFIX + procName.GetHashCode();
+            ident += "_" + annot.GetHashCode();
+            ident += "_" + i + "_" + j;
+            ident = ident.Replace('-', '_');
+            return ident;
         }
 
         Expr toUniqueVarTemplate(Expr expr, HashSet<Variable> templateVars)
@@ -1171,14 +1200,7 @@ namespace ProofMinimization
             return ret;
         }
 
-        string createIdentifier(string procName, string annot, int i, int j)
-        {
-            string ident = ART_VAR_PREFIX + procName.GetHashCode();
-            ident += "_" + annot.GetHashCode();
-            ident += "_" + i + "_" + j;
-            ident = ident.Replace('-', '_');
-            return ident;
-        }
+
 
     }
 }
