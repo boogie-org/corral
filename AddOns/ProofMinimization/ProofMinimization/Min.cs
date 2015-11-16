@@ -225,6 +225,11 @@ namespace ProofMinimization
                     candidateToCost[tp] += cnt;
                 }
             }
+
+            foreach (var t in templates.Intersection(priorFullyInstantiatedTemplates))
+            {
+                candidateToCost[t]++;
+            }
         }
 
         // Minimize
