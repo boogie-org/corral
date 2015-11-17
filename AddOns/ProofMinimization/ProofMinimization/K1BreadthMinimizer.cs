@@ -378,6 +378,9 @@ namespace ProofMinimization
 
         int houdiniTemplateLimit = 30;
 
+        public static TemplateAnnotations currBest = new TemplateAnnotations(new List<Expr>());
+
+
         // Tells us what algorithm should we use, the base one or the advanced one.
         bool baseTechnique;
 
@@ -447,6 +450,9 @@ namespace ProofMinimization
             for (int i = 0; i < files.Count; i++)
             {
                 var file = files[i];
+
+                currBest = subRepositoryUnion(files, i, minTemplates);
+
                 log("\r\n\r\nWorking on file (" + (i + 1) + ") :" + file);
                 log("The number of functions in the program is " + mdata.fileToProg[file].getProgram().Procedures.Count());
 
@@ -497,10 +503,27 @@ namespace ProofMinimization
                 C = r.Item1;
                 index = r.Item2;
                 log("Template union C is of size " + C.ClauseCount());
+                currBest = C;
+
                 log("Subrepository index ending in " + index);
                 C = computeMinimalUnionTemplate(C);
+                currBest = C;
             }
 
+            printConsoleAnnotation(C);
+
+            log("\r\n");
+            log("Total number of SDV calls: " + sdvCalls);
+            log("Total number of cache hits: " + cacheHits);
+            log("MINIMIZATION FINISHED.");
+            //TODO: this is currently bogus as it used only for Akash's debugging.
+            templateToPerfDelta = new Dictionary<int, int>();
+            return new HashSet<int>();
+        }
+
+
+        public static void printConsoleAnnotation(TemplateAnnotations C)
+        {
             var annots = SimplifyExpr.GetExprConjunctions(C.ToCnfExpression());
             foreach (var annot in annots)
             {
@@ -517,17 +540,29 @@ namespace ProofMinimization
                 {
                     prefix = "{:loop} ";
                 }
-                Console.WriteLine("Additional contact required: {0}", prefix + annot.ToString());
-                log(string.Format("Additional contact required: {0}", prefix + annot.ToString()));
+                Console.WriteLine("Additional contract required: {0}", prefix + annot.ToString());
             }
+        }
 
-            log("\r\n");
-            log("Total number of SDV calls: " + sdvCalls);
-            log("Total number of cache hits: " + cacheHits);
-            log("MINIMIZATION FINISHED.");
-            //TODO: this is currently bogus as it used only for Akash's debugging.
-            templateToPerfDelta = new Dictionary<int, int>();
-            return new HashSet<int>();
+
+        TemplateAnnotations subRepositoryUnion(List<string> fNames, int index, Dictionary<string, TemplateAnnotations> mins)
+        {
+            HashSet<string> unqAnnots = new HashSet<string>();
+            List<Expr> annots = new List<Expr>();
+            for (int i = 0; i < index; i++)
+            {
+                TemplateAnnotations m = mins[fNames[i]];
+                var cannots = SimplifyExpr.GetExprConjunctions(m.ToCnfExpression());
+                foreach (var cannot in cannots)
+                {
+                    if (!unqAnnots.Contains(cannot.ToString()))
+                    {
+                        unqAnnots.Add(cannot.ToString());
+                        annots.Add(cannot);
+                    }
+                 }
+            }
+            return new TemplateAnnotations(annots);
         }
 
 

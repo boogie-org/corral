@@ -100,8 +100,15 @@ namespace ProofMinimization
 
             foreach (var f in files)
             {
-                var program = BoogieUtil.ReadAndResolve(f);
-                CheckRMT(program);
+                Program program;
+                try {
+                    program = BoogieUtil.ReadAndResolve(f);
+                    CheckRMT(program);
+                } catch (Exception e)
+                {
+                    Console.WriteLine("WARNING: a file failed at parsing " + f);
+                    continue;
+                }
 
                 fileToKeepConstants.Add(f, new HashSet<string>());
                 fileToTempIds.Add(f, new HashSet<int>());
@@ -176,7 +183,7 @@ namespace ProofMinimization
                         if (fileToKeepConstants[f].Contains(constantName)) continue;
 
                         var templateId = QKeyValue.FindIntAttribute(ens.Attributes, "template", -1);
-                        if (templateId != -1)
+                        if (false)
                         {
                             addTemplate(templateId, f, constantName);
                             fileToTempIds[f].Add(templateId);
@@ -198,11 +205,10 @@ namespace ProofMinimization
                                 // template for it exists
                                 saveTemplateOrigin(f, impl.Proc.Name, tempIdToExpr[strToTemplate[temp]], expr, annotsToOrigins, isloop);
                                 addTemplate(strToTemplate[temp], f, constantName);
+                                fileToTempIds[f].Add(strToTemplate[temp]);
                             }
                             else
                             {
-
-
                                 // create new template
                                 var tid = TemplateCounterStart + strToTemplate.Count;
                                 strToTemplate.Add(temp, tid);

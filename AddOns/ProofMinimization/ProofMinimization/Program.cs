@@ -281,6 +281,7 @@ namespace ProofMinimization
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             Console.WriteLine("Got Ctrl-C");
+            K1BreadthMinimizer.printConsoleAnnotation(K1BreadthMinimizer.currBest);
             //Log(0);
             System.Diagnostics.Process.GetCurrentProcess()
                 .Kill();
