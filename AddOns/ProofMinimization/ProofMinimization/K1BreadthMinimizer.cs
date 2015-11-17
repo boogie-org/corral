@@ -160,6 +160,7 @@ namespace ProofMinimization
     class SimplifiedAnnotsIterator
     {
         TemplateAnnotations annots;
+        MinimizerData mdata;
 
         // iteration state
         int clauseIndex = 0;
@@ -170,8 +171,9 @@ namespace ProofMinimization
         // binary mask for subset enumeration.
         int mask = -1;
 
-        public SimplifiedAnnotsIterator(TemplateAnnotations annots)
+        public SimplifiedAnnotsIterator(TemplateAnnotations annots, MinimizerData mdata)
         {
+            this.mdata = mdata;
             this.annots = annots;
 
             for (int i = 0; i <= this.annots.ClauseMaxSize(); i++)
@@ -233,9 +235,80 @@ namespace ProofMinimization
                     newClause.Add(clause[i]);
                 }
             }
+
+            // Save new simplified annotations.
+            saveSimplifiedAnnotation(clause, newClause, subset);
+
             clause.Clear();
             clause.AddRange(newClause);
             return canns;
+        }
+
+
+        void saveSimplifiedAnnotation(List<Expr> oldClause, List<Expr> newClause, HashSet<int> subset)
+        {
+            if (newClause.Count() == 0)
+            {
+                return;
+            }
+
+            Expr oldAnnot = SimplifyExpr.Reduce(oldClause, BinaryOperator.Opcode.Or);
+            Expr newAnnot = SimplifyExpr.Reduce(newClause, BinaryOperator.Opcode.Or);
+
+            if (!mdata.annotsToOrigins.ContainsKey(oldAnnot.ToString()))
+            {
+                Console.WriteLine("ERROR: annotation not saved to origins " + oldAnnot.ToString());
+                return;
+            }
+
+            // foreach file were oldAnnotation appears
+            foreach (var file in mdata.annotsToOrigins[oldAnnot.ToString()].Keys)
+            {
+                var procsData = mdata.annotsToOrigins[oldAnnot.ToString()][file];
+                // foreach function in the file that has oldAnnotation as an anottation
+                foreach (var proc in procsData.Keys)
+                {
+                    List<Expr> exprs = procsData[proc];
+                    foreach (Expr expr in exprs)
+                    {
+                        List<Expr> newLits = new List<Expr>();
+                        var lits = SimplifyExpr.GetExprDisjuncts(expr);
+                        for (int i = 0; i < lits.Count(); i++)
+                        {
+                            if (subset.Contains(i))
+                            {
+                                newLits.Add(lits[i]);
+                            }
+                        }
+
+                        Expr newExpr = SimplifyExpr.Reduce(newLits, BinaryOperator.Opcode.Or);
+
+                        if (!mdata.annotsToOrigins.ContainsKey(newAnnot.ToString()))
+                        {
+                            mdata.annotsToOrigins[newAnnot.ToString()] = new Dictionary<string, Dictionary<string, List<Expr>>>();
+                        }
+
+                        if (!mdata.annotsToOrigins[newAnnot.ToString()].ContainsKey(file))
+                        {
+                            mdata.annotsToOrigins[newAnnot.ToString()][file] = new Dictionary<string, List<Expr>>();
+                        }
+
+                        if (!mdata.annotsToOrigins[newAnnot.ToString()][file].ContainsKey(proc))
+                        {
+                            mdata.annotsToOrigins[newAnnot.ToString()][file][proc] = new List<Expr>();
+                        }
+
+                        List<Expr> sexprs = mdata.annotsToOrigins[newAnnot.ToString()][file][proc];
+                        HashSet<string> exprStrings = new HashSet<string>();
+                        sexprs.Iter(e => exprStrings.Add(e.ToString()));
+
+                        if (!exprStrings.Contains(newExpr.ToString()))
+                        {
+                            sexprs.Add(newExpr);
+                        }
+                    }
+                }
+            }
         }
 
         HashSet<int> nextSubset()
@@ -431,16 +504,21 @@ namespace ProofMinimization
             var annots = SimplifyExpr.GetExprConjunctions(C.ToCnfExpression());
             foreach (var annot in annots)
             {
-                if (mdata.loopAnnotations.Contains(annot.ToString()))
+                GatherAllVariables allv = new GatherAllVariables();
+                allv.Visit(annot);
+                HashSet<string> allvars = allv.variables;
+
+                string prefix = "";
+                // Loop annotation is that annotation that can have global but
+                // (1) it should not have any general formal ins and outs and (2)
+                // it should have loop variables starting with "v_loop".
+                if (allvars.All(v => !v.StartsWith("v_fin") && !v.StartsWith("v_fout")) &&
+                    !allvars.All(v => !v.StartsWith("v_loop")))
                 {
-                    Console.WriteLine("Additional contact required: {{:loop}} {0}", annot.ToString());
-                    log(string.Format("Additional contact required: {{:loop}} {0}", annot.ToString()));
+                    prefix = "{:loop} ";
                 }
-                else
-                {
-                    Console.WriteLine("Additional contact required: {0}", annot.ToString());
-                    log(string.Format("Additional contact required: {0}", annot.ToString()));
-                }
+                Console.WriteLine("Additional contact required: {0}", prefix + annot.ToString());
+                log(string.Format("Additional contact required: {0}", prefix + annot.ToString()));
             }
 
             log("\r\n");
@@ -523,7 +601,7 @@ namespace ProofMinimization
 
             while (true)
             {
-                SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(bestTemplate);
+                SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(bestTemplate, mdata);
                 bool b = false;
 
                 log("Computing the minimal union template...");
@@ -746,16 +824,8 @@ namespace ProofMinimization
             }
             foreach (var annotStr in uniqueAnnots)
             {
-                if (mdata.loopAnnotations.Contains(annotStr))
-                {
-                    Console.WriteLine("Additional contact required: {{:loop}} {0}", annotStr);
-                    log(string.Format("Additional contact required: {{:loop}} {0}", annotStr));
-                }
-                else
-                {
-                    log(string.Format("Additional contract required: {0}", annotStr));
-                    Console.WriteLine("Additional contract required: {0}", annotStr);
-                }
+                log(string.Format("Additional contract required: {0}", annotStr));
+                Console.WriteLine("Additional contract required: {0}", annotStr);
             }
 
             log("\r\n");
@@ -851,7 +921,7 @@ namespace ProofMinimization
         {
             var program = mdata.fileToProg[file];
             log("Creating k1 simplified templates iterator...");
-            SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template);
+            SimplifiedAnnotsIterator iter = new SimplifiedAnnotsIterator(template, mdata);
 
             TemplateAnnotations simple;
             var tCost = template.Cost();
@@ -1088,7 +1158,7 @@ namespace ProofMinimization
                     tcollector.Visit(annot);
                     HashSet<Variable> templateVariables = tcollector.variables;
 
-                    annot = isInstantationCandidate(annot, templateVariables, globals, formals, modifiesNames);
+                    annot = getInstantationCandidate(annot, templateVariables, globals, formals, modifiesNames);
                     if (annot == null)
                     {
                         continue;
@@ -1129,7 +1199,7 @@ namespace ProofMinimization
         }
 
 
-        Expr isInstantationCandidate(Expr annotation, HashSet<Variable> annotationVars, Dictionary<string, Variable> globals, 
+        Expr getInstantationCandidate(Expr annotation, HashSet<Variable> annotationVars, Dictionary<string, Variable> globals, 
                                             Dictionary<string, Variable> formals, HashSet<string> modifiesNames)
         {
             // Get template variable names only.
