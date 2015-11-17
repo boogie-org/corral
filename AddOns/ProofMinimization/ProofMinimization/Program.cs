@@ -80,7 +80,19 @@ namespace ProofMinimization
                     printcontracts = true;
                     continue;
                 }
-
+                if (args[i].StartsWith("/killAfter:"))
+                {
+                    var timeout = Int32.Parse(args[i].Substring("/killAfter:".Length));
+                    var timeouttask = new System.Threading.Tasks.Task(() =>
+                    {
+                        System.Threading.Thread.Sleep(timeout * 1000);
+                        Console.WriteLine("ProofMinization timed out");
+                        K1BreadthMinimizer.printConsoleAnnotation(K1BreadthMinimizer.currBest);
+                        Console.WriteLine();
+                        Process.GetCurrentProcess().Kill();
+                    });
+                    timeouttask.Start();
+                }
                 if (args[i].StartsWith("/keep:"))
                 {
                     keepPatterns.Add(args[i].Substring("/keep:".Length));
@@ -282,6 +294,7 @@ namespace ProofMinimization
         {
             Console.WriteLine("Got Ctrl-C");
             K1BreadthMinimizer.printConsoleAnnotation(K1BreadthMinimizer.currBest);
+            Console.WriteLine();
             //Log(0);
             System.Diagnostics.Process.GetCurrentProcess()
                 .Kill();
