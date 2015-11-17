@@ -353,6 +353,8 @@ namespace ProofMinimization
 
                         ret = true;
                         templateToConstants[t]++;
+
+                        impl.Proc.Ensures.Add(new Ensures(false, Expr.Imp(Expr.Ident(nc), expr)));
                     }
 
                 }

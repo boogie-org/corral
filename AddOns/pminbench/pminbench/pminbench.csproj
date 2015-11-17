@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{73231F53-64C1-431E-B9A8-440101307589}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>pminbench</RootNamespace>
+    <AssemblyName>pminbench</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="AbsInt">
+      <HintPath>..\..\..\references\AbsInt.dll</HintPath>
+    </Reference>
+    <Reference Include="Basetypes">
+      <HintPath>..\..\..\references\Basetypes.dll</HintPath>
+    </Reference>
+    <Reference Include="CodeContractsExtender">
+      <HintPath>..\..\..\references\CodeContractsExtender.dll</HintPath>
+    </Reference>
+    <Reference Include="Concurrency">
+      <HintPath>..\..\..\references\Concurrency.dll</HintPath>
+    </Reference>
+    <Reference Include="Core">
+      <HintPath>..\..\..\references\Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Doomed">
+      <HintPath>..\..\..\references\Doomed.dll</HintPath>
+    </Reference>
+    <Reference Include="ExecutionEngine">
+      <HintPath>..\..\..\references\ExecutionEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="Graph">
+      <HintPath>..\..\..\references\Graph.dll</HintPath>
+    </Reference>
+    <Reference Include="Houdini">
+      <HintPath>..\..\..\references\Houdini.dll</HintPath>
+    </Reference>
+    <Reference Include="Model">
+      <HintPath>..\..\..\references\Model.dll</HintPath>
+    </Reference>
+    <Reference Include="ParserHelper">
+      <HintPath>..\..\..\references\ParserHelper.dll</HintPath>
+    </Reference>
+    <Reference Include="Predication">
+      <HintPath>..\..\..\references\Predication.dll</HintPath>
+    </Reference>
+    <Reference Include="Provers.SMTLib">
+      <HintPath>..\..\..\references\Provers.SMTLib.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="VCExpr">
+      <HintPath>..\..\..\references\VCExpr.dll</HintPath>
+    </Reference>
+    <Reference Include="VCGeneration">
+      <HintPath>..\..\..\references\VCGeneration.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utils.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\cba.csproj">
+      <Project>{b05d046d-a620-4233-9d52-0255c7a69760}</Project>
+      <Name>cba</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\CoreLib\CoreLib.csproj">
+      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
+      <Name>CoreLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
+      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
+      <Name>ExplainError</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\HoudiniLite\HoudiniLite.csproj">
+      <Project>{b5007b19-6d3a-4746-b5ff-b60f679c8a01}</Project>
+      <Name>HoudiniLite</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
+      <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
+      <Name>ProgTransformation</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
+      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
+      <Name>CorralUtil</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ProofMinimization\ProofMinimization\ProofMinimization.csproj">
+      <Project>{b4c4c070-6742-4eaa-8cb0-63bef916ef2e}</Project>
+      <Name>ProofMinimization</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
