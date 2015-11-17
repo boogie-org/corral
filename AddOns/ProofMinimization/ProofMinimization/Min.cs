@@ -110,6 +110,8 @@ namespace ProofMinimization
                     continue;
                 }
 
+                Console.WriteLine("Processing program {0}", f);
+
                 fileToKeepConstants.Add(f, new HashSet<string>());
                 fileToTempIds.Add(f, new HashSet<int>());
 

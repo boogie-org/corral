@@ -185,7 +185,7 @@ namespace ProofMinimization
         public static Expr NormalizeExpr(Expr expr)
         {
             var nexpr = normalizeExpr(expr);
-            nexpr = ConvertToCNF(nexpr);
+            nexpr = ConvertToCNF(nexpr, 0);
             //Console.WriteLine("Normalization from {0} to {1}", expr.ToString(), nexpr.ToString());
             //Debug.Assert(IsCleanFolCNF(nexpr));
             return nexpr;
@@ -322,19 +322,21 @@ namespace ProofMinimization
 
 
         // Convert a FOL formula that was passed through normalize(Expr expr) to a CNF formula.
-        public static Expr ConvertToCNF(Expr expr)
+        public static Expr ConvertToCNF(Expr expr, int cnt)
         {
+            if (cnt == 2) return expr;
+
             // Case where we have conjunction (P^Q). Inductively, we have that
             // P is a conjunction itself as well as Q. So just conjunct them together.
             if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
                 ((expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
             {
-                var f = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[0]));
-                var s = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[1]));
+                var f = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[0], cnt));
+                var s = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[1], cnt));
 
                 List<Expr> conjucts = new List<Expr>();
                 conjucts.AddRange(f); conjucts.AddRange(s);
-                return Reduce(conjucts, BinaryOperator.Opcode.And);
+                return Expr.And(conjucts);
             }
 
             // Case where we have disjunction (PvQ). Inductively, we have that
@@ -343,8 +345,8 @@ namespace ProofMinimization
             if (expr is NAryExpr && (expr as NAryExpr).Fun is BinaryOperator &&
                ((expr as NAryExpr).Fun as BinaryOperator).Op == BinaryOperator.Opcode.Or)
             {
-                var f = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[0]));
-                var s = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[1]));
+                var f = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[0], cnt + 1));
+                var s = GetExprConjunctions(ConvertToCNF((expr as NAryExpr).Args[1], cnt + 1));
 
                 if (f.Count == 1 && s.Count == 1)
                     return expr;
@@ -358,7 +360,7 @@ namespace ProofMinimization
                         disjuncts.Add(disjunct);
                     }
                 }
-                return Reduce(disjuncts, BinaryOperator.Opcode.And);
+                return Expr.And(disjuncts); 
             }
 
             // We've encountered a literal because all negations are pushed inwards by normalize

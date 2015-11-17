@@ -92,6 +92,7 @@ namespace ProofMinimization
                         Process.GetCurrentProcess().Kill();
                     });
                     timeouttask.Start();
+                    continue;
                 }
                 if (args[i].StartsWith("/keep:"))
                 {
