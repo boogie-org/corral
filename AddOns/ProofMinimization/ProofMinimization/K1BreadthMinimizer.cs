@@ -453,6 +453,7 @@ namespace ProofMinimization
             {
                 var file = files[i];
 
+                // Save the approximatelly best solution so far.
                 currBest = subRepositoryUnion(files, i, minTemplates);
 
                 log("\r\n\r\nWorking on file (" + (i + 1) + ") :" + file);

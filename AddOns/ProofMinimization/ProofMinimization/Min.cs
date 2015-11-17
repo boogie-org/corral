@@ -183,6 +183,7 @@ namespace ProofMinimization
                         if (fileToKeepConstants[f].Contains(constantName)) continue;
 
                         var templateId = QKeyValue.FindIntAttribute(ens.Attributes, "template", -1);
+                        // Used to be templateId != -1
                         if (false)
                         {
                             addTemplate(templateId, f, constantName);
@@ -220,7 +221,6 @@ namespace ProofMinimization
                             }
                         }
                     }
-
                 }
 
                 // stash the program
