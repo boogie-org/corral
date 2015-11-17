@@ -619,7 +619,7 @@ namespace ProofMinimization
         static int PerfMetric(int n)
         {
             if (usePerf < 0) return Int32.MaxValue;
-            if (!useSI) return (n+1);
+            if (!useSI) return n;
             if (n < 50) return (n + 100);
             return (int)(usePerf * n + 0.5);
         }

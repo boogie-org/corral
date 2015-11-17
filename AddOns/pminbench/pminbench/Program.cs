@@ -66,7 +66,7 @@ namespace pminbench
             Console.WriteLine("Running Proof Minimization");
 
             var res =
-                Util.run(Environment.CurrentDirectory, proofMinExe, string.Format("{0} /noSI /cnf /initBound:100", Path.Combine(proofbench, "*.bpl")));
+                Util.run(Environment.CurrentDirectory, proofMinExe, string.Format("{0} /perf /initBound:100", Path.Combine(proofbench, "*.bpl")));
             File.WriteAllLines("proofmin_out.txt", res);
 
             var templates = ParseOutput(res);
