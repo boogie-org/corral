@@ -370,6 +370,8 @@ namespace ProofMinimization
         int sdvCalls = 0;
         int cacheHits = 0;
 
+        int mib = 100;
+
         static Dictionary<string, Dictionary<string, List<double>>> costCache = new Dictionary<string, Dictionary<string, List<double>>>();
         static Dictionary<string, Dictionary<string, int>> costLimitCache = new Dictionary<string, Dictionary<string, int>>();
         double pbalance = 0.5;
@@ -1018,7 +1020,7 @@ namespace ProofMinimization
             return false;
         }
 
-        List<double> computeCost(string file, ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation, int limit = 0)
+        List<double> computeCost(string file, ProgTransformation.PersistentProgram program, Dictionary<Procedure, List<Expr>> instantiation, int limit = -1)
         {
             var allconstants = new Dictionary<string, Constant>();
             var prog = program.getProgram();
@@ -1093,7 +1095,14 @@ namespace ProofMinimization
             var pcopy2 = BoogieUtil.ReResolveInMem(prog);
             //cba.Util.BoogieUtil.PrintProgram(prog, "problem.bpl");
 
+
+            // Houdini optimization
+            var ot = CommandLineOptions.Clo.ProverKillTime;
+            CommandLineOptions.Clo.ProverKillTime = 60;
             var assignment = CoreLib.HoudiniInlining.RunHoudini(pcopy1, true);
+            CommandLineOptions.Clo.ProverKillTime = ot;
+            
+
             CoreLib.HoudiniInlining.InstrumentHoudiniAssignment(pcopy2, assignment);
             // Cost of Houdini is currently the number of thrown candidates.
             // This roughly corresponds to the number of solver calls, which
@@ -1105,8 +1114,7 @@ namespace ProofMinimization
             var pcopy3 = BoogieUtil.ReResolveInMem(pcopy2);
             //cba.Util.BoogieUtil.PrintProgram(pcopy3, "interim2_" + call + ".bpl");
             // Run SI but first set bound to infinity.
-            limit = limit < 0 ? 0 : limit;
-            BoogieVerify.options.maxInlinedBound = limit;
+            BoogieVerify.options.maxInlinedBound = limit <= 0 ? mib : limit;
             var err = new List<BoogieErrorTrace>();
             var rstatus = BoogieVerify.Verify(pcopy3, out err, true);
 
