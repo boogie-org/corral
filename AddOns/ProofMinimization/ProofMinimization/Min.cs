@@ -128,41 +128,49 @@ namespace ProofMinimization
                         });
                 }
 
-                // Prune, according to annotations
-                DropConstants(program, new HashSet<string>(
-                    program.TopLevelDeclarations.OfType<Constant>()
-                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, Driver.DropAttr))
-                    .Select(c => c.Name)));
-
-                var allconstants = new Dictionary<string, Constant>();
-                program.TopLevelDeclarations.OfType<Constant>()
-                    .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
-                    .Iter(c => allconstants.Add(c.Name, c));
-
-                // Normalize expressions
-                program.TopLevelDeclarations.OfType<Implementation>()
-                    .Iter(impl => impl.Proc.Ensures.Iter(ens => SimplifyExpr.SimplifyEnsures(ens, allconstants)));
-
-                // Remove constants that don't hold -- optimization
-                HashSet<string> consts = new HashSet<string>(allconstants.Keys);
-                HashSet<string> assignment;
                 int perf = 0;
+                var allconstants = new Dictionary<string, Constant>();
+                try {
+                    // Prune, according to annotations
+                    DropConstants(program, new HashSet<string>(
+                        program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, Driver.DropAttr))
+                        .Select(c => c.Name)));
+                  
+                    program.TopLevelDeclarations.OfType<Constant>()
+                        .Where(c => QKeyValue.FindBoolAttribute(c.Attributes, "existential"))
+                        .Iter(c => allconstants.Add(c.Name, c));
 
-                var ret = ConstrInitialProof(new PersistentProgram(program), consts, out assignment, ref perf);
+                    // Normalize expressions
+                    program.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => impl.Proc.Ensures.Iter(ens => SimplifyExpr.SimplifyEnsures(ens, allconstants)));
 
-                if (ret != BoogieVerify.ReturnStatus.OK)
+                    // Remove constants that don't hold -- optimization
+                    HashSet<string> consts = new HashSet<string>(allconstants.Keys);
+                    HashSet<string> assignment;
+                    
+
+                    var ret = ConstrInitialProof(new PersistentProgram(program), consts, out assignment, ref perf);
+
+
+                    if (ret != BoogieVerify.ReturnStatus.OK)
+                    {
+                        Console.WriteLine("Warning: Program {0} doesn't have an initial inductive proof", f);
+                        continue;
+                    }
+                
+                    // anything not in assignment can be dropped
+                    DropConstants(program, consts.Difference(assignment));
+                    consts.Difference(assignment).Iter(s => allconstants.Remove(s));
+                    fileToKeepConstants[f].IntersectWith(assignment);
+
+                    Console.WriteLine("File {0} defines {1} constants ({2} dropped)", f, assignment.Count, consts.Count - assignment.Count);
+                }
+                catch (Exception e)
                 {
-                    Console.WriteLine("Warning: Program {0} doesn't have an initial inductive proof", f);
+                    Console.WriteLine("WARNING: initial verification failed {0} {1}", f, e.Message);
                     continue;
                 }
-
-                // anything not in assignment can be dropped
-                DropConstants(program, consts.Difference(assignment));
-                consts.Difference(assignment).Iter(s => allconstants.Remove(s));
-                fileToKeepConstants[f].IntersectWith(assignment);
-
-                Console.WriteLine("File {0} defines {1} constants ({2} dropped)", f, assignment.Count, consts.Count - assignment.Count);
-
                 // initial perf
                 fileToPerf.Add(f, perf);
 
