@@ -453,6 +453,11 @@ namespace ProofMinimization
             {
                 var file = files[i];
 
+                if (!mdata.fileToTempIds.ContainsKey(file) || mdata.fileToTempIds[file].Count() == 0)
+                {
+                    continue;
+                }
+
                 // Save the approximatelly best solution so far.
                 currBest = subRepositoryUnion(files, i, minTemplates);
 
@@ -642,6 +647,11 @@ namespace ProofMinimization
                 var file = files[i];
                 try
                 {
+                    if (!mdata.fileToTempIds.ContainsKey(file) || mdata.fileToTempIds[file].Count() == 0)
+                    {
+                        continue;
+                    }
+
                     var cost = getTemplateCost(file, mdata.fileToProg[file], template);
                     if (cost == null)
                     {
@@ -652,7 +662,7 @@ namespace ProofMinimization
                 }
                 catch (Exception e)
                 {
-                    log(string.Format("ERROR: computing initial union cost failed {0} {1}", file, e.Message));
+                    log(string.Format("WARNING: computing initial union cost failed {0} {1}", file, e.Message));
                 }
             }
 
@@ -698,7 +708,7 @@ namespace ProofMinimization
                         }
                         catch (Exception e)
                         {
-                            log(string.Format("ERROR: computing union cost failed {0} {1}", file, e.Message));
+                            log(string.Format("WARNING: computing union cost failed {0} {1}", file, e.Message));
                         }
                     }
 
