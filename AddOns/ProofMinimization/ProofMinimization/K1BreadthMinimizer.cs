@@ -463,6 +463,13 @@ namespace ProofMinimization
                 for (int j = 0; j < i; j++)
                 {
                     var f = files[j];
+
+                    // This can happen because limit is 100 by default, not infinity.
+                    if (!minTemplates.ContainsKey(f))
+                    {
+                        continue;
+                    }
+
                     log("Checking existing result of " + f);
                     var t = minTemplates[f];
                     try
@@ -492,7 +499,7 @@ namespace ProofMinimization
                 }
                 catch (Exception e)
                 {
-                    log(string.Format("ERROR: Minimality computation failed {0} {1}", file, e.Message));
+                    log(string.Format("WARNING: Minimality computation failed {0} {1}", file, e.Message));
                 }
             }
 
@@ -554,7 +561,15 @@ namespace ProofMinimization
             List<Expr> annots = new List<Expr>();
             for (int i = 0; i < index; i++)
             {
-                TemplateAnnotations m = mins[fNames[i]];
+                var fname = fNames[i];
+
+                // This can happen because limit is 100 by default, not infinity.
+                if (!mins.ContainsKey(fname))
+                {
+                    continue;
+                }
+
+                TemplateAnnotations m = mins[fname];
                 var cannots = SimplifyExpr.GetExprConjunctions(m.ToCnfExpression());
                 foreach (var cannot in cannots)
                 {
@@ -594,6 +609,13 @@ namespace ProofMinimization
                 }
 
                 var fname = fNames[index];
+
+                // This can happen because of limit set to 100.
+                if (!minTemplates.ContainsKey(fname))
+                {
+                    continue;
+                }
+
                 TemplateAnnotations ts = minTemplates[fname];
                 var ants = SimplifyExpr.GetExprConjunctions(ts.ToCnfExpression());
                 foreach (var ant in ants)
@@ -623,7 +645,7 @@ namespace ProofMinimization
                     var cost = getTemplateCost(file, mdata.fileToProg[file], template);
                     if (cost == null)
                     {
-                        log("WARNING: initial cost for union template failed: " + file);
+                        log("INTERESTING: initial cost for union template failed: " + file);
                     }
 
                     bestCost[file] = cost;
@@ -672,7 +694,7 @@ namespace ProofMinimization
                             {
                                 hit = false;
                                 break;
-                            }
+                           }
                         }
                         catch (Exception e)
                         {
@@ -902,7 +924,7 @@ namespace ProofMinimization
 
             if (bestTemplate.Cost() == null)
             {
-                throw new Exception("ERROR: initial template does not verify the program!");
+                throw new Exception("NO PROBLEM, initial template does not verify the program.");
             }
 
             while (true)
