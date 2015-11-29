@@ -1097,6 +1097,7 @@ namespace cba.Util
             // Find declared globals
             program.TopLevelDeclarations.OfType<Variable>()
                 .Iter(v => rv.globals.Add(v.Name));
+            rv.declared = rv.globals;
 
             rv.VisitProgram(program);
         }
