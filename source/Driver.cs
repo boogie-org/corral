@@ -657,6 +657,9 @@ namespace cba
                     impl.AddAttribute(CoreLib.StratifiedInlining.ForceInlineAttr);
             }
 
+            // CodeExpr support
+            PreProcessCodeExpr(init);
+
             foreach(var decl in init.TopLevelDeclarations)
                     decl.Attributes = BoogieUtil.removeAttr("inline", decl.Attributes);
 
@@ -704,6 +707,84 @@ namespace cba
             ProgTransformation.PersistentProgram.FreeParserMemory();
             
             return inputProg;
+        }
+
+        // Inline procedures call from inside a CodeExpr
+        public static void PreProcessCodeExpr(Program program)
+        {
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                impl.OriginalBlocks = impl.Blocks;
+                impl.OriginalLocVars = impl.LocVars;
+            }
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                if (CommandLineOptions.Clo.UserWantsToCheckRoutine(impl.Name) && !impl.SkipVerification)
+                {
+                    CodeExprInliner.ProcessImplementation(program, impl);
+                }
+            }
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                impl.OriginalBlocks = null;
+                impl.OriginalLocVars = null;
+            }
+        }
+
+        // Inline procedures call from inside a CodeExpr
+        class CodeExprInliner : Inliner
+        {
+            Dictionary<Declaration, QKeyValue> declToAnnotations;
+
+            public CodeExprInliner(Program program)
+                : base(program, null, -1)
+            {
+                this.declToAnnotations = new Dictionary<Declaration, QKeyValue>();
+                // save annotation
+                foreach (var decl in program.TopLevelDeclarations)
+                {
+                    declToAnnotations.Add(decl, decl.Attributes);
+                    decl.Attributes = null;
+                }
+            }
+
+            new public static void ProcessImplementation(Program program, Implementation impl)
+            {
+                var ce = new CodeExprInliner(program);
+                ProcessImplementation(program, impl, ce);
+                ce.RestoreAnnotations();
+            }
+
+            public override Expr VisitCodeExpr(CodeExpr node)
+            {
+                // Install {:inline} annotations
+                RestoreAnnotations();
+
+                var ret = base.VisitCodeExpr(node);
+
+                // remove {:inline} annotation
+                RemoveAnnotations();
+
+                return ret;
+            }
+
+            void RestoreAnnotations()
+            {
+                foreach (var decl in program.TopLevelDeclarations)
+                {
+                    if (!declToAnnotations.ContainsKey(decl)) continue;
+                    decl.Attributes = declToAnnotations[decl];
+                }
+            }
+
+            void RemoveAnnotations()
+            {
+                foreach (var decl in program.TopLevelDeclarations)
+                {
+                    decl.Attributes = null;
+                }
+            }
+
         }
 
         public static void InlineProcedures(Program program)

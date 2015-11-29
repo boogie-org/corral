@@ -296,6 +296,10 @@ namespace cba
         // The control flow of the program is not modified by variable slicing.
         public override Block VisitBlock(Block block)
         {
+            // Happens with CodeExpr in global scope
+            if (currImplementation == null)
+                return block;
+
             var ret = sliceBlock(block);
             Debug.Assert(tinfo.getNumTrans(currImplementation.Name, block.Label) == block.Cmds.Count);
             return ret;

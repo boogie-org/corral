@@ -1881,7 +1881,7 @@ namespace cba
 
         }
 
-        class CallInliner : Inliner
+        public class CallInliner : Inliner
         {
             public CallInliner(Program program)
                 : base(program, null, -1)
