@@ -831,7 +831,7 @@ namespace VC {
 
   public class StratifiedVCGen : StratifiedVCGenBase {
     public bool PersistCallTree;
-    public static HashSet<string> callTree = null;
+    public HashSet<string> callTree = null;
     public int numInlined = 0;
     public int vcsize = 0;
     private HashSet<string> procsThatReachedRecBound;
