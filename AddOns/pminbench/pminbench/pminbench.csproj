@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\Binaries\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -117,10 +117,6 @@
     <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\ProofMinimization\ProofMinimization\ProofMinimization.csproj">
-      <Project>{b4c4c070-6742-4eaa-8cb0-63bef916ef2e}</Project>
-      <Name>ProofMinimization</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
