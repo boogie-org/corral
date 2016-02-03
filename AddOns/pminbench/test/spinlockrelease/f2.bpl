@@ -2,10 +2,16 @@
 procedure {:entrypoint} main()
 {
    call init();
+   call dispatch();
+}
+
+procedure dispatch()
+{
 
    while(*) {
      call wrap_Acquire();
      call wrap_Release();
+     call dispatch();
    }
 
    call d_exit();

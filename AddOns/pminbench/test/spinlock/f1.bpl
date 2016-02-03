@@ -38,7 +38,7 @@ procedure Release(lock: int)
    if(lock == guard && guard != 0) 
    {
       if(s == 0) { assert false; }
-      else { assume false; }
+      else { s := 0; } 
    }
 }
 

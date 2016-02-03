@@ -26,6 +26,8 @@ namespace pminbench
                 return;
 
             var files = new HashSet<string>();
+            var pminargs = "";
+
             foreach (var arg in args)
             {
                 if (arg == "/break")
@@ -36,7 +38,7 @@ namespace pminbench
 
                 if (arg.StartsWith("/"))
                 {
-                    Console.WriteLine("Ignoring flag: {0}", arg);
+                    pminargs += arg + " ";
                     continue;
                 }
 
@@ -66,7 +68,7 @@ namespace pminbench
             Console.WriteLine("Running Proof Minimization");
 
             var res =
-                Util.run(Environment.CurrentDirectory, proofMinExe, string.Format("{0} /perf /initBound:100", Path.Combine(proofbench, "*.bpl")));
+                Util.run(Environment.CurrentDirectory, proofMinExe, string.Format("{0} {1} /perf", Path.Combine(proofbench, "*.bpl"), pminargs));
             File.WriteAllLines("proofmin_out.txt", res);
 
             var templates = ParseOutput(res);
@@ -101,8 +103,12 @@ namespace pminbench
 
             if (!File.Exists(proofMinExe))
             {
-                Console.WriteLine("Error: ProofMinimization.exe not found");
-                return false;
+                proofMinExe = Path.Combine(runDir, "..", "ProofMin", "ProofMinimization.exe");
+                if (!File.Exists(proofMinExe))
+                {
+                    Console.WriteLine("Error: ProofMinimization.exe not found");
+                    return false;
+                }
             }
 
             return true;
