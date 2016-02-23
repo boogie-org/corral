@@ -105,7 +105,7 @@ namespace FastAVN
 
                 // Run harness instrumentation
                 var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
-                var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} {1} {2}", args[0], resultfile, avHarnessInstrArgs));
+                var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} \"{1}\" {2}", args[0], resultfile, avHarnessInstrArgs));
 
                 hinstOut.Iter(s => Console.WriteLine("[hinst] {0}", s));
 
@@ -363,7 +363,7 @@ namespace FastAVN
                         if (deadlineReached) return;
 
                         // spawn the job -- local
-                        var output = RemoteExec.run(wd, avnPath, pruneFile + " " + avnArgs);
+                        var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", pruneFile, avnArgs));
 
                         lock (fslock)
                         {
