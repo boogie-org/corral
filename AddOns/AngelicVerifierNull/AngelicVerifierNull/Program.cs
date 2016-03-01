@@ -66,6 +66,7 @@ namespace AngelicVerifierNull
         public static bool allocateParameters = true; //allocating parameters for procedures
         static bool trackAllVars = false; //track all variables
         static bool dumpTimedoutCorralQueries = false;
+        static bool runHoudini = false;
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -159,6 +160,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/sdv"))
                 printTraceMode = PRINT_TRACE_MODE.Sdv;
+
+            if (args.Any(s => s == "/runHoudini"))
+                runHoudini = true;
 
             args.Where(s => s.StartsWith("/bopt:"))
                 .Iter(s => boogieOpts += " \"/" + s.Substring("/bopt:".Length) + "\" ");
@@ -296,6 +300,7 @@ namespace AngelicVerifierNull
             var extraVars = cba.Driver.findTemplates(init, corralConfig);
             corralConfig.trackedVars.UnionWith(extraVars);
             cba.GlobalConfig.InferPass.printHoudiniQuery = corralConfig.houdiniQuery;
+            if(!runHoudini) cba.GlobalConfig.InferPass = null;
         }
 
         class ErrorTraceInfo
