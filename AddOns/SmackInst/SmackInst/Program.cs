@@ -35,10 +35,13 @@ namespace SmackInst
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
 
 
             // Read the input file
             var program = BoogieUtil.ReadAndResolve(args[0]);
+            // SMACK does not add globals to modify clauses
+            BoogieUtil.DoModSetAnalysis(program);
 
             // Process it
             program = Process(program);
@@ -372,9 +375,14 @@ namespace SmackInst
 
         public override Expr VisitNAryExpr(NAryExpr node)
         {
-            if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
+            // we have two forms of map operation to take care
+            // the first is map select
+            // the second is map store
+            if (((node.Fun is MapSelect && node.Args.Count == 2) || (node.Fun is MapStore && node.Args.Count == 3)) && node.Args[0] is IdentifierExpr)
             {
-                accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
+                // All memory regions are in form of $M.d+
+                if (node.Args[0].ToString().Contains("$M"))
+                  accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
             }
 
             return base.VisitNAryExpr(node);
