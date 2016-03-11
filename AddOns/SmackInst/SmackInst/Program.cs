@@ -12,7 +12,7 @@ namespace SmackInst
 {
     class Driver
     {
-        public static readonly HashSet<string> MallocNames = new HashSet<string>{ "$malloc", "$alloca" };
+        public static readonly HashSet<string> MallocNames = new HashSet<string>{ "malloc", "$alloc" };
         public static readonly string allocVar = "$CurrAddr";
 
         public static bool initMem = false;
