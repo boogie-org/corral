@@ -1,5 +1,5 @@
 
-make $1.bpl
+smack $1.c -bpl $1.bpl --no-verify --verifier-options="/doModSetAnalysis"
 mono ../../../SmackInst/SmackInst/bin/Debug/SmackInst.exe $1.bpl $1.inst.bpl
 mono ../../AvHarnessInstrumentation/bin/Debug/AvHarnessInstrumentation.exe $1.inst.bpl $1.harness.bpl /noAA /unknownProc:$malloc
 echo -----------------------------------------------
