@@ -5,6 +5,7 @@ obj
 bin
 *.suo
 *.suo
+*.swp
 AddOns/FastAVN/FastAVN/bin
 AddOns/FastAVN/FastAVN/obj
 AddOns/AliasAnalysis/AliasAnalysis.v11.suo
@@ -14,6 +15,10 @@ AddOns/AngelicVerifierNull/AngelicVerifierNull.v11.suo
 AddOns/AngelicVerifierNull/AngelicVerifierNull/AngelicVerifierNull.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.v11.suo
+AddOns/AngelicVerifierNull/test/c-smack/*.avn.log
+AddOns/AngelicVerifierNull/test/c-smack/*.inst.bpl
+AddOns/AngelicVerifierNull/test/c-smack/*.harness.bpl
+AddOns/AngelicVerifierNull/test/c-smack/*.harness_inst.bpl
 AddOns/AngelicVerifierNull/test/Angelic*
 AddOns/AngelicVerifierNull/test/Blocked*
 AddOns/AngelicVerifierNull/test/Output
