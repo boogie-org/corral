@@ -309,9 +309,11 @@ namespace SmackInst
 	{
 		private Dictionary<String, Expr> consts;
 
-		public ConstantElimination() {
+		public ConstantElimination()
+		{
 			consts = new Dictionary<string, Expr> ();
 		}
+
 		public override Expr VisitIdentifierExpr (IdentifierExpr node)
 		{
 			if (node.Decl is Constant && consts.ContainsKey(node.Name))
@@ -322,15 +324,21 @@ namespace SmackInst
 	
 		public void Run(Program prog)
 		{
-			HashSet<string> constNames = new HashSet<string> (prog.TopLevelDeclarations.OfType<Constant> ().Select (c => c.Name));
-			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr.ToString().Contains("==") && axi.Expr is NAryExpr).ToList()) {
+			HashSet<string> constNames = new HashSet<string>(prog.TopLevelDeclarations.OfType<Constant>().Select(c => c.Name));
+			HashSet<Axiom> axiomsToDelete = new HashSet<Axiom>();
+			HashSet<string> constsToDelete = new HashSet<string>();
+			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr is NAryExpr && (axi.Expr as NAryExpr).Fun.FunctionName == "==")) {
 				var axExpr = ax.Expr as NAryExpr;
-				if (axExpr.Args.Count == 2 && constNames.Contains (axExpr.Args [0].ToString ()) && axExpr.Args [1] is LiteralExpr) {
-					consts [axExpr.Args [0].ToString ()] = axExpr.Args [1];
-					prog.RemoveTopLevelDeclarations (x => x is Constant && (x as Constant).Name == axExpr.Args [0].ToString ());
-					prog.RemoveTopLevelDeclaration (ax);
+				var lhsName = axExpr.Args[0].ToString();
+				var rhs = axExpr.Args[1];
+				if (constNames.Contains(lhsName) && rhs is LiteralExpr) {
+					consts [lhsName] = rhs;
+					axiomsToDelete.Add (ax);
+					constsToDelete.Add (lhsName);
 				}
 			}
+			prog.RemoveTopLevelDeclarations(x => x is Constant && constsToDelete.Contains((x as Constant).Name));
+			prog.RemoveTopLevelDeclarations(ax => ax is Axiom && axiomsToDelete.Contains(ax as Axiom));
 			VisitProgram (prog);
 		}
 	}
