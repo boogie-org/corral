@@ -58,6 +58,9 @@ namespace SmackInst
             //BoogieUtil.PrintProgram(program, "tt.bpl");
             program = BoogieUtil.ReResolve(program, false);
 
+			// Remove literal constants
+			var CE = new ConstantElimination ();
+			CE.Run (program);
 			// inline functions
 			InlineFunctions(program);
 
@@ -300,6 +303,37 @@ namespace SmackInst
         }
 
     }
+
+	// Literal constants elimination pass
+	class ConstantElimination: StandardVisitor
+	{
+		private Dictionary<String, Expr> consts;
+
+		public ConstantElimination() {
+			consts = new Dictionary<string, Expr> ();
+		}
+		public override Expr VisitIdentifierExpr (IdentifierExpr node)
+		{
+			if (node.Decl is Constant && consts.ContainsKey(node.Name))
+			    return consts[node.Name];
+			else
+			    return base.VisitIdentifierExpr(node);
+		}
+	
+		public void Run(Program prog)
+		{
+			HashSet<string> constNames = new HashSet<string> (prog.TopLevelDeclarations.OfType<Constant> ().Select (c => c.Name));
+			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr.ToString().Contains("==") && axi.Expr is NAryExpr).ToList()) {
+				var axExpr = ax.Expr as NAryExpr;
+				if (axExpr.Args.Count == 2 && constNames.Contains (axExpr.Args [0].ToString ()) && axExpr.Args [1] is LiteralExpr) {
+					consts [axExpr.Args [0].ToString ()] = axExpr.Args [1];
+					prog.RemoveTopLevelDeclarations (x => x is Constant && (x as Constant).Name == axExpr.Args [0].ToString ());
+					prog.RemoveTopLevelDeclaration (ax);
+				}
+			}
+			VisitProgram (prog);
+		}
+	}
 
     // Convert 0 to NULL
     class ConvertToNull : StandardVisitor
