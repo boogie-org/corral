@@ -119,6 +119,11 @@ namespace AngelicVerifierNull
                                     QKeyValue.FindBoolAttribute((c as AssumeCmd).Attributes, AvnAnnotations.EnvironmentAssumptionAttr)))));
                 }
 
+                // remove {:inline} attributes on procedures without a body; its confusing
+                var impls = new HashSet<string>(prog.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+                foreach (var proc in prog.TopLevelDeclarations.OfType<Procedure>().Where(p => !impls.Contains(p.Name)))
+                    proc.Attributes = BoogieUtil.removeAttr("inline", proc.Attributes);
+
                 var program = new PersistentProgram(prog, corralConfig.mainProcName, 0);
 
                 // hook to run the control flow slicing static analysis pre pass
