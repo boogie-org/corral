@@ -18,20 +18,21 @@ namespace CoreLib
         readonly string recordProcNameInt = "boogie_si_record_sdvcp_int";
         readonly string recordProcNameBool = "boogie_si_record_sdvcp_bool";
         readonly string recordProcNameCtor = "boogie_si_record_sdvcp_ctor_";
-        readonly string initLocProcNameInt = "init_locals_nondet_int__tmp";
-        readonly string initLocProcNameBool = "init_locals_nondet_bool__tmp";
+        readonly string initLocProcName = "init_locals_nondet_tmp_";
         public static readonly string LocalVarInitValueAttr = "InitLocalVar";
         public Dictionary<string, int> allocConstants;
 
         private HashSet<string> procsWithoutBody;
         private Dictionary<string, Procedure> typeToRecordProc;
-
+        private Dictionary<string, Procedure> typeToInitLocalsProc;
+ 
         public SDVConcretizePathPass()
         {
             success = false;
             procsWithoutBody = new HashSet<string>();
             allocConstants = new Dictionary<string, int>();
             typeToRecordProc = new Dictionary<string, Procedure>();
+            typeToInitLocalsProc = new Dictionary<string, Procedure>();
         }
 
         public override CBAProgram runCBAPass(CBAProgram p)
@@ -59,38 +60,21 @@ namespace CoreLib
             var reProcBool = new Procedure(Token.NoToken, recordProcNameBool, new List<TypeVariable>(), new List<Variable> { inpVarBool }, new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
 
             // Add procedures for initialization of local variables
-            var outVarInt = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int), false);
-            var outVarBool = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Bool), false);
-            var reLocProcInt = new Procedure(Token.NoToken, initLocProcNameInt, new List<TypeVariable>(),
-                new List<Variable>(), new List<Variable>(new Variable[] { outVarInt }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-            var reLocProcBool = new Procedure(Token.NoToken, initLocProcNameBool, new List<TypeVariable>(),
-                new List<Variable>(), new List<Variable>(new Variable[] { outVarBool }), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
-
-            procsWithoutBody.Add(reLocProcInt.Name);
-            procsWithoutBody.Add(reLocProcBool.Name);
-
             foreach (var impl in p.TopLevelDeclarations.OfType<Implementation>())
             {
                 var ncmds = new List<Cmd>();
-                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsInt))
+                foreach (var loc in (impl.LocVars.Concat(impl.OutParams)))
                 {
-                    var cc = new CallCmd(Token.NoToken, initLocProcNameInt, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
+                    var cc = new CallCmd(Token.NoToken, GetInitLocalsProc(loc.TypedIdent.Type).Name, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
                     cc.Attributes = new QKeyValue(Token.NoToken, RestrictToTrace.ConcretizeConstantNameAttr, new List<object> { LocalVarInitValueAttr }, cc.Attributes);
-                    cc.Proc = reLocProcInt;
-                    ncmds.Add(cc);
-                }
-                foreach (var loc in (impl.LocVars.OfType<Variable>().Concat(impl.OutParams)).Where(v => v.TypedIdent.Type.IsBool))
-                {
-                    var cc = new CallCmd(Token.NoToken, initLocProcNameBool, new List<Expr>(), new List<IdentifierExpr>(new IdentifierExpr[] { Expr.Ident(loc) }));
-                    cc.Attributes = new QKeyValue(Token.NoToken, RestrictToTrace.ConcretizeConstantNameAttr, new List<object> { LocalVarInitValueAttr }, cc.Attributes);
-                    cc.Proc = reLocProcBool;
+                    cc.Proc = GetInitLocalsProc(loc.TypedIdent.Type);
                     ncmds.Add(cc);
                 }
                 ncmds.AddRange(impl.Blocks[0].Cmds);
                 impl.Blocks[0].Cmds = ncmds;
             }
-            p.AddTopLevelDeclaration(reLocProcInt);
-            p.AddTopLevelDeclaration(reLocProcBool);
+            typeToInitLocalsProc.Values.Iter(pr => procsWithoutBody.Add(pr.Name));
+            typeToInitLocalsProc.Values.Iter(pr => p.AddTopLevelDeclaration(pr));
 
             // save the current program
             var fd = new FixedDuplicator(true);
@@ -300,6 +284,17 @@ namespace CoreLib
             }
         }
 
+        private Procedure GetInitLocalsProc(Microsoft.Boogie.Type ty)
+        {
+            var typeToStr = ty.ToString().Replace('[', '_').Replace(']', '_');
+            if (!typeToInitLocalsProc.ContainsKey(typeToStr))
+            {
+                var outVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", ty), false);
+                var reProc = new Procedure(Token.NoToken, initLocProcName + typeToStr, new List<TypeVariable>(), new List<Variable>(), new List<Variable> { outVar }, new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                typeToInitLocalsProc.Add(typeToStr, reProc);
+            }
+            return typeToInitLocalsProc[typeToStr];
+        }
 
         public ErrorTrace mapBackTraceRecord(ErrorTrace trace)
         {
