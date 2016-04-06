@@ -37,6 +37,12 @@
 [TAG: AV_OUTPUT] ----- Analyzing t9.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> x_1 != NULL)
 
+-------------------- t10.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t10.bpl ------
+[TAG: AV_OUTPUT] Found free variables :: mapconst0
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc main with expr M[1] != 0
+
 -------------------- empty_forall.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing empty_forall.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> arr[42] != NULL
