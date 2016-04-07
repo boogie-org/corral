@@ -1,3 +1,4 @@
+
 procedure {:entrypoint} main()
 {
   var M: [int]int;
@@ -8,7 +9,7 @@ procedure {:entrypoint} main()
 
 }
 
-procedure  hv(M: [int]int) returns (Mp: [int]int) {
+procedure  hv(M: [int]int) returns (Mp: [int]int)
+{
    assume Mp[0] == M[0];
 }
-
