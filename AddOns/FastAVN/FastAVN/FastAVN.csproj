@@ -34,30 +34,41 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AbsInt">
-      <HintPath>..\..\..\source\Util\bin\Debug\AbsInt.dll</HintPath>
+    <Reference Include="BoogieAbsInt">
+      <HintPath>..\..\..\references\BoogieAbsInt.dll</HintPath>
     </Reference>
-    <Reference Include="Basetypes">
-      <HintPath>..\..\..\source\Util\bin\Debug\Basetypes.dll</HintPath>
+    <Reference Include="BoogieBasetypes">
+      <HintPath>..\..\..\references\BoogieBasetypes.dll</HintPath>
     </Reference>
-    <Reference Include="Core">
-      <HintPath>..\..\..\references\Core.dll</HintPath>
+    <Reference Include="BoogieCodeContractsExtender">
+      <HintPath>..\..\..\references\BoogieCodeContractsExtender.dll</HintPath>
     </Reference>
-    <Reference Include="ExecutionEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\references\ExecutionEngine.dll</HintPath>
+    <Reference Include="BoogieConcurrency">
+      <HintPath>..\..\..\references\BoogieConcurrency.dll</HintPath>
     </Reference>
-    <Reference Include="Graph, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\source\Util\bin\Debug\Graph.dll</HintPath>
+    <Reference Include="BoogieCore">
+      <HintPath>..\..\..\references\BoogieCore.dll</HintPath>
     </Reference>
-    <Reference Include="Model, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\source\Util\bin\Debug\Model.dll</HintPath>
+    <Reference Include="BoogieExecutionEngine">
+      <HintPath>..\..\..\references\BoogieExecutionEngine.dll</HintPath>
     </Reference>
-    <Reference Include="ParserHelper, Version=2.2.30705.1126, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\source\Util\bin\Debug\ParserHelper.dll</HintPath>
+    <Reference Include="BoogieGraph">
+      <HintPath>..\..\..\references\BoogieGraph.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieHoudini">
+      <HintPath>..\..\..\references\BoogieHoudini.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieModel">
+      <HintPath>..\..\..\references\BoogieModel.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieParserHelper">
+      <HintPath>..\..\..\references\BoogieParserHelper.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCExpr">
+      <HintPath>..\..\..\references\BoogieVCExpr.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCGeneration">
+      <HintPath>..\..\..\references\BoogieVCGeneration.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -66,12 +77,6 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="VCExpr">
-      <HintPath>..\..\..\source\Util\bin\Debug\VCExpr.dll</HintPath>
-    </Reference>
-    <Reference Include="VCGeneration">
-      <HintPath>..\..\..\source\Util\bin\Debug\VCGeneration.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
