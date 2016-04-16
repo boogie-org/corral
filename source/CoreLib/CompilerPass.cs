@@ -653,6 +653,9 @@ namespace cba
             // Remove the inlined procedures & implementations
             removeInlinedProcs(p);
 
+            // Remove annotations that won't parse because of dropped variables
+            RemoveVarsFromAttributes.Prune(p);
+
             return p;
         }
 
