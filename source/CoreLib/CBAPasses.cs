@@ -1196,6 +1196,9 @@ namespace cba
             if (loopProcs.Count == 0)
                 return null;
 
+            // Remove vars from attributes that are not in scope anymore
+            RemoveVarsFromAttributes.Prune(p);
+
             return p;
         }
 
