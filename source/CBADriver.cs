@@ -53,7 +53,7 @@ namespace cba
             curr = cp1.run(curr);
             if (cp2 != null) curr = cp2.run(curr);
             if(cp3 != null) curr = cp3.run(curr);
-            
+
             // infer contracts
             if (GlobalConfig.InferPass != null)
             {

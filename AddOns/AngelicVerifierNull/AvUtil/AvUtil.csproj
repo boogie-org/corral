@@ -30,41 +30,41 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AbsInt">
-      <HintPath>..\..\..\references\AbsInt.dll</HintPath>
+    <Reference Include="BoogieAbsInt">
+      <HintPath>..\..\..\references\BoogieAbsInt.dll</HintPath>
     </Reference>
-    <Reference Include="Basetypes">
-      <HintPath>..\..\..\references\Basetypes.dll</HintPath>
+    <Reference Include="BoogieBasetypes">
+      <HintPath>..\..\..\references\BoogieBasetypes.dll</HintPath>
     </Reference>
-    <Reference Include="CodeContractsExtender">
-      <HintPath>..\..\..\references\CodeContractsExtender.dll</HintPath>
+    <Reference Include="BoogieCodeContractsExtender">
+      <HintPath>..\..\..\references\BoogieCodeContractsExtender.dll</HintPath>
     </Reference>
-    <Reference Include="Concurrency">
-      <HintPath>..\..\..\references\Concurrency.dll</HintPath>
+    <Reference Include="BoogieConcurrency">
+      <HintPath>..\..\..\references\BoogieConcurrency.dll</HintPath>
     </Reference>
-    <Reference Include="Core">
-      <HintPath>..\..\..\references\Core.dll</HintPath>
+    <Reference Include="BoogieCore">
+      <HintPath>..\..\..\references\BoogieCore.dll</HintPath>
     </Reference>
-    <Reference Include="Doomed">
-      <HintPath>..\..\..\references\Doomed.dll</HintPath>
+    <Reference Include="BoogieExecutionEngine">
+      <HintPath>..\..\..\references\BoogieExecutionEngine.dll</HintPath>
     </Reference>
-    <Reference Include="ExecutionEngine">
-      <HintPath>..\..\..\references\ExecutionEngine.dll</HintPath>
+    <Reference Include="BoogieGraph">
+      <HintPath>..\..\..\references\BoogieGraph.dll</HintPath>
     </Reference>
-    <Reference Include="Graph">
-      <HintPath>..\..\..\references\Graph.dll</HintPath>
+    <Reference Include="BoogieHoudini">
+      <HintPath>..\..\..\references\BoogieHoudini.dll</HintPath>
     </Reference>
-    <Reference Include="Houdini">
-      <HintPath>..\..\..\references\Houdini.dll</HintPath>
+    <Reference Include="BoogieModel">
+      <HintPath>..\..\..\references\BoogieModel.dll</HintPath>
     </Reference>
-    <Reference Include="Model">
-      <HintPath>..\..\..\references\Model.dll</HintPath>
+    <Reference Include="BoogieParserHelper">
+      <HintPath>..\..\..\references\BoogieParserHelper.dll</HintPath>
     </Reference>
-    <Reference Include="ParserHelper">
-      <HintPath>..\..\..\references\ParserHelper.dll</HintPath>
+    <Reference Include="BoogieVCExpr">
+      <HintPath>..\..\..\references\BoogieVCExpr.dll</HintPath>
     </Reference>
-    <Reference Include="Predication">
-      <HintPath>..\..\..\references\Predication.dll</HintPath>
+    <Reference Include="BoogieVCGeneration">
+      <HintPath>..\..\..\references\BoogieVCGeneration.dll</HintPath>
     </Reference>
     <Reference Include="Provers.SMTLib">
       <HintPath>..\..\..\references\Provers.SMTLib.dll</HintPath>
@@ -76,12 +76,6 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="VCExpr">
-      <HintPath>..\..\..\references\VCExpr.dll</HintPath>
-    </Reference>
-    <Reference Include="VCGeneration">
-      <HintPath>..\..\..\references\VCGeneration.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Utils.cs" />

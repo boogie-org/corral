@@ -386,7 +386,7 @@ namespace ConcurrentHoudini
                 Console.WriteLine("Running OG: {0}", expandedFileName);
 
             LinearTypeChecker linearTypechecker;
-            MoverTypeChecker moverTypeChecker;
+            CivlTypeChecker moverTypeChecker;
             var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
 
             if (oc != PipelineOutcome.ResolvedAndTypeChecked)

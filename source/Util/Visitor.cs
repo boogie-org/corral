@@ -1134,6 +1134,12 @@ namespace cba.Util
             return base.VisitVariable(node);
         }
 
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            node.Attributes = Remove(node.Attributes, declared);
+            return base.VisitAssumeCmd(node);
+        }
+
         public override Cmd VisitCallCmd(CallCmd node)
         {
             node.Attributes = Remove(node.Attributes, declared);
