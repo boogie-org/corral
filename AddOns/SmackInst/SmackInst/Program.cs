@@ -90,7 +90,7 @@ namespace SmackInst
                 .FirstOrDefault();
             if (alloc != null)
             {
-                alloc.AddAttribute("scalar");
+                //alloc.AddAttribute("scalar");
                 alloc.AddAttribute(AvUtil.AvnAnnotations.AllocatorVarAttr);
             }
             else
