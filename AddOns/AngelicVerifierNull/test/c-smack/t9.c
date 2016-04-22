@@ -9,5 +9,4 @@ struct foo
 int main()
 {
   *(bar.y) = 1;
-  assert(**&(bar.y) == 1);
 }

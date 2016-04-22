@@ -16,7 +16,7 @@ AddOns/AngelicVerifierNull/AngelicVerifierNull/AngelicVerifierNull.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.csproj.user
 AddOns/FastAVN/FastAVN/FastAVN.v11.suo
 AddOns/AngelicVerifierNull/test/c-smack/*.avn.log
-AddOns/AngelicVerifierNull/test/c-smack/*.inst.bpl
+#AddOns/AngelicVerifierNull/test/c-smack/*.inst.bpl
 AddOns/AngelicVerifierNull/test/c-smack/*.harness.bpl
 AddOns/AngelicVerifierNull/test/c-smack/*.harness_inst.bpl
 AddOns/AngelicVerifierNull/test/Angelic*
