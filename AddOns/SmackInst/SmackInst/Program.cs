@@ -424,14 +424,17 @@ namespace SmackInst
 
         void Instrument(Implementation impl)
         {
+			var varDecls = new Dictionary<string, string>();
+			var cb = new CollectBasePointer(varDecls);
+			cb.VisitImplementation(impl);
             foreach (var block in impl.Blocks)
             {
                 var newcmds = new List<Cmd>();
                 foreach (Cmd cmd in block.Cmds)
                 {
-                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
-                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
+                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd, varDecls));
+                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd, varDecls));
+                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd, varDecls));
                     else newcmds.Add(cmd);
                 }
                 block.Cmds = newcmds;
@@ -457,7 +460,7 @@ namespace SmackInst
             return new AssertCmd(Token.NoToken, Expr.Not(new NAryExpr(Token.NoToken, new FunctionCall(f), new List<Expr> { e, nil })));
         }
 
-        List<Cmd> ProcessCall(CallCmd cmd)
+		List<Cmd> ProcessCall(CallCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -473,7 +476,7 @@ namespace SmackInst
             return ret;
         }
 
-        List<Cmd> ProcessAssume(AssumeCmd cmd)
+		List<Cmd> ProcessAssume(AssumeCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -487,7 +490,7 @@ namespace SmackInst
             return ret;
         }
 
-        List<Cmd> ProcessAssign(AssignCmd cmd)
+		List<Cmd> ProcessAssign(AssignCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -497,9 +500,13 @@ namespace SmackInst
 			cmd.Rhss.Iter(e => reads.VisitExpr(e));
             foreach (var tup in reads.accesses)
             {
-                ret.Add(MkAssert(tup.Item2));
+				var ptr = tup.Item2;
+				string basePtr;
+				if (varDecls.TryGetValue(ptr.ToString(), out basePtr))
+					ret.Add (MkAssert (Expr.Ident(BoogieAstFactory.MkFormal (basePtr, btype.Int, true))));
+				else
+					ret.Add(MkAssert(ptr));
             }
-
             ret.Add(cmd);
 
             return ret;
@@ -541,5 +548,25 @@ namespace SmackInst
             return base.VisitNAryExpr(node);
         }
     }
+
+	public class CollectBasePointer : FixedVisitor
+	{
+		public Dictionary<string, string> varDecls;
+
+		public CollectBasePointer(Dictionary<string, string> varDecls)
+		{
+			this.varDecls = varDecls;
+		}
+
+		public override LocalVariable VisitLocalVariable (LocalVariable node)
+		{
+			if (node.FindStringAttribute ("base") != null) {
+				varDecls [node.Name] = node.FindStringAttribute ("base");
+				// TODO: figure out how to remove attributes
+				node.Attributes = node.Attributes.Next;
+			}
+ 			return node;
+		}
+	}
 
 }
