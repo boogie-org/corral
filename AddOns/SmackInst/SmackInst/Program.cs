@@ -563,7 +563,7 @@ namespace SmackInst
 			if (node.FindStringAttribute ("base") != null) {
 				varDecls [node.Name] = node.FindStringAttribute ("base");
 				// TODO: figure out how to remove attributes
-				node.Attributes = node.Attributes.Next;
+				//node.Attributes = node.Attributes.Next;
 			}
  			return node;
 		}
