@@ -59,7 +59,7 @@ def try_command(args, cmd, console = False):
     if args.verbose:
       print 'Running %s' %(' '.join(cmd))
     
-    proc = subprocess.Popen(cmd, preexec_fn=os.setsid,
+    proc = subprocess.Popen(cmd,
       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if console:
       while True:
