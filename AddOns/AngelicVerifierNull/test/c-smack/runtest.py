@@ -1,5 +1,8 @@
 import os
 import argparse
+import subprocess
+import signal
+import re
 
 def arguments():
 
@@ -7,6 +10,9 @@ def arguments():
 
   parser.add_argument('input_file', metavar='input-file',
     help = 'source file (*.bpl or *.c)')    
+  
+  parser.add_argument('-v', '--verbose', action='store_true', default=False,
+    help = 'verbose mode')
 
   avh_group = parser.add_argument_group("AvHarnessInstrument options")
   
@@ -17,7 +23,7 @@ def arguments():
 
   avn_group = parser.add_argument_group("AngelicVerifierNull options")
 
-  avn_group.add_argument('--loop-unroll', metavar='N', type=int,
+  avn_group.add_argument('--unroll', metavar='N', type=int,
     default=5, help = 'loop unrolling bound [default: %(default)s]')
 
   avn_group.add_argument('-sdv', action='store_true', default=False, 
@@ -41,35 +47,129 @@ def GetBinary(BinaryName):
             os.path.join(root, BinaryName), 'bin'),'Debug'),
              BinaryName + '.exe')
 
+# ported from SMACK top.py
+# time-out is not supoorted
+
+def try_command(args, cmd, console = False):
+  console = console or args.verbose
+  output = '' 
+  proc = None
+
+  try:
+    if args.verbose:
+      print 'Running %s' %(' '.join(cmd))
+    
+    proc = subprocess.Popen(cmd, preexec_fn=os.setsid,
+      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if console:
+      while True:
+        line = proc.stdout.readline()
+        if line:
+          output += line
+          print line,
+        elif proc.poll() is not None:
+          break
+      proc.wait
+    else:
+      output = proc.communicate()[0]
+
+    rc = proc.returncode
+    proc = None
+    if rc:
+      raise RuntimeError("%s returned non-zero." % cmd[0])
+    else:
+      return output
+
+  except (RuntimeError, OSError) as err:
+    print >> sys.stderr, output
+    sys.exit("Error invoking command:\n%s\n%s" % (" ".join(cmd), err))
+
+  finally:
+    if proc: os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+
 def runsmack(args):
-  print 'Running SMACK'
+  #print 'Running SMACK'
+  if os.name != 'posix':
+    print 'OS not supported'
+
+  cmd = ['smack', '--no-verify']
+  cmd += [args.input_file]
+  cmd += ['-bpl', args.file_name + '.bpl']
+  
+  return try_command(args, cmd, False)  
     
 def runsi(args):
-  print "Running SmackInst at: '{}'".format(args.si_exe)
+  #print "Running SmackInst at: '{}'".format(args.si_exe)
   if (not os.path.exists(args.si_exe)):
     print "SmackInst not found" 
-  return None
+
+  cmd = [args.si_exe]
+  if os.name == 'posix':
+    cmd = ['mono'] + cmd   
+  cmd += [args.file_name + '.bpl']
+  cmd += [args.file_name + '.inst.bpl']
+  
+  return try_command(args, cmd, False) 
 
 def runavh(args):
-  print "Running AvHarnessInstrumentation at: '{}'".format(args.avh_exe) 
+  #print "Running AvHarnessInstrumentation at: '{}'".format(args.avh_exe) 
   if (not os.path.exists(args.avh_exe)):
     print "AvHarnessInstrument not found" 
-  return None
+
+  cmd = [args.avh_exe]
+  if os.name == 'posix':
+    cmd = ['mono'] + cmd
+  cmd += [args.file_name + '.inst.bpl']
+  cmd += [args.file_name + '.harness.bpl']
+
+  if args.aa:
+    cmd += ['/noAA:0']
+  else:
+    cmd += ['/noAA']
+
+  cmd += ['/unknownProc:' + proc for proc in args.unknown_procs]
+  return try_command(args, cmd, False) 
 
 def runavn(args):
-  print "Running AngelicVerifierNull at: '{}'".format(args.avn_exe)
+  #print "Running AngelicVerifierNull at: '{}'".format(args.avn_exe)
   if (not os.path.exists(args.avn_exe)):
     print "AngelicVerifierNull not found" 
-  return None
+
+  cmd = [args.avn_exe]
+  if os.name == 'posix':
+    cmd = ['mono'] + cmd
+  cmd += [args.file_name + '.harness.bpl']
+  cmd += ['/nodup']
+  cmd += ['/traceSlicing']
+  cmd += ['/copt:recursionBound:' + str(args.unroll)]
+  cmd += ['/copt:k:1']
+  if args.sdv:
+    cmd += ['/sdv']
+  else:
+    cmd += ['/copt:tryCTrace']
+  return try_command(args, cmd, False) 
+
+def output_summary(output):
+  av_output = [] 
+
+  for line in output.splitlines(True):
+    if re.search('AV_OUTPUT', line):
+      av_output += [line]    
+  
+  return '\n'.join(av_output)
 
 if __name__ == '__main__':
   args = arguments()
+  args.file_name = os.path.splitext(args.input_file)[0]
 
   if (os.path.splitext(args.input_file)[1][1:] == 'c'):
-    runsmack(args)
+    smack_output = runsmack(args)
+
   
   find_exe(args)
  
   si_output = runsi(args) 
   avh_output = runavh(args)
   avn_output = runavn(args)
+
+  print output_summary(avn_output)
