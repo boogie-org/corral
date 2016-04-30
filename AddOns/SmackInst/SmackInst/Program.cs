@@ -12,7 +12,7 @@ namespace SmackInst
 {
     class Driver
     {
-        public static readonly HashSet<string> MallocNames = new HashSet<string>{ "$malloc", "$alloca" };
+        public static readonly HashSet<string> MallocNames = new HashSet<string>{ "malloc", "$alloc" };
         public static readonly string allocVar = "$CurrAddr";
 
         public static bool initMem = false;
@@ -35,10 +35,13 @@ namespace SmackInst
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
+            CommandLineOptions.Clo.DoModSetAnalysis = true;
 
 
             // Read the input file
-            var program = BoogieUtil.ReadAndResolve(args[0]);
+            var program = BoogieUtil.ReadAndResolve(args[0], false);
+            // SMACK does not add globals to modify clauses
+            //BoogieUtil.DoModSetAnalysis(program);
 
             // Process it
             program = Process(program);
@@ -53,7 +56,13 @@ namespace SmackInst
             // Get rid of Synonyms
             RemoveTypeSynonyms.Remove(program);
             //BoogieUtil.PrintProgram(program, "tt.bpl");
-            program = BoogieUtil.ReResolve(program);
+            program = BoogieUtil.ReResolve(program, false);
+
+			// Remove literal constants
+			var CE = new ConstantElimination ();
+			CE.Run (program);
+			// inline functions
+			InlineFunctions(program);
 
             // add "allocator" to malloc
             program.TopLevelDeclarations.OfType<Procedure>()
@@ -81,7 +90,7 @@ namespace SmackInst
                 .FirstOrDefault();
             if (alloc != null)
             {
-                alloc.AddAttribute("scalar");
+                //alloc.AddAttribute("scalar");
                 alloc.AddAttribute(AvUtil.AvnAnnotations.AllocatorVarAttr);
             }
             else
@@ -94,6 +103,49 @@ namespace SmackInst
 
             return program;
         }
+
+		// Inline functions with {:inline true} attribute
+		// borrow code from Symbooglix transform passes
+		static void InlineFunctions(Program prog)
+		{
+			Predicate<Function> Condition = f => QKeyValue.FindBoolAttribute(f.Attributes, "inline");
+			var functionInlingVisitor = new FunctionInlingVisitor(Condition);
+
+			// Apply to axioms
+			foreach (var axiom in prog.TopLevelDeclarations.OfType<Axiom>())
+			{
+				functionInlingVisitor.Visit(axiom);
+			}
+
+			// Apply to each Procedure's requires and ensures
+			foreach (var procedure in prog.TopLevelDeclarations.OfType<Procedure>())
+			{
+				foreach (var ensures in procedure.Ensures)
+				{
+					functionInlingVisitor.Visit(ensures);
+				}
+
+				foreach (var requires in procedure.Requires)
+				{
+					functionInlingVisitor.Visit(requires);
+				}
+			}
+
+			// Apply to functions too, is this correct??
+			foreach (var function in prog.TopLevelDeclarations.OfType<Function>())
+			{
+				if (function.Body != null)
+				{
+					function.Body = functionInlingVisitor.Visit(function.Body) as Expr;
+				}
+			}
+
+			// Apply to Commands in basic blocks
+			foreach (var basicBlock in prog.Blocks())
+			{
+				functionInlingVisitor.Visit(basicBlock);
+			}
+		}
 
         static void InitMemory(Program program)
         {
@@ -149,6 +201,71 @@ namespace SmackInst
         }
     }
 
+	public class FunctionInlingVisitor : StandardVisitor
+	{
+		private Predicate<Function> Condition;
+		public int InlineCounter
+		{
+			get;
+			private set;
+		}
+		public FunctionInlingVisitor(Predicate<Function> condition)
+		{
+			this.Condition = condition;
+			InlineCounter = 0;
+		}
+
+		public override Expr VisitNAryExpr(NAryExpr node)
+		{
+			if (!(node.Fun is FunctionCall))
+				return base.VisitNAryExpr(node);
+
+			var FC = node.Fun as FunctionCall;
+
+			// Can't inline SMTLIBv2 functions
+			if (QKeyValue.FindStringAttribute(FC.Func.Attributes, "bvbuiltin") != null)
+				return base.VisitNAryExpr(node);
+
+			if (Condition(FC.Func))
+			{
+				if (FC.Func.Body == null)
+					throw new InvalidOperationException("Can't inline a function without a body");
+
+				// Compute mapping
+				var varToExprMap = new Dictionary<Variable,Expr>();
+				foreach (var parameterArgumentPair in FC.Func.InParams.Zip(node.Args))
+				{
+					varToExprMap.Add(parameterArgumentPair.Item1, parameterArgumentPair.Item2);
+				}
+
+				// Using Closure :)
+				Substitution sub = delegate(Variable v)
+				{
+					try
+					{
+						return varToExprMap[v];
+					}
+					catch (KeyNotFoundException)
+					{
+						// The substituter seems to expect null being
+						// returned if we don't want to change the variable
+						return null;
+					}
+				};
+
+				// Return the Function expression with variables substituted for function arguments.
+				// This is basically inling
+				++InlineCounter;
+				var result= Substituter.Apply(sub, FC.Func.Body);
+
+				// Make sure we visit the result because it may itself contain function calls
+				return (Expr) base.Visit(result);
+			}
+			else
+				return base.VisitNAryExpr(node);
+		}
+	}
+
     // Remove type synonyms of int
     class RemoveTypeSynonyms : StandardVisitor
     {
@@ -186,6 +303,45 @@ namespace SmackInst
         }
 
     }
+
+	// Literal constants elimination pass
+	class ConstantElimination: StandardVisitor
+	{
+		private Dictionary<String, Expr> consts;
+
+		public ConstantElimination()
+		{
+			consts = new Dictionary<string, Expr> ();
+		}
+
+		public override Expr VisitIdentifierExpr (IdentifierExpr node)
+		{
+			if (node.Decl is Constant && consts.ContainsKey(node.Name))
+			    return consts[node.Name];
+			else
+			    return base.VisitIdentifierExpr(node);
+		}
+	
+		public void Run(Program prog)
+		{
+			HashSet<string> constNames = new HashSet<string>(prog.TopLevelDeclarations.OfType<Constant>().Select(c => c.Name));
+			HashSet<Axiom> axiomsToDelete = new HashSet<Axiom>();
+			HashSet<string> constsToDelete = new HashSet<string>();
+			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr is NAryExpr && (axi.Expr as NAryExpr).Fun.FunctionName == "==")) {
+				var axExpr = ax.Expr as NAryExpr;
+				var lhsName = axExpr.Args[0].ToString();
+				var rhs = axExpr.Args[1];
+				if (constNames.Contains(lhsName) && rhs is LiteralExpr) {
+					consts [lhsName] = rhs;
+					axiomsToDelete.Add (ax);
+					constsToDelete.Add (lhsName);
+				}
+			}
+			prog.RemoveTopLevelDeclarations(x => x is Constant && constsToDelete.Contains((x as Constant).Name));
+			prog.RemoveTopLevelDeclarations(ax => ax is Axiom && axiomsToDelete.Contains(ax as Axiom));
+			VisitProgram (prog);
+		}
+	}
 
     // Convert 0 to NULL
     class ConvertToNull : StandardVisitor
@@ -268,14 +424,17 @@ namespace SmackInst
 
         void Instrument(Implementation impl)
         {
+			var varDecls = new Dictionary<string, string>();
+			var cb = new CollectBasePointer(varDecls);
+			cb.VisitImplementation(impl);
             foreach (var block in impl.Blocks)
             {
                 var newcmds = new List<Cmd>();
                 foreach (Cmd cmd in block.Cmds)
                 {
-                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
-                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
-                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
+                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd, varDecls));
+                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd, varDecls));
+                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd, varDecls));
                     else newcmds.Add(cmd);
                 }
                 block.Cmds = newcmds;
@@ -301,7 +460,7 @@ namespace SmackInst
             return new AssertCmd(Token.NoToken, Expr.Not(new NAryExpr(Token.NoToken, new FunctionCall(f), new List<Expr> { e, nil })));
         }
 
-        List<Cmd> ProcessCall(CallCmd cmd)
+		List<Cmd> ProcessCall(CallCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -317,7 +476,7 @@ namespace SmackInst
             return ret;
         }
 
-        List<Cmd> ProcessAssume(AssumeCmd cmd)
+		List<Cmd> ProcessAssume(AssumeCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -331,7 +490,7 @@ namespace SmackInst
             return ret;
         }
 
-        List<Cmd> ProcessAssign(AssignCmd cmd)
+		List<Cmd> ProcessAssign(AssignCmd cmd, Dictionary<string, string> varDecls)
         {
             var ret = new List<Cmd>();
 
@@ -341,9 +500,13 @@ namespace SmackInst
 			cmd.Rhss.Iter(e => reads.VisitExpr(e));
             foreach (var tup in reads.accesses)
             {
-                ret.Add(MkAssert(tup.Item2));
+				var ptr = tup.Item2;
+				string basePtr;
+				if (varDecls.TryGetValue(ptr.ToString(), out basePtr))
+					ret.Add (MkAssert (Expr.Ident(BoogieAstFactory.MkFormal (basePtr, btype.Int, true))));
+				else
+					ret.Add(MkAssert(ptr));
             }
-
             ret.Add(cmd);
 
             return ret;
@@ -372,13 +535,38 @@ namespace SmackInst
 
         public override Expr VisitNAryExpr(NAryExpr node)
         {
-            if (node.Fun is MapSelect && node.Args.Count == 2 && node.Args[0] is IdentifierExpr)
+            // we have two forms of map operation to take care
+            // the first is map select
+            // the second is map store
+            if (((node.Fun is MapSelect && node.Args.Count == 2) || (node.Fun is MapStore && node.Args.Count == 3)) && node.Args[0] is IdentifierExpr)
             {
-                accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
+                // All memory regions are in form of $M.d+
+                if (node.Args[0].ToString().Contains("$M"))
+                  accesses.Add(Tuple.Create((node.Args[0] as IdentifierExpr).Decl, node.Args[1]));
             }
 
             return base.VisitNAryExpr(node);
         }
     }
+
+	public class CollectBasePointer : FixedVisitor
+	{
+		public Dictionary<string, string> varDecls;
+
+		public CollectBasePointer(Dictionary<string, string> varDecls)
+		{
+			this.varDecls = varDecls;
+		}
+
+		public override LocalVariable VisitLocalVariable (LocalVariable node)
+		{
+			if (node.FindStringAttribute ("base") != null) {
+				varDecls [node.Name] = node.FindStringAttribute ("base");
+				// TODO: figure out how to remove attributes
+				//node.Attributes = node.Attributes.Next;
+			}
+ 			return node;
+		}
+	}
 
 }

@@ -19,6 +19,7 @@ struct str* foo(int b, int* a) {
 
 void func(int* w) {
 	struct str * s = foo(*w, w);
+  (*s).x = 1;
 }
 
 int main() {
