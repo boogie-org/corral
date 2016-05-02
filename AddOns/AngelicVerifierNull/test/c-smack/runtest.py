@@ -128,7 +128,7 @@ def runavh(args):
     cmd += ['/noAA']
 
   cmd += ['/unknownProc:' + proc for proc in args.unknown_procs]
-  return try_command(args, cmd, False) 
+  return try_command(args, cmd, True)
 
 def runavn(args):
   #print "Running AngelicVerifierNull at: '{}'".format(args.avn_exe)
@@ -150,13 +150,13 @@ def runavn(args):
   return try_command(args, cmd, False) 
 
 def output_summary(output):
-  av_output = [] 
+  av_output = ''
 
   for line in output.splitlines(True):
     if re.search('AV_OUTPUT', line):
-      av_output += [line]    
+      av_output += line
   
-  return '\n'.join(av_output)
+  return av_output
 
 if __name__ == '__main__':
   args = arguments()
@@ -172,4 +172,4 @@ if __name__ == '__main__':
   avh_output = runavh(args)
   avn_output = runavn(args)
 
-  print output_summary(avn_output)
+  print output_summary(avn_output).strip()
