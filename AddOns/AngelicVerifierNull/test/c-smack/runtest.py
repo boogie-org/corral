@@ -3,6 +3,7 @@ import argparse
 import subprocess
 import signal
 import re
+import sys
 
 def arguments():
 
