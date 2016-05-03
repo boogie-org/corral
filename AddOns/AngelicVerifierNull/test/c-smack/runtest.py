@@ -20,6 +20,11 @@ def arguments():
   smack_group.add_argument('--smack-options', metavar='OPTIONS', default='',
     help = 'additional SMACK arguments (e.g., --smack-options="-bc a.bc")')
 
+  si_group = parser.add_argument_group("SmackInst options")
+
+  si_group.add_argument('-init-mem', action='store_true', default=False,
+    help = 'initialize memory')
+
   avh_group = parser.add_argument_group("AvHarnessInstrument options")
   
   avh_group.add_argument('-aa', action='store_true', default=False,
@@ -124,6 +129,8 @@ def runsi(args):
     cmd = ['mono'] + cmd   
   cmd += [args.file_name + '.bpl']
   cmd += [args.file_name + '.inst.bpl']
+  if args.init_mem:
+    cmd += ['/initMem']
   
   return try_command(args, cmd, False) 
 

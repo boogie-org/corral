@@ -155,49 +155,51 @@ namespace SmackInst
             if (alloc == null) return;
 
             // create alloc_init
-            var allocinit = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
-                alloc.Name + "_init", alloc.TypedIdent.Type), false);
+            //var allocinit = new Constant(Token.NoToken, new TypedIdent(Token.NoToken,
+            //    alloc.Name + "_init", alloc.TypedIdent.Type), false);
 
             // malloc ensures ret > alloc_init
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => MallocNames.Contains(p.Name))
-                .Iter(p => p.Ensures.Add(new Ensures(false, Expr.Gt(Expr.Ident(p.OutParams[0]), Expr.Ident(allocinit)))));
+            //program.TopLevelDeclarations.OfType<Procedure>()
+            //    .Where(p => MallocNames.Contains(p.Name))
+            //    .Iter(p => p.Ensures.Add(new Ensures(false, Expr.Gt(Expr.Ident(p.OutParams[0]), Expr.Ident(allocinit)))));
 
             // forall x : int :: { M[x] } M[x] >= 0 && M[x] < alloc_init
-            var initM = new Func<Variable, Expr>(M =>
-                { 
-                    var x = new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "x", btype.Int));
-                    var mx = BoogieAstFactory.MkMapAccessExpr(M, Expr.Ident(x));
+            //var initM = new Func<Variable, Expr>(M =>
+            //    { 
+            //        var x = new BoundVariable(Token.NoToken, new TypedIdent(Token.NoToken, "x", btype.Int));
+            //        var mx = BoogieAstFactory.MkMapAccessExpr(M, Expr.Ident(x));
+			//
+            //        return new ForallExpr(Token.NoToken, new List<TypeVariable>(),
+            //            new List<Variable> { x }, null, new Trigger(Token.NoToken, true, new List<Expr> { mx }),
+            //            Expr.And(Expr.Ge(mx, Expr.Literal(0)), Expr.Lt(mx, Expr.Ident(allocinit))));
+            //    });
 
-                    return new ForallExpr(Token.NoToken, new List<TypeVariable>(),
-                        new List<Variable> { x }, null, new Trigger(Token.NoToken, true, new List<Expr> { mx }),
-                        Expr.And(Expr.Ge(mx, Expr.Literal(0)), Expr.Lt(mx, Expr.Ident(allocinit))));
-                });
-
-            var cmds = new List<Cmd>(
-                program.TopLevelDeclarations.OfType<GlobalVariable>()
-                .Where(g => g.Name.StartsWith("$M"))
-                .Where(g => g.TypedIdent.Type.IsMap && (g.TypedIdent.Type as MapType).Result.IsInt)
-                .Select(g => initM(g))
-                .Select(e => new AssumeCmd(Token.NoToken, e)));
+            //var cmds = new List<Cmd>(
+            //    program.TopLevelDeclarations.OfType<GlobalVariable>()
+            //    .Where(g => g.Name.StartsWith("$M"))
+            //    .Where(g => g.TypedIdent.Type.IsMap && (g.TypedIdent.Type as MapType).Result.IsInt)
+            //    .Select(g => initM(g))
+            //    .Select(e => new AssumeCmd(Token.NoToken, e)));
 
             // alloc_init > 0 && alloc > alloc_init
-            cmds.Insert(0, new AssumeCmd(Token.NoToken,
-                Expr.And(Expr.Gt(Expr.Ident(allocinit), Expr.Literal(0)), Expr.Gt(Expr.Ident(alloc), Expr.Ident(allocinit)))));
+            //cmds.Insert(0, new AssumeCmd(Token.NoToken,
+            //    Expr.And(Expr.Gt(Expr.Ident(allocinit), Expr.Literal(0)), Expr.Gt(Expr.Ident(alloc), Expr.Ident(allocinit)))));
 
+			var cmds = new List<Cmd>();
+			cmds.Add(new AssumeCmd(Token.NoToken, Expr.Gt (Expr.Ident (alloc), Expr.Literal (0))));
             var blk = new Block(Token.NoToken, "start", cmds, new ReturnCmd(Token.NoToken));
                     
             // create init proc
             var initproc = new Procedure(Token.NoToken, "SmackExtraInit", new List<TypeVariable>(), new List<Variable>(),
                 new List<Variable>(), new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
             initproc.AddAttribute(AvUtil.AvnAnnotations.InitialializationProcAttr);
-
+			//initproc.Ensures.Add(new Ensures(true, Expr.Gt(Expr.Ident(alloc), Expr.Literal (0))));
             var initimpl = new Implementation(Token.NoToken, initproc.Name, new List<TypeVariable>(), new List<Variable>(),
                 new List<Variable>(), new List<Variable>(), new List<Block>{ blk });
 
             program.AddTopLevelDeclaration(initproc);
             program.AddTopLevelDeclaration(initimpl);
-            program.AddTopLevelDeclaration(allocinit);
+            //program.AddTopLevelDeclaration(allocinit);
         }
     }
 
