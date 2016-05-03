@@ -22,6 +22,7 @@ g_string_append_c_inline (GString *gstring,
       gstring->str[gstring->len] = 0;
     }
   else
+    // comment out the following line gets rid of the bug
     g_string_insert_c (gstring, -1, c);
   return gstring;
 }
