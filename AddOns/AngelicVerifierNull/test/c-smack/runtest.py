@@ -15,12 +15,22 @@ def arguments():
   parser.add_argument('-v', '--verbose', action='store_true', default=False,
     help = 'verbose mode')
 
+  smack_group = parser.add_argument_group("SMACK options")
+
+  smack_group.add_argument('--smack-options', metavar='OPTIONS', default='',
+    help = 'additional SMACK arguments (e.g., --smack-options="-bc a.bc")')
+
   avh_group = parser.add_argument_group("AvHarnessInstrument options")
   
   avh_group.add_argument('-aa', action='store_true', default=False,
     help = 'use alias analysis')
+
   avh_group.add_argument('--unknown-procs', metavar='PROC', nargs='+',
     default=['malloc'], help = 'specify angelic unknown procedures [default: %(default)s]')
+
+  avh_group.add_argument('--harness-options', metavar='OPTIONS', default='',
+    help = 'additional AvHarnessInstrumentation arugments (e.g., --harness-options="x")'
+  )
 
   avn_group = parser.add_argument_group("AngelicVerifierNull options")
 
@@ -29,6 +39,10 @@ def arguments():
 
   avn_group.add_argument('-sdv', action='store_true', default=False, 
     help = 'use sdv output format')
+
+  avh_group.add_argument('--verifier-options', metavar='OPTIONS', default='',
+    help = 'additional AngelicVerifierNull arugments (e.g., --verifer-options="y")'
+  )
 
   return parser.parse_args()
   
@@ -96,6 +110,7 @@ def runsmack(args):
   cmd = ['smack', '--no-verify']
   cmd += [args.input_file]
   cmd += ['-bpl', args.file_name + '.bpl']
+  cmd += args.smack_options.split()
   
   return try_command(args, cmd, False)  
     
@@ -122,6 +137,7 @@ def runavh(args):
     cmd = ['mono'] + cmd
   cmd += [args.file_name + '.inst.bpl']
   cmd += [args.file_name + '.harness.bpl']
+  cmd += args.harness_options.split()
 
   if args.aa:
     cmd += ['/noAA:0']
@@ -148,6 +164,7 @@ def runavn(args):
     cmd += ['/sdv']
   else:
     cmd += ['/copt:tryCTrace']
+  cmd += args.verifier_options.split()
   return try_command(args, cmd, False) 
 
 def output_summary(output):
