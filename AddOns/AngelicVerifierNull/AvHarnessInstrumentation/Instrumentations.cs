@@ -19,12 +19,11 @@ namespace AvHarnessInstrumentation
     /// </summary>
     public class Instrumentations
     {
-        public static Implementation GetEnvironmentAssumptionsProc(Program program)
+        public static Procedure GetEnvironmentAssumptionsProc(Program program)
         {
             return program.TopLevelDeclarations
-                .OfType<Implementation>()
-                .FirstOrDefault(impl => QKeyValue.FindBoolAttribute(impl.Attributes, AvnAnnotations.InitialializationProcAttr)
-                    || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr));
+                .OfType<Procedure>()
+                .FirstOrDefault(proc => QKeyValue.FindBoolAttribute(proc.Attributes, AvnAnnotations.InitialializationProcAttr));
         }
 
         public class HarnessInstrumentation
@@ -159,8 +158,8 @@ namespace AvHarnessInstrumentation
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit
                 var init = Instrumentations.GetEnvironmentAssumptionsProc(prog);
-                if (init != null && Options.FieldNonNull)
-                    globalCmds.Add(BoogieAstFactory.MkCall(init.Proc, new List<Expr>(), new List<Variable>()));
+                if (init != null)
+                    globalCmds.Add(BoogieAstFactory.MkCall(init, new List<Expr>(), new List<Variable>()));
 
                 // Dont initialize Boogie instrumentation variables
                 prog.GlobalVariables

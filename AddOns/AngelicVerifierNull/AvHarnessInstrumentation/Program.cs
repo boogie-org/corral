@@ -23,8 +23,6 @@ namespace AvHarnessInstrumentation
         public static bool HoudiniPass = false;
         // Add unsound options for NULL
         public static bool AddMapSelectNonNullAssumptions = false;
-        // Use field non-null assumption
-        public static bool FieldNonNull = true;
         // use procs tagged as {:harness} as potential entrypoints as well
         public static bool useHarnessTag = false;
         // mark all assumes as slic
