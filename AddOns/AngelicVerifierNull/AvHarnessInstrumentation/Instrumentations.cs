@@ -226,8 +226,17 @@ namespace AvHarnessInstrumentation
                 var procsWithImpl = prog.TopLevelDeclarations.OfType<Implementation>()
                     .Select(x => x.Proc);
                 var procs = prog.TopLevelDeclarations.OfType<Procedure>();
+                
+                // remove procedures that are never called
+                var procsUsed = new HashSet<string>();
+                prog.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.cmds.OfType<CallCmd>()
+                            .Iter(cc => procsUsed.Add(cc.callee))));
+
                 //TODO: this can be almost quadratic in the size of |Procedures|, cleanup
-                var procsWithoutImpl = procs.Where(x => !procsWithImpl.Contains(x));
+                var procsWithoutImpl = procs.Where(x => !procsWithImpl.Contains(x) && procsUsed.Contains(x.Name));                     
+
                 var stubImpls = new List<Implementation>();
                 foreach (var p in procsWithoutImpl)
                 {
@@ -236,7 +245,7 @@ namespace AvHarnessInstrumentation
                 }
                 prog.AddTopLevelDeclarations(stubImpls);
             }
-            //Change the body of any stub that returns a pointer into calling malloc()
+            //Change the body of any stub that returns a pointer into calling unknown()
             //TODO: only do this for procedures with a single return with a pointer type            
             private void MkStubImplementation(List<Implementation> stubImpls, Procedure p)
             {
@@ -262,7 +271,7 @@ namespace AvHarnessInstrumentation
                     else
                     {
                         // unsupported
-                        Console.WriteLine("Warning: demonic havoc of globals; probably unsupported");
+                        Console.WriteLine("Warning: demonic havoc of global {0} in {1}", v.Name, p.Name);
                     }
                 }
                 foreach (var ip in p.InParams)
