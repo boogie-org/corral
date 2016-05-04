@@ -162,6 +162,12 @@ namespace AvHarnessInstrumentation
                 if (init != null && Options.FieldNonNull)
                     globalCmds.Add(BoogieAstFactory.MkCall(init.Proc, new List<Expr>(), new List<Variable>()));
 
+                // Dont initialize Boogie instrumentation variables
+                prog.GlobalVariables
+                    .Where(g => g.Name == "alloc" || BoogieUtil.checkAttrExists(AvnAnnotations.AllocatorVarAttr, g.Attributes))
+                    .Where(g => !BoogieUtil.checkAttrExists("scalar", g.Attributes))
+                    .Iter(g => g.AddAttribute("scalar"));
+
                 // initialize globals
                 prog.GlobalVariables
                     .Where(g => g.Name != "alloc" && !BoogieUtil.checkAttrExists(AvnAnnotations.AllocatorVarAttr, g.Attributes))
