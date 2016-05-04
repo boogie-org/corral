@@ -1598,6 +1598,7 @@ namespace cba.Util
 
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
+            RemoveVarsFromAttributes.Prune(program);
 
             if (GVN.doGVN)
             {
