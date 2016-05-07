@@ -1063,6 +1063,62 @@ namespace AngelicVerifierNull
             var tprog = traceProgCons.getProgram();
             //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
+            // For AngelicUnknown procs that have an implementation, we need to create a symbolic constant
+            // to mark their return value, and avoid using the actual implementation
+            var angelicProcsWithBody = new HashSet<string>();
+            foreach (var proc in tprog.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => QKeyValue.FindBoolAttribute(p.Attributes, AvnAnnotations.AngelicUnknownCall)))
+                angelicProcsWithBody.Add(proc.Name);
+            angelicProcsWithBody.IntersectWith(tprog.TopLevelDeclarations.OfType<Implementation>().Select(impl => impl.Name));
+            var nameToProc = BoogieUtil.nameProcMapping(tprog);
+
+            foreach (var aproc in angelicProcsWithBody)
+            {
+                // create a procedure without implementation that returns its argument
+                //   procedure aproc_unk(a: T) returns (b: T); ensures a == b;
+                Debug.Assert(nameToProc[aproc].OutParams.Count == 1, "AngelicUnknown procedure must only have a single return value");
+                var outp = nameToProc[aproc].OutParams[0];
+                var a = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "a", outp.TypedIdent.Type), true);
+                var b = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "b", outp.TypedIdent.Type), false);
+                var aproc_unk = new Procedure(Token.NoToken, aproc + "_unk", new List<TypeVariable>(),
+                    new List<Variable> { a },
+                    new List<Variable> { b },
+                    new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                aproc_unk.Ensures.Add(new Ensures(true, Expr.Eq(Expr.Ident(a), Expr.Ident(b))));
+
+                tprog.AddTopLevelDeclaration(aproc_unk);
+
+                foreach (var impl in tprog.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    foreach (var blk in impl.Blocks)
+                    {
+                        var newcmds = new List<Cmd>();
+                        foreach (var cmd in blk.Cmds)
+                        {
+                            newcmds.Add(cmd);
+
+                            var ccmd = cmd as CallCmd;
+                            if (ccmd == null) { continue; }
+                            if (ccmd.callee == aproc)
+                            {
+                                var formalp = ccmd.Outs[0].Decl;
+
+                                var cc_id = QKeyValue.FindIntAttribute(ccmd.Attributes, 
+                                    cba.RestrictToTrace.ConcretizeCallIdAttr, -1);
+                                Debug.Assert(cc_id != -1);
+
+                                newcmds.Add(new CallCmd(Token.NoToken, aproc_unk.Name,
+                                    new List<Expr> { Expr.Ident(formalp) },
+                                    new List<IdentifierExpr> { Expr.Ident(formalp) },
+                                    new QKeyValue(Token.NoToken, cba.RestrictToTrace.ConcretizeCallIdAttr, 
+                                        new List<object>{ Expr.Literal(cc_id) }, null)));
+                            }
+                        }
+                        blk.Cmds = newcmds;
+                    }
+                }
+            }
+
             // mark some annotations (that enable optimizations) along the path program
             CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars, false);
 
