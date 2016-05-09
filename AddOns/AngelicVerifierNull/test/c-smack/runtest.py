@@ -107,6 +107,8 @@ def try_command(args, cmd, console = False):
   finally:
     if proc: os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
+run_cmds = []
+
 def runsmack(args):
   #print 'Running SMACK'
   if os.name != 'posix':
@@ -121,6 +123,7 @@ def runsmack(args):
     
 def runsi(args):
   #print "Running SmackInst at: '{}'".format(args.si_exe)
+  global run_cmds
   if (not os.path.exists(args.si_exe)):
     print "SmackInst not found" 
 
@@ -132,10 +135,12 @@ def runsi(args):
   if args.init_mem:
     cmd += ['/initMem']
   
+  run_cmds += ['// RUN: %si "%s" "%t0.bpl"' + ' '.join(cmd[4 if os.name == 'posix' else 3 :])]
   return try_command(args, cmd, False) 
 
 def runavh(args):
   #print "Running AvHarnessInstrumentation at: '{}'".format(args.avh_exe) 
+  global run_cmds
   if (not os.path.exists(args.avh_exe)):
     print "AvHarnessInstrument not found" 
 
@@ -152,10 +157,12 @@ def runavh(args):
     cmd += ['/noAA']
 
   cmd += ['/unknownProc:' + proc for proc in args.unknown_procs]
+  run_cmds += ['// RUN: %avh "%t0.bpl" "%t1.bpl" ' + ' '.join(cmd[4 if os.name == 'posix' else 3 :])]
   return try_command(args, cmd, True)
 
 def runavn(args):
   #print "Running AngelicVerifierNull at: '{}'".format(args.avn_exe)
+  global run_cmds
   if (not os.path.exists(args.avn_exe)):
     print "AngelicVerifierNull not found" 
 
@@ -172,6 +179,7 @@ def runavn(args):
   else:
     cmd += ['/copt:tryCTrace']
   cmd += args.verifier_options.split()
+  run_cmds += ['// RUN: %avn "%t1.bpl" ' + ' '.join(cmd[3 if os.name == 'posix' else 2 :]) + ' | %grep > %t3']
   return try_command(args, cmd, False) 
 
 def output_summary(output):
@@ -182,6 +190,14 @@ def output_summary(output):
       av_output += line
   
   return av_output
+
+def add_commands_to_bpl(args):
+  with open(args.file_name + '.bpl', 'r+') as f:
+    bpl = '\n'.join(run_cmds) + '\n// RUN: %diff '+ \
+            '"%s.expect" %t3\n\n' + f.read()
+    f.seek(0)
+    f.truncate()
+    f.write(bpl)
 
 if __name__ == '__main__':
   args = arguments()
@@ -196,5 +212,7 @@ if __name__ == '__main__':
   si_output = runsi(args) 
   avh_output = runavh(args)
   avn_output = runavn(args)
+
+  add_commands_to_bpl(args)
 
   print output_summary(avn_output).strip()
