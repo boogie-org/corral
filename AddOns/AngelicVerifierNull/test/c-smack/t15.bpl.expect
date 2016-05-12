@@ -1,0 +1,3 @@
+[TAG: AV_OUTPUT] Found free variables :: mapconst2
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc main with expr !($p13 == NULL)

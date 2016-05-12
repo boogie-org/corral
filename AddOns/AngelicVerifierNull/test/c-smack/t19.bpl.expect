@@ -1,0 +1,5 @@
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> $M.0[x_2] != NULL)
+[TAG: AV_OUTPUT] Found free variables :: alloc___104
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc g_string_append_c_inline with expr !($p18 == NULL)
