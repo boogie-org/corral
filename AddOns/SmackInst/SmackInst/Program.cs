@@ -56,7 +56,7 @@ namespace SmackInst
             // Get rid of Synonyms
             RemoveTypeSynonyms.Remove(program);
             //BoogieUtil.PrintProgram(program, "tt.bpl");
-            program = BoogieUtil.ReResolve(program, false);
+            program = BoogieUtil.ReResolveInMem(program, false);
 
 			// Remove literal constants
 			var CE = new ConstantElimination ();
