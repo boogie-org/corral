@@ -388,7 +388,7 @@ namespace AvHarnessInstrumentation
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
-            init = BoogieUtil.ReResolve(init);
+            init = BoogieUtil.ReResolveInMem(init);
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
             // Update mod sets
@@ -629,7 +629,7 @@ namespace AvHarnessInstrumentation
                     Stats.resume("inlining");
 
                     Stats.resume("read.write");
-                    program = BoogieUtil.ReResolve(program);
+                    program = BoogieUtil.ReResolveInMem(program);
                     Stats.stop("read.write");
 
                     var op = CommandLineOptions.Clo.InlineDepth;
@@ -645,7 +645,7 @@ namespace AvHarnessInstrumentation
                 }
 
                 Stats.resume("read.write");
-                program = BoogieUtil.ReResolve(program);
+                program = BoogieUtil.ReResolveInMem(program);
                 Stats.stop("read.write");
 
                 // Make sure that aliasing queries are on identifiers only
