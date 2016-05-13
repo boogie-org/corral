@@ -12,6 +12,6 @@ echo.
 echo -------------------- %f% --------------------
 del /Q %f%.harness.bpl 2> delout
 %SIEXE% %f%.bpl %f%.inst.bpl
-%HEXE% %f%.inst.bpl %f%.harness.bpl %HOPTS%  %* | findstr AV_OUTPUT
-if exist %f%.harness.bpl %BGEXE% %f%.harness.bpl %BGOPTS%  %* | findstr AV_OUTPUT
-
+%HEXE% %f%.inst.bpl %f%.harness.bpl %HOPTS%  %* > %f%.avn.log
+if exist %f%.harness.bpl %BGEXE% %f%.harness.bpl %BGOPTS%  %* >> %f%.avn.log
+type %f%.avn.log | findstr AV_OUTPUT
