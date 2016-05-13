@@ -1463,14 +1463,14 @@ $bb0:
   assume {:branchcond $i3} true;
   goto $bb1, $bb2;
 $bb1:
-  assume ($i3 == 1);
+  assume {:partition} ($i3 == 1);
   assume {:sourceloc "t21.c", 8, 5} true;
   $M.1 := $store.i32($M.1, x, 1);
   assume {:sourceloc "t21.c", 8, 5} true;
   goto $bb3;
 $bb2:
   assume {:sourceloc "t21.c", 7, 7} true;
-  assume !(($i3 == 1));
+  assume {:partition} !(($i3 == 1));
   goto $bb3;
 $bb3:
   assume {:sourceloc "t21.c", 10, 7} true;
@@ -1480,14 +1480,14 @@ $bb3:
   goto $bb4, $bb6;
 $bb4:
   assume {:sourceloc "t21.c", 10, 7} true;
-  assume ($i4 == 1);
+  assume {:partition} ($i4 == 1);
   goto $bb5;
 $bb5:
   assume {:sourceloc "t21.c", 15, 1} true;
   $exn := false;
   return;
 $bb6:
-  assume !(($i4 == 1));
+  assume {:partition} !(($i4 == 1));
   assume {:sourceloc "t21.c", 11, 5} true;
   assume {:sourceloc "t21.c", 12, 5} true;
   assume __SMACK_MustReach(true);
