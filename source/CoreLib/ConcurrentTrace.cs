@@ -322,6 +322,7 @@ namespace cba
             Console.WriteLine("Execution trace:");
             //Console.WriteLine("Format:  filename(line,col): threadid, k");
             var prev = "";
+            var extra = "";
             foreach (var ev in events)
             {
                 if (!ev.committed)
@@ -331,19 +332,20 @@ namespace cba
 
                 if (ev.extra != "")
                 {
-                    ev.extra = "(" + ev.extra + ")";
+                    extra += (extra == "" ? "" : ", ") + ev.extra;
                 }
 
                 var filename = sanitizeFileName(ev.filename);
                 if (filename != null && filename != "")
                 {
                     //var str = string.Format("{0}({1},{2}):  Thread={3}  K={4}:  {5}", filename, ev.lineno, 1, ev.tid, ev.k, ev.extra);
-                    var str = string.Format("{0}({1},{2}): Trace: Thread={3}  {4}", filename, ev.lineno, ev.col == -1? 1 : ev.col, ev.tid, ev.extra);
+                    var str = string.Format("{0}({1},{2}): Trace: Thread={3}  ({4})", filename, ev.lineno, ev.col == -1? 1 : ev.col, ev.tid, extra);
                     if (str != prev)
                     {
                         Console.WriteLine(str);
                     }
                     prev = str;
+                    extra = "";
                 }
             }
 
