@@ -194,7 +194,8 @@ def output_summary(output):
 def add_commands_to_bpl(args):
   with open(args.file_name + '.bpl', 'r+') as f:
     bpl = '\n'.join(run_cmds) + '\n// RUN: %diff '+ \
-            '"%s.expect" %t3\n\n' + f.read()
+      '"%s.expect" %t3\n\n' + ''.join(filter(lambda x: re.search(r'// RUN: %(si|avh|avn|diff)', x) is None,\
+        f.readlines())).lstrip()
     f.seek(0)
     f.truncate()
     f.write(bpl)
