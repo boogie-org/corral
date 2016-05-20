@@ -3,7 +3,16 @@
 Corral is a solver for the reachability modulo theories problem. Learn more here: http://research.microsoft.com/en-us/projects/verifierq
 
 ## Dependency on Boogie
-Corral has a dependency on Boogie (https://github.com/boogie-org/boogie). Download Boogie sources with the revision number that is mentioned in ``references\BoogieRev.txt``.
+Corral has a dependency on [Boogie](https://github.com/boogie-org/boogie), which is provided as a git submodule. To download the specific revision of Boogie that Corral depends on:
+
+```
+cd ${CORRAL_DIR}
+git submodule init
+git submodule update
+cd boogie
+```
+
+Then follow the [Boogie](https://github.com/boogie-org/boogie#building) building instructions.
 
 ## Building and running Corral on Windows
 
