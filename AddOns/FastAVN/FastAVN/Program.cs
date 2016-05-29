@@ -18,6 +18,7 @@ namespace FastAVN
     {
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
+        static bool createEntryPointBplsOnly = false; //if true stops fastavn after generating entrypoint bpls
         static string avnPath = null; // path to AVN binary
         static string avHarnessInstrPath = null; // path to AVN harness instrumentation binary
         static string psexecPath = null; // path to psexec
@@ -62,6 +63,12 @@ namespace FastAVN
 
             args.Where(s => s.StartsWith("/hopt:"))
                 .Iter(s => avHarnessInstrArgs += " /" + s.Substring("/hopt:".Length) + " ");
+
+            if (args.Any(s => s == "/createEntrypointBplsOnly"))
+            {
+                Driver.createEntryPointBplsOnly = true;
+                Debug.Assert(Driver.keepFiles, "/createEntrypointBplsOnly requires /keepFiles for now");
+            }
 
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -286,6 +293,11 @@ namespace FastAVN
             threads.Iter(t => t.Start());
             threads.Iter(t => t.Join());
 
+            if (Driver.createEntryPointBplsOnly)
+            {
+                Console.WriteLine("Early exit due to /createEntryPointBplsOnly");
+                return;
+            }
             lock (fslock)
             {
                 if (printingOutput) return;
@@ -356,6 +368,11 @@ namespace FastAVN
 
                     sem.Release();
 
+                    if (Driver.createEntryPointBplsOnly)
+                    {
+                        Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
+                        return;
+                    }
                     if (!remotedirs.Contains(rd))
                     {
                         Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
