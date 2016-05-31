@@ -18,6 +18,8 @@ namespace FastAVN
     {
         static int approximationDepth = -1; // k-depth: default infinity
         static int verbose = 1; // default verbosity level
+        static bool createEntryPointBplsOnly = false; //if true stops fastavn after generating entrypoint bpls
+        static bool mergeEntryPointBugsOnly = false; //if true then simply merges bugs present in all the entrypoint dirs
         static string avnPath = null; // path to AVN binary
         static string avHarnessInstrPath = null; // path to AVN harness instrumentation binary
         static string psexecPath = null; // path to psexec
@@ -63,6 +65,11 @@ namespace FastAVN
             args.Where(s => s.StartsWith("/hopt:"))
                 .Iter(s => avHarnessInstrArgs += " /" + s.Substring("/hopt:".Length) + " ");
 
+            if (args.Any(s => s == "/createEntrypointBplsOnly"))
+                Driver.createEntryPointBplsOnly = true;
+            if (args.Any(s => s == "/mergeEntrypointBugsOnly"))
+                Driver.mergeEntryPointBugsOnly = true;
+
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
@@ -96,6 +103,24 @@ namespace FastAVN
             try
             {
                 Stats.resume("fastavn");
+                if (Driver.mergeEntryPointBugsOnly)
+                {
+                    // collate bugs
+                    lock (fslock)
+                    {
+                        printingOutput = true;
+                        if (Directory.Exists(bug_folder))
+                        {
+                            Utils.Print(string.Format("WARNING!! Removing {0} folder", bug_folder));
+                            Directory.Delete(Path.Combine(Directory.GetCurrentDirectory(), bug_folder), true);
+                        }
+                        HashSet<string> epNames = new HashSet<string>(Directory.GetDirectories(@"."));
+                        epNames = new HashSet<string>(epNames.Select(s => Path.GetFileName(s)));
+                        printBugs(ref mergedBugs, epNames.Count);
+                        mergeBugs(epNames);
+                    }
+                    return;
+                }
                 // Get input program
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
@@ -286,6 +311,11 @@ namespace FastAVN
             threads.Iter(t => t.Start());
             threads.Iter(t => t.Join());
 
+            if (Driver.createEntryPointBplsOnly)
+            {
+                Console.WriteLine("Early exit due to /createEntryPointBplsOnly");
+                return;
+            }
             lock (fslock)
             {
                 if (printingOutput) return;
@@ -356,6 +386,12 @@ namespace FastAVN
 
                     sem.Release();
 
+                    if (Driver.createEntryPointBplsOnly)
+                    {
+                        Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
+                        resources.Add(rd);
+                        continue;
+                    }
                     if (!remotedirs.Contains(rd))
                     {
                         Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
