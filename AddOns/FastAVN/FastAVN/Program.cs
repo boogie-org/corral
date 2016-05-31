@@ -66,10 +66,7 @@ namespace FastAVN
                 .Iter(s => avHarnessInstrArgs += " /" + s.Substring("/hopt:".Length) + " ");
 
             if (args.Any(s => s == "/createEntrypointBplsOnly"))
-            {
                 Driver.createEntryPointBplsOnly = true;
-                Debug.Assert(Driver.keepFiles, "/createEntrypointBplsOnly requires /keepFiles for now");
-            }
             if (args.Any(s => s == "/mergeEntrypointBugsOnly"))
                 Driver.mergeEntryPointBugsOnly = true;
 
@@ -392,7 +389,8 @@ namespace FastAVN
                     if (Driver.createEntryPointBplsOnly)
                     {
                         Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
-                        return;
+                        resources.Add(rd);
+                        continue;
                     }
                     if (!remotedirs.Contains(rd))
                     {
