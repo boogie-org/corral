@@ -103,7 +103,6 @@ namespace cba
             GlobalConfig.annotations = config.annotations;
             GlobalConfig.catchAllExceptions = config.catchAllExceptions;
             GlobalConfig.printAllTraces = config.printAllTraces;
-            GlobalConfig.explainQuantifiers = config.explainQuantifiers;
             ContractInfer.fastRequiresInference = config.fastRequiresInference;
             ContractInfer.useHoudiniLite = config.runHoudiniLite;
             ContractInfer.disableStaticAnalysis = config.disableStaticAnalysis;
@@ -646,19 +645,6 @@ namespace cba
                 catch (InvalidInput e)
                 {
                     throw new InvalidInput("Input Program not well-formed.\n" + e.Message);
-                }
-            }
-
-            if (config.explainQuantifiers != null)
-            {
-                if (!WellFormedProg.checkFunctionsAreInlined(init))
-                {
-                    throw new InvalidInput("Please add {:inline} attribute to all functions with a body in the program to use /explainQuantifiers");
-                }
-
-                if (config.arrayTheory != ArrayTheoryOptions.STRONG && !WellFormedProg.checkMapTypes(init))
-                {
-                    throw new InvalidInput("Please use the flag /useArrayTheory along with /explainQuantifiers");
                 }
 
             }

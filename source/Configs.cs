@@ -155,8 +155,6 @@ namespace cba
 
         public int irreducibleLoopUnroll { get; private set; }
 
-        public string explainQuantifiers { get; private set; }
-
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -345,8 +343,6 @@ namespace cba
 
             extraFlags = new HashSet<string>();
             irreducibleLoopUnroll = -1;
-
-            explainQuantifiers = null;
         }
 
 
@@ -547,11 +543,6 @@ namespace cba
             else if (flag == "/nonUniformUnfolding")
             {
                 NonUniformUnfolding = true;
-            }
-            else if (flag.StartsWith("/explainQuantifiers:"))
-            {
-                var split = flag.Split(sep);
-                explainQuantifiers = split[1];
             }
             else if (flag == "/printAllTraces")
             {

@@ -285,8 +285,7 @@ namespace cba
         static bool verifyingPath = false;
         static bool verifyingProg = false;
         static bool refinement = false;
-        static string old_logfile = null;
-
+        
         public static BoogieVerifyOptions progVerifyOptions = null;
         public static BoogieVerifyOptions refinementVerifyOptions = null;
         public static BoogieVerifyOptions pathVerifyOptions = null;
@@ -367,12 +366,9 @@ namespace cba
             verifyingPath = true;
             BoogieVerify.recordTempTime = true;
 
-            
-            if (GlobalConfig.explainQuantifiers != null)
-            {
-                old_logfile = CommandLineOptions.Clo.SimplifyLogFilePath;
-                CommandLineOptions.Clo.SimplifyLogFilePath = GlobalConfig.explainQuantifiers;
-            }
+
+            // AL: adding logging
+            // CommandLineOptions.Clo.SimplifyLogFilePath = "logPath";
 
             startTime = DateTime.Now;
         }
@@ -385,11 +381,6 @@ namespace cba
             GlobalConfig.InferPass = ci;
             BoogieVerify.recordTempTime = false;
             //CommandLineOptions.Clo.ModelViewFile = null;
-
-            if (GlobalConfig.explainQuantifiers != null)
-            {
-                CommandLineOptions.Clo.SimplifyLogFilePath = old_logfile;
-            }
 
             Stats.pathVerificationTime += (DateTime.Now - startTime);
         }
