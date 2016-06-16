@@ -333,12 +333,9 @@ namespace FastAVN
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
                     Program newprogram;
 
-                    // lock because Parsing a program is not thread-safe
-                    lock (fslock)
-                    {
-                        BoogieUtil.PrintProgram(program, pruneFile); // dump original program (so that each entrypoint has its own copy of program)
-                        newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); // entrypoint's copy of the program
-                    }
+                    // Each entrypoint should have its own copy of program
+                    BoogieUtil.PrintProgram(program, pruneFile);
+                    newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); 
 
                     // slice the program by entrypoints
                     Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
@@ -349,10 +346,7 @@ namespace FastAVN
                         .FirstOrDefault());
 
                     File.Delete(pruneFile);
-                    lock (fslock)
-                    {
                         BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
-                    }
 
                     sem.Release();
 
@@ -384,7 +378,7 @@ namespace FastAVN
                     else
                     {
                         // spawn the job -- remote
-                        if(psexecPath == null)
+                        if (psexecPath == null)
                             throw new FileNotFoundException("Cannot find PSEXEC!");
 
                         // find the name of the machine from the remote folder name
@@ -407,7 +401,7 @@ namespace FastAVN
                         {
                             // delete temp files
                             var td = Path.Combine(rd, impl.Name);
-                            if(debug) Console.WriteLine("Getting files in directory: {0}", td);
+                            if (debug) Console.WriteLine("Getting files in directory: {0}", td);
                             var files = System.IO.Directory.GetFiles(td, "*.bpl");
                             foreach (var f in files)
                             {
@@ -442,7 +436,6 @@ namespace FastAVN
 
                         resources.Add(rd);
                     }
-
                     
                 }
             }
