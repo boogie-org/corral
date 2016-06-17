@@ -33,6 +33,7 @@ namespace FastAVN
         static string bug_filename = "Bug";
         static string angelic_stack = "stack";
         static string stack_extension = ".txt";
+        static bool useMemNotDisk = false;
         static FastAvnConfig config = null;
 
         static DateTime startingTime = DateTime.Now;
@@ -56,6 +57,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/keepFiles"))
                 Driver.keepFiles = true;
+
+            if (args.Any(s => s == "/useMemNotDisk"))
+                Driver.useMemNotDisk = true;
 
             args.Where(s => s.StartsWith("/aopt:"))
                 .Iter(s => avnArgs += " /" + s.Substring("/aopt:".Length) + " ");
@@ -334,8 +338,15 @@ namespace FastAVN
                     Program newprogram;
 
                     // Each entrypoint should have its own copy of program
-                    BoogieUtil.PrintProgram(program, pruneFile);
-                    newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile); 
+                    if (useMemNotDisk)
+                    {
+                        newprogram = BoogieUtil.ReResolveInMem(program);
+                    }
+                    else
+                    {
+                        BoogieUtil.PrintProgram(program, pruneFile);
+                        newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile);
+                    }
 
                     // slice the program by entrypoints
                     Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
