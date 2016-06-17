@@ -31,7 +31,7 @@ def arguments():
     help = 'use alias analysis')
 
   avh_group.add_argument('--unknown-procs', metavar='PROC', nargs='+',
-    default=['malloc'], help = 'specify angelic unknown procedures [default: %(default)s]')
+    default=['malloc', '$alloc'], help = 'specify angelic unknown procedures [default: %(default)s]')
 
   avh_group.add_argument('--harness-options', metavar='OPTIONS', default='',
     help = 'additional AvHarnessInstrumentation arugments (e.g., --harness-options="x")'
