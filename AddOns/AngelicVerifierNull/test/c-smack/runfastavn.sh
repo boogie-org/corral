@@ -9,5 +9,5 @@ mono $AVHOME/SmackInst/SmackInst/bin/Debug/SmackInst.exe $1.bpl $1.inst.bpl
 
 mono $AVHOME/FastAVN/FastAVN/bin/Debug/FastAVN.exe $1.inst.bpl \
 /hopt:noAA /hopt:unknownProc:malloc /hopt:unknownProc:\$alloc \
-/aopt:nodup /aopt:traceSlicing /aopt:copt:recursionBound:5 /aopt:copt:k:1 /aopt:sdv /aopt:dontGeneralize\
+/aopt:nodup /aopt:traceSlicing /aopt:copt:recursionBound:5 /aopt:copt:k:1 /aopt:sdv /aopt:dontGeneralize \
 /numThreads:64 /keepFiles /killAfter:3600
