@@ -16,9 +16,9 @@ cd boogie
 
 Here is how you set up Corral. 
 
-1. Build <Corral>\cba.sln. This solution includes the necessary Boogie projects; there is no longer a separate step to build Boogie.
-2. Running Corral requires z3. We have tested Corral against z3 version 4.1; download and copy z3.exe in <Corral>\bin\debug folder. 
-3. Corral takes a Boogie program as input. There are regressions provided in <Corral>\test\regressions folder. Go to this folder and run "perl check.pl" to run all the regressions. You can run an individual test, for instance, as follows: go to <Corral>\test\regressions and do: "..\..\bin\debug\corral.exe 001\001.bpl /flags:001\config". The flag "/flags:filename" instructs corral to read its flags from the file "filename".
+1. Build `cba.sln`. This solution includes the necessary Boogie projects; there is no longer a separate step to build Boogie.
+2. Running Corral requires z3. We have tested Corral against z3 version 4.1; download and copy z3.exe in `bin\debug` folder, alongside the `corral.exe` executable. 
+3. Corral takes a Boogie program as input. There are regressions provided in `test\regressions` folder. Go to this folder and run `perl check.pl` to run all the regressions. You can run an individual test, for instance, as follows: go to `test\regressions` and do: `..\..\bin\debug\corral.exe 001\001.bpl /flags:001\config`. The flag `/flags:filename` instructs corral to read its flags from the file `filename`.
 
 ## Building and Running Corral on Linux using Mono
 
