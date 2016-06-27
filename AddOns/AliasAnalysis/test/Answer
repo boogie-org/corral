@@ -1,28 +1,49 @@
 
 -------------------- f1.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f: False
 
 -------------------- f2.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f: False
 
 -------------------- f3.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f: True
 
 -------------------- f4.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f: True
 
 -------------------- f5.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f: True
 
 -------------------- f6.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f1: False
 f2: True
 
 -------------------- f7.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 f1: True
 f2: False
 
+-------------------- f9.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
+f: True
+
 -------------------- fail_driver4_completerequest.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 alias1: True
 alias2: True
 alias3: True
@@ -32,10 +53,14 @@ alias6: True
 alias7: True
 
 -------------------- fail_driver5_SignalEventIncCompletion2.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 alias1: True
 alias2: False
 
 -------------------- fail_driver5_spinlock.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 alias1: True
 alias2: False
 alias3: False
@@ -46,6 +71,8 @@ alias7: False
 alias8: False
 
 -------------------- flpydisk_fail_wmiforward.bpl --------------------
+Using global value numbering
+AA: Cycle elimination found 0 cycles
 alias1: False
 alias2: True
 alias3: False

@@ -1048,8 +1048,56 @@ namespace AliasAnalysis
             }
         }
 
+        // Convert M := M[x := y] to M[x] := y. Return false if the conversion fails
+        private bool EliminateMapStoreAndProcess(AssignLhs lhs, Expr rhs, out AssignLhs lhsNew, out Expr rhsNew)
+        {
+            lhsNew = null;
+            rhsNew = null;
+
+            var lhsMap = lhs as SimpleAssignLhs;
+            var nary = rhs as NAryExpr;
+            if (lhsMap == null || nary == null) return false;
+
+            if (nary.Fun.FunctionName != "MapStore") return false;
+            if (nary.Args.Count != 3) return false;
+
+            var arg1 = nary.Args[0] as IdentifierExpr;
+            if (arg1 == null) return false;
+
+            // The map variable is the same on both side
+            if (lhsMap.AssignedVariable.Decl.Name != arg1.Decl.Name) return false;
+
+            lhsNew = new MapAssignLhs(Token.NoToken, lhs, new List<Expr> { nary.Args[1] });
+            rhsNew = nary.Args[2];
+
+            if (FunctionsUsed.GetFunctionsUsed(rhsNew).Contains("MapStore")) return false;
+
+            return true;
+        }
+
         private void ProcessAssignment(AssignLhs target, string targetProcName, Expr source, string sourceProcName)
         {
+            // Watch out for M := M[x := y]
+            var hasMapUpdates = FunctionsUsed.GetFunctionsUsed(source).Contains("MapStore");
+
+            if (hasMapUpdates)
+            {
+                AssignLhs lhs = null;
+                Expr rhs = null;
+
+                if (!EliminateMapStoreAndProcess(target, source, out lhs, out rhs))
+                {
+                    Console.WriteLine("Warning: AA failed to eliminated a MapStore: {0} := {1}", target, source);
+                }
+                else
+                {
+                    target = lhs;
+                    source = rhs;
+                }
+
+            }
+
+
             var rs = ReadSet.Get(source);
             if (target is SimpleAssignLhs)
             {
