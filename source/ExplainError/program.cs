@@ -1536,7 +1536,28 @@ namespace ExplainError
                 return LiteralInVocabularyNew(c);
             }
             else
-                return !LiteralNotInVocabularyOld(c);
+                return LiteralInVocabularyAux(c); //!LiteralNotInVocabularyOld(c);
+        }
+
+        /// <summary>
+        /// c is matched by (a) at least 1 positive filter, and (b) no negative filters
+        /// </summary>
+        /// <param name="c"></param>
+        /// <returns></returns>
+        private static bool LiteralInVocabularyAux(Expr c)
+        {
+            //Console.Write("Atom:{0}\t", c);
+            //Check if it matches any of the negative filters
+            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return false;   //definitely not matches
+            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return false;
+            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return false;
+            if (!displayGuardVariables && ContainsGuardVar(c)) return false;  //definitely not matches
+
+            //Check if it matches any of the positive filters
+            if (noFilters) return true; //anything matches
+            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return true;  //definitely matches
+            if (diplayPropertyMaps && ContainsPropertyMap(c)) return true;
+            return true;
         }
 
         private static bool LiteralNotInVocabularyOld(Expr c)
