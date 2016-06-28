@@ -291,15 +291,11 @@ namespace ExplainError
 
             var FindSourceLineInfo = new Func<Cmd, Tuple<string,int>> (cmd => 
                 {
-                    //var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
-                    //var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
                     string sourceFile; 
                     int sourceLine, col; 
                     bool keepCmd;
                     if (cba.PrintConcurrentProgramPath.getSourceInfo(cmd, out sourceFile, out sourceLine, out col, out keepCmd))
                         return Tuple.Create(sourceFile, sourceLine);                        
-                    //if (sourceFile != null && sourceLine != -1)
-                    //    return Tuple.Create(sourceFile, sourceLine);
                     return null;
                 });
 
