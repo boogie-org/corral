@@ -95,6 +95,10 @@
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CoreLib\CoreLib.csproj">
+      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
+      <Name>CoreLib</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Util\CorralUtil.csproj">
       <Project>{186DE4BD-014D-47C7-A914-831EA98116A9}</Project>
       <Name>CorralUtil</Name>

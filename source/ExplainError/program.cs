@@ -289,12 +289,17 @@ namespace ExplainError
             eeRelevantSourceLines = new List<Tuple<string, int, string>>();
             var allSourceLines = new List<Tuple<string, int>>();
 
-            var FindSourceLineInfo = new Func<QKeyValue, Tuple<string,int>> (kv => 
+            var FindSourceLineInfo = new Func<Cmd, Tuple<string,int>> (cmd => 
                 {
-                    var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
-                    var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
-                    if (sourceFile != null && sourceLine != -1)
-                        return Tuple.Create(sourceFile, sourceLine);
+                    //var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
+                    //var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
+                    string sourceFile; 
+                    int sourceLine, col; 
+                    bool keepCmd;
+                    if (cba.PrintConcurrentProgramPath.getSourceInfo(cmd, out sourceFile, out sourceLine, out col, out keepCmd))
+                        return Tuple.Create(sourceFile, sourceLine);                        
+                    //if (sourceFile != null && sourceLine != -1)
+                    //    return Tuple.Create(sourceFile, sourceLine);
                     return null;
                 });
 
@@ -314,22 +319,23 @@ namespace ExplainError
             {
                 //if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
+                var si = FindSourceLineInfo(cmd); //with SMACK, we cannot trust lineinfo to be in assert true anymore
+                if (si != null) //a line with sourcefile/sourceline info
+                {
+                    //only count valid sourcefiles
+                    if (si.Item1 != "?")
+                    {
+                        allSourceLines.Add(Tuple.Create(si.Item1, si.Item2));
+                        if (lastStmtsAdded.Count > 0)
+                            eeRelevantSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
+                    }
+                    lastStmtsAdded.Clear();  //reset it after considering sourceline
+                    continue;
+                }
                 if (cmd is AssertCmd)
                 {
                     if (IsTrueAssert((AssertCmd)cmd))
                     {
-                        var si = FindSourceLineInfo(((AssertCmd)cmd).Attributes);
-                        if (si != null) //a line with sourcefile/sourceline info
-                        {
-                            //only count valid sourcefiles
-                            if (si.Item1 != "?")
-                            {
-                                allSourceLines.Add(Tuple.Create(si.Item1, si.Item2));
-                                if (lastStmtsAdded.Count > 0)
-                                    eeRelevantSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
-                            }
-                            lastStmtsAdded.Clear();  //reset it after considering sourceline
-                        }
                         continue; 
                     } else
                     {
