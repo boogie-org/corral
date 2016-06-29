@@ -532,7 +532,7 @@ namespace AvHarnessInstrumentation
             }
             public override Implementation VisitImplementation(Implementation node)
             {
-                if (assertProcs.Contains(node.Name))
+                if (!assertProcs.Contains(node.Name))
                     return base.VisitImplementation(node);
                 return node;
             }
