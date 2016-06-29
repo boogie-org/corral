@@ -522,6 +522,27 @@ namespace AvHarnessInstrumentation
             }
         }
 
+
+        public class PruneNonAssertProcs : StandardVisitor
+        {
+            HashSet<string> assertProcs = null;
+            public PruneNonAssertProcs(IEnumerable<string> assertProcs)
+            {
+                this.assertProcs = new HashSet<string>(assertProcs);
+            }
+            public override Implementation VisitImplementation(Implementation node)
+            {
+                if (assertProcs.Contains(node.Name))
+                    return base.VisitImplementation(node);
+                return node;
+            }
+            public override Cmd VisitAssertCmd(AssertCmd node)
+            {
+                node.Expr = Expr.True; 
+                return base.VisitAssertCmd(node);
+            }
+
+        }
     }
 
     // Replace "assume x == NULL" with 

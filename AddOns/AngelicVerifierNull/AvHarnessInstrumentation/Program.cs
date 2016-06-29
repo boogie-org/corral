@@ -45,6 +45,8 @@ namespace AvHarnessInstrumentation
         public static int unrollDepth = -1;
         // stubs file
         public static string stubsfile = null;
+        // only keep assertions in these procedures if non-null
+        public static HashSet<string> assertProcs = null; 
     }
 
     public class Driver
@@ -359,6 +361,10 @@ namespace AvHarnessInstrumentation
                             .Iter(AddAnnotation)));
             }
 
+            //only keep assertions in assertProc procedures
+            if (Options.assertProcs != null)
+                (new Instrumentations.PruneNonAssertProcs(Options.assertProcs)).Visit(init);
+
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
 
@@ -396,6 +402,7 @@ namespace AvHarnessInstrumentation
 
             if (Options.AddMapSelectNonNullAssumptions)
                 (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
+
 
             BoogieUtil.pruneProcs(init, AvnAnnotations.CORRAL_MAIN_PROC);
 
@@ -476,6 +483,12 @@ namespace AvHarnessInstrumentation
             args.Where(s => s.StartsWith("/unknownProc:"))
                 .Iter(s => Options.unknownProcs.Add(s.Substring("/unknownProc:".Length)));
 
+            args.Where(s => s.StartsWith("/assertProc:"))
+                .Iter(s =>
+                    {
+                        if (Options.assertProcs == null) { Options.assertProcs = new HashSet<string>(); }
+                        Options.assertProcs.Add(s.Substring("/assertProc:".Length));
+                    });
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");
         }
