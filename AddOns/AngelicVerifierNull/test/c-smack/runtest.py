@@ -15,6 +15,9 @@ def arguments():
   parser.add_argument('-v', '--verbose', action='store_true', default=False,
     help = 'verbose mode')
 
+  parser.add_argument('-g', '--general', action='store_true', default=False,
+    help = 'check general assertion (do not run smackinst.exe)')
+
   smack_group = parser.add_argument_group("SMACK options")
 
   smack_group.add_argument('--smack-options', metavar='OPTIONS', default='',
@@ -36,6 +39,9 @@ def arguments():
   avh_group.add_argument('--harness-options', metavar='OPTIONS', default='',
     help = 'additional AvHarnessInstrumentation arugments (e.g., --harness-options="x")'
   )
+
+  avh_group.add_argument('--use-entry-points', action='store_true', default=False,
+    help = 'use entry points only')
 
   avn_group = parser.add_argument_group("AngelicVerifierNull options")
 
@@ -147,8 +153,10 @@ def runavh(args):
   cmd = [args.avh_exe]
   if os.name == 'posix':
     cmd = ['mono'] + cmd
-  cmd += [args.file_name + '.inst.bpl']
+  cmd += [args.file_name + '.bpl' if args.general else '.inst.bpl']
   cmd += [args.file_name + '.harness.bpl']
+  if args.use_entry_points:
+    cmd += ['/useEntryPoints']
   cmd += args.harness_options.split()
 
   if args.aa:
@@ -174,6 +182,7 @@ def runavn(args):
   cmd += ['/traceSlicing']
   cmd += ['/copt:recursionBound:' + str(args.unroll)]
   cmd += ['/copt:k:1']
+  cmd += ['/dontGeneralize']
   if args.sdv:
     cmd += ['/sdv']
   else:
@@ -209,8 +218,9 @@ if __name__ == '__main__':
 
   
   find_exe(args)
- 
-  si_output = runsi(args) 
+
+  if (not args.general):
+    si_output = runsi(args)
   avh_output = runavh(args)
   avn_output = runavn(args)
 
