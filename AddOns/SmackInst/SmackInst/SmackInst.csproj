@@ -32,41 +32,47 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="AbsInt">
+    <Reference Include="BoogieAbsInt">
       <HintPath>..\..\..\references\BoogieAbsInt.dll</HintPath>
     </Reference>
-    <Reference Include="Basetypes">
+    <Reference Include="BoogieBasetypes">
       <HintPath>..\..\..\references\BoogieBasetypes.dll</HintPath>
     </Reference>
-    <Reference Include="CodeContractsExtender">
+    <Reference Include="BoogieCodeContractsExtender">
       <HintPath>..\..\..\references\BoogieCodeContractsExtender.dll</HintPath>
     </Reference>
-    <Reference Include="Concurrency">
+    <Reference Include="BoogieConcurrency">
       <HintPath>..\..\..\references\BoogieConcurrency.dll</HintPath>
     </Reference>
-    <Reference Include="Core">
+    <Reference Include="BoogieCore">
       <HintPath>..\..\..\references\BoogieCore.dll</HintPath>
     </Reference>
-    <Reference Include="Doomed">
+    <Reference Include="BoogieDoomed">
       <HintPath>..\..\..\references\BoogieDoomed.dll</HintPath>
     </Reference>
-    <Reference Include="ExecutionEngine">
+    <Reference Include="BoogieExecutionEngine">
       <HintPath>..\..\..\references\BoogieExecutionEngine.dll</HintPath>
     </Reference>
-    <Reference Include="Graph">
+    <Reference Include="BoogieGraph">
       <HintPath>..\..\..\references\BoogieGraph.dll</HintPath>
     </Reference>
-    <Reference Include="Houdini">
+    <Reference Include="BoogieHoudini">
       <HintPath>..\..\..\references\BoogieHoudini.dll</HintPath>
     </Reference>
-    <Reference Include="Model">
+    <Reference Include="BoogieModel">
       <HintPath>..\..\..\references\BoogieModel.dll</HintPath>
     </Reference>
-    <Reference Include="ParserHelper">
+    <Reference Include="BoogieParserHelper">
       <HintPath>..\..\..\references\BoogieParserHelper.dll</HintPath>
     </Reference>
-    <Reference Include="Predication">
+    <Reference Include="BoogiePredication">
       <HintPath>..\..\..\references\BoogiePredication.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCExpr">
+      <HintPath>..\..\..\references\BoogieVCExpr.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCGeneration">
+      <HintPath>..\..\..\references\BoogieVCGeneration.dll</HintPath>
     </Reference>
     <Reference Include="Provers.SMTLib">
       <HintPath>..\..\..\references\Provers.SMTLib.dll</HintPath>
@@ -78,12 +84,6 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="VCExpr">
-      <HintPath>..\..\..\references\BoogieVCExpr.dll</HintPath>
-    </Reference>
-    <Reference Include="VCGeneration">
-      <HintPath>..\..\..\references\BoogieVCGeneration.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
