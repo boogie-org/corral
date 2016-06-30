@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Boogie;
 using cba.Util;
 using btype = Microsoft.Boogie.Type;
+using System.Diagnostics;
 
 namespace BctMemInst
 {
@@ -79,7 +80,10 @@ namespace BctMemInst
             freeProcs[0].Blocks[0].Cmds.Insert(0,
                 BoogieAstFactory.MkMapAssign(Freed, Expr.Ident(x), Expr.Literal(true)));
 
-            InstrumentMemoryAccesses.Instrument(program, nil);
+            DesugarIte.Instrument(program);
+
+            InstrumentMemoryAccesses.Instrument(program, nil);            
+
             return program;
         }
 
@@ -129,12 +133,12 @@ namespace BctMemInst
         List<Cmd> MkAssert(Expr e)
         {
             return new List<Cmd> {
-                new AssertCmd(Token.NoToken, Expr.And(new List<Expr> {
-                    Expr.Neq(e, nil),
-                    BoogieAstFactory.MkMapAccessExpr(Driver.Alloc, e),
-                    Expr.Not(BoogieAstFactory.MkMapAccessExpr(Driver.Freed, e))
-                })),
-                new AssumeCmd(Token.NoToken, Expr.Neq(e, nil))
+                new AssertCmd(Token.NoToken, Expr.Neq(e, nil)),
+                new AssertCmd(Token.NoToken, BoogieAstFactory.MkMapAccessExpr(Driver.Alloc, e)),
+                new AssertCmd(Token.NoToken, Expr.Not(BoogieAstFactory.MkMapAccessExpr(Driver.Freed, e))),
+                new AssumeCmd(Token.NoToken, Expr.Neq(e, nil)),
+                new AssumeCmd(Token.NoToken, BoogieAstFactory.MkMapAccessExpr(Driver.Alloc, e)),
+                new AssumeCmd(Token.NoToken, Expr.Not(BoogieAstFactory.MkMapAccessExpr(Driver.Freed, e))),
             };
         }
 
@@ -191,6 +195,9 @@ namespace BctMemInst
             var acmd = cmd as AssumeCmd;
             if (acmd == null) return false;
 
+            if (BoogieUtil.checkAttrExists("partition", acmd.Attributes))
+                return false;
+
             var expr = acmd.Expr as NAryExpr;
             if (expr == null) return false;
 
@@ -242,4 +249,214 @@ namespace BctMemInst
         }
     }
 
+    public class DesugarIte : StandardVisitor
+    {
+        int counterVar;
+        int counterBlock;
+        List<Tuple<Variable, Expr>> IteExprs;
+        List<Variable> newVars;
+
+        DesugarIte()
+        {
+            counterVar = 0;
+            counterBlock = 0;
+            IteExprs = new List<Tuple<Variable, Expr>>();
+            newVars = new List<Variable>();
+        }
+
+        void Reset()
+        {
+            IteExprs = new List<Tuple<Variable, Expr>>();
+        }
+
+        public static void Instrument(Program program)
+        {
+            foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                var obj = new DesugarIte();
+                obj.Instrument(impl);
+                obj.Desugar(impl);
+                impl.LocVars.AddRange(obj.newVars);
+            }
+        }
+
+        void Instrument(Implementation impl)
+        {
+            foreach (var block in impl.Blocks)
+            {
+                var newcmds = new List<Cmd>();
+                foreach (Cmd cmd in block.Cmds)
+                {
+                    if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd));
+                    else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd));
+                    else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd));
+                    else newcmds.Add(cmd);
+                }
+                block.Cmds = newcmds;
+            }
+        }
+
+        void Desugar(Implementation impl)
+        {
+            var newBlocks = new List<Block>();
+            var newVars = new List<Variable>();
+
+            foreach (var block in impl.Blocks)
+            {
+                var currBlock = new Block(Token.NoToken, block.Label, new List<Cmd>(), null);
+                var currCmds = new List<Cmd>();
+
+                foreach (var cmd in block.Cmds)
+                {
+                    var acmd = cmd as AssignCmd;
+                    if (acmd == null || !acmd.Lhss[0].DeepAssignedVariable.Name.StartsWith("mem_inst_tmp_"))
+                    {
+                        currCmds.Add(cmd);
+                        continue;
+                    }
+
+                    Debug.Assert(acmd.Rhss.Count == 1);
+                    var ite = acmd.Rhss[0] as NAryExpr;
+                    Debug.Assert(ite != null && ite.Fun is IfThenElse);
+
+                    Desugar((acmd.Lhss[0] as SimpleAssignLhs).AssignedVariable.Decl,
+                        ite.Args[0], ite.Args[1], ite.Args[2], ref currCmds, ref currBlock, newBlocks);
+                }
+
+                currBlock.Cmds = currCmds;
+                currBlock.TransferCmd = block.TransferCmd;
+                newBlocks.Add(currBlock);
+            }
+
+            impl.Blocks = newBlocks;
+            impl.LocVars.AddRange(newVars);
+        }
+
+        void Desugar(Variable lhs, Expr cond, Expr then, Expr els, ref List<Cmd> currCmds, ref Block currBlock, List<Block> newBlocks)
+        {
+            // create three new blocks
+            var lab1 = GetNewLabel();
+            var lab2 = GetNewLabel();
+            var lab3 = GetNewLabel();
+
+            var tmp = CreateTmp(btype.Bool);
+
+            currCmds.Add(BoogieAstFactory.MkVarEqExpr(tmp, cond));
+
+            // end current block
+            currBlock.Cmds = currCmds;
+            currBlock.TransferCmd = new GotoCmd(Token.NoToken, new List<string> { lab1, lab2 });
+            newBlocks.Add(currBlock);
+
+
+            var blk1 = new Block(Token.NoToken, lab1, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
+            var blk2 = new Block(Token.NoToken, lab2, new List<Cmd>(), BoogieAstFactory.MkGotoCmd(lab3));
+
+            blk1.Cmds.AddRange(
+                new List<Cmd> {
+                    BoogieAstFactory.MkAssume(Expr.Ident(tmp)),
+                    BoogieAstFactory.MkVarEqExpr(lhs, then)
+                });
+
+            blk2.Cmds.AddRange(
+                new List<Cmd> {
+                    BoogieAstFactory.MkAssume(Expr.Not(Expr.Ident(tmp))),
+                    BoogieAstFactory.MkVarEqExpr(lhs, els)
+                });
+
+            newBlocks.Add(blk1);
+            newBlocks.Add(blk2);
+
+            currBlock = new Block(Token.NoToken, lab3, new List<Cmd>(), null);
+            currCmds = new List<Cmd>();
+        }
+
+
+        List<Cmd> ProcessAssign(AssignCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            for (int i = 0; i < cmd.Rhss.Count; i++)
+            {
+                Reset();
+                var expr = base.VisitExpr(cmd.Rhss[i]);
+                cmd.SetAssignCmdRhs(i, expr);
+                ret.AddRange(GetTmpAssignments());
+            }
+
+            ret.Add(cmd);
+
+            return ret;
+        }
+
+        List<Cmd> ProcessCall(CallCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            for (int i = 0; i < cmd.Ins.Count; i++)
+            {
+                Reset();
+                var expr = base.VisitExpr(cmd.Ins[i]);
+                cmd.Ins[i] = expr;
+                ret.AddRange(GetTmpAssignments());
+            }
+
+            ret.Add(cmd);
+
+            return ret;
+        }
+
+        List<Cmd> ProcessAssume(AssumeCmd cmd)
+        {
+            var ret = new List<Cmd>();
+
+            Reset();
+            var expr = base.VisitExpr(cmd.Expr);
+            ret.AddRange(GetTmpAssignments());
+            cmd.Expr = expr;
+            ret.Add(cmd);
+
+            return ret;
+        }
+
+        List<Cmd> GetTmpAssignments()
+        {
+            var ret = new List<Cmd>();
+            foreach (var tup in IteExprs)
+            {
+                ret.Add(new AssignCmd(Token.NoToken,
+                    new List<AssignLhs> { new SimpleAssignLhs(Token.NoToken, Expr.Ident(tup.Item1)) },
+                    new List<Expr> { tup.Item2 }));
+            }
+            return ret;
+        }
+
+        string GetNewLabel()
+        { 
+            return "mem_inst_blk_" + (counterBlock++);
+        }
+
+        Variable CreateTmp(btype type)
+        {
+            var v = new LocalVariable(Token.NoToken, new TypedIdent(Token.NoToken,
+                "mem_inst_tmp_" + (counterVar++), type));
+            newVars.Add(v);
+            return v;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var rnode = base.VisitNAryExpr(node) as NAryExpr;
+
+            if (rnode.Fun is IfThenElse)
+            {
+                var tmp = CreateTmp(rnode.Type);
+                IteExprs.Add(Tuple.Create(tmp, rnode as Expr));
+
+                return Expr.Ident(tmp);
+            }
+
+            return rnode;            
+        }
+    }
 }

@@ -74,6 +74,10 @@
       <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
       <Name>Core</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\Doomed\Doomed.csproj">
+      <Project>{884386a3-58e9-40bb-a273-b24976775553}</Project>
+      <Name>Doomed</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\ExecutionEngine\ExecutionEngine.csproj">
       <Project>{eaa5eb79-d475-4601-a59b-825c191cd25f}</Project>
       <Name>ExecutionEngine</Name>
@@ -97,6 +101,10 @@
     <ProjectReference Include="..\..\..\boogie\Source\ParserHelper\ParserHelper.csproj">
       <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
       <Name>ParserHelper</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\Predication\Predication.csproj">
+      <Project>{afaa5ce1-c41b-44f0-88f8-fd8a43826d44}</Project>
+      <Name>Predication</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\Provers\SMTLib\SMTLib.csproj">
       <Project>{9b163aa3-36bc-4afb-88ab-79bc9e97e401}</Project>

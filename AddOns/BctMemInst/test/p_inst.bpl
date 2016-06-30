@@ -364,7 +364,7 @@ const {:extern} unique T$System.Random: int;
 axiom $TypeConstructor(T$System.Random()) == T$System.Random;
 
 procedure {:extern} System.Random.Next$System.Int32($this: Ref, maxValue$in: int) returns ($result: int);
-  ensures $result < maxValue$in && $result >= 0;
+  ensures $result >= 0 && $result < maxValue$in;
 
 
 
@@ -413,7 +413,8 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
 
   anon0:
     assume args$in != null;
-    assume $Alloc[args$in] && ! FreedRef[args$in];
+    assume $Alloc[args$in];
+    assume !FreedRef[args$in];
 
     call T$RandomGraph.RandomGraph.#cctor();
     call RandomGraph.Consts.#cctor();
@@ -431,8 +432,12 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 94} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 94} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 94} true;
-    assert args != null && $Alloc[args] && !FreedRef[args];
+    assert args != null;
+    assert $Alloc[args];
+    assert !FreedRef[args];
     assume args != null;
+    assume $Alloc[args];
+    assume !FreedRef[args];
     call $tmp0 := System.Int32.Parse$System.String($ArrayContents[args][0]);
     F$RandomGraph.Consts.MAX_NODES := $tmp0;
     goto anon3;
@@ -450,8 +455,12 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 98} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 98} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 98} true;
-    assert args != null && $Alloc[args] && !FreedRef[args];
+    assert args != null;
+    assert $Alloc[args];
+    assert !FreedRef[args];
     assume args != null;
+    assume $Alloc[args];
+    assume !FreedRef[args];
     call $tmp1 := System.Int32.Parse$System.String($ArrayContents[args][1]);
     F$RandomGraph.Consts.MAX_CNXS := $tmp1;
     goto anon6;
@@ -469,8 +478,12 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 102} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 102} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 102} true;
-    assert args != null && $Alloc[args] && !FreedRef[args];
+    assert args != null;
+    assert $Alloc[args];
+    assert !FreedRef[args];
     assume args != null;
+    assume $Alloc[args];
+    assume !FreedRef[args];
     call $tmp2 := System.Int32.Parse$System.String($ArrayContents[args][2]);
     F$RandomGraph.Consts.REPLACEMENTS := $tmp2;
     goto anon9;
@@ -526,8 +539,12 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
     call RandomGraph.Node.#ctor($tmp7);
     assume $DynamicType($tmp7) == T$RandomGraph.Node();
     assume $TypeConstructor($DynamicType($tmp7)) == T$RandomGraph.Node;
-    assert nodes_Ref != null && $Alloc[nodes_Ref] && !FreedRef[nodes_Ref];
+    assert nodes_Ref != null;
+    assert $Alloc[nodes_Ref];
+    assert !FreedRef[nodes_Ref];
     assume nodes_Ref != null;
+    assume $Alloc[nodes_Ref];
+    assume !FreedRef[nodes_Ref];
     $ArrayContents := $ArrayContents[nodes_Ref := $ArrayContents[nodes_Ref][i_int := $tmp7]];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 108} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 108} true;
@@ -561,6 +578,7 @@ implementation RandomGraph.RandomGraph.Main$System.Stringarray(args$in: Ref) ret
     goto anon26_Then, anon26_Else;
 
   anon26_Then:
+    assume {:partition} $Exception != null;
     return;
 
   anon26_Else:
@@ -664,13 +682,21 @@ implementation RandomGraph.RandomGraph.interconnects__inner$System.Random$Random
     i := i$in;
     assume {:breadcrumb 2} true;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 133} true;
-    assert nodes != null && $Alloc[nodes] && !FreedRef[nodes];
+    assert nodes != null;
+    assert $Alloc[nodes];
+    assert !FreedRef[nodes];
     assume nodes != null;
+    assume $Alloc[nodes];
+    assume !FreedRef[nodes];
     node_i_Ref := $ArrayContents[nodes][i];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 134} true;
     $tmp0 := node_i_Ref;
-    assert $tmp0 != null && $Alloc[$tmp0] && !FreedRef[$tmp0];
+    assert $tmp0 != null;
+    assert $Alloc[$tmp0];
+    assert !FreedRef[$tmp0];
     assume $tmp0 != null;
+    assume $Alloc[$tmp0];
+    assume !FreedRef[$tmp0];
     node_i_edges_Ref := F$RandomGraph.Node.edges[$tmp0];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 135} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 135} true;
@@ -685,8 +711,12 @@ implementation RandomGraph.RandomGraph.interconnects__inner$System.Random$Random
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 138} true;
     call $tmp2 := System.Random.Next$System.Int32(r, F$RandomGraph.Consts.MAX_NODES);
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 138} true;
-    assert nodes != null && $Alloc[nodes] && !FreedRef[nodes];
+    assert nodes != null;
+    assert $Alloc[nodes];
+    assert !FreedRef[nodes];
     assume nodes != null;
+    assume $Alloc[nodes];
+    assume !FreedRef[nodes];
     call RandomGraph.Node.AddEdge$RandomGraph.Node$RandomGraph.Nodearray(node_i_Ref, $ArrayContents[nodes][$tmp2], node_i_edges_Ref);
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 136} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 136} true;
@@ -733,8 +763,12 @@ implementation RandomGraph.RandomGraph.replace$System.Random$RandomGraph.Nodearr
     call $tmp0 := System.Random.Next$System.Int32(r, F$RandomGraph.Consts.MAX_NODES);
     i_int := $tmp0;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 147} true;
-    assert nodes != null && $Alloc[nodes] && !FreedRef[nodes];
+    assert nodes != null;
+    assert $Alloc[nodes];
+    assert !FreedRef[nodes];
     assume nodes != null;
+    assume $Alloc[nodes];
+    assume !FreedRef[nodes];
     original_Ref := $ArrayContents[nodes][i_int];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 148} true;
     call $tmp1 := Alloc();
@@ -749,6 +783,7 @@ implementation RandomGraph.RandomGraph.replace$System.Random$RandomGraph.Nodearr
     goto anon3_Then, anon3_Else;
 
   anon3_Then:
+    assume {:partition} $Exception != null;
     return;
 
   anon3_Else:
@@ -758,8 +793,12 @@ implementation RandomGraph.RandomGraph.replace$System.Random$RandomGraph.Nodearr
   anon2:
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 150} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 150} true;
-    assert nodes != null && $Alloc[nodes] && !FreedRef[nodes];
+    assert nodes != null;
+    assert $Alloc[nodes];
+    assert !FreedRef[nodes];
     assume nodes != null;
+    assume $Alloc[nodes];
+    assume !FreedRef[nodes];
     $ArrayContents := $ArrayContents[nodes := $ArrayContents[nodes][i_int := new_n_Ref]];
     return;
 }
@@ -863,6 +902,10 @@ implementation RandomGraph.Node.AddEdge$RandomGraph.Node$RandomGraph.Nodearray($
   var $tmp2: Ref;
   var $localExc: Ref;
   var $label: int;
+  var mem_inst_tmp_0: bool;
+  var mem_inst_tmp_1: bool;
+  var mem_inst_tmp_2: bool;
+  var mem_inst_tmp_3: bool;
 
   anon0:
     to := to$in;
@@ -870,21 +913,33 @@ implementation RandomGraph.Node.AddEdge$RandomGraph.Node$RandomGraph.Nodearray($
     assume {:breadcrumb 7} true;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 33} true;
     $tmp0 := to;
-    assert $tmp0 != null && $Alloc[$tmp0] && !FreedRef[$tmp0];
+    assert $tmp0 != null;
+    assert $Alloc[$tmp0];
+    assert !FreedRef[$tmp0];
     assume $tmp0 != null;
+    assume $Alloc[$tmp0];
+    assume !FreedRef[$tmp0];
     otherEdges_Ref := F$RandomGraph.Node.edges[$tmp0];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 34} true;
     goto anon10_Then, anon10_Else;
 
   anon10_Then:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     assume {:partition} F$RandomGraph.Node.head[$this] >= $ArrayLength(edges);
     goto anon3;
 
   anon10_Else:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     assume {:partition} $ArrayLength(edges) > F$RandomGraph.Node.head[$this];
     $tmp1 := to;
     goto anon3;
@@ -893,20 +948,64 @@ implementation RandomGraph.Node.AddEdge$RandomGraph.Node$RandomGraph.Nodearray($
     goto anon11_Then, anon11_Else;
 
   anon11_Then:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
-    assert $tmp1 != null && $Alloc[$tmp1] && !FreedRef[$tmp1];
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
+    mem_inst_tmp_2 := F$RandomGraph.Node.head[$this] >= $ArrayLength(edges);
+    goto mem_inst_blk_0, mem_inst_blk_1;
+
+  mem_inst_blk_0:
+    assume mem_inst_tmp_2;
+    mem_inst_tmp_0 := true;
+    goto mem_inst_blk_2;
+
+  mem_inst_blk_1:
+    assume !mem_inst_tmp_2;
+    assert $tmp1 != null;
+    assert $Alloc[$tmp1];
+    assert !FreedRef[$tmp1];
     assume $tmp1 != null;
-    assume {:partition} (if F$RandomGraph.Node.head[$this] >= $ArrayLength(edges) then true else !(F$RandomGraph.Node.head[$tmp1] < $ArrayLength(otherEdges_Ref)));
+    assume $Alloc[$tmp1];
+    assume !FreedRef[$tmp1];
+    mem_inst_tmp_0 := !(F$RandomGraph.Node.head[$tmp1] < $ArrayLength(otherEdges_Ref));
+    goto mem_inst_blk_2;
+
+  mem_inst_blk_2:
+    assume {:partition} mem_inst_tmp_0;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 35} true;
     return;
 
   anon11_Else:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
-    assert $tmp1 != null && $Alloc[$tmp1] && !FreedRef[$tmp1];
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
+    mem_inst_tmp_3 := F$RandomGraph.Node.head[$this] >= $ArrayLength(edges);
+    goto mem_inst_blk_3, mem_inst_blk_4;
+
+  mem_inst_blk_3:
+    assume mem_inst_tmp_3;
+    mem_inst_tmp_1 := true;
+    goto mem_inst_blk_5;
+
+  mem_inst_blk_4:
+    assume !mem_inst_tmp_3;
+    assert $tmp1 != null;
+    assert $Alloc[$tmp1];
+    assert !FreedRef[$tmp1];
     assume $tmp1 != null;
-    assume {:partition} !(if F$RandomGraph.Node.head[$this] >= $ArrayLength(edges) then true else !(F$RandomGraph.Node.head[$tmp1] < $ArrayLength(otherEdges_Ref)));
+    assume $Alloc[$tmp1];
+    assume !FreedRef[$tmp1];
+    mem_inst_tmp_1 := !(F$RandomGraph.Node.head[$tmp1] < $ArrayLength(otherEdges_Ref));
+    goto mem_inst_blk_5;
+
+  mem_inst_blk_5:
+    assume {:partition} !mem_inst_tmp_1;
     goto anon6;
 
   anon6:
@@ -925,31 +1024,63 @@ implementation RandomGraph.Node.AddEdge$RandomGraph.Node$RandomGraph.Nodearray($
   anon9:
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 39} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 39} true;
-    assert edges != null && $Alloc[edges] && !FreedRef[edges];
+    assert edges != null;
+    assert $Alloc[edges];
+    assert !FreedRef[edges];
     assume edges != null;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assume $Alloc[edges];
+    assume !FreedRef[edges];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     $ArrayContents := $ArrayContents[edges := $ArrayContents[edges][F$RandomGraph.Node.head[$this] := to]];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 40} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 40} true;
     $tmp2 := to;
-    assert otherEdges_Ref != null && $Alloc[otherEdges_Ref] && !FreedRef[otherEdges_Ref];
+    assert otherEdges_Ref != null;
+    assert $Alloc[otherEdges_Ref];
+    assert !FreedRef[otherEdges_Ref];
     assume otherEdges_Ref != null;
-    assert $tmp2 != null && $Alloc[$tmp2] && !FreedRef[$tmp2];
+    assume $Alloc[otherEdges_Ref];
+    assume !FreedRef[otherEdges_Ref];
+    assert $tmp2 != null;
+    assert $Alloc[$tmp2];
+    assert !FreedRef[$tmp2];
     assume $tmp2 != null;
+    assume $Alloc[$tmp2];
+    assume !FreedRef[$tmp2];
     $ArrayContents := $ArrayContents[otherEdges_Ref := $ArrayContents[otherEdges_Ref][F$RandomGraph.Node.head[$tmp2] := $this]];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 41} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 41} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.head[$this] := F$RandomGraph.Node.head[$this] + 1;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 42} true;
-    assert to != null && $Alloc[to] && !FreedRef[to];
+    assert to != null;
+    assert $Alloc[to];
+    assert !FreedRef[to];
     assume to != null;
-    assert to != null && $Alloc[to] && !FreedRef[to];
+    assume $Alloc[to];
+    assume !FreedRef[to];
+    assert to != null;
+    assert $Alloc[to];
+    assert !FreedRef[to];
     assume to != null;
+    assume $Alloc[to];
+    assume !FreedRef[to];
     F$RandomGraph.Node.head[to] := F$RandomGraph.Node.head[to] + 1;
     return;
 }
@@ -980,12 +1111,20 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     new_n := new_n$in;
     assume {:breadcrumb 8} true;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 48} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     local_edges_Ref := F$RandomGraph.Node.edges[$this];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 49} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     head_local_int := F$RandomGraph.Node.head[$this];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 50} true;
     i_int := 0;
@@ -993,8 +1132,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
 
   IL_0015:
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 53} true;
-    assert local_edges_Ref != null && $Alloc[local_edges_Ref] && !FreedRef[local_edges_Ref];
+    assert local_edges_Ref != null;
+    assert $Alloc[local_edges_Ref];
+    assert !FreedRef[local_edges_Ref];
     assume local_edges_Ref != null;
+    assume $Alloc[local_edges_Ref];
+    assume !FreedRef[local_edges_Ref];
     c_Ref := $ArrayContents[local_edges_Ref][i_int];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 55} true;
     goto anon12_Then, anon12_Else;
@@ -1003,8 +1146,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     assume {:partition} c_Ref == old_n;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 57} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 57} true;
-    assert local_edges_Ref != null && $Alloc[local_edges_Ref] && !FreedRef[local_edges_Ref];
+    assert local_edges_Ref != null;
+    assert $Alloc[local_edges_Ref];
+    assert !FreedRef[local_edges_Ref];
     assume local_edges_Ref != null;
+    assume $Alloc[local_edges_Ref];
+    assume !FreedRef[local_edges_Ref];
     $ArrayContents := $ArrayContents[local_edges_Ref := $ArrayContents[local_edges_Ref][i_int := new_n]];
     goto anon3;
 
@@ -1018,8 +1165,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     goto anon13_Then, anon13_Else;
 
   anon13_Then:
-    assert $tmp0 != null && $Alloc[$tmp0] && !FreedRef[$tmp0];
+    assert $tmp0 != null;
+    assert $Alloc[$tmp0];
+    assert !FreedRef[$tmp0];
     assume $tmp0 != null;
+    assume $Alloc[$tmp0];
+    assume !FreedRef[$tmp0];
     assume {:partition} F$RandomGraph.Node.deleted[$tmp0] == 1;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 60} true;
     call $tmp1 := Alloc();
@@ -1031,8 +1182,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     return;
 
   anon13_Else:
-    assert $tmp0 != null && $Alloc[$tmp0] && !FreedRef[$tmp0];
+    assert $tmp0 != null;
+    assert $Alloc[$tmp0];
+    assert !FreedRef[$tmp0];
     assume $tmp0 != null;
+    assume $Alloc[$tmp0];
+    assume !FreedRef[$tmp0];
     assume {:partition} F$RandomGraph.Node.deleted[$tmp0] != 1;
     goto anon6;
 
@@ -1042,8 +1197,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     goto anon14_Then, anon14_Else;
 
   anon14_Then:
-    assert $tmp2 != null && $Alloc[$tmp2] && !FreedRef[$tmp2];
+    assert $tmp2 != null;
+    assert $Alloc[$tmp2];
+    assert !FreedRef[$tmp2];
     assume $tmp2 != null;
+    assume $Alloc[$tmp2];
+    assume !FreedRef[$tmp2];
     assume {:partition} F$RandomGraph.Node.deleted[$tmp2] == 1;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 62} true;
     call $tmp3 := Alloc();
@@ -1055,8 +1214,12 @@ implementation RandomGraph.Node.Substitute$RandomGraph.Node$RandomGraph.Node($th
     return;
 
   anon14_Else:
-    assert $tmp2 != null && $Alloc[$tmp2] && !FreedRef[$tmp2];
+    assert $tmp2 != null;
+    assert $Alloc[$tmp2];
+    assert !FreedRef[$tmp2];
     assume $tmp2 != null;
+    assume $Alloc[$tmp2];
+    assume !FreedRef[$tmp2];
     assume {:partition} F$RandomGraph.Node.deleted[$tmp2] != 1;
     goto anon9;
 
@@ -1101,24 +1264,44 @@ implementation RandomGraph.Node.ReplaceWith$RandomGraph.Node($this: Ref, new_n$i
     assume {:breadcrumb 9} true;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 69} true;
     $tmp0 := new_n;
-    assert $tmp0 != null && $Alloc[$tmp0] && !FreedRef[$tmp0];
+    assert $tmp0 != null;
+    assert $Alloc[$tmp0];
+    assert !FreedRef[$tmp0];
     assume $tmp0 != null;
+    assume $Alloc[$tmp0];
+    assume !FreedRef[$tmp0];
     redundant_edges_Ref := F$RandomGraph.Node.edges[$tmp0];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 70} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     original_edges_Ref := F$RandomGraph.Node.edges[$this];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 71} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 71} true;
-    assert new_n != null && $Alloc[new_n] && !FreedRef[new_n];
+    assert new_n != null;
+    assert $Alloc[new_n];
+    assert !FreedRef[new_n];
     assume new_n != null;
+    assume $Alloc[new_n];
+    assume !FreedRef[new_n];
     F$RandomGraph.Node.edges[new_n] := original_edges_Ref;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 72} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 72} true;
-    assert new_n != null && $Alloc[new_n] && !FreedRef[new_n];
+    assert new_n != null;
+    assert $Alloc[new_n];
+    assert !FreedRef[new_n];
     assume new_n != null;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assume $Alloc[new_n];
+    assume !FreedRef[new_n];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.head[new_n] := F$RandomGraph.Node.head[$this];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 74} true;
     i_int := 0;
@@ -1126,8 +1309,12 @@ implementation RandomGraph.Node.ReplaceWith$RandomGraph.Node($this: Ref, new_n$i
 
   IL_002a:
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 77} true;
-    assert original_edges_Ref != null && $Alloc[original_edges_Ref] && !FreedRef[original_edges_Ref];
+    assert original_edges_Ref != null;
+    assert $Alloc[original_edges_Ref];
+    assert !FreedRef[original_edges_Ref];
     assume original_edges_Ref != null;
+    assume $Alloc[original_edges_Ref];
+    assume !FreedRef[original_edges_Ref];
     n_Ref := $ArrayContents[original_edges_Ref][i_int];
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 78} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 78} true;
@@ -1135,6 +1322,7 @@ implementation RandomGraph.Node.ReplaceWith$RandomGraph.Node($this: Ref, new_n$i
     goto anon6_Then, anon6_Else;
 
   anon6_Then:
+    assume {:partition} $Exception != null;
     return;
 
   anon6_Else:
@@ -1152,22 +1340,34 @@ implementation RandomGraph.Node.ReplaceWith$RandomGraph.Node($this: Ref, new_n$i
     goto anon7_Then, anon7_Else;
 
   anon7_Then:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     assume {:partition} i_int < F$RandomGraph.Node.head[$this];
     goto IL_002a;
 
   anon7_Else:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     assume {:partition} F$RandomGraph.Node.head[$this] <= i_int;
     goto anon5;
 
   anon5:
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 80} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 80} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.deleted[$this] := 1;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 82} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 82} true;
@@ -1187,32 +1387,56 @@ implementation RandomGraph.Node.#ctor($this: Ref)
   var $label: int;
 
   anon0:
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.edges[$this] := null;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.head[$this] := 0;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.deleted[$this] := 0;
     assume {:breadcrumb 10} true;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 26} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 26} true;
     call $tmp0 := Alloc();
     assume $ArrayLength($tmp0) == 1 * F$RandomGraph.Consts.MAX_CNXS;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.edges[$this] := $tmp0;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 27} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 27} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.head[$this] := 0;
     assert {:first} {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 28} true;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 28} true;
-    assert $this != null && $Alloc[$this] && !FreedRef[$this];
+    assert $this != null;
+    assert $Alloc[$this];
+    assert !FreedRef[$this];
     assume $this != null;
+    assume $Alloc[$this];
+    assume !FreedRef[$this];
     F$RandomGraph.Node.deleted[$this] := 0;
     assert {:sourceFile "C:\Users\akashl\Documents\work\fastgc\RandomGraph\RandomGraph.cs"} {:sourceLine 28} true;
     call System.Object.#ctor($this);
