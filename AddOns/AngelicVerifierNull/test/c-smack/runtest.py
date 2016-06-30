@@ -36,6 +36,9 @@ def arguments():
   avh_group.add_argument('--unknown-procs', metavar='PROC', nargs='+',
     default=['malloc', '$alloc'], help = 'specify angelic unknown procedures [default: %(default)s]')
 
+  avh_group.add_argument('--assert-procs', metavar='PROC', nargs='+',
+    default=[], help = 'specify procedures with assertions [default: %(default)s]')
+
   avh_group.add_argument('--harness-options', metavar='OPTIONS', default='',
     help = 'additional AvHarnessInstrumentation arugments (e.g., --harness-options="x")'
   )
@@ -153,7 +156,7 @@ def runavh(args):
   cmd = [args.avh_exe]
   if os.name == 'posix':
     cmd = ['mono'] + cmd
-  cmd += [args.file_name + '.bpl' if args.general else '.inst.bpl']
+  cmd += [args.file_name + ('.bpl' if args.general else '.inst.bpl')]
   cmd += [args.file_name + '.harness.bpl']
   if args.use_entry_points:
     cmd += ['/useEntryPoints']
@@ -165,6 +168,10 @@ def runavh(args):
     cmd += ['/noAA']
 
   cmd += ['/unknownProc:' + proc for proc in args.unknown_procs]
+
+  if len(args.assert_procs) > 0:
+    cmd += ['/assertProc:' + proc for proc in args.assert_procs]
+
   run_cmds += ['// RUN: %avh "%t0.bpl" "%t1.bpl" ' + ' '.join(cmd[4 if os.name == 'posix' else 3 :])]
   return try_command(args, cmd, True)
 
