@@ -393,6 +393,18 @@ namespace AngelicVerifierNull
                 //Console.WriteLine("Assert -> {0}", failingAssert);
                 var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
+                // Remove axioms on alloc constants
+                var HasAllocConstant = new Func<Expr, bool>(e =>
+                {
+                    var vu = new VarsUsed();
+                    vu.VisitExpr(e);
+                    if (vu.varsUsed.Intersect(concretize.allocConstants.Keys).Any())
+                        return true;
+                    return false;
+                });
+                if (Options.RemoveAllocConstantAxioms)
+                    ppprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
+
                 //call ExplainError 
                 BoogieUtil.PrintProgram(ppprog, string.Format("ee{0}.bpl", eecnt++));
 
@@ -1372,19 +1384,6 @@ namespace AngelicVerifierNull
             if (!Options.useEE) return Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True); ;
             ExplainError.STATUS eeStatus = ExplainError.STATUS.INCONCLUSIVE;
             
-
-            // Remove axioms on alloc constants
-            var HasAllocConstant = new Func<Expr, bool>(e =>
-            {
-                var vu = new VarsUsed();
-                vu.VisitExpr(e);
-                if (vu.varsUsed.Intersect(concretize.allocConstants.Keys).Any())
-                    return true;
-                return false;
-            });
-            if(Options.RemoveAllocConstantAxioms)
-                nprog.RemoveTopLevelDeclarations(decl => (decl is Axiom) && HasAllocConstant((decl as Axiom).Expr));
-
             // Add these flags by default (nothing right now)
             var eeflags = new List<string>(); // {"/onlySlicAssumes+", "/ignoreAllAssumes-"};
             eeflags.AddRange(extraEEflags);
