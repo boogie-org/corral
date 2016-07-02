@@ -152,8 +152,6 @@ namespace AvHarnessInstrumentation
                 blockCallConsts.Iter(x => prog.AddTopLevelDeclaration(x));
                 //TODO: get globals of type refs/pointers and maps
                 var initCmd = (AssumeCmd)BoogieAstFactory.MkAssume(Expr.True);
-                //TODO: find a reusable API to add attributes to cmds
-                //initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() { "Start" }, null);
 
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit

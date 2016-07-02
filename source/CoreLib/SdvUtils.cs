@@ -347,7 +347,6 @@ namespace CoreLib
     public static class SdvUtils
     {
         // Mark "slic" assume statements
-        // Insert captureState for driver methods and start
         // Mark "indirect" call assume statements
         public static void sdvAnnotateDefectTrace(Program trace, HashSet<string> slicVars, bool addSlicAnnotations = true)
         {
@@ -374,27 +373,9 @@ namespace CoreLib
                       new QKeyValue(Token.NoToken, "slic", new List<object>(), ac.Attributes);
             });
 
-            var isDriverImpl = new Predicate<Implementation>(impl =>
-            {
-                return !impl.Name.Contains("sdv") && !impl.Name.Contains("SLIC");
-            });
-
-
             foreach (var impl in trace.TopLevelDeclarations
                 .OfType<Implementation>())
             {
-                // Tag entry points of the driver
-                if (isDriverImpl(impl))
-                {
-                    var ac = new AssumeCmd(Token.NoToken, Expr.True);
-                    ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>{impl.Name}, null);
-
-                    var nc = new List<Cmd>();
-                    nc.Add(ac);
-                    nc.AddRange(impl.Blocks[0].Cmds);
-                    impl.Blocks[0].Cmds = nc;
-                }
-
                 if (addSlicAnnotations)
                 {
                     // Insert "slic" annotation
@@ -416,13 +397,6 @@ namespace CoreLib
                     }
                 }
 
-                // Start captureState
-                foreach (var blk in impl.Blocks)
-                {
-                    blk.Cmds.OfType<AssumeCmd>()
-                        .Where(ac => QKeyValue.FindBoolAttribute(ac.Attributes, "mainInitDone"))
-                        .Iter(ac => { ac.Attributes = new QKeyValue(Token.NoToken, "captureState", new List<object>(new string[] { "Start" }), ac.Attributes); });
-                }
             }
 
             // Mark malloc

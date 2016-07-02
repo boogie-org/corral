@@ -38,7 +38,6 @@ namespace ExplainError
     public class Toplevel
     {
         # region Analysis flags
-        public const string CAPTURESTATE_ATTRIBUTE_NAME = "captureState";
         private const int MAX_TIMEOUT = 100;
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
 
@@ -264,8 +263,8 @@ namespace ExplainError
         # region Top-level routines for computing and massaging Pre
 
         /// <summary>
-        /// Will compute a DNF form of precondition for statements upto the last assume {:captureState "Start"} true
-        /// or all the statements, if no such assume exists
+        /// Will compute a DNF form of precondition 
+        /// or all the statements
         /// Performs a static slicing of the trace
         /// </summary>
         /// <param name="cmdseq"></param>
@@ -350,12 +349,6 @@ namespace ExplainError
                 }
                 else if (cmd is AssumeCmd)
                 {
-                    string captureStateLoc;
-                    if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc))
-                    {
-                        Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at a captureStateLoc ");
-                        break; //compute pre now
-                    }
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
                         //if (verbose) Console.WriteLine("--- Block {0}", cmd);
@@ -569,7 +562,7 @@ namespace ExplainError
                 }
             }
             Console.WriteLine("\n\n-------------------- Pre at {0} in DNF [Size = {1}] ---------------------",
-                        captureStateLoc == null ? "Start" : "CaptureState at " + captureStateLoc, preDnf.Count);
+                        "Start", preDnf.Count);
             var feasCnt = 0;
             var prunedCubesFromDnf = new HashSet<List<Expr>>(); //string form of exprs
             foreach (var cube in preDnf)
@@ -644,12 +637,6 @@ namespace ExplainError
             }
             public override Cmd VisitAssumeCmd(AssumeCmd cmd)
             {
-                string captureStateLoc;
-                if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc) &&
-                    captureStateLoc != null)
-                {
-                    return base.VisitAssumeCmd(new AssumeCmd(Token.NoToken, exprToAssume));
-                }
                 return base.VisitAssumeCmd(cmd);
             }
         }
@@ -665,7 +652,7 @@ namespace ExplainError
             t.VisitImplementation(currImpl); //changes currImpl as well
             var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
             Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
-            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds to have the captureState
+            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds 
             if (!result) return false;
             //now try to greedily minimize
             var retain = new HashSet<List<Expr>>();
@@ -680,7 +667,7 @@ namespace ExplainError
                 result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
                 Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
                 if (!result) retain.Add(d); //necessary
-                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds to have the captureState
+                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds 
             }
             if (retain.Count > 0) //else keep preInDnfForm possibly non-minimal
                 preInDnfForm = retain;
@@ -1240,7 +1227,6 @@ namespace ExplainError
                 Console.WriteLine("\n  ---- ExplainError options ----------------------------------------\n");
                 Console.WriteLine("  Boolean options: use /option or /option+ to set, use /option- to unset");
                 Console.WriteLine("  /verbose:                      Makes output verbose");
-                //Console.WriteLine("  /showPreAtAllCapturedStates    Show Pre at any place {:captureState} is specified, default only Start");
                 Console.WriteLine("  /onlySlicAssumes:              Ignore assumes that do not have {:slic} attribute");
                 Console.WriteLine("  /onlyDisplayAliasingInPre:     Only display aliasing (x == y) constaints where both sides are non constants");
                 Console.WriteLine("  /onlyDisplayMapExpressions:    Only display expressions with at least one map expression (e.g. m[e] <> e'");
@@ -1285,12 +1271,7 @@ namespace ExplainError
             }
             return true;
         }
-        private static bool ContainsCaptureStateAttribute(AssumeCmd assumeCmd, out string captureStateLoc)
-        {
-            captureStateLoc = QKeyValue.FindStringAttribute(assumeCmd.Attributes, CAPTURESTATE_ATTRIBUTE_NAME);
-            //return (captureStateLoc != null);
-            return captureStateLoc == "Start";
-        }
+
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
