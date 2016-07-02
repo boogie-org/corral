@@ -628,18 +628,6 @@ namespace ExplainError
             throw new NotImplementedException();
         }
 
-        class InjectNecessaryDisjuncts : StandardVisitor
-        {
-            Expr exprToAssume;
-            public InjectNecessaryDisjuncts(Expr c)
-            {
-                exprToAssume = c;
-            }
-            public override Cmd VisitAssumeCmd(AssumeCmd cmd)
-            {
-                return base.VisitAssumeCmd(cmd);
-            }
-        }
         private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preInDnfForm)
         {
             if (!checkIfExprFalseCalled)
@@ -648,8 +636,8 @@ namespace ExplainError
             Debug.Assert(proc != null, "The proc of currImpl is null");
             Expr disjunct = ExprListSetToDNFExpr(preInDnfForm);
             var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
-            var t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-            t.VisitImplementation(currImpl); //changes currImpl as well
+            currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
+
             var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
             Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
             currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds 
@@ -662,8 +650,9 @@ namespace ExplainError
                 var tmp = new HashSet<List<Expr>>(preInDnfForm);
                 tmp.Remove(d); //remove 1 element and check the rest
                 disjunct = ExprListSetToDNFExpr(tmp);
-                t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-                t.VisitImplementation(currImpl); //changes currImpl as well
+
+                currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
+
                 result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
                 Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
                 if (!result) retain.Add(d); //necessary
