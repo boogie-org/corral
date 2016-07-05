@@ -22,7 +22,6 @@ namespace ExplainError
     public enum STATUS
     {
         SUCCESS,         /* the returned constraint suppresses error */
-        PARTIALCOVER,    /* will be deprecated */
         TIMEOUT,         /* analysis timed out */
         INCONCLUSIVE,    /* analysis was imprecise */
         ILLEGAL          /* some unexpected condition encountered */
@@ -181,20 +180,12 @@ namespace ExplainError
                 //SimplifyAssumesUsingForwardPass();
                 ComputePreCmdSeq(impl.Blocks[0].Cmds, skipAssumes, out preInDnfForm, out eeSlicedSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
-                //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
-                //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
-                if (true /*CheckNecessaryDisjuncts(ref preInDnfForm)*/)
-                {
-                    CheckIfTrueDisjunct(ref preInDnfForm);
-                    Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
-                    Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
-                    returnStatus = STATUS.SUCCESS;
-                }
-                else
-                {
-                    Console.WriteLine(">>>> WARNING: The returned set is not necessary (incomplete)....");
-                    returnStatus = STATUS.PARTIALCOVER;
-                }
+
+                CheckNecessaryDisjuncts(ref preInDnfForm);
+                CheckIfTrueDisjunct(ref preInDnfForm);
+                Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
+                returnStatus = STATUS.SUCCESS;
+
                 currImpl = null;
                 sw.Stop();
                 var preStrings = DisplayDisjunctsOnConsole(preInDnfForm);
@@ -628,6 +619,12 @@ namespace ExplainError
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Given a DNF (d1 || d2 || d3), with corresponds to a block !d1 && !d2 && !d3
+        /// remove !di greedily if the rest still blocks 
+        /// </summary>
+        /// <param name="preInDnfForm"></param>
+        /// <returns></returns>
         private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preInDnfForm)
         {
             if (!checkIfExprFalseCalled)
@@ -637,22 +634,19 @@ namespace ExplainError
             Expr disjunct = ExprListSetToDNFExpr(preInDnfForm);
             var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
             currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
-
             var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
             Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
             currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds 
-            if (!result) return false;
+            if (!result) return false; //sanity check that the entire CNF is a block to start with
+
             //now try to greedily minimize
             var retain = new HashSet<List<Expr>>();
-
             foreach (var d in preInDnfForm)
             {
                 var tmp = new HashSet<List<Expr>>(preInDnfForm);
                 tmp.Remove(d); //remove 1 element and check the rest
                 disjunct = ExprListSetToDNFExpr(tmp);
-
                 currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
-
                 result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
                 Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
                 if (!result) retain.Add(d); //necessary
