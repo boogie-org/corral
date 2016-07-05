@@ -24,14 +24,14 @@ namespace ExplainError
         SUCCESS,         /* the returned constraint suppresses error */
         TIMEOUT,         /* analysis timed out */
         INCONCLUSIVE,    /* analysis was imprecise */
-        ILLEGAL          /* some unexpected condition encountered */
+        ILLEGAL          /* input program does not pass sanity check */
     };
 
     public enum COVERMODE
     {
-        MONOMIAL,       /* only consider a monomial overcover (clausal under cover for resulting block) */
-        FULL,           /* only consider full DNF overcover   (CNF under cover for the resulting block) */
-        FULL_IF_NO_MONOMIAL  /* only consider full if no monomial overcover other than true */
+        MONOMIAL,       /* a single clause resulting block */
+        FULL,           /* CNF with multiple clauses resulting block */
+        FULL_IF_NO_MONOMIAL  /* only consider full if no monomial other than false is found */
     };
 
     public class Toplevel
