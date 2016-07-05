@@ -119,6 +119,7 @@
     <Compile Include="BoogieUtil.cs" />
     <Compile Include="Duplicator.cs" />
     <Compile Include="HashSetExtras.cs" />
+    <Compile Include="LiveVariableAnalysis.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="VarSet.cs" />
     <Compile Include="Util.cs" />
