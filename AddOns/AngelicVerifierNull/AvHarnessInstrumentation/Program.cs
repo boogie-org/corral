@@ -510,7 +510,7 @@ namespace AvHarnessInstrumentation
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
             BoogieUtil.InitializeBoogie("");
-            ProgTransformation.PersistentProgramIO.useDuplicator = true;
+            //ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             var sw = new Stopwatch();
             sw.Start();
@@ -657,9 +657,11 @@ namespace AvHarnessInstrumentation
                     Stats.stop("inlining");
                 }
 
+                /* TODO: Is this needed?
                 Stats.resume("read.write");
                 program = BoogieUtil.ReResolveInMem(program);
                 Stats.stop("read.write");
+                */
 
                 // Make sure that aliasing queries are on identifiers only
                 var af =
@@ -683,6 +685,7 @@ namespace AvHarnessInstrumentation
             var origProgram = inp.getProgram();
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
+
             if (pruneEP) PruneRedundantEntryPoints(origProgram);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);

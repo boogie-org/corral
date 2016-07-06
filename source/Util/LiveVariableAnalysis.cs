@@ -30,10 +30,10 @@ public class CbaLiveVariableAnalysis
             var cc = block.Cmds[i] as CallCmd;
             if (cc != null)
             {
-                liveVarsAfter = PropagateCall(cc, liveVarsAfter, program);
+                PropagateCall(cc, liveVarsAfter, program);
                 continue;
             }
-            Propagate(block.Cmds[i], liveVarsAfter);
+            Propagate(block.Cmds[i], liveVarsAfter, program == null);
         }
         return liveVarsAfter;
     }
@@ -71,10 +71,10 @@ public class CbaLiveVariableAnalysis
                 var cc = cmds[i] as CallCmd;
                 if (cc != null)
                 {
-                    liveVarsAfter = PropagateCall(cc, liveVarsAfter, program);
+                    PropagateCall(cc, liveVarsAfter, program);
                     continue;
                 }
-                Propagate(cmds[i], liveVarsAfter);
+                Propagate(cmds[i], liveVarsAfter, program == null);
             }
 
             block.liveVarsBefore = liveVarsAfter;
@@ -82,20 +82,27 @@ public class CbaLiveVariableAnalysis
         }
     }
 
-    private static HashSet<Variable> PropagateCall(CallCmd cc, HashSet<Variable> liveVarsAfter, Program program)
+    private static void PropagateCall(CallCmd cc, HashSet<Variable> liveVarsAfter, Program program)
     {
-        liveVarsAfter = new HashSet<Variable>(liveVarsAfter);
         // globals U in-params U (after - out-params)
         cc.Outs.Where(ie => ie != null).Iter(ie => liveVarsAfter.Remove(ie.Decl));
-        program.TopLevelDeclarations
-            .OfType<GlobalVariable>()
-            .Iter(v => liveVarsAfter.Add(v));
+        if (program != null)
+        {
+            program.TopLevelDeclarations
+                .OfType<GlobalVariable>()
+                .Iter(v => liveVarsAfter.Add(v));
+        }
 
         VariableCollector/*!*/ collector = new VariableCollector();
         cc.Ins.Where(e => e != null).Iter(e => collector.Visit(e));
-        liveVarsAfter.UnionWith(collector.usedVars);
-
-        return liveVarsAfter;
+        if (program == null)
+        {
+            liveVarsAfter.UnionWith(collector.usedVars.Where(v => v is LocalVariable || v is Formal));
+        }
+        else
+        {
+            liveVarsAfter.UnionWith(collector.usedVars);
+        }
     }
 
     private static HashSet<Variable> initLiveVars(Block block, Implementation impl, Program program)
@@ -117,9 +124,13 @@ public class CbaLiveVariableAnalysis
         else if (block.TransferCmd is ReturnCmd)
         {
             // Globals and out-formals are live
-            program.TopLevelDeclarations
-                .OfType<GlobalVariable>()
-                .Iter(v => liveVarsAfter.Add(v));
+            if (program != null)
+            {
+                program.TopLevelDeclarations
+                    .OfType<GlobalVariable>()
+                    .Iter(v => liveVarsAfter.Add(v));
+            }
+
             impl.OutParams
                 .OfType<Formal>()
                 .Iter(v => liveVarsAfter.Add(v));
@@ -128,7 +139,7 @@ public class CbaLiveVariableAnalysis
     }
 
     // perform in place update of liveSet
-    public static void Propagate(Cmd cmd, HashSet<Variable/*!*/>/*!*/ liveSet)
+    public static void Propagate(Cmd cmd, HashSet<Variable/*!*/>/*!*/ liveSet, bool allGlobalsAreLive)
     {
         Contract.Requires(cmd != null);
         Contract.Requires(cce.NonNullElements(liveSet));
@@ -148,7 +159,7 @@ public class CbaLiveVariableAnalysis
                 SimpleAssignLhs salhs = lhs as SimpleAssignLhs;
                 Contract.Assert(salhs != null);
                 Variable var = salhs.DeepAssignedVariable;
-                if (var != null && liveSet.Contains(var))
+                if (var != null && (liveSet.Contains(var) || (allGlobalsAreLive && var is GlobalVariable)))
                 {
                     indexSet.Add(index);
                     liveSet.Remove(var);
@@ -163,7 +174,14 @@ public class CbaLiveVariableAnalysis
                 {
                     VariableCollector/*!*/ collector = new VariableCollector();
                     collector.Visit(expr);
-                    liveSet.UnionWith(collector.usedVars);
+                    if (allGlobalsAreLive)
+                    {
+                        liveSet.UnionWith(collector.usedVars.Where(v => v is LocalVariable || v is Formal));
+                    }
+                    else
+                    {
+                        liveSet.UnionWith(collector.usedVars);
+                    }
                 }
                 index++;
             }
@@ -196,7 +214,14 @@ public class CbaLiveVariableAnalysis
             {
                 VariableCollector/*!*/ collector = new VariableCollector();
                 collector.Visit(predicateCmd.Expr);
-                liveSet.UnionWith(collector.usedVars);
+                if (allGlobalsAreLive)
+                {
+                    liveSet.UnionWith(collector.usedVars.Where(v => v is LocalVariable || v is Formal));
+                }
+                else
+                {
+                    liveSet.UnionWith(collector.usedVars);
+                }
             }
         }
         else if (cmd is CommentCmd)
@@ -206,7 +231,7 @@ public class CbaLiveVariableAnalysis
         else if (cmd is SugaredCmd)
         {
             SugaredCmd/*!*/ sugCmd = (SugaredCmd)cce.NonNull(cmd);
-            Propagate(sugCmd.Desugaring, liveSet);
+            Propagate(sugCmd.Desugaring, liveSet, allGlobalsAreLive);
         }
         else if (cmd is StateCmd)
         {
@@ -215,7 +240,7 @@ public class CbaLiveVariableAnalysis
             int len = cmds.Count;
             for (int i = len - 1; i >= 0; i--)
             {
-                Propagate(cmds[i], liveSet);
+                Propagate(cmds[i], liveSet, allGlobalsAreLive);
             }
             foreach (Variable/*!*/ v in stCmd.Locals)
             {
