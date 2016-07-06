@@ -47,6 +47,8 @@ namespace AvHarnessInstrumentation
         public static string stubsfile = null;
         // only keep assertions in these procedures if non-null
         public static HashSet<string> assertProcs = null; 
+        // only keep the following procedures as entryPoints if non-null
+        public static HashSet<string> entryPointProcs = null;
     }
 
     public class Driver
@@ -361,7 +363,7 @@ namespace AvHarnessInstrumentation
                             .Iter(AddAnnotation)));
             }
 
-            //only keep assertions in assertProc procedures
+            // Only keep assertions in assertProc procedures
             if (Options.assertProcs != null)
                 (new Instrumentations.PruneNonAssertProcs(Options.assertProcs)).Visit(init);
 
@@ -372,6 +374,16 @@ namespace AvHarnessInstrumentation
             init.RemoveTopLevelDeclarations(decl => (decl is Implementation) &&
                 (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
                  BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
+
+            // Restrict entrypoints to those provided explicitly (overrides any other way to providing entryPoints)
+            if (Options.entryPointProcs != null)
+            {
+                Options.useHarnessTag = false;
+                Options.useProvidedEntryPoints = false;
+                init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Where(d => Options.entryPointProcs.Contains(d.Name))
+                    .Iter(d => d.AddAttribute("entrypoint"));
+            }
 
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
@@ -489,6 +501,12 @@ namespace AvHarnessInstrumentation
                         if (Options.assertProcs == null) { Options.assertProcs = new HashSet<string>(); }
                         Options.assertProcs.Add(s.Substring("/assertProc:".Length));
                     });
+            args.Where(s => s.StartsWith("/entryPointProc:"))
+                .Iter(s =>
+                {
+                    if (Options.entryPointProcs == null) { Options.entryPointProcs = new HashSet<string>(); }
+                    Options.entryPointProcs.Add(s.Substring("/entryPointProc:".Length));
+                });
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");
         }
