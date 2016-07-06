@@ -792,12 +792,8 @@ namespace cba
         {
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            Console.Write("Eliminating dead vars .. ");
             ExecutionEngine.EliminateDeadVariables(program);
-            Console.WriteLine("Done");
-            Console.Write("Inlining .. ");
             ExecutionEngine.Inline(program);
-            Console.WriteLine("Done");
             CommandLineOptions.Clo.StratifiedInlining = si;
         }
 

@@ -49,6 +49,8 @@ namespace AvHarnessInstrumentation
         public static HashSet<string> assertProcs = null; 
         // only keep the following procedures as entryPoints if non-null
         public static HashSet<string> entryPointProcs = null;
+        // delay AA
+        public static bool delayAA = false;
     }
 
     public class Driver
@@ -450,6 +452,9 @@ namespace AvHarnessInstrumentation
             if (args.Any(s => s == "/noAA:1"))
                 Options.UseAliasAnalysisForAssertions = false;
 
+            if (args.Any(s => s == "/delayAA"))
+                Options.delayAA = true;
+
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;
 
@@ -528,7 +533,7 @@ namespace AvHarnessInstrumentation
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
             BoogieUtil.InitializeBoogie("");
-            //ProgTransformation.PersistentProgramIO.useDuplicator = true;
+            ProgTransformation.PersistentProgramIO.useDuplicator = true;
 
             var sw = new Stopwatch();
             sw.Start();
@@ -537,29 +542,39 @@ namespace AvHarnessInstrumentation
             {
                 // Get the program, install the harness and do basic instrumentation
                 var inprog = GetProgram(args[0]);
-                var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
+                
 
                 Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsBeforeAA : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
 
-                // Run alias analysis
-                Stats.resume("alias.analysis");
-                Console.WriteLine("Running alias analysis");
-                program = RunAliasAnalysis(program);
-                Stats.stop("alias.analysis");
-
-                Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
-
-                // run Houdini pass
-                if (Options.HoudiniPass)
+                if (Options.delayAA)
                 {
-                    Utils.Print("Running Houdini Pass");
-                    program = RunHoudiniPass(program);
-                    Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    PruneRedundantEntryPoints(inprog);
+                    BoogieUtil.PrintProgram(inprog, args[1]);
                 }
+                else
+                {
+                    var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
 
-                program.writeToFile(args[1]);
+                    // Run alias analysis
+                    Stats.resume("alias.analysis");
+                    Console.WriteLine("Running alias analysis");
+                    program = RunAliasAnalysis(program);
+                    Stats.stop("alias.analysis");
+
+                    Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+
+                    // run Houdini pass
+                    if (Options.HoudiniPass)
+                    {
+                        Utils.Print("Running Houdini Pass");
+                        program = RunHoudiniPass(program);
+                        Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    }
+
+                    program.writeToFile(args[1]);
+                }
             }
             catch (Exception e)
             {
