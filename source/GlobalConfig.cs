@@ -63,6 +63,9 @@ namespace cba
         // Use ArrayTheory in the boogie verifier
         public static ArrayTheoryOptions useArrayTheory = ArrayTheoryOptions.WEAK;
 
+        // Used for dumping out the final Z3 query
+        public static string explainQuantifiers = null;
+
         // Hint for when to start conserving memory
         public static int memLimit
         {

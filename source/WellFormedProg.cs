@@ -159,5 +159,59 @@ namespace cba
                 throw new InvalidInput("Program has a user-defined type (cannot use with ArrayTheory)");
             }
         }
+
+        public static bool checkFunctionsAreInlined(Program program)
+        {
+            foreach (var func in program.TopLevelDeclarations.OfType<Function>())
+            {
+                if (func.Body != null && !BoogieUtil.checkAttrExists("inline", func.Attributes))
+                {
+                    Console.WriteLine("Function {0} does not have an inline attribute", func.Name);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public static bool checkMapTypes(Program program)
+        {
+            var types = ProgramTypes.FindAllTypes(program);
+            if (types.Any(t => t.IsMap))
+            {
+                Console.WriteLine("Program uses the map type: {0}", types.Where(t => t.IsMap).First().ToString());
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    public class ProgramTypes : FixedVisitor
+    {
+        HashSet<Microsoft.Boogie.Type> types;
+
+        ProgramTypes()
+        {
+            types = new HashSet<Microsoft.Boogie.Type>();
+        }
+
+        public static HashSet<Microsoft.Boogie.Type> FindAllTypes(Program program)
+        {
+            var visitor = new ProgramTypes();
+            visitor.VisitProgram(program);
+            return visitor.types;
+        }
+
+        public override Microsoft.Boogie.Type VisitType(Microsoft.Boogie.Type node)
+        {
+            types.Add(node);
+            return base.VisitType(node);
+        }
+
+        public override Variable VisitVariable(Variable node)
+        {
+            if(node.TypedIdent.Type != null) types.Add(node.TypedIdent.Type);
+            return base.VisitVariable(node);
+        }
     }
 }

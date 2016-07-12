@@ -1,16 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}</ProjectGuid>
+    <ProjectGuid>{F55C5577-D086-4E4D-9797-069CF7BAE0A4}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AngelicVerifierNull</RootNamespace>
-    <AssemblyName>AngelicVerifierNull</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <RootNamespace>BctMemInst</RootNamespace>
+    <AssemblyName>BctMemInst</AssemblyName>
+    <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -21,7 +22,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -31,7 +31,6 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -40,10 +39,10 @@
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Instrumentations.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -54,6 +53,10 @@
     <ProjectReference Include="..\..\..\boogie\Source\AbsInt\AbsInt.csproj">
       <Project>{0efa3e43-690b-48dc-a72c-384a3ea7f31f}</Project>
       <Name>AbsInt</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\AIFramework\AIFramework.csproj">
+      <Project>{39b0658d-c955-41c5-9a43-48c97a1ef5fd}</Project>
+      <Name>AIFramework</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\Basetypes\Basetypes.csproj">
       <Project>{43dfad18-3e35-4558-9be2-caff6b5ba8a0}</Project>
@@ -71,6 +74,10 @@
       <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
       <Name>Core</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\Doomed\Doomed.csproj">
+      <Project>{884386a3-58e9-40bb-a273-b24976775553}</Project>
+      <Name>Doomed</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\ExecutionEngine\ExecutionEngine.csproj">
       <Project>{eaa5eb79-d475-4601-a59b-825c191cd25f}</Project>
       <Name>ExecutionEngine</Name>
@@ -83,6 +90,10 @@
       <Project>{cf41e903-78eb-43ba-a355-e5feb5ececd4}</Project>
       <Name>Houdini</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\ModelViewer\ModelViewer.csproj">
+      <Project>{a678c6eb-b329-46a9-bbfc-7585f01acd7c}</Project>
+      <Name>ModelViewer</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\Model\Model.csproj">
       <Project>{acef88d5-dadd-46da-bae1-2144d63f4c83}</Project>
       <Name>Model</Name>
@@ -90,6 +101,10 @@
     <ProjectReference Include="..\..\..\boogie\Source\ParserHelper\ParserHelper.csproj">
       <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
       <Name>ParserHelper</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\boogie\Source\Predication\Predication.csproj">
+      <Project>{afaa5ce1-c41b-44f0-88f8-fd8a43826d44}</Project>
+      <Name>Predication</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\Provers\SMTLib\SMTLib.csproj">
       <Project>{9b163aa3-36bc-4afb-88ab-79bc9e97e401}</Project>
@@ -103,18 +118,6 @@
       <Project>{e1f10180-c7b9-4147-b51f-fa1b701966dc}</Project>
       <Name>VCGeneration</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\cba.csproj">
-      <Project>{b05d046d-a620-4233-9d52-0255c7a69760}</Project>
-      <Name>cba</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\CoreLib\CoreLib.csproj">
-      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
-      <Name>CoreLib</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\..\source\ExplainError\ExplainError.csproj">
-      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
-      <Name>ExplainError</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\..\source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
       <Name>ProgTransformation</Name>
@@ -122,18 +125,6 @@
     <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\AliasAnalysis\AliasAnalysis\AliasAnalysis.csproj">
-      <Project>{584822a6-f933-484f-aff3-5d3cc2337198}</Project>
-      <Name>AliasAnalysis</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\PropInst\PropInstUtils\PropInstUtils.csproj">
-      <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
-      <Name>PropInstUtils</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\AvUtil\AvUtil.csproj">
-      <Project>{04d1ebfe-f934-44d2-86c6-407bc99ae00a}</Project>
-      <Name>AvUtil</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

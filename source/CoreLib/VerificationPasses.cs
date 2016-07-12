@@ -345,7 +345,9 @@ namespace cba
                             object v = null;
                             if (cc.Proc.Name == recordIntArgProc && modelVal is Model.Integer)
                             {
-                                v = (modelVal as Model.Integer).AsInt();
+                                // TODO: need a better fix for BigNums
+                                //v = (modelVal as Model.Integer).AsInt();
+                                v = Microsoft.Basetypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
                             }
                             else if (cc.Proc.Name == recordIntArgProc && modelVal is int)
                             {
@@ -461,7 +463,9 @@ namespace cba
                         object v = null;
                         if (cc.Proc.Name == recordIntArgProc && modelVal is Model.Integer)
                         {
-                            v = (modelVal as Model.Integer).AsInt();
+                            // TODO: need a better fix for BigNums
+                            //v = (modelVal as Model.Integer).AsInt();
+                            v = Microsoft.Basetypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
                         }
                         else if (cc.Proc.Name == recordIntArgProc && modelVal is int)
                         {
