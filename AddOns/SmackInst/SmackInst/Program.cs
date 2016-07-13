@@ -17,6 +17,13 @@ namespace SmackInst
 
         public static bool initMem = false;
 
+        public static string oldRoot = "";
+        public static string newRoot = "";
+        public static bool replaceRoot = false;
+
+        public static bool count = false;
+        public static bool onlyCount = false;
+
         static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -31,6 +38,20 @@ namespace SmackInst
             if (args.Any(a => a == "/initMem"))
                 initMem = true;
 
+            if (args.Any(a => a == "/replaceRoot"))
+                replaceRoot = true;
+
+            args.Where(a => a.StartsWith("/oldRoot:"))
+                .Iter(a => oldRoot = a.Substring("/oldRoot:".Length));
+
+            args.Where(a => a.StartsWith("/newRoot:"))
+                .Iter(a => newRoot = a.Substring("/newRoot:".Length));
+
+            if (args.Any(a => a == "/count"))
+                count = true;
+
+            if (args.Any(a => a == "/onlyCount"))
+                onlyCount = true;
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -43,6 +64,12 @@ namespace SmackInst
             // SMACK does not add globals to modify clauses
             //BoogieUtil.DoModSetAnalysis(program);
 
+            // Preprocess program: count lines + replace Root
+            program = preProcess(program, count || onlyCount, oldRoot, newRoot);
+
+            if (onlyCount)
+                return;
+
             // Process it
             program = Process(program);
 
@@ -50,7 +77,16 @@ namespace SmackInst
             BoogieUtil.PrintProgram(program, args[1]);
         }
 
-        
+        static Program preProcess(Program program, bool count, string oldRoot, string newRoot)
+        {
+            if (count || (oldRoot.Length > 0 && newRoot.Length > 0))
+            {
+                var cr = new CountAndReplaceVistor(count, oldRoot, newRoot);
+                cr.Run(program);
+            }
+            return program;
+        }
+
         static Program Process(Program program)
         {
             // Get rid of Synonyms
@@ -200,6 +236,65 @@ namespace SmackInst
             program.AddTopLevelDeclaration(initproc);
             program.AddTopLevelDeclaration(initimpl);
             //program.AddTopLevelDeclaration(allocinit);
+        }
+
+    }
+
+    public class CountAndReplaceVistor : FixedVisitor
+    {
+        HashSet<string> lines = new HashSet<string>();
+        bool count;
+        string oldRoot;
+        string newRoot;
+
+        public CountAndReplaceVistor(bool count, string oldRoot, string newRoot)
+        {
+            this.count = count;
+            this.oldRoot = oldRoot;
+            this.newRoot = newRoot;
+        }
+
+        public void Run(Program program)
+        {
+            VisitProgram(program);
+            Console.WriteLine("LOC: " + lines.Count);
+        }
+
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            // Not good: only one attribute is assumed here, could be broken
+            if (node.Attributes != null && node.Attributes.Key.Equals("sourceloc"))
+            {
+                Debug.Assert(node.Attributes.Params.Count == 3, "Source location should contain three elements");
+                var file = node.Attributes.Params[0].ToString();
+                //Console.WriteLine(file);
+                if (!file.Contains("smack.c"))
+                {
+                    if (count)
+                    {
+                        var line = node.Attributes.Params[1].ToString();
+                        lines.Add(file + ":" + line);
+                    }
+                    if (oldRoot.Length > 0)
+                    {
+                        //Debug.Assert(file.StartsWith(oldRoot), "File path should start with old root (implies an absolute path)");
+                        if (file.StartsWith(oldRoot))
+                        {
+                            file = file.Replace(oldRoot, newRoot);
+                            file = file.Replace(@"/", @"\");
+                            var newParams = new List<object>();
+                            newParams.Add(file);
+                            newParams.Add(node.Attributes.Params[1]);
+                            newParams.Add(node.Attributes.Params[2]);
+                            node.Attributes.ClearParams();
+                            node.Attributes.AddParams(newParams);
+                        }
+                        else
+                            Console.WriteLine(file);
+                    }
+                }
+            }
+            return base.VisitAssumeCmd(node);
         }
     }
 
