@@ -173,6 +173,65 @@ namespace FastAVN
             }
         }
 
+        static void FastSplit(string file)
+        {
+            var start_time = DateTime.Now;
+
+            ReportTimeAndMemory(start_time, "Start");
+
+            var program = BoogieUtil.ParseProgram(file);
+
+            ReportTimeAndMemory(start_time, "Parsed");
+
+            var procs = BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+            program.RemoveTopLevelDeclarations(decl => (decl is Implementation) && !procs.Contains((decl as Implementation).Name));
+
+            ReportTimeAndMemory(start_time, "Pruned");
+
+            var cg = BoogieUtil.GetCallGraph(program);
+
+            ReportTimeAndMemory(start_time, "CG");
+
+            Console.WriteLine("#Procs: {0}", procs.Count);
+            Console.WriteLine("#Nodes: {0}", cg.Nodes.Count);
+
+            var i = 0;
+            foreach (var proc in procs)
+            {
+                i++; if (i == 100) break;
+                Console.Write("Proc {0}", proc);
+                var reachable = BoogieUtil.GetReachableNodes(proc, cg);
+                Console.WriteLine("   {0}", reachable.Count);
+
+                var newProgram = new Program();
+                newProgram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
+                    !reachable.Contains((decl as Implementation).Name)));
+
+
+
+                BoogieUtil.PrintProgram(newProgram, "tmp" + i.ToString() + ".bpl");
+
+                ReportTimeAndMemory(start_time, "Prog " + i.ToString());
+            }
+
+        }
+        static void ReportMemory(string msg = "")
+        {
+            Console.WriteLine("Memory{0}: {1} MB", msg == "" ? "" : " " + msg, (GC.GetTotalMemory(true) * 1.0 / (1024 * 1024)).ToString("F2"));
+        }
+
+        static void ReportTime(DateTime start, string msg = "")
+        {
+            Console.WriteLine("Elapsed time{0}: {1} seconds", msg == "" ? "" : " " + msg, (DateTime.Now - start).TotalSeconds.ToString("F2"));
+        }
+
+        static void ReportTimeAndMemory(DateTime start, string msg = "")
+        {
+            ReportTime(start, msg);
+            ReportMemory(msg);
+        }
+
+
         private static void InitializeCorralandBoogie()
         {
             CommandLineOptions.Install(new CommandLineOptions());
