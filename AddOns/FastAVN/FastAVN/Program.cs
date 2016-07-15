@@ -107,7 +107,8 @@ namespace FastAVN
             avnPath = findExe("AngelicVerifierNull.exe");
             avHarnessInstrPath = findExe("AvHarnessInstrumentation.exe");
 
-            Debug.Assert(avnPath != null && avHarnessInstrPath != null);
+            Debug.Assert(avnPath != null && avHarnessInstrPath != null, "Cannot find executables");
+            Debug.Assert(blockingDepth < 0 || approximationDepth < 0, "Cannot do both blockingDepth and angelicDepth");
 
             try
             {
@@ -137,35 +138,51 @@ namespace FastAVN
                 // initialize corral and boogie for fastAVN
                 InitializeCorralandBoogie();
 
-                // Run harness instrumentation
-                var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
-                var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} \"{1}\" {2}", args[0], resultfile, avHarnessInstrArgs));
-
-                hinstOut.Iter(s => Console.WriteLine("[hinst] {0}", s));
-
-                if (!File.Exists(resultfile))
-                    throw new Exception("Error running harness instrumentation");
-
-                var prog = BoogieUtil.ReadAndOnlyResolve(resultfile);
-
-                // Do a run on instrumented program, filter out entrypoints
+                var inputfile = args[0];
                 var entrypoints = new HashSet<string>();
-                var entrypoint_impl = prog.TopLevelDeclarations.OfType<Implementation>()
-                    .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
-                    .FirstOrDefault();
-                Debug.Assert(entrypoint_impl != null);
+                Program program;
 
-                // other entrypoints can never reach an assertion, don't run AVN on them
-                foreach (Block b in entrypoint_impl.Blocks)
+                if (!earlySplit)
                 {
-                    b.Cmds.OfType<CallCmd>()
-                        .Where(cc => QKeyValue.FindBoolAttribute(cc.Attributes, AvUtil.AvnAnnotations.AvhEntryPointAttr))
-                        .Iter(cc => entrypoints.Add(cc.callee));
+                    // Run harness instrumentation                    
+                    var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
+                    var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} \"{1}\" {2}", inputfile, resultfile, avHarnessInstrArgs));                    
+
+                    hinstOut.Iter(s => Console.WriteLine("[hinst] {0}", s));
+
+                    if (!File.Exists(resultfile))
+                        throw new Exception("Error running harness instrumentation");
+
+                    program = BoogieUtil.ReadAndOnlyResolve(resultfile);
+
+                    // Do a run on instrumented program, filter out entrypoints
+                    var entrypoint_impl = program.TopLevelDeclarations.OfType<Implementation>()
+                        .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
+                        .FirstOrDefault();
+                    Debug.Assert(entrypoint_impl != null);
+
+                    // other entrypoints can never reach an assertion, don't run AVN on them
+                    foreach (Block b in entrypoint_impl.Blocks)
+                    {
+                        b.Cmds.OfType<CallCmd>()
+                            .Where(cc => QKeyValue.FindBoolAttribute(cc.Attributes, AvUtil.AvnAnnotations.AvhEntryPointAttr))
+                            .Iter(cc => entrypoints.Add(cc.callee));
+                    }
+                }
+                else
+                {
+                    program = BoogieUtil.ReadAndOnlyResolve(inputfile);
+                    program.TopLevelDeclarations.OfType<Implementation>()
+                        .Iter(impl => entrypoints.Add(impl.Name));
+
+                    var mayReach = 
+                        BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+
+                    entrypoints.IntersectWith(mayReach);
                 }
 
                 // do reachability analysis on procedures
-                // prune deep (depth > K) implementations: treat as angelic
-                sliceAndRunAVN(prog, approximationDepth, entrypoints);
+                RunAVN(program, entrypoints);
 
                 Stats.stop("fastavn");
                 Stats.printStats();
@@ -283,20 +300,35 @@ namespace FastAVN
         }
 
         public static ConcurrentDictionary<string, int> mergedBugs = new ConcurrentDictionary<string, int>();
-        public static Dictionary<string, HashSet<string>> edges = null;
-        public static HashSet<string> remotedirs = new HashSet<string>();
         public static string fslock = "FileSystemLock";
         public static readonly bool debug = false;
+
+        // static program information (!eagerSplit)
+        public static Dictionary<string, HashSet<string>> edges = null;
+        // static program information (eagerSplit)
+        public static List<Declaration> InputProgramDecls = null;
+        public static Microsoft.Boogie.GraphUtil.Graph<string> CallGraph = null;
 
         /// <summary>
         /// Run AVN binary on sliced programs
         /// </summary>
         /// <param name="prog">Original program</param>
-        /// <param name="approximationDepth">Depth k beyond which angelic approximation is applied</param>
-        private static void sliceAndRunAVN(Program prog, int approximationDepth, HashSet<string> epNames)
+        private static void RunAVN(Program prog, HashSet<string> epNames)
         {
-            edges = buildCallGraph(prog);
-           
+            // compute and stash common information
+            if (!earlySplit)
+            {
+                edges = buildCallGraph(prog);
+            }
+            else
+            {
+                CallGraph = BoogieUtil.GetCallGraph(prog);
+                // for populating pred/succ cache
+                CallGraph.Successors(CallGraph.Nodes.First());
+
+                InputProgramDecls = new List<Declaration>(prog.TopLevelDeclarations);
+            }
+
             // entrypoints
             var entrypoints = new ConcurrentBag<Implementation>(prog.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => epNames.Contains(impl.Name)));
@@ -323,7 +355,10 @@ namespace FastAVN
             for (int i = 0; i < numThreads; i++)
             {
                 var w = new Worker(prog, entrypoints);
-                threads.Add(new Thread(new ThreadStart(w.Run)));
+                if(!earlySplit)
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
+                else
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
             }
 
             threads.Iter(t => t.Start());
@@ -381,15 +416,14 @@ namespace FastAVN
                 impls.Iter(im => implNames.Add(im.Name));
             }
 
-            public void Run()
+            public void RunSplitAndAv()
             {
                 Implementation impl;
-                var rd = Environment.CurrentDirectory;
 
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
-                    var wd = Path.Combine(rd, impl.Name); // create new directory for each entrypoint
+                    var wd = Path.Combine(Environment.CurrentDirectory, impl.Name); // create new directory for each entrypoint
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
@@ -431,37 +465,90 @@ namespace FastAVN
                     // spawn the job -- local
                     var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", pruneFile, avnArgs));
 
-                    lock (fslock)
-                    {
-                        // delete temp files
-                        if (!keepFiles)
-                        {
-                            var files = System.IO.Directory.GetFiles(wd, "*.bpl");
-                            foreach (var f in files)
-                                System.IO.File.Delete(f);
-                        }
+                    PostProcess(impl.Name, wd, output);
+                }                
+            }
 
-                        using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
-                            output.Iter(s => sw.WriteLine("{0}", s));
+            public void RunSplitAndAvhAndAv()
+            {
+                Implementation impl;
+
+                while (true)
+                {
+                    if (!impls.TryTake(out impl)) { break; }
+                    var wd = Path.Combine(Environment.CurrentDirectory, impl.Name); // create new directory for each entrypoint
+
+                    Directory.CreateDirectory(wd); // create new directory for each entrypoint
+                    RemoteExec.CleanDirectory(wd);
+                    var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
+
+                    var reachable = BoogieUtil.GetReachableNodes(impl.Name, CallGraph);
+
+                    var newprogram = new Program();
+                    newprogram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
+                        !reachable.Contains((decl as Implementation).Name)));
+
+                    // Prune program
+                    // blah blah
+
+                    BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
+
+                    if (Driver.createEntryPointBplsOnly)
+                    {
+                        Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
+                        continue;
                     }
 
-                    Console.WriteLine("Running entrypoint {0} locally }}", impl.Name);
+                    Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
 
-                    lock (fslock)
-                    {
+                    if (deadlineReached) return;
 
-                        // collect and merge bugs
-                        var bugs = collectBugs(Path.Combine(Directory.GetCurrentDirectory(), impl.Name, bugReportFileName));
-                        bugs.Iter(b =>
-                        {
-                            if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
-                            mergedBugs[b] += 1;
-                        });
-                        Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
-                    }
+                    // spawn AVH
+                    var resultfile = Path.Combine(wd, "hinst.bpl");
+                    var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("\"{0}\" \"{1}\" {2}", pruneFile, resultfile, avHarnessInstrArgs));
+                    for (int i = 0; i < hinstOut.Count; i++)
+                        hinstOut[i] = "[hinst] " + hinstOut[i];
 
+                    // spawn AV
+                    var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", resultfile, avnArgs));
+
+                    PostProcess(impl.Name, wd, hinstOut.Concat(output));
                 }
             }
+
+            static void PostProcess(string impl, string wd, IEnumerable<string> output)
+            {
+                lock (fslock)
+                {
+                    // delete temp files
+                    if (!keepFiles)
+                    {
+                        var files = System.IO.Directory.GetFiles(wd, "*.bpl");
+                        foreach (var f in files)
+                            System.IO.File.Delete(f);
+                    }
+
+                    using (StreamWriter sw = new StreamWriter(Path.Combine(wd, "stdout.txt")))
+                        output.Iter(s => sw.WriteLine("{0}", s));
+                }
+
+                Console.WriteLine("Running entrypoint {0} locally }}", impl);
+
+                lock (fslock)
+                {
+                    // collect and merge bugs
+                    var bugs = collectBugs(Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName));
+                    bugs.Iter(b =>
+                    {
+                        if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
+                        mergedBugs[b] += 1;
+                    });
+                    Utils.Print(string.Format("Bugs found so far: {0}", mergedBugs.Count));
+                }
+
+            }
+
+
         }
 
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
