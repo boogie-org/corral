@@ -306,7 +306,6 @@ namespace FastAVN
         // static program information (!eagerSplit)
         public static Dictionary<string, HashSet<string>> edges = null;
         // static program information (eagerSplit)
-        public static List<Declaration> InputProgramDecls = null;
         public static Microsoft.Boogie.GraphUtil.Graph<string> CallGraph = null;
 
         /// <summary>
@@ -325,8 +324,6 @@ namespace FastAVN
                 CallGraph = BoogieUtil.GetCallGraph(prog);
                 // for populating pred/succ cache
                 CallGraph.Successors(CallGraph.Nodes.First());
-
-                InputProgramDecls = new List<Declaration>(prog.TopLevelDeclarations);
             }
 
             // entrypoints
@@ -490,6 +487,17 @@ namespace FastAVN
 
                     // Prune program
                     // blah blah
+
+
+                    // Remove unnecessary decls
+                    var vu = new VarsUsed();
+                    newprogram.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable) && !(decl is Function))
+                        .Iter(decl => vu.VisitDeclaration(decl));
+
+                    newprogram.RemoveTopLevelDeclarations(decl => decl is GlobalVariable
+                        && !vu.globalsUsed.Contains((decl as GlobalVariable).Name));
+                    newprogram.RemoveTopLevelDeclarations(decl => decl is Function
+                        && !vu.functionsUsed.Contains((decl as Function).Name));
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
