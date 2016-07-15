@@ -130,7 +130,6 @@ namespace FastAVN
                     return;
                 }
 
-
                 // Get input program
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
@@ -311,30 +310,9 @@ namespace FastAVN
 
             if (deadline > 100)
             {
-                var timeouttask = new System.Threading.Tasks.Task(() =>
-                {
-                    System.Threading.Thread.Sleep((deadline - 100) * 1000);
-                    Console.WriteLine("FastAvn deadline reached; consolidating results");
-
-                    deadlineReached = true;
-                    KillSpawnedProcesses();
-
-                    // Sleep for 2 seconds
-                    System.Threading.Thread.Sleep(2 * 1000);
-
-                    // collate bugs
-                    lock (fslock)
-                    {
-                        if (printingOutput) return;
-                        printingOutput = true;
-                        printBugs(ref mergedBugs, epNames.Count);
-                        mergeBugs(epNames);
-                    }
-
-                    // Kill self
-                    Process.GetCurrentProcess().Kill();
-                });
-                timeouttask.Start();
+                var timer = new System.Timers.Timer((deadline - 100) * 1000);
+                timer.Elapsed += (sender, e) => HandleTimer(epNames);
+                timer.Start();
             }
             else if (deadline != 0)
             {
@@ -364,6 +342,30 @@ namespace FastAVN
                 mergeBugs(epNames);
             }
         }
+
+        public static void HandleTimer(HashSet<string> epNames)
+        {
+            Console.WriteLine("FastAvn deadline reached; consolidating results");
+
+            deadlineReached = true;
+            KillSpawnedProcesses();
+
+            // Sleep for 2 seconds
+            System.Threading.Thread.Sleep(2 * 1000);
+
+            // collate bugs
+            lock (fslock)
+            {
+                if (printingOutput) return;
+                printingOutput = true;
+                printBugs(ref mergedBugs, epNames.Count);
+                mergeBugs(epNames);
+            }
+
+            // Kill self
+            Process.GetCurrentProcess().Kill();
+        }
+
 
         class Worker
         {
