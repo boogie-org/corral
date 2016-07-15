@@ -314,7 +314,7 @@ namespace FastAVN
         /// <param name="prog">Original program</param>
         private static void RunAVN(Program prog, HashSet<string> epNames)
         {
-            // compute and stash common information
+            // compute and stash some common information
             if (!earlySplit)
             {
                 edges = buildCallGraph(prog);
@@ -486,7 +486,34 @@ namespace FastAVN
                         !reachable.Contains((decl as Implementation).Name)));
 
                     // Prune program
-                    // blah blah
+                    var cutoff = approximationDepth < 0 ? blockingDepth : approximationDepth;
+                    if (cutoff > 0)
+                    {
+                        var pruneAway = ProcsAfterDepth(impl.Name, cutoff);
+                        if (blockingDepth > 0)
+                        {
+                            // add assume false
+                            var pimpls = new HashSet<Implementation>(newprogram.TopLevelDeclarations.OfType<Implementation>()
+                                .Where(i => pruneAway.Contains(i.Name)));
+                            foreach (var i in pimpls)
+                            {
+                                var fd = new FixedDuplicator(false);
+                                var copy = fd.VisitImplementation(i);
+                                copy.Blocks.Clear();
+                                copy.Blocks.Add(new Block(Token.NoToken, "start",
+                                    new List<Cmd> { BoogieAstFactory.MkAssume(Expr.False) },
+                                    new ReturnCmd(Token.NoToken)));
+                                newprogram.AddTopLevelDeclaration(copy);
+                            }
+                            newprogram.RemoveTopLevelDeclarations(decl => pimpls.Contains(decl as Implementation));
+                        }
+                        else
+                        {
+                            // delete the impl
+                            newprogram.RemoveTopLevelDeclarations(decl => decl is Implementation &&
+                                pruneAway.Contains((decl as Implementation).Name));
+                        }
+                    }
 
 
                     // Remove unnecessary decls
@@ -522,6 +549,32 @@ namespace FastAVN
 
                     PostProcess(impl.Name, wd, hinstOut.Concat(output));
                 }
+            }
+
+            // Do BFS. Return all procs with shortest distance > depth
+            static HashSet<string> ProcsAfterDepth(string root, int depth)
+            {
+                var reachable = new HashSet<string>{ root };
+                var currdepth = 0;
+
+                var frontier = new HashSet<string>();
+                frontier.UnionWith(reachable);
+
+                while (frontier.Count != 0 && currdepth < depth)
+                {
+                    currdepth++;
+
+                    var next = new HashSet<string>();
+                    frontier.Iter(s => next.UnionWith(CallGraph.Successors(s)));
+
+                    frontier = next.Difference(reachable);
+                    reachable.UnionWith(next);
+                }
+
+                var nodes = new HashSet<string>(CallGraph.Nodes);
+                nodes.ExceptWith(reachable);
+
+                return nodes;
             }
 
             static void PostProcess(string impl, string wd, IEnumerable<string> output)
