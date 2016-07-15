@@ -473,6 +473,7 @@ namespace FastAVN
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
+
                     var wd = Path.Combine(Environment.CurrentDirectory, impl.Name); // create new directory for each entrypoint
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
@@ -483,13 +484,15 @@ namespace FastAVN
 
                     var newprogram = new Program();
                     newprogram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
-                        !reachable.Contains((decl as Implementation).Name)));
+                        reachable.Contains((decl as Implementation).Name)));
 
                     // Prune program
                     var cutoff = approximationDepth < 0 ? blockingDepth : approximationDepth;
                     if (cutoff > 0)
                     {
                         var pruneAway = ProcsAfterDepth(impl.Name, cutoff);
+                        Debug.Assert(!pruneAway.Contains(impl.Name));
+
                         if (blockingDepth > 0)
                         {
                             // add assume false
@@ -503,9 +506,9 @@ namespace FastAVN
                                 copy.Blocks.Add(new Block(Token.NoToken, "start",
                                     new List<Cmd> { BoogieAstFactory.MkAssume(Expr.False) },
                                     new ReturnCmd(Token.NoToken)));
+                                newprogram.RemoveTopLevelDeclaration(i);
                                 newprogram.AddTopLevelDeclaration(copy);
                             }
-                            newprogram.RemoveTopLevelDeclarations(decl => pimpls.Contains(decl as Implementation));
                         }
                         else
                         {
@@ -515,6 +518,7 @@ namespace FastAVN
                         }
                     }
 
+                    BoogieUtil.pruneProcs(newprogram, impl.Name);
 
                     // Remove unnecessary decls
                     var vu = new VarsUsed();
@@ -526,21 +530,33 @@ namespace FastAVN
                     newprogram.RemoveTopLevelDeclarations(decl => decl is Function
                         && !vu.functionsUsed.Contains((decl as Function).Name));
 
+                    Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name, 
+                        newprogram.TopLevelDeclarations.OfType<Implementation>().Count());
+
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
-                    if (Driver.createEntryPointBplsOnly)
+                    var mayReach =
+                        BoogieUtil.procsThatMaySatisfyPredicate(newprogram, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+
+                    if (!mayReach.Contains(impl.Name))
                     {
-                        Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
+                        PostProcess(impl.Name, wd, new List<string> { "Assert not reachable" });
                         continue;
                     }
 
-                    Console.WriteLine("Running entrypoint {0} locally {{", impl.Name);
+                    if (Driver.createEntryPointBplsOnly)
+                    {
+                        Console.WriteLine("Running entrypoint {0} }}", impl.Name);
+
+                        Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
+                        continue;
+                    }
 
                     if (deadlineReached) return;
 
                     // spawn AVH
                     var resultfile = Path.Combine(wd, "hinst.bpl");
-                    var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("\"{0}\" \"{1}\" {2}", pruneFile, resultfile, avHarnessInstrArgs));
+                    var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("\"{0}\" \"{1}\" {2} /entryPointProc:{3}", pruneFile, resultfile, avHarnessInstrArgs, impl.Name));
                     for (int i = 0; i < hinstOut.Count; i++)
                         hinstOut[i] = "[hinst] " + hinstOut[i];
 
@@ -593,7 +609,7 @@ namespace FastAVN
                         output.Iter(s => sw.WriteLine("{0}", s));
                 }
 
-                Console.WriteLine("Running entrypoint {0} locally }}", impl);
+                Console.WriteLine("Running entrypoint {0} }}", impl);
 
                 lock (fslock)
                 {

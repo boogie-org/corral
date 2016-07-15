@@ -29,6 +29,8 @@ namespace AvHarnessInstrumentation
         public static bool markAssumesAsSlic = false;
         // Use only provided entrypoints
         public static bool useProvidedEntryPoints = false;
+        // User provided entrypoint
+        public static string userEntryPoint = null;
         // do deadcode detection
         public static bool deadCodeDetect = false;
         // allocate parameters for procedures
@@ -381,10 +383,14 @@ namespace AvHarnessInstrumentation
             if (Options.entryPointProcs != null)
             {
                 Options.useHarnessTag = false;
-                Options.useProvidedEntryPoints = false;
+                Options.useProvidedEntryPoints = true;
                 init.TopLevelDeclarations.OfType<NamedDeclaration>()
                     .Where(d => Options.entryPointProcs.Contains(d.Name))
                     .Iter(d => d.AddAttribute("entrypoint"));
+                init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Where(d => !Options.entryPointProcs.Contains(d.Name))
+                    .Iter(d => d.Attributes = BoogieUtil.removeAttr("entrypoint", d.Attributes));
+
             }
 
             // Add {:entrypoint} to procs with {:harness}
