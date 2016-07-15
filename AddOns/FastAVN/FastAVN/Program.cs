@@ -17,9 +17,13 @@ namespace FastAVN
     class Driver
     {
         static int approximationDepth = -1; // k-depth: default infinity
+        static int blockingDepth = -1; // depth after which to block
+
         static int verbose = 1; // default verbosity level
         static bool createEntryPointBplsOnly = false; //if true stops fastavn after generating entrypoint bpls
         static bool mergeEntryPointBugsOnly = false; //if true then simply merges bugs present in all the entrypoint dirs
+        static bool earlySplit = false; // split before AVH?
+
         static string avnPath = null; // path to AVN binary
         static string avHarnessInstrPath = null; // path to AVN harness instrumentation binary
         static readonly string bugReportFileName = "results.txt"; // default bug report filename produced by AVN
@@ -69,16 +73,25 @@ namespace FastAVN
 
             if (args.Any(s => s == "/createEntrypointBplsOnly"))
                 Driver.createEntryPointBplsOnly = true;
+
             if (args.Any(s => s == "/mergeEntrypointBugsOnly"))
                 Driver.mergeEntryPointBugsOnly = true;
 
+            if (args.Any(s => s == "/splitFirst"))
+                Driver.earlySplit = true;
+
+            
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
 
             // depth k used by implementation pruning
-            args.Where(s => s.StartsWith("/depth:"))
-                .Iter(s => approximationDepth = int.Parse(s.Substring("/depth:".Length)));
+            args.Where(s => s.StartsWith("/angelicAfterDepth:"))
+                .Iter(s => approximationDepth = int.Parse(s.Substring("/angelicAfterDepth:".Length)));
+
+            // depth k used by implementation pruning
+            args.Where(s => s.StartsWith("/blockAfterDepth:"))
+                .Iter(s => blockingDepth = int.Parse(s.Substring("/blockAfterDepth:".Length)));
 
             args.Where(s => s.StartsWith("/numThreads:"))
                 .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
@@ -99,24 +112,25 @@ namespace FastAVN
             try
             {
                 Stats.resume("fastavn");
+
                 if (Driver.mergeEntryPointBugsOnly)
                 {
                     // collate bugs
-                    lock (fslock)
+                    printingOutput = true;
+                    if (Directory.Exists(bug_folder))
                     {
-                        printingOutput = true;
-                        if (Directory.Exists(bug_folder))
-                        {
-                            Utils.Print(string.Format("WARNING!! Removing {0} folder", bug_folder));
-                            Directory.Delete(Path.Combine(Directory.GetCurrentDirectory(), bug_folder), true);
-                        }
-                        HashSet<string> epNames = new HashSet<string>(Directory.GetDirectories(@"."));
-                        epNames = new HashSet<string>(epNames.Select(s => Path.GetFileName(s)));
-                        printBugs(ref mergedBugs, epNames.Count);
-                        mergeBugs(epNames);
+                        Utils.Print(string.Format("WARNING!! Removing {0} folder", bug_folder));
+                        Directory.Delete(Path.Combine(Directory.GetCurrentDirectory(), bug_folder), true);
                     }
+                    HashSet<string> epNames = new HashSet<string>(Directory.GetDirectories(@"."));
+                    epNames = new HashSet<string>(epNames.Select(s => Path.GetFileName(s)));
+                    printBugs(ref mergedBugs, epNames.Count);
+                    mergeBugs(epNames);
+
                     return;
                 }
+
+
                 // Get input program
                 Utils.Print(String.Format("----- Run FastAVN on {0} with k={1} ------",
                     args[0], approximationDepth), Utils.PRINT_TAG.AV_OUTPUT);
