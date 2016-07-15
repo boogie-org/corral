@@ -46,6 +46,8 @@ namespace AngelicVerifierNull
         public static bool blockOnFreeVars = false;
         // File containing the filters for ExplainError
         public static string eeFilters = "";
+        // Kill the process after these many seconds
+        public static int killAfter = 0;
         // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
         public static bool UseDuplicator
         { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
@@ -86,7 +88,14 @@ namespace AngelicVerifierNull
 
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
-            ProgTransformation.PersistentProgramIO.useStrings = true; 
+            ProgTransformation.PersistentProgramIO.useStrings = true;
+
+            if (Options.killAfter > 0)
+            {
+                var timer = new System.Timers.Timer(Options.killAfter * 1000);
+                timer.Elapsed += (sender, e) => HandleTimer(sw);
+                timer.Start();
+            }
 
             try
             {
@@ -158,6 +167,17 @@ namespace AngelicVerifierNull
             }
         }
 
+        public static void HandleTimer(Stopwatch sw)
+        {
+            if (ResultsFile != null) ResultsFile.Close();
+            Utils.Print("AngelicVerifier failed with: Timeout", Utils.PRINT_TAG.AV_OUTPUT);
+            Stats.printStats();
+            Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+            // Kill self
+            Process.GetCurrentProcess().Kill();
+        }
+
         public static void SetOptions(string[] args)
         {
             if (args.Any(s => s == "/break"))
@@ -209,6 +229,9 @@ namespace AngelicVerifierNull
 
             args.Where(s => s.StartsWith("/timeoutEE:"))
                 .Iter(s => Options.eeTimeout = int.Parse(s.Substring("/timeoutEE:".Length)));
+
+            args.Where(s => s.StartsWith("/killAfter:"))
+                .Iter(s => Options.killAfter = int.Parse(s.Substring("/killAfter:".Length)));
 
             if (args.Any(s => s == "/traceSlicing"))
                 Options.TraceSlicing = true;
