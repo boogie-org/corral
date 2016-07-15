@@ -290,7 +290,7 @@ namespace AvHarnessInstrumentation
                     var mapVars = prog.TopLevelDeclarations.OfType<Variable>().Where(x => x.Name == mapName && x.TypedIdent.Type.IsMap);
                     if (mapVars.Count() != 1)
                     {
-                        Utils.Print(String.Format("Mapname {0} provided in {:ref} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
+                        Utils.Print(String.Format("Mapname {0} provided in {{:ref}} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
                             mapName, ip.Name, p.Name, mapVars.Count()),
                             Utils.PRINT_TAG.AV_WARNING);
                         continue;

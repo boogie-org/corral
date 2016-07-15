@@ -556,7 +556,7 @@ namespace FastAVN
 
                     // spawn AVH
                     var resultfile = Path.Combine(wd, "hinst.bpl");
-                    var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("\"{0}\" \"{1}\" {2} /entryPointProc:{3}", pruneFile, resultfile, avHarnessInstrArgs, impl.Name));
+                    var hinstOut = RemoteExec.run(wd, avHarnessInstrPath, string.Format("\"{0}\" \"{1}\" {2} /entryPointProc:{3}", pruneFile, resultfile, avHarnessInstrArgs, impl.Name));
                     for (int i = 0; i < hinstOut.Count; i++)
                         hinstOut[i] = "[hinst] " + hinstOut[i];
 
