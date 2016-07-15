@@ -88,7 +88,7 @@ namespace FastAVN
 
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
-            avnArgs += " /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- ";
+            avnArgs = " /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- " + avnArgs;
 
             // Find AVN executable
             avnPath = findExe("AngelicVerifierNull.exe");
