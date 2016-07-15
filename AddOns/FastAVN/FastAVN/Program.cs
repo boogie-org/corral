@@ -350,8 +350,8 @@ namespace FastAVN
             deadlineReached = true;
             KillSpawnedProcesses();
 
-            // Sleep for 2 seconds
-            System.Threading.Thread.Sleep(2 * 1000);
+            // Sleep for 5 seconds
+            System.Threading.Thread.Sleep(5 * 1000);
 
             // collate bugs
             lock (fslock)
