@@ -533,8 +533,6 @@ namespace FastAVN
                     Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name, 
                         newprogram.TopLevelDeclarations.OfType<Implementation>().Count());
 
-                    BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
-
                     var mayReach =
                         BoogieUtil.procsThatMaySatisfyPredicate(newprogram, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
 
@@ -543,6 +541,8 @@ namespace FastAVN
                         PostProcess(impl.Name, wd, new List<string> { "Assert not reachable" });
                         continue;
                     }
+
+                    BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
                     if (Driver.createEntryPointBplsOnly)
                     {
