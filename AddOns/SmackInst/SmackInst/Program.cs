@@ -99,10 +99,10 @@ namespace SmackInst
             if (!program.Implementations.Any(impl => impl.Proc.Name.Equals(root)))
             {
                 Console.WriteLine("Warning: specified root is not found");
-                Console.WriteLine("Get all the roots:");
+                Console.WriteLine("Get all non-trivial roots:");
                 // ignore recursion
-                var roots = graph.Nodes.Where(n => graph.Predecessors(n).Count() == 0);
-                Console.WriteLine(roots);
+                var roots = graph.Nodes.Where(n => graph.Predecessors(n).Count() == 0 && graph.Successors(n).Count() > 0);
+                Console.WriteLine(String.Join(", ", roots.ToArray()));
                 Console.WriteLine("Print the whole graph with all roots");
                 dotty.Write(graph.ToDot());
                 dotty.Close();
