@@ -24,6 +24,7 @@ namespace SmackInst
         public static bool count = false;
         public static bool onlyCount = false;
         public static bool checkNULL = false;
+        public static bool printCallGraph = false;
 
         static void Main(string[] args)
         {
@@ -57,6 +58,9 @@ namespace SmackInst
             if (args.Any(a => a == "/checkNULL"))
                 checkNULL = true;
 
+            if (args.Any(a => a == "/printCallGraph"))
+                printCallGraph = true;
+
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -67,6 +71,12 @@ namespace SmackInst
             var program = BoogieUtil.ReadAndResolve(args[0], false);
             // SMACK does not add globals to modify clauses
             //BoogieUtil.DoModSetAnalysis(program);
+
+            if (printCallGraph)
+            {
+                PrintCallGraphToDot(program, "main", "callgraph.dot");
+                return;
+            }
 
             // Preprocess program: count lines + replace Root
             program = preProcess(program, count || onlyCount, oldRoot, newRoot);
@@ -79,6 +89,48 @@ namespace SmackInst
 
             // write the output
             BoogieUtil.PrintProgram(program, args[1]);
+        }
+
+        static void PrintCallGraphToDot(Program program, string root, string filename)
+        {
+            var dotty = new System.IO.StreamWriter(filename);
+            var graph = BoogieUtil.GetCallGraph(program);
+
+            if (!program.Implementations.Any(impl => impl.Proc.Name.Equals(root)))
+            {
+                Console.WriteLine("Warning: specified root is not found");
+                Console.WriteLine("Get all the roots:");
+                // ignore recursion
+                var roots = graph.Nodes.Where(n => graph.Predecessors(n).Count() == 0);
+                Console.WriteLine(roots);
+                Console.WriteLine("Print the whole graph with all roots");
+                dotty.Write(graph.ToDot());
+                dotty.Close();
+                return;
+            }
+
+            dotty.WriteLine("digraph \"Call graph\" {");
+            dotty.WriteLine("  label=\"Call graph\";");
+          
+            var visited = new HashSet<string>{root};
+            var worklist = new HashSet<string>{root};
+            var depth = 0;
+            // do BFS
+            while (worklist.Count != 0 && depth < 50)
+            {
+                depth++;
+                // print all edges from this level to next
+                worklist.Iter(w => graph.Successors(w).Iter(s => dotty.WriteLine(string.Format("  \"{0}\" -> \"{1}\";", w, s))));
+                // expand worklist to next level
+                var nl = new HashSet<string>();
+                worklist.Iter(w => nl.UnionWith(graph.Successors(w)));
+                // break circle
+                worklist = nl.Difference(visited);
+                // add next level to visited
+                visited.UnionWith(nl);
+            }
+            dotty.WriteLine("}");
+            dotty.Close();
         }
 
         static Program preProcess(Program program, bool count, string oldRoot, string newRoot)
