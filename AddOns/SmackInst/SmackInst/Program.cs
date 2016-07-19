@@ -160,6 +160,11 @@ namespace SmackInst
             program.AddTopLevelDeclaration(nil);
             program.AddTopLevelDeclaration(ax);
 
+            // add "allocator" to malloc
+            program.TopLevelDeclarations.OfType<Procedure>()
+                .Where(p => MallocNames.Contains(p.Name))
+                .Iter(p => p.AddAttribute("allocator"));
+
             // if we don't check NULL, stop here
             if (!checkNULL)
                 return program;
@@ -169,11 +174,6 @@ namespace SmackInst
 			CE.Run (program);
 			// inline functions
 			InlineFunctions(program);
-
-            // add "allocator" to malloc
-            program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(p => MallocNames.Contains(p.Name))
-                .Iter(p => p.AddAttribute("allocator"));
 
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
