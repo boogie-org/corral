@@ -23,6 +23,7 @@ namespace SmackInst
 
         public static bool count = false;
         public static bool onlyCount = false;
+        public static bool checkNULL = false;
 
         static void Main(string[] args)
         {
@@ -52,6 +53,9 @@ namespace SmackInst
 
             if (args.Any(a => a == "/onlyCount"))
                 onlyCount = true;
+
+            if (args.Any(a => a == "/checkNULL"))
+                checkNULL = true;
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -94,6 +98,20 @@ namespace SmackInst
             //BoogieUtil.PrintProgram(program, "tt.bpl");
             program = BoogieUtil.ReResolveInMem(program, false);
 
+            // Create "null"
+            var nil = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "NULL", btype.Int), false);
+            nil.AddAttribute("allocated");
+
+            // axiom NULL == 0;
+            var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
+
+            program.AddTopLevelDeclaration(nil);
+            program.AddTopLevelDeclaration(ax);
+
+            // if we don't check NULL, stop here
+            if (!checkNULL)
+                return program;
+
 			// Remove literal constants
 			var CE = new ConstantElimination ();
 			CE.Run (program);
@@ -105,18 +123,8 @@ namespace SmackInst
                 .Where(p => MallocNames.Contains(p.Name))
                 .Iter(p => p.AddAttribute("allocator"));
 
-            // Create "null"
-            var nil = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "NULL", btype.Int), false);
-            nil.AddAttribute("allocated");
-
-            // axiom NULL == 0;
-            var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
-
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
-
-            program.AddTopLevelDeclaration(nil);
-            program.AddTopLevelDeclaration(ax);
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
