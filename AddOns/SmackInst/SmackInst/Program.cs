@@ -155,10 +155,10 @@ namespace SmackInst
             nil.AddAttribute("allocated");
 
             // axiom NULL == 0;
-            var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
+            //var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
 
             program.AddTopLevelDeclaration(nil);
-            program.AddTopLevelDeclaration(ax);
+            //program.AddTopLevelDeclaration(ax);
 
             // add "allocator" to malloc
             program.TopLevelDeclarations.OfType<Procedure>()
@@ -170,13 +170,17 @@ namespace SmackInst
                 return program;
 
 			// Remove literal constants
-			var CE = new ConstantElimination ();
+			var CE = new ConstantElimination();
 			CE.Run (program);
 			// inline functions
 			InlineFunctions(program);
 
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
+
+            // Add NULL axiom here such that ConvertToNULL doesn't lead to dumb axiom
+            var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
+            program.AddTopLevelDeclaration(ax);
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
@@ -481,7 +485,7 @@ namespace SmackInst
 	
 		public void Run(Program prog)
 		{
-			HashSet<string> constNames = new HashSet<string>(prog.TopLevelDeclarations.OfType<Constant>().Select(c => c.Name));
+			HashSet<string> constNames = new HashSet<string>(prog.TopLevelDeclarations.OfType<Constant>().Where(c => c.Name != "NULL").Select(c => c.Name));
 			HashSet<Axiom> axiomsToDelete = new HashSet<Axiom>();
 			HashSet<string> constsToDelete = new HashSet<string>();
 			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr is NAryExpr && (axi.Expr as NAryExpr).Fun.FunctionName == "==")) {
@@ -523,7 +527,7 @@ namespace SmackInst
             var ret = new HashSet<Constant>();
             var constants = program.TopLevelDeclarations.OfType<Constant>().ToList();
             foreach (var c in constants)
-            {
+            {     
                 if (!c.Name.StartsWith("$0")) continue;
                 var e = Expr.Eq(Expr.Ident(c), Expr.Literal(0));
                 if (program.TopLevelDeclarations.OfType<Axiom>()
