@@ -307,6 +307,8 @@ namespace FastAVN
         public static Dictionary<string, HashSet<string>> edges = null;
         // static program information (eagerSplit)
         public static Microsoft.Boogie.GraphUtil.Graph<string> CallGraph = null;
+        public static Dictionary<Declaration, HashSet<string>> DeclToGlobalsUsed = null;
+        public static Dictionary<Declaration, HashSet<string>> DeclToFunctionsUsed = null;
 
         /// <summary>
         /// Run AVN binary on sliced programs
@@ -324,6 +326,18 @@ namespace FastAVN
                 CallGraph = BoogieUtil.GetCallGraph(prog);
                 // for populating pred/succ cache
                 CallGraph.Successors(CallGraph.Nodes.First());
+
+                DeclToFunctionsUsed = new Dictionary<Declaration, HashSet<string>>();
+                DeclToGlobalsUsed = new Dictionary<Declaration, HashSet<string>>();
+
+                foreach (var decl in prog.TopLevelDeclarations)
+                {
+                    var vu = new VarsUsed();
+                    vu.VisitDeclaration(decl);
+
+                    DeclToGlobalsUsed.Add(decl, vu.globalsUsed);
+                    DeclToFunctionsUsed.Add(decl, vu.functionsUsed);
+                }
             }
 
             // entrypoints
@@ -483,6 +497,7 @@ namespace FastAVN
                     var reachable = BoogieUtil.GetReachableNodes(impl.Name, CallGraph);
 
                     var newprogram = new Program();
+
                     newprogram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
                         reachable.Contains((decl as Implementation).Name)));
 
@@ -521,16 +536,21 @@ namespace FastAVN
                     BoogieUtil.pruneProcs(newprogram, impl.Name);
 
                     // Remove unnecessary decls
-                    var vu = new VarsUsed();
+                    var globalsUsed = new HashSet<string>();
+                    var functionsUsed = new HashSet<string>();
                     newprogram.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable) && !(decl is Function))
-                        .Iter(decl => vu.VisitDeclaration(decl));
+                        .Iter(decl =>
+                        {
+                            globalsUsed.UnionWith(DeclToGlobalsUsed[decl]);
+                            functionsUsed.UnionWith(DeclToFunctionsUsed[decl]);
+                        });
 
                     newprogram.RemoveTopLevelDeclarations(decl => decl is GlobalVariable
-                        && !vu.globalsUsed.Contains((decl as GlobalVariable).Name));
+                        && !globalsUsed.Contains((decl as GlobalVariable).Name));
                     newprogram.RemoveTopLevelDeclarations(decl => decl is Function
-                        && !vu.functionsUsed.Contains((decl as Function).Name));
+                        && !functionsUsed.Contains((decl as Function).Name));
 
-                    Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name, 
+                    Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name,
                         newprogram.TopLevelDeclarations.OfType<Implementation>().Count());
 
                     var mayReach =
@@ -541,6 +561,7 @@ namespace FastAVN
                         PostProcess(impl.Name, wd, new List<string> { "Assert not reachable" });
                         continue;
                     }
+
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
