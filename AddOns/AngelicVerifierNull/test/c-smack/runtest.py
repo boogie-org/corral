@@ -18,6 +18,9 @@ def arguments():
   parser.add_argument('-g', '--general', action='store_true', default=False,
     help = 'check general assertion (do not run smackinst.exe)')
 
+  parser.add_argument('--checkNULL', action='store_true', default=False,
+    help = 'check NULL pointer deference')
+
   smack_group = parser.add_argument_group("SMACK options")
 
   smack_group.add_argument('--smack-options', metavar='OPTIONS', default='',
@@ -143,6 +146,8 @@ def runsi(args):
   cmd += [args.file_name + '.inst.bpl']
   if args.init_mem:
     cmd += ['/initMem']
+  if args.checkNULL:
+    cmd += ['/checkNULL']
   
   run_cmds += ['// RUN: %si "%s" "%t0.bpl"' + ' '.join(cmd[4 if os.name == 'posix' else 3 :])]
   return try_command(args, cmd, False) 
@@ -194,6 +199,8 @@ def runavn(args):
     cmd += ['/sdv']
   else:
     cmd += ['/copt:tryCTrace']
+  cmd += ['/EE:ignoreAllAssumes+']
+  cmd += ['/EE:onlySlicAssumes-']
   cmd += args.verifier_options.split()
   run_cmds += ['// RUN: %avn "%t1.bpl" ' + ' '.join(cmd[3 if os.name == 'posix' else 2 :]) + ' | %grep > %t3']
   return try_command(args, cmd, False) 
