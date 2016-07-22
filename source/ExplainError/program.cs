@@ -882,20 +882,29 @@ namespace ExplainError
         private static Expr CreateITE(Expr p)
         {
             CheckTimeout("Inside CreateITE");
-            var pn = p as NAryExpr;
-            if (pn == null) return p;
-            if (pn.Fun.FunctionName == "MapSelect")
+            if (p is NAryExpr)
             {
-                return EliminateUpdates(pn.Args[0], pn.Args[1]);
-            }
-            List<Expr> args = new List<Expr>();
-            var pArgs = new List<Expr>(pn.Args);
-            foreach (Expr a in pArgs /*pn.Args*/)  //Collection was modified; enumeration operation may not execute (???)
+                var pn = p as NAryExpr;
+                if (pn.Fun.FunctionName == "MapSelect")
+                {
+                    return EliminateUpdates(pn.Args[0], pn.Args[1]);
+                }
+                List<Expr> args = new List<Expr>();
+                var pArgs = new List<Expr>(pn.Args);
+                foreach (Expr a in pArgs /*pn.Args*/)  //Collection was modified; enumeration operation may not execute (???)
+                {
+                    var b = CreateITE(a);
+                    args.Add(b);
+                }
+                return ExprUtil.NAryExpr(pn.Fun, args);
+            } else if (p is QuantifierExpr)
             {
-                var b = CreateITE(a);
-                args.Add(b);
+                var qn = p as QuantifierExpr;
+                var tmpBody = CreateITE(qn.Body);
+                qn.Body = tmpBody;
+                return p;
             }
-            return ExprUtil.NAryExpr(pn.Fun, args);
+            return p;
         }
         private static Expr EliminateUpdates(Expr map, Expr index)
         {
@@ -961,16 +970,24 @@ namespace ExplainError
         {
             CheckTimeout("FlattenITE start");
             Expr a, b, c;
-            var e = expr as NAryExpr;
-            if (e == null) return expr;
-            var args = new List<Expr>();
-            foreach (Expr arg in e.Args)
-                args.Add(FlattenITE(arg));
-            var f = ExprUtil.NAryExpr(e.Fun, args);
-            if (!IsIteExpr(f, out a, out b, out c)) return f; //
-            return ExprUtil.Or(
-                ExprUtil.And(a, b),
-                ExprUtil.And(ExprUtil.Not(a), c));
+            if (expr is NAryExpr)
+            {
+                var e = expr as NAryExpr;
+                var args = new List<Expr>();
+                foreach (Expr arg in e.Args)
+                    args.Add(FlattenITE(arg));
+                var f = ExprUtil.NAryExpr(e.Fun, args);
+                if (!IsIteExpr(f, out a, out b, out c)) return f; //
+                return ExprUtil.Or(
+                    ExprUtil.And(a, b),
+                    ExprUtil.And(ExprUtil.Not(a), c));
+            } else if (expr is QuantifierExpr)
+            {
+                var qn = expr as QuantifierExpr;
+                qn.Body = FlattenITE(qn.Body);
+                return expr;
+            }
+            return expr;
         }
         private static bool IsIteExpr(Expr expr, out Expr a, out Expr b, out Expr c)
         {
@@ -985,14 +1002,22 @@ namespace ExplainError
         }
         private static Expr EliminateITE(Expr p)
         {
-            var e = p as NAryExpr;
-            if (e == null) return p;
-            if (ExprUtil.IsRelationalOp(e.Fun))
-                return EliminateITERelationalExpr(e);
-            var args = new List<Expr>();
-            foreach (Expr a in e.Args)
-                args.Add(EliminateITE(a));
-            return ExprUtil.NAryExpr(e.Fun, args);
+            if (p is NAryExpr)
+            {
+                var e = p as NAryExpr;
+                if (ExprUtil.IsRelationalOp(e.Fun))
+                    return EliminateITERelationalExpr(e);
+                var args = new List<Expr>();
+                foreach (Expr a in e.Args)
+                    args.Add(EliminateITE(a));
+                return ExprUtil.NAryExpr(e.Fun, args);
+            } else if (p is QuantifierExpr)
+            {
+                var qn = p as QuantifierExpr;
+                qn.Body = EliminateITE(qn.Body);
+                return p;
+            }
+            return p;
         }
         private static Expr EliminateITERelationalExpr(NAryExpr x)
         {
