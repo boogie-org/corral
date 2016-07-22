@@ -67,7 +67,6 @@ namespace ExplainError
         //Display options
         private static bool showBoogieExprs = false;
         public static bool useFieldMapAttribute = true; //shoudl always use it, not exposing
-        public static bool dontUsePruningWhileEliminatingUpdates = false; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
         public static bool checkIfExprFalseCalled = false; //HACK!
         private static int timeout = MAX_TIMEOUT; // seconds
         private static bool verbose = false;
@@ -913,32 +912,14 @@ namespace ExplainError
             var k = m.Args[2];
             var eq = ExprUtil.Eq(index, j);
             var l = Expr.Select(i, index);
-            if (IsInconsistentWithContext(eq))
-            {
-                Console.Write("+");
-                return CreateITE(l); //else
-            }
-            else if (IsInconsistentWithContext(ExprUtil.Not(eq)))
-            {
-                Console.Write("-");
-                return CreateITE(k); //then
-            }
+
             Console.Write("*");
             var a = CreateITE(eq);
             var b = CreateITE(k);
             var c = CreateITE(l);
             return ExprUtil.Ite(a, b, c);
         }
-        //Is eq inconsistent with the context
-        private static bool IsInconsistentWithContext(Expr e)
-        {
-            //turning it on may be unsound M[x:=1][y] != 1 ==> x != y, but simplifying it to M[y] != 1 is not equivalent            
-            if (dontUsePruningWhileEliminatingUpdates) return false;
-            if (currPre == null) return false;
-            var res = VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(currPre, e));
-            Console.Write(".");
-            return res;
-        }
+
         private static Expr TryRewriteITE(Expr e)
         { //Try to apply a rewrite rule if applicable
             CheckTimeout("Inside TryRewriteITE");
@@ -1190,7 +1171,6 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
-                if (CheckBooleanFlag(a, "dontUsePruningWhileEliminatingUpdates", ref dontUsePruningWhileEliminatingUpdates)) continue;
                 int eeCoverOptAsInt = 0;
                 if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt))
                 {
