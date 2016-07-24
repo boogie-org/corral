@@ -165,6 +165,8 @@ namespace SmackInst
                 .Where(p => MallocNames.Contains(p.Name))
                 .Iter(p => p.AddAttribute("allocator"));
 
+			// inline functions
+			InlineFunctions(program);
             // if we don't check NULL, stop here
             if (!checkNULL)
                 return program;
@@ -172,8 +174,6 @@ namespace SmackInst
 			// Remove literal constants
 			var CE = new ConstantElimination();
 			CE.Run (program);
-			// inline functions
-			InlineFunctions(program);
 
             // Convert 0 to NULL in the program
             ConvertToNull.Convert(program, nil);
