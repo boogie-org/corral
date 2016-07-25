@@ -10,7 +10,10 @@ def arguments():
   parser = argparse.ArgumentParser()
 
   parser.add_argument('input_file', metavar='input-file',
-    help = 'source file (*.bpl or *.c)')    
+    help = 'source file (*.bpl or *.c)')
+
+  parser.add_argument('prop', metavar='property',
+    help = 'property to check (null, double-free, resource leak)')
   
   parser.add_argument('-v', '--verbose', action='store_true', default=False,
     help = 'verbose mode')
@@ -18,8 +21,8 @@ def arguments():
   parser.add_argument('-g', '--general', action='store_true', default=False,
     help = 'check general assertion (do not run smackinst.exe)')
 
-  parser.add_argument('--checkNULL', action='store_true', default=False,
-    help = 'check NULL pointer deference')
+  #parser.add_argument('--checkNULL', action='store_true', default=False,
+  #  help = 'check NULL pointer deference')
 
   smack_group = parser.add_argument_group("SMACK options")
 
@@ -62,9 +65,16 @@ def arguments():
   )
 
   return parser.parse_args()
-  
+
+def checkNULL(args):
+  if args.prop == 'null':
+    return True
+  else:
+    return False
+
 def find_exe(args):
   args.si_exe = GetBinary('SmackInst')
+  args.pi_exe = GetBinary('PropInst')
   args.avh_exe = GetBinary('AvHarnessInstrumentation')
   args.avn_exe = GetBinary('AngelicVerifierNull')
 
@@ -72,7 +82,7 @@ def GetBinary(BinaryName):
   up = os.path.dirname
   corralRoot = up(up(up(up(up(os.path.abspath('__file__'))))))
   avRoot = os.path.join(corralRoot, 'AddOns')
-  root = os.path.join(avRoot, 'SmackInst') if (BinaryName == 'SmackInst') else os.path.join(avRoot, 'AngelicVerifierNull')
+  root = os.path.join(avRoot, BinaryName) if (BinaryName == 'SmackInst' or BinaryName == 'PropInst') else os.path.join(avRoot, 'AngelicVerifierNull')
   return os.path.join(
           os.path.join(
            os.path.join(
@@ -146,11 +156,29 @@ def runsi(args):
   cmd += [args.file_name + '.inst.bpl']
   if args.init_mem:
     cmd += ['/initMem']
-  if args.checkNULL:
+  if checkNULL(args):
     cmd += ['/checkNULL']
   
   run_cmds += ['// RUN: %si "%s" "%t0.bpl"' + ' '.join(cmd[4 if os.name == 'posix' else 3 :])]
   return try_command(args, cmd, False) 
+
+def runpi(args):
+  global run_cmds
+  if (not os.path.exists(args.pi_exe)):
+    print "PropInst not found"
+
+  cmd = [args.pi_exe]
+  if os.name == 'posix':
+    cmd = ['mono'] + cmd
+  prop_name = args.prop
+  prop_file = prop_name + '.avp'
+  inst_file_name = args.file_name + '-' + prop_name
+  cmd += [prop_file]
+  cmd += [args.file_name + '.bpl']
+  cmd += [inst_file_name + '.bpl']
+  args.file_name = inst_file_name
+#TODO: add the command to run commands
+  return try_command(args, cmd, False)
 
 def runavh(args):
   #print "Running AvHarnessInstrumentation at: '{}'".format(args.avh_exe) 
@@ -227,14 +255,18 @@ if __name__ == '__main__':
   args = arguments()
   args.file_name = os.path.splitext(args.input_file)[0]
 
-  if (os.path.splitext(args.input_file)[1][1:] == 'c'):
+  if (os.path.splitext(args.input_file)[1][1:] != 'bpl'):
     smack_output = runsmack(args)
 
   
   find_exe(args)
 
+  if (not checkNULL(args)):
+    pi_output = runpi(args)
+
   if (not args.general):
     si_output = runsi(args)
+
   avh_output = runavh(args)
   avn_output = runavn(args)
 
