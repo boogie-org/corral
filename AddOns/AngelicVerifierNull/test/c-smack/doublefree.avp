@@ -1,0 +1,22 @@
+GlobalDeclarations
+{
+var {:propertyMap} validFree : [int] bool;
+//function {:reachableStates} mustReach(bool) : bool;
+}
+
+
+TemplateVariables
+{
+var p : int;
+}
+
+ProcedureRule
+{
+procedure {:#NameMatches "^\$free$"} fmFree( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+procedure {:#NoImplementation} {:#NameMatches "^_ZdlPv$"} fmDelete( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+}
+-->
+{
+assert(validFree[p1]);
+validFree[p1] := false;
+}
