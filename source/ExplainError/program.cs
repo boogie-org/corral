@@ -713,6 +713,8 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
+                if (VCVerifier.CheckIfExprFalse(currImpl, c)  || VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(c)))
+                    continue;//remove any true/false predicate
                 if (!LiteralInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
