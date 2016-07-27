@@ -1,22 +1,55 @@
 GlobalDeclarations
 {
 var {:propertyMap} validFree : [int] bool;
-//function {:reachableStates} mustReach(bool) : bool;
 }
 
 
 TemplateVariables
 {
 var p : int;
+//procedure {:#NameMatches "^free\_$"} fmFree_( p1 : int) returns();
 }
 
-ProcedureRule
+CmdRule
 {
-procedure {:#NameMatches "^\$free$"} fmFree( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
-procedure {:#NoImplementation} {:#NameMatches "^_ZdlPv$"} fmDelete( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+call free_(p);
 }
 -->
 {
-assert(validFree[p1]);
-validFree[p1] := false;
+assert validFree[p];
+#this;
+validFree[p] := false;
 }
+
+CmdRule
+{
+call _ZdlPv(p);
+}
+-->
+{
+assert validFree[p];
+#this;
+validFree[p] := false;
+}
+
+//CmdRule
+//{
+//call _ZdaPv(p);
+//}
+//-->
+//{
+//assert validFree[p];
+//#this;
+//validFree[p] := false;
+//}
+//
+//ProcedureRule
+//{
+//procedure {:#NameMatches "\w*\$[Ff]ree\w*"} fmFree( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+//procedure {:#NoImplementation} {:#NameMatches "\w*[Dd]elete\w*"} fmDelete( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+//}
+//-->
+//{
+//assert(validFree[p1]);
+//validFree[p1] := false;
+//}
