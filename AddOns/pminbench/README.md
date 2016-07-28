@@ -2,7 +2,11 @@
 
 [Proof Minimization](https://github.com/boogie-org/corral/blob/master/AddOns/ProofMinimization) is a tool that takes a set of program proofs as input and returns a miniamal set of annotations sufficient for proving correctness of each input program. The algorithm is described in our ASE'16 paper cited below.
 
-[PMinBench](https://github.com/boogie-org/corral/tree/master/AddOns/pminbench) is a wrapper utility around ProofMinimzation. It expects a set of Boogie programs as input. It will run [Duality](https://www.microsoft.com/en-us/research/project/duality) on them to spit out the proof of correctness. Next, it runs ProofMinimization on these proofs and prints the minimal template (a list of abstract annotations) on the console. For example, run:
+[PMinBench](https://github.com/boogie-org/corral/tree/master/AddOns/pminbench) is a wrapper utility around ProofMinimzation. It expects a set of Boogie programs as input. It will run [Duality](https://www.microsoft.com/en-us/research/project/duality) on them to spit out the proof of correctness. Next, it runs ProofMinimization on these proofs and prints the minimal template (a list of abstract annotations) on the console. 
+
+To build, first build [Corral](https://github.com/boogie-org/corral) then open and build `pminbench.sln`.
+
+To run, for example:
 
 `Binaries\pminbench.exe spinlockrelease\*.bpl`
 
