@@ -4,7 +4,7 @@
 
 [PMinBench](https://github.com/boogie-org/corral/tree/master/AddOns/pminbench) is a wrapper utility around ProofMinimzation. It expects a set of Boogie programs as input. It will run [Duality](https://www.microsoft.com/en-us/research/project/duality) on them to spit out the proof of correctness. Next, it runs ProofMinimization on these proofs and prints the minimal template (a list of abstract annotations) on the console. 
 
-To build, first build [Corral](https://github.com/boogie-org/corral) then open and build `pminbench.sln`.
+To build, first build [Corral](https://github.com/boogie-org/corral) then open and build `pminbench.sln`. Next, build [Z3](https://github.com/Z3Prover/z3) and place `z3.exe` in the `Binaries` folder (alongside `pminbench.exe`).
 
 To run, for example:
 
@@ -34,3 +34,5 @@ Passing the additional flag `/inlineDepth:2`, e.g., `Binaries\pminbench.exe irql
 Inferring Annotations For Device Drivers From Verification Histories. Zvonimir Pavlinovic, Akash Lal, Rahul Sharma. In Proc: Automated Software Engineering (ASE) 2016 
 
 ## Supplemental material
+
+Additional material for the ASE'16 paper can be found [here](https://github.com/boogie-org/corral/edit/master/AddOns/pminbench/supplemental)
