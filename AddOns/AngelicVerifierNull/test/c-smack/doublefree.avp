@@ -32,16 +32,16 @@ assert validFree[p];
 validFree[p] := false;
 }
 
-//CmdRule
-//{
-//call _ZdaPv(p);
-//}
-//-->
-//{
-//assert validFree[p];
-//#this;
-//validFree[p] := false;
-//}
+CmdRule
+{
+call _ZdaPv(p);
+}
+-->
+{
+assert validFree[p];
+#this;
+validFree[p] := false;
+}
 //
 //ProcedureRule
 //{
