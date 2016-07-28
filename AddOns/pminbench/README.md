@@ -27,7 +27,7 @@ Note:
 
 Directories `test\cancelspinlock`, `test\spinlock`, `test\irql` contain other examples. The example in `test\irql` is the same as one in `Fig. 3` of the ASE'16 paper. One can see it returns the abstract annotation `old(v_loop_int_0) == v_loop_int_0`
 
-Passing the additional flag `/inlineDepth:2`, e.g., `Binaries\pminbench.exe irql\*.bpl /inlineDepth:2` makes the output (inferred set of annotations) even smaller. This flag increases the precision of `Houdini`, hence even more annotations can be dropped.
+Passing the additional flag `/inlineDepth:2`, e.g., `Binaries\pminbench.exe test\irql\*.bpl /inlineDepth:2` makes the output (inferred set of annotations) even smaller. This flag increases the precision of `Houdini`, hence even more annotations can be dropped.
 
 ## Publications
 
