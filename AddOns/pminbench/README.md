@@ -8,7 +8,7 @@ To build, first build [Corral](https://github.com/boogie-org/corral) then open a
 
 To run, for example:
 
-`Binaries\pminbench.exe spinlockrelease\*.bpl`
+`Binaries\pminbench.exe test\spinlockrelease\*.bpl`
 
 This should print something like:
 ```
@@ -18,14 +18,14 @@ This should print something like:
     depth == old(depth)
 ```
 Note:
-- The programs in `spinlockrelease\*.bpl` are based on Fig.2 of the ASE'16 paper.
+- The programs in `test\spinlockrelease\*.bpl` are based on `Fig. 2` of the ASE'16 paper.
 - The `ok` bit is called `assertsPassed`.
 - You may observe slightly different answers on your machine. This is because Duality can produce different proofs on
   different machines.
 - After running the above command, one can inspect the duality proofs by looking at the files in the folder `proofbench`. The ensure clauses are the postconditions produced by Duality.
 - Directly run `ProofMinimization` as `Binaries\ProofMinimization.exe proofbench\*.bpl /perf` and look for `Additional contract required:` printed on console.
 
-Directories `cancelspinlock`, `spinlock`, `irql` have other examples. The example in `irql` is the same as one in `Fig. 3` of the ASE'16 paper. One can see it returns the abstract annotation `old(v_loop_int_0) == v_loop_int_0`
+Directories `test\cancelspinlock`, `test\spinlock`, `test\irql` contain other examples. The example in `test\irql` is the same as one in `Fig. 3` of the ASE'16 paper. One can see it returns the abstract annotation `old(v_loop_int_0) == v_loop_int_0`
 
 Passing the additional flag `/inlineDepth:2`, e.g., `Binaries\pminbench.exe irql\*.bpl /inlineDepth:2` makes the output (inferred set of annotations) even smaller. This flag increases the precision of `Houdini`, hence even more annotations can be dropped.
 
