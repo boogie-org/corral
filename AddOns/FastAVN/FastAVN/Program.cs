@@ -541,8 +541,10 @@ namespace FastAVN
                     newprogram.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable) && !(decl is Function))
                         .Iter(decl =>
                         {
-                            globalsUsed.UnionWith(DeclToGlobalsUsed[decl]);
-                            functionsUsed.UnionWith(DeclToFunctionsUsed[decl]);
+                            if(DeclToGlobalsUsed.ContainsKey(decl))
+                                globalsUsed.UnionWith(DeclToGlobalsUsed[decl]);
+                            if(DeclToFunctionsUsed.ContainsKey(decl))
+                                functionsUsed.UnionWith(DeclToFunctionsUsed[decl]);
                         });
 
                     newprogram.RemoveTopLevelDeclarations(decl => decl is GlobalVariable
