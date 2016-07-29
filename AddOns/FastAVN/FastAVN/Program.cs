@@ -380,8 +380,11 @@ namespace FastAVN
                 Console.WriteLine("Early exit due to /createEntryPointBplsOnly");
                 return;
             }
+
             lock (fslock)
             {
+                epNames = new HashSet<string>(Worker.DirsCreated);
+
                 if (printingOutput) return;
                 printingOutput = true;
                 printBugs(ref mergedBugs, epNames.Count);
@@ -416,8 +419,11 @@ namespace FastAVN
         class Worker
         {
             ConcurrentBag<Implementation> impls;
+            public static ConcurrentBag<string> DirsCreated = new ConcurrentBag<string>();
             HashSet<string> implNames;
             Program program;
+            static string counter_lock = "counter_lock";
+            static int trunc_counter = 0;
 
             public Worker(Program program, ConcurrentBag<Implementation> impls)
             {
@@ -434,7 +440,8 @@ namespace FastAVN
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
-                    var wd = Path.Combine(Environment.CurrentDirectory, impl.Name); // create new directory for each entrypoint
+                    var wd = Path.Combine(Environment.CurrentDirectory, TruncatePath(impl.Name));
+                    DirsCreated.Add(TruncatePath(impl.Name));
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
@@ -488,7 +495,8 @@ namespace FastAVN
                 {
                     if (!impls.TryTake(out impl)) { break; }
 
-                    var wd = Path.Combine(Environment.CurrentDirectory, impl.Name); // create new directory for each entrypoint
+                    var wd = Path.Combine(Environment.CurrentDirectory, TruncatePath(impl.Name));
+                    DirsCreated.Add(TruncatePath(impl.Name));
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
@@ -588,6 +596,26 @@ namespace FastAVN
 
                     PostProcess(impl.Name, wd, hinstOut.Concat(output));
                 }
+            }
+
+            static string TruncatePath(string implName)
+            {
+                if (implName.Length > 70)
+                {
+                    int cnt = 0;
+                    // prevent long file names
+                    lock (counter_lock)
+                    {
+                        cnt = trunc_counter;
+                        trunc_counter++;
+                    }
+
+                    var prefix = implName.Substring(0, 70);
+                    prefix += "trunc_" + cnt;
+                    return prefix;
+                }
+
+                return implName;
             }
 
             // Do BFS. Return all procs with shortest distance > depth
