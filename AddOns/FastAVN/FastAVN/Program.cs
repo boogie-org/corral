@@ -45,6 +45,7 @@ namespace FastAVN
         static bool printingOutput = false;
         static int deadline = 0;
         static bool keepFiles = false;
+        static HashSet<string> entryPointProcs = null;
 
         static void Main(string[] args)
         {
@@ -99,6 +100,13 @@ namespace FastAVN
             args.Where(s => s.StartsWith("/killAfter:"))
                 .Iter(s => deadline = int.Parse(s.Substring("/killAfter:".Length)));
 
+            args.Where(s => s.StartsWith("/entryPointProc:"))
+                .Iter(s =>
+                    {
+                        if (entryPointProcs == null) { entryPointProcs = new HashSet<string>(); }
+                        entryPointProcs.Add(s.Substring("/entryPointProc:".Length));
+                    });
+
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
             avnArgs = " /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- " + avnArgs;
@@ -144,7 +152,13 @@ namespace FastAVN
 
                 if (!earlySplit)
                 {
-                    // Run harness instrumentation                    
+                                    
+                    if (entryPointProcs != null)
+                    {
+                        entryPointProcs.Iter(s => avHarnessInstrArgs += string.Format("/entryPointProc:{0} ", s));
+                    }
+
+                    // Run harness instrumentation    
                     var resultfile = Path.Combine(Directory.GetCurrentDirectory(), "hinst.bpl");
                     var hinstOut = RemoteExec.run(Directory.GetCurrentDirectory(), avHarnessInstrPath, string.Format("{0} \"{1}\" {2}", inputfile, resultfile, avHarnessInstrArgs));                    
 
@@ -342,7 +356,8 @@ namespace FastAVN
 
             // entrypoints
             var entrypoints = new ConcurrentBag<Implementation>(prog.TopLevelDeclarations.OfType<Implementation>()
-                .Where(impl => epNames.Contains(impl.Name)));
+                .Where(impl => epNames.Contains(impl.Name))
+                .Where(impl => entryPointProcs == null || entryPointProcs.Contains(impl.Name)));
 
             // deadline
             if (deadline > 0)
@@ -591,8 +606,18 @@ namespace FastAVN
                     for (int i = 0; i < hinstOut.Count; i++)
                         hinstOut[i] = "[hinst] " + hinstOut[i];
 
-                    // spawn AV
-                    var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", resultfile, avnArgs));
+                    List<string> output;
+
+                    if (File.Exists(resultfile))
+                    {
+                        // spawn AV
+                        output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", resultfile, avnArgs));
+                    }
+                    else
+                    {
+                        output = new List<string>();
+                        output.Add("Error running AvH. Output not found.");
+                    }
 
                     PostProcess(impl.Name, wd, hinstOut.Concat(output));
                 }

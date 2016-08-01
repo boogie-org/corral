@@ -45,6 +45,8 @@ namespace AvHarnessInstrumentation
         public static int inlineDepth = -1;
         // unroll depth for bounding fixpoint depth
         public static int unrollDepth = -1;
+        // Kill the process after these many seconds
+        public static int killAfter = 0;
         // stubs file
         public static string stubsfile = null;
         // only keep assertions in these procedures if non-null
@@ -506,6 +508,9 @@ namespace AvHarnessInstrumentation
             args.Where(s => s.StartsWith("/unknownProc:"))
                 .Iter(s => Options.unknownProcs.Add(s.Substring("/unknownProc:".Length)));
 
+            args.Where(s => s.StartsWith("/killAfter:"))
+                .Iter(s => Options.killAfter = int.Parse(s.Substring("/killAfter:".Length)));
+
             args.Where(s => s.StartsWith("/assertProc:"))
                 .Iter(s =>
                     {
@@ -543,6 +548,13 @@ namespace AvHarnessInstrumentation
 
             var sw = new Stopwatch();
             sw.Start();
+
+            if (Options.killAfter > 0)
+            {
+                var timer = new System.Timers.Timer(Options.killAfter * 1000);
+                timer.Elapsed += (sender, e) => HandleTimer(sw);
+                timer.Start();
+            }
 
             try
             {
@@ -596,6 +608,15 @@ namespace AvHarnessInstrumentation
             }
         }
 
+        public static void HandleTimer(Stopwatch sw)
+        {
+            Utils.Print("AvHarnessInstrumentation failed with: Timeout", Utils.PRINT_TAG.AV_OUTPUT);
+            Stats.printStats();
+            Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+            // Kill self
+            Process.GetCurrentProcess().Kill();
+        }
 
         public static PersistentProgram RunHoudiniPass(PersistentProgram prog)
         {
