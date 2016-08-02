@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Microsoft.Boogie;
 using btype = Microsoft.Boogie.Type;
 using cba.Util;
+using System.Text.RegularExpressions;
 
 namespace SmackInst
 {
@@ -69,6 +70,7 @@ namespace SmackInst
 
             // Read the input file
             var program = BoogieUtil.ReadAndResolve(args[0], false);
+            
             // SMACK does not add globals to modify clauses
             //BoogieUtil.DoModSetAnalysis(program);
 
@@ -167,6 +169,11 @@ namespace SmackInst
 
 			// inline functions
 			InlineFunctions(program);
+
+            // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
+            var fpAt = new AnnotateFPDispatchProcVisitor();
+            fpAt.Run(program);
+
             // if we don't check NULL, stop here
             if (!checkNULL)
                 return program;
@@ -300,6 +307,28 @@ namespace SmackInst
             program.AddTopLevelDeclaration(initproc);
             program.AddTopLevelDeclaration(initimpl);
             //program.AddTopLevelDeclaration(allocinit);
+        }
+
+    }
+
+    // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
+    public class AnnotateFPDispatchProcVisitor : FixedVisitor
+    {
+        string pattern = @"^devirtbounce\d*$";
+
+        public void Run(Program program)
+        {
+            program.Implementations.Where(impl => Regex.IsMatch(impl.Proc.Name, pattern))
+                .Iter(impl => VisitImplementation(impl));
+        }
+
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            if (BoogieUtil.checkAttrExists("partition", node.Attributes))
+            {
+                node.Attributes = new QKeyValue(Token.NoToken, "fpcondition", new List<object>(), node.Attributes);
+            }
+            return base.VisitAssumeCmd(node);
         }
 
     }
