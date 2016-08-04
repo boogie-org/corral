@@ -45,7 +45,10 @@ namespace FastAVN
         static bool printingOutput = false;
         static int deadline = 0;
         static bool keepFiles = false;
+        //include a procedure p if 
+        //(ePP == null || p \in ePP) && (ePE == null || p \not\in ePE)
         static HashSet<string> entryPointProcs = null;
+        static HashSet<string> entryPointExcludes = null; 
 
         static void Main(string[] args)
         {
@@ -106,6 +109,12 @@ namespace FastAVN
                         if (entryPointProcs == null) { entryPointProcs = new HashSet<string>(); }
                         entryPointProcs.Add(s.Substring("/entryPointProc:".Length));
                     });
+            args.Where(s => s.StartsWith("/entryPointExcludes:"))
+                .Iter(s =>
+                {
+                    if (entryPointExcludes == null) { entryPointExcludes = new HashSet<string>(); }
+                    entryPointExcludes.Add(s.Substring("/entryPointExcludes:".Length));
+                });
 
             // default args
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
@@ -156,6 +165,10 @@ namespace FastAVN
                     if (entryPointProcs != null)
                     {
                         entryPointProcs.Iter(s => avHarnessInstrArgs += string.Format("/entryPointProc:{0} ", s));
+                    }
+                    if (entryPointExcludes != null)
+                    {
+                        entryPointExcludes.Iter(s => avHarnessInstrArgs += string.Format("/entryPointExcludes:{0}", s));
                     }
 
                     // Run harness instrumentation    
@@ -354,10 +367,16 @@ namespace FastAVN
                 }
             }
 
+            var matchesEntryPointExclude = new Func<string, bool>(s =>
+            {
+                return entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s)); 
+            });
+
             // entrypoints
             var entrypoints = new ConcurrentBag<Implementation>(prog.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => epNames.Contains(impl.Name))
-                .Where(impl => entryPointProcs == null || entryPointProcs.Contains(impl.Name)));
+                .Where(impl => entryPointProcs == null || entryPointProcs.Contains(impl.Name))
+                .Where(impl => entryPointExcludes == null || !matchesEntryPointExclude(impl.Name)));
 
             // deadline
             if (deadline > 0)

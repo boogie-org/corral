@@ -50,9 +50,11 @@ namespace AvHarnessInstrumentation
         // stubs file
         public static string stubsfile = null;
         // only keep assertions in these procedures if non-null
-        public static HashSet<string> assertProcs = null; 
-        // only keep the following procedures as entryPoints if non-null
+        public static HashSet<string> assertProcs = null;
+        //include a procedure p if 
+        //(ePP == null || p \in ePP) && (ePE == null || p \not\in ePE)
         public static HashSet<string> entryPointProcs = null;
+        public static HashSet<string> entryPointExcludes = null; 
         // delay AA
         public static bool delayAA = false;
     }
@@ -384,16 +386,20 @@ namespace AvHarnessInstrumentation
             // Restrict entrypoints to those provided explicitly (overrides any other way to providing entryPoints)
             if (Options.entryPointProcs != null)
             {
+                //only consider the user provided entry points in command line
                 Options.useHarnessTag = false;
                 Options.useProvidedEntryPoints = true;
                 init.TopLevelDeclarations.OfType<NamedDeclaration>()
-                    .Where(d => Options.entryPointProcs.Contains(d.Name))
-                    .Iter(d => d.AddAttribute("entrypoint"));
-                init.TopLevelDeclarations.OfType<NamedDeclaration>()
-                    .Where(d => !Options.entryPointProcs.Contains(d.Name))
                     .Iter(d => d.Attributes = BoogieUtil.removeAttr("entrypoint", d.Attributes));
-
             }
+            var matchesEntryPointExclude = new Func<string, bool>(s =>
+            {
+                return Options.entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s));
+            });
+            init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
+                .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
+                .Iter(d => d.AddAttribute("entrypoint"));
 
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
@@ -522,6 +528,12 @@ namespace AvHarnessInstrumentation
                 {
                     if (Options.entryPointProcs == null) { Options.entryPointProcs = new HashSet<string>(); }
                     Options.entryPointProcs.Add(s.Substring("/entryPointProc:".Length));
+                });
+            args.Where(s => s.StartsWith("/entryPointExcludes:"))
+                .Iter(s =>
+                {
+                    if (Options.entryPointExcludes == null) { Options.entryPointExcludes = new HashSet<string>(); }
+                    Options.entryPointExcludes.Add(s.Substring("/entryPointExcludes:".Length));
                 });
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");
