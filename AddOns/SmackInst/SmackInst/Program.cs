@@ -27,6 +27,8 @@ namespace SmackInst
         public static bool checkNULL = false;
         public static bool printCallGraph = false;
 
+        public static bool detectDeadCode = false;
+
         static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -62,6 +64,8 @@ namespace SmackInst
             if (args.Any(a => a == "/printCallGraph"))
                 printCallGraph = true;
 
+            if (args.Any(a => a == "/detectDeadCode"))
+                detectDeadCode = true;
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -174,6 +178,11 @@ namespace SmackInst
             var fpAt = new AnnotateFPDispatchProcVisitor();
             fpAt.Run(program);
 
+            // Add MustReach function calls to the begining of each procedure and upon returns
+            if (detectDeadCode) {
+                var ddc = new SimpleDeadcodeDectectionVisitor();
+                ddc.Run(program);
+            }
             // if we don't check NULL, stop here
             if (!checkNULL)
                 return program;
@@ -309,6 +318,74 @@ namespace SmackInst
             //program.AddTopLevelDeclaration(allocinit);
         }
 
+    }
+
+    public class SimpleDeadcodeDectectionVisitor : FixedVisitor
+    {
+        Function f;
+        // stupid
+        int returnCount;
+
+        public void Run(Program program)
+        {
+            // First add a MustReach function
+            f = new Function(Token.NoToken, "ProcedureMustReach", new List<Variable>{
+                BoogieAstFactory.MkFormal("x", btype.Bool, true)},
+                BoogieAstFactory.MkFormal("y", btype.Bool, false));
+            f.AddAttribute("ReachableStates");
+            program.AddTopLevelDeclaration(f);
+            // Then add function calls to the beginning and end of each non-stub procedure
+            program.Implementations.Iter(impl => VisitImplementation(impl));
+        }
+
+        AssumeCmd getAssumeReach()
+        {
+            return new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(f), new List<Expr> { Expr.True }));
+        }
+
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            // get first block and inject call to MustReach function
+            var blk = node.Blocks[0];
+            blk.Cmds.Insert(0, getAssumeReach());
+            returnCount = 0;
+            node.Blocks.Iter(b => VisitBlock(b));
+            //Debug.Assert(returnCount <= 1, "Doesn't SMACK only has one return?");
+            if (returnCount != 1)
+                Console.WriteLine(string.Format("Got a return function with not one exits: {0}:{1}", node.Proc.Name, returnCount));
+            return node;
+        }
+
+        public override Block VisitBlock(Block node)
+        {
+            List<Cmd> newCmds = new List<Cmd>();
+            foreach (var cmd in node.Cmds) 
+            {
+                newCmds.Add(cmd);
+                if (isAboutToReturn(cmd))
+                { 
+                    // Hack: SMACK always set a global variable to false before return
+                    newCmds.Add(getAssumeReach());
+                    returnCount++;
+                }
+            }
+            node.Cmds = newCmds;
+            return node;
+        }
+
+        bool isAboutToReturn(Cmd cmd)
+        {
+            if (cmd is AssignCmd)
+            {
+                var ac = cmd as AssignCmd;
+                if (ac.Lhss[0].AsExpr.ToString().Equals("$exn") && ac.Rhss[0].ToString().Equals(Expr.False.ToString()))
+                    return true;
+                else
+                    return false;
+            }
+            else
+                return false;
+        }
     }
 
     // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
