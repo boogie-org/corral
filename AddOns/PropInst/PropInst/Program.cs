@@ -24,6 +24,9 @@ namespace PropInst
                 return;
             }
 
+            if (args.Any(s => s == "/break"))
+                System.Diagnostics.Debugger.Launch();
+
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -176,6 +179,9 @@ namespace PropInst
                     if (anyParamsAttributes == null
                         || ExprMatchVisitor.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
                     {
+                        if (!procSig.InParams[anyParamsPosition].TypedIdent.Type.Equals(p.TypedIdent.Type))
+                            continue; //skip parameters that don't match type
+
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
                         var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
                         foreach (var kvp in paramSubstitution)
