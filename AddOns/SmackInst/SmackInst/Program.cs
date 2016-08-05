@@ -392,11 +392,14 @@ namespace SmackInst
     public class AnnotateFPDispatchProcVisitor : FixedVisitor
     {
         string pattern = @"^devirtbounce\d*$";
+        List<Function> aliasQfuncs = new List<Function>();
+        int counter = 0;
 
         public void Run(Program program)
         {
             program.Implementations.Where(impl => Regex.IsMatch(impl.Proc.Name, pattern))
                 .Iter(impl => VisitImplementation(impl));
+            program.AddTopLevelDeclarations(aliasQfuncs);
         }
 
         public override Cmd VisitAssumeCmd(AssumeCmd node)
@@ -405,7 +408,52 @@ namespace SmackInst
             {
                 node.Attributes = new QKeyValue(Token.NoToken, "fpcondition", new List<object>(), node.Attributes);
             }
-            return base.VisitAssumeCmd(node);
+            return node;
+        }
+
+        AssumeCmd MkAssume(Expr funcPtr, Expr callee)
+        {
+            var a = BoogieAstFactory.MkFormal("a", btype.Int, true);
+            var b = BoogieAstFactory.MkFormal("b", btype.Int, true);
+            var f = new Function(Token.NoToken, "FPAliasQ" + (counter++),
+                new List<Variable> { a, b },
+                BoogieAstFactory.MkFormal("c", btype.Bool, false));
+            f.AddAttribute("aliasingQuery");
+            //f.AddAttribute("inline");
+            //f.Body = Expr.Eq(Expr.Ident(a), Expr.Ident(b));
+
+            aliasQfuncs.Add(f);
+
+            return new AssumeCmd(Token.NoToken, new NAryExpr(Token.NoToken, new FunctionCall(f), new List<Expr> { funcPtr, callee }));
+        }
+
+        public override Block VisitBlock(Block node)
+        {
+            List<Cmd> newCmds = new List<Cmd>();
+            foreach (Cmd cmd in node.Cmds)
+            {
+                if (cmd is AssumeCmd)
+                {
+                    if (!(cmd as AssumeCmd).Expr.ToString().Equals(Expr.False.ToString()))
+                        newCmds.Add(VisitAssumeCmd(cmd as AssumeCmd));
+                    else
+                        node.TransferCmd = new ReturnCmd(Token.NoToken);
+                }
+                else if (cmd is CallCmd)
+                {
+                    // add assume(aliasing(funcPtr, calledProc))
+                    var callCmd = cmd as CallCmd;
+                    var callee = callCmd.callee;
+                    // watch out: varg functions have trailing arg types in function name
+                    callee = callee.Split('.')[0];
+                    newCmds.Add(MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int)));
+                    newCmds.Add(cmd);
+                }
+                else
+                    newCmds.Add(cmd);
+            }
+            node.Cmds = newCmds;
+            return node;
         }
 
     }
