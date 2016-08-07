@@ -142,11 +142,14 @@ namespace PropInst
                                 newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
 
                             impl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, newOutParams, new List<Variable>(), new List<Block>());
+                            impl.Proc = proc;
 
-
-                            _program.AddTopLevelDeclaration(impl);
+                            //_program.AddTopLevelDeclaration(impl);
                         }
                         InjectCode(impl, anyParamsPosition, anyParamsAttributes, anyParamsPositionOut, anyParamsAttributesOut, procSig, rule, paramSubstitution);
+                        if (dwf is Procedure && impl.Blocks.Count > 0)
+                            _program.AddTopLevelDeclaration(impl);
+                        //TODO: sig matching is broken, so is the stat
                         Stats.count("Times " + PropertyKeyWords.ProcedureRule + " injected code");
                         //only take the first match
                         return;
