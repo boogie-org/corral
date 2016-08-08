@@ -181,7 +181,6 @@ namespace PropInst
                     {
                         if (!procSig.InParams[anyParamsPosition].TypedIdent.Type.Equals(p.TypedIdent.Type))
                             continue; //skip parameters that don't match type
-
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
                         var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
                         foreach (var kvp in paramSubstitution)
@@ -294,10 +293,21 @@ namespace PropInst
                         }
                         else
                         {
-                            foreach (var subsPair in substitutions)
+                            // overfit useafterfree example
+                            // only instantiate #this once
+                            foreach (var templateCmd in rule.InsertionTemplate)
                             {
-                                var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
-                                ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                                if (templateCmd is CallCmd && (templateCmd as CallCmd).Proc.Name.Equals("#this"))
+                                    ret.AddRange(new List<Cmd> { cmd });
+                                else
+                                {
+                                    foreach (var subsPair in substitutions)
+                                    {
+                                        var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                                        //ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                                        ret.AddRange(sv.VisitCmdSeq(new List<Cmd> { templateCmd }));
+                                    }
+                                }
                             }
                         }
                         //the rule yielded a match --> done
@@ -359,22 +369,29 @@ namespace PropInst
 
             if (matchCallee != null && BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.AnyArgs, matchCallee.Attributes))
             {
-                var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
-
+                //var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
+                var anyArgsExpr = toMatch.Ins[0];
 
                 var atLeastOneMatch = false;
 
-                foreach (var arg in cmd.Ins)
+                foreach (var argCombo in cmd.Ins.Zip(cmd.Proc.InParams, Tuple.Create))
                 {
-                    var emv = new ExprMatchVisitor(anyArgsExpr);
-                    emv.VisitExpr(arg);
-
-                    if (emv.Matches)
+                    var cmdArg = argCombo.Item1;
+                    var procArg = argCombo.Item2;
+                    // also match param type and attribute
+                    if (procArg.TypedIdent.Type.Equals(matchCallee.InParams[0].TypedIdent.Type)
+                        && ExprMatchVisitor.AreAttributesASubset(matchCallee.InParams[0].Attributes, procArg.Attributes))
                     {
-                        atLeastOneMatch = true;
-                        substitutions.Add(
-                            new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
-                                emv.Substitution, emv.FunctionSubstitution));
+                        var emv = new ExprMatchVisitor(anyArgsExpr);
+                        emv.VisitExpr(cmdArg);
+
+                        if (emv.Matches)
+                        {
+                            atLeastOneMatch = true;
+                            substitutions.Add(
+                                new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
+                                    emv.Substitution, emv.FunctionSubstitution));
+                        }
                     }
                 }
                 if (!atLeastOneMatch)
