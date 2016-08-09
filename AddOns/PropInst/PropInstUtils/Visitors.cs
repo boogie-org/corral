@@ -134,6 +134,11 @@ namespace PropInstUtils
             return new AssertCmd(node.tok, VisitExpr(node.Expr));
         }
 
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            return new AssumeCmd(node.tok, VisitExpr(node.Expr));
+        }
+
         public override Cmd VisitAssignCmd(AssignCmd node)
         {
             var lhssDispatched = new List<AssignLhs>();
