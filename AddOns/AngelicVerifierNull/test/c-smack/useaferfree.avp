@@ -2,6 +2,7 @@ GlobalDeclarations
 {
 var {:propertyMap} validFree : [int] bool;
 function {:inline} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
+function {:ReachableStates} NonNULL(bool) : bool;
 }
 
 
@@ -9,37 +10,36 @@ TemplateVariables
 {
 var p : int;
 //procedure anyProc(p : int, {:#AnyParameters} a : int) returns( {:#AnyParameters} r: int);
-//procedure anyProc({:#AnyParameters} q : int) returns( {:#AnyParameters} r: int);
+procedure {:#AnyArguments} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
 //procedure anyProc(q : int, k:int) returns( {:#AnyParameters} r: int);
 }
 
 CmdRule
 {
-//call anyProc(p);
-call bar(p);
+call anyProc(p);
 }
 -->
 {
 assert isValid(p, validFree);
+assume NonNULL(p != 0);
 #this;
 }
 
 ProcedureRule
 {
-procedure {:#NameMatches ".*"} fmDeleteArray( {:#AnyParameters} p1 : int) returns({:#AnyParameters} r: int);
+procedure {:#NameMatches "^free_$"} builtin_free( p1 : int);
 }
 -->
 {
-assert isValid(p1, validFree);
+validFree[p1] := false;
 }
 
 //ProcedureRule
 //{
-//procedure {:#NameMatches "^free_$"} fmFree( p1 : int);
-//procedure {:#NoImplementation} {:#NameMatches "^_ZdlPv$"} fmDelete( p1 : int);
-//procedure {:#NoImplementation} {:#NameMatches "^_ZdaPv$"} fmDeleteArray( p1 : int);
+//procedure {:#HasImplementation} {:#NameMatches ".*"} fmDeleteArray( {:#AnyParameters} {:pointer} p1 : int) returns({:#AnyParameters} r: int);
 //}
 //-->
 //{
-//validFree[p1] := false;
+//assert isValid(p1, validFree);
 //}
+
