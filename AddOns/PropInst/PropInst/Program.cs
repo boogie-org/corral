@@ -298,20 +298,47 @@ namespace PropInst
                         {
                             // overfit useafterfree example
                             // only instantiate #this once
-                            foreach (var templateCmd in rule.InsertionTemplate)
+                            //foreach (var templateCmd in rule.InsertionTemplate)
+                            //{
+                            //    if (templateCmd is CallCmd && (templateCmd as CallCmd).Proc.Name.Equals("#this"))
+                            //        ret.AddRange(new List<Cmd> { cmd });
+                            //    else
+                            //    {
+                            //        foreach (var subsPair in substitutions)
+                            //        {
+                            //            var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                            //            //ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                            //            ret.AddRange(sv.VisitCmdSeq(new List<Cmd> { templateCmd }));
+                            //        }
+                            //    }
+                            //}
+                            // refactor substitutions
+                            var visitCmdIndex = 0;
+                            List<Cmd> visitCmds = new List<Cmd>();
+                            while (visitCmdIndex < rule.InsertionTemplate.Count)
                             {
-                                if (templateCmd is CallCmd && (templateCmd as CallCmd).Proc.Name.Equals("#this"))
-                                    ret.AddRange(new List<Cmd> { cmd });
-                                else
+                                var visitCmd = rule.InsertionTemplate[visitCmdIndex];
+                                if (visitCmd is CallCmd && (visitCmd as CallCmd).Proc.Name.Equals("#this"))
                                 {
                                     foreach (var subsPair in substitutions)
                                     {
                                         var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
                                         //ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
-                                        ret.AddRange(sv.VisitCmdSeq(new List<Cmd> { templateCmd }));
+                                        ret.AddRange(sv.VisitCmdSeq(new List<Cmd>(visitCmds)));
                                     }
+                                    ret.AddRange(new List<Cmd> { cmd });
+                                    visitCmds.Clear();
+                                } else
+                                {
+                                    visitCmds.Add(visitCmd);
                                 }
+                                visitCmdIndex++;
                             }
+                           foreach (var subsPair in substitutions)
+                           {
+                                var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                                ret.AddRange(sv.VisitCmdSeq(new List<Cmd>(visitCmds)));
+                           }
                         }
                         //the rule yielded a match --> done
                         Stats.count("Times " + PropertyKeyWords.CmdRule + " injected code");
