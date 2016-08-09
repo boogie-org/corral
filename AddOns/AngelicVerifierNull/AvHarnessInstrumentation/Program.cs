@@ -397,6 +397,7 @@ namespace AvHarnessInstrumentation
                 return Options.entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s));
             });
             init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                .Where(d => d is Procedure || d is Implementation)
                 .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
                 .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
                 .Iter(d => d.AddAttribute("entrypoint"));
