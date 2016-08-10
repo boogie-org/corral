@@ -9,9 +9,38 @@ function {:ReachableStates} NonNULL(bool) : bool;
 TemplateVariables
 {
 var p : int;
-//procedure anyProc(p : int, {:#AnyParameters} a : int) returns( {:#AnyParameters} r: int);
 procedure {:#AnyArguments} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
-//procedure anyProc(q : int, k:int) returns( {:#AnyParameters} r: int);
+}
+
+CmdRule
+{
+call free_(p);
+}
+-->
+{
+assume NonNULL(p != 0);
+assert isValid(p, validFree);
+#this;
+}
+
+CmdRule
+{
+call _ZdlPv(p);
+}
+-->
+{
+assert validFree[p];
+#this;
+}
+
+CmdRule
+{
+call _ZdaPv(p);
+}
+-->
+{
+assert validFree[p];
+#this;
 }
 
 CmdRule
@@ -21,9 +50,9 @@ call anyProc(p);
 -->
 {
 assert isValid(p, validFree);
-assume NonNULL(p != 0);
 #this;
 }
+
 
 ProcedureRule
 {
@@ -34,12 +63,20 @@ procedure {:#NameMatches "^free_$"} builtin_free( p1 : int);
 validFree[p1] := false;
 }
 
-//ProcedureRule
-//{
-//procedure {:#HasImplementation} {:#NameMatches ".*"} fmDeleteArray( {:#AnyParameters} {:pointer} p1 : int) returns({:#AnyParameters} r: int);
-//}
-//-->
-//{
-//assert isValid(p1, validFree);
-//}
+ProcedureRule
+{
+procedure {:#NameMatches "^_ZdlPv$"} builtin_delete( p1 : int);
+}
+-->
+{
+validFree[p1] := false;
+}
 
+ProcedureRule
+{
+procedure {:#NameMatches "^_ZdaPv$"} builtin_delete_array( p1 : int);
+}
+-->
+{
+validFree[p1] := false;
+}
