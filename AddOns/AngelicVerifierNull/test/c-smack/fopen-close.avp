@@ -1,0 +1,44 @@
+GlobalDeclarations
+{
+// true means file open, false means file closed
+var {:propertyMap} $FileOpen : [int] bool;
+function {:ReachableStates} FileMustReach(bool) : bool;
+procedure {:AngelicUnknown} stub() returns(r : int);
+}
+
+
+TemplateVariables
+{
+var p : int;
+}
+
+CmdRule
+{
+  $exn := false; 
+}
+-->
+{
+  #this;
+  assert (forall $x: int :: $FileOpen[$x] && $x != 0 ==> old($FileOpen[$x]));
+}
+
+ProcedureRule
+{
+procedure {:#NameMatches "^fopen$"} fmOpen( p1 : int, {:#AnyParameters} a : int) returns ( r : int);
+}
+-->
+{
+call r := stub();
+assume FileMustReach(!$FileOpen[r] && r != 0);
+$FileOpen[r] := true;
+}
+
+ProcedureRule
+{
+procedure {:#NameMatches "fclose"} fmClose( p1 : int, {:#AnyParameters} a : int) returns ( r : int);
+}
+-->
+{
+assert $FileOpen[p1] && p1 != 0;
+$FileOpen[p1] := false;
+}
