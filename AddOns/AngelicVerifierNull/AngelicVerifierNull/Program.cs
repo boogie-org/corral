@@ -105,7 +105,8 @@ namespace AngelicVerifierNull
                 Utils.Print(String.Format("----- Analyzing {0} ------", args[0]), Utils.PRINT_TAG.AV_OUTPUT);
 
                 var prog = BoogieUtil.ReadAndOnlyResolve(args[0]);
-                cba.PrintSdvPath.SaveSourceInfo(prog);
+                if(!Options.TraceSlicing)
+                    cba.PrintSdvPath.SaveSourceInfo(prog);
                 GlobalCorralSpecificPass(prog);
                 Debug.Assert(corralConfig.mainProcName != null);
 
