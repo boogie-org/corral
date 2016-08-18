@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -80,7 +81,7 @@ namespace SmackInst
 
             if (printCallGraph)
             {
-                PrintCallGraphToDot(program, "main", "callgraph.dot");
+                PrintCallGraphToDot(program, "i386_immediate", "callgraph.dot");
                 return;
             }
 
@@ -126,10 +127,10 @@ namespace SmackInst
             {
                 depth++;
                 // print all edges from this level to next
-                worklist.Iter(w => graph.Successors(w).Iter(s => dotty.WriteLine(string.Format("  \"{0}\" -> \"{1}\";", w, s))));
+                worklist.Where(w => !Regex.IsMatch(w, @"^devirtbounce\d*$")).Iter(w => graph.Successors(w).Where(q => !Regex.IsMatch(q, @"^devirtbounce\d*$")).Iter(s => dotty.WriteLine(string.Format("  \"{0}\" -> \"{1}\";", w, s))));
                 // expand worklist to next level
                 var nl = new HashSet<string>();
-                worklist.Iter(w => nl.UnionWith(graph.Successors(w)));
+                worklist.Iter(w => nl.UnionWith(graph.Successors(w).Where(x => !Regex.IsMatch(x, @"^devirtbounce\d*$"))));
                 // break circle
                 worklist = nl.Difference(visited);
                 // add next level to visited
@@ -394,6 +395,7 @@ namespace SmackInst
         string pattern = @"^devirtbounce\d*$";
         List<Function> aliasQfuncs = new List<Function>();
         int counter = 0;
+        //List<Procedure> angelicDispatch = new List<Procedure>();
 
         public void Run(Program program)
         {
@@ -437,7 +439,11 @@ namespace SmackInst
                     if (!(cmd as AssumeCmd).Expr.ToString().Equals(Expr.False.ToString()))
                         newCmds.Add(VisitAssumeCmd(cmd as AssumeCmd));
                     else
-                        node.TransferCmd = new ReturnCmd(Token.NoToken);
+                    {
+                        //node.TransferCmd = new ReturnCmd(Token.NoToken);
+                        // create a stub
+                        newCmds.Add(cmd);
+                    }
                 }
                 else if (cmd is CallCmd)
                 {
@@ -461,6 +467,7 @@ namespace SmackInst
     public class CountAndReplaceVistor : FixedVisitor
     {
         HashSet<string> lines = new HashSet<string>();
+        HashSet<string> files = new HashSet<string>();
         bool count;
         string oldRoot;
         string newRoot;
@@ -475,7 +482,34 @@ namespace SmackInst
         public void Run(Program program)
         {
             VisitProgram(program);
-            Console.WriteLine("LOC: " + lines.Count);
+            Console.WriteLine("#Procs:" + program.Implementations.Count());
+            Console.WriteLine("Unique line count: " + lines.Count);
+            //files.Iter(f => Console.WriteLine(f));
+            Console.WriteLine("Line count of all files contained: " + OpenAndCount());
+        }
+
+        public int OpenAndCount()
+        {
+            int totalloc = 0;
+            Console.WriteLine("The current directory is {0}", Directory.GetCurrentDirectory());
+            foreach (var file in files)
+            {
+                try
+                {
+                    var fileloc = File.ReadLines(file).Count();
+                    totalloc += fileloc;
+                    Console.WriteLine(string.Format("{0}:{1}", file, fileloc));
+                }
+                catch (FileNotFoundException)
+                {
+                    Console.WriteLine(string.Format("{0}:not found", file));
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    Console.WriteLine(string.Format("{0}:not found", file));
+                }
+            }
+            return totalloc;
         }
 
         public override Cmd VisitAssumeCmd(AssumeCmd node)
@@ -492,6 +526,7 @@ namespace SmackInst
                     {
                         var line = node.Attributes.Params[1].ToString();
                         lines.Add(file + ":" + line);
+                        files.Add(file);
                     }
                     if (oldRoot.Length > 0)
                     {
@@ -505,10 +540,10 @@ namespace SmackInst
                             newParams.Add(node.Attributes.Params[1]);
                             newParams.Add(node.Attributes.Params[2]);
                             node.Attributes.ClearParams();
-                            node.Attributes.AddParams(newParams);
+                            node.Attributes.AddParams(newParams);                           
                         }
                         else
-                            Console.WriteLine(file);
+                            Console.WriteLine(string.Format("Not under root dir: {0}", file));
                     }
                 }
             }
