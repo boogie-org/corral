@@ -56,7 +56,7 @@ axiom ($1024.ref == 1024);
 // Memory maps (0 regions)
 
 // Memory address bounds
-axiom ($GLOBALS_BOTTOM == $sub.ref(0, 361));
+axiom ($GLOBALS_BOTTOM == $sub.ref(0, 353));
 axiom ($EXTERNS_BOTTOM == $sub.ref(0, 32768));
 axiom ($MALLOC_TOP == 2136997887);
 
@@ -1584,15 +1584,17 @@ axiom (foo == $sub.ref(0, 329));
 procedure  foo({:pointer} x: ref)
 {
   var $p0: ref;
+  var $p1: ref;
 $bb0:
   call {:cexpr "x"} boogie_si_record_ref(x);
   assume {:sourceloc "t27.c", 7, 8} true;
   $p0 := $bitcast.ref.ref(x);
   assume {:sourceloc "t27.c", 7, 3} true;
   call free_($p0);
-  call {:cexpr "x"} boogie_si_record_ref($0.ref);
+  assume {:sourceloc "t27.c", 9, 8} true;
+  $p1 := $bitcast.ref.ref(x);
   assume {:sourceloc "t27.c", 9, 3} true;
-  call bar($0.ref);
+  call free_($p1);
   assume {:sourceloc "t27.c", 10, 1} true;
   $exn := false;
   return;
@@ -1603,14 +1605,11 @@ procedure  free_({:pointer} $p0: ref)
 {
   call $free($p0);
 }
-const {:allocated} bar: ref;
-axiom (bar == $sub.ref(0, 345));
-procedure  bar({:pointer} $p0: ref);
 const {:allocated} llvm.dbg.value: ref;
-axiom (llvm.dbg.value == $sub.ref(0, 353));
+axiom (llvm.dbg.value == $sub.ref(0, 345));
 procedure  llvm.dbg.value({:scalar} $p0: ref, {:scalar} $i1: i64, {:scalar} $p2: ref, {:scalar} $p3: ref);
 const {:allocated} __SMACK_static_init: ref;
-axiom (__SMACK_static_init == $sub.ref(0, 361));
+axiom (__SMACK_static_init == $sub.ref(0, 353));
 procedure  __SMACK_static_init()
 {
 $bb0:
