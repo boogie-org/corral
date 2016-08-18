@@ -1441,6 +1441,22 @@ namespace ExplainError
             //we want to keep x[y := z][w] != z constaints that give rise to y != w aliasing constraints
             return true;
         }
+
+        /// <summary>
+        /// checks if c is a != b
+        /// </summary>
+        /// <param name="c"></param>
+        /// <returns></returns>
+        private static bool IsNeqComparison(Expr c)
+        {
+            var expr = c as NAryExpr;
+            if (expr == null) return false;
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Neq) return false;
+            return true;
+        }
+
         private static bool ContainsMapExpression(Expr c)
         {
             var a = c as NAryExpr;
@@ -1521,7 +1537,7 @@ namespace ExplainError
         {
             //Console.Write("Atom:{0}\t", c);
             //Check if it matches any of the negative filters
-            if (onlyDisplayAliasingInPre && !IsAliasingConstraint(c)) return false;   //definitely not matches
+            if (onlyDisplayAliasingInPre && IsNeqComparison(c) /*!IsAliasingConstraint(c)*/) return false;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return false;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return false;
             if (!displayGuardVariables && ContainsGuardVar(c)) return false;  //definitely not matches
