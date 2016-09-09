@@ -133,6 +133,10 @@
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\ProofMinimization\ProofMinimization\ProofMinimization.csproj">
+      <Project>{b4c4c070-6742-4eaa-8cb0-63bef916ef2e}</Project>
+      <Name>ProofMinimization</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

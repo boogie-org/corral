@@ -2898,6 +2898,14 @@ namespace cba
                             continue;
                         }
 
+                        // Remove yield statements
+                        if (cmd is YieldCmd)
+                        {
+                            currCmds.Add(BoogieAstFactory.MkAssume(Expr.True));
+                            addedTrans(impl.Name, blk.Label, incnt, cmd, currLabel, currCmds);
+                            continue;
+                        }
+
                         // instrument assert
                         if (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd))
                         {
