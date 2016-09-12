@@ -1,0 +1,88 @@
+GlobalDeclarations
+{
+var {:propertyMap} validFree : [int] bool;
+function {:inline} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
+function {:ReachableStates} NonNULL(bool) : bool;
+}
+
+
+TemplateVariables
+{
+var p : int;
+procedure {:#AnyArguments} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
+}
+
+//CmdRule
+//{
+//call free_(p);
+//}
+//-->
+//{
+////assume NonNULL(p != 0);
+//assert isValid(p, validFree);
+//#this;
+//validFree[p] := false;
+//}
+//
+//CmdRule
+//{
+//call _ZdlPv(p);
+//}
+//-->
+//{
+//assert validFree[p];
+//#this;
+//validFree[p] := false;
+//}
+//
+//CmdRule
+//{
+//call _ZdaPv(p);
+//}
+//-->
+//{
+//assert validFree[p];
+//#this;
+//validFree[p] := false;
+//}
+//
+CmdRule
+{
+call anyProc(p);
+}
+-->
+{
+assert isValid(p, validFree);
+#this;
+}
+
+
+ProcedureRule
+{
+procedure {:#NameMatches "^free_$"} builtin_free({:pointer} p1 : int);
+}
+-->
+{
+  //if (p1 != 0) {
+ //   assert validFree[p1];
+    validFree[p1] := if (p1 == 0) then validFree[p1] else false;
+ // }
+}
+//
+//ProcedureRule
+//{
+//procedure {:#NameMatches "^_ZdlPv$"} builtin_delete( p1 : int);
+//}
+//-->
+//{
+//validFree[p1] := false;
+//}
+//
+//ProcedureRule
+//{
+//procedure {:#NameMatches "^_ZdaPv$"} builtin_delete_array( p1 : int);
+//}
+//-->
+//{
+//validFree[p1] := false;
+//}

@@ -152,14 +152,18 @@ namespace AvHarnessInstrumentation
                 blockCallConsts.Iter(x => prog.AddTopLevelDeclaration(x));
                 //TODO: get globals of type refs/pointers and maps
                 var initCmd = (AssumeCmd)BoogieAstFactory.MkAssume(Expr.True);
-                //TODO: find a reusable API to add attributes to cmds
-                //initCmd.Attributes = new QKeyValue(Token.NoToken, ExplainError.Toplevel.CAPTURESTATE_ATTRIBUTE_NAME, new List<Object>() { "Start" }, null);
 
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit
                 var init = Instrumentations.GetEnvironmentAssumptionsProc(prog);
                 if (init != null)
                     globalCmds.Add(BoogieAstFactory.MkCall(init, new List<Expr>(), new List<Variable>()));
+
+                // Dont initialize Boogie instrumentation variables
+                prog.GlobalVariables
+                    .Where(g => g.Name == "alloc" || BoogieUtil.checkAttrExists(AvnAnnotations.AllocatorVarAttr, g.Attributes))
+                    .Where(g => !BoogieUtil.checkAttrExists("scalar", g.Attributes))
+                    .Iter(g => g.AddAttribute("scalar"));
 
                 // initialize globals
                 prog.GlobalVariables
@@ -225,8 +229,17 @@ namespace AvHarnessInstrumentation
                 var procsWithImpl = prog.TopLevelDeclarations.OfType<Implementation>()
                     .Select(x => x.Proc);
                 var procs = prog.TopLevelDeclarations.OfType<Procedure>();
+                
+                // remove procedures that are never called
+                var procsUsed = new HashSet<string>();
+                prog.TopLevelDeclarations.OfType<Implementation>()
+                    .Iter(impl => impl.Blocks
+                        .Iter(blk => blk.cmds.OfType<CallCmd>()
+                            .Iter(cc => procsUsed.Add(cc.callee))));
+
                 //TODO: this can be almost quadratic in the size of |Procedures|, cleanup
-                var procsWithoutImpl = procs.Where(x => !procsWithImpl.Contains(x));
+                var procsWithoutImpl = procs.Where(x => !procsWithImpl.Contains(x) && procsUsed.Contains(x.Name));                     
+
                 var stubImpls = new List<Implementation>();
                 foreach (var p in procsWithoutImpl)
                 {
@@ -235,7 +248,7 @@ namespace AvHarnessInstrumentation
                 }
                 prog.AddTopLevelDeclarations(stubImpls);
             }
-            //Change the body of any stub that returns a pointer into calling malloc()
+            //Change the body of any stub that returns a pointer into calling unknown()
             //TODO: only do this for procedures with a single return with a pointer type            
             private void MkStubImplementation(List<Implementation> stubImpls, Procedure p)
             {
@@ -261,7 +274,7 @@ namespace AvHarnessInstrumentation
                     else
                     {
                         // unsupported
-                        Console.WriteLine("Warning: demonic havoc of globals; probably unsupported");
+                        Console.WriteLine("Warning: demonic havoc of global {0} in {1}", v.Name, p.Name);
                     }
                 }
                 foreach (var ip in p.InParams)
@@ -277,7 +290,7 @@ namespace AvHarnessInstrumentation
                     var mapVars = prog.TopLevelDeclarations.OfType<Variable>().Where(x => x.Name == mapName && x.TypedIdent.Type.IsMap);
                     if (mapVars.Count() != 1)
                     {
-                        Utils.Print(String.Format("Mapname {0} provided in {:ref} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
+                        Utils.Print(String.Format("Mapname {0} provided in {{:ref}} for parameter {1} for procedure {2} has {3} matches, expecting exactly 1 match",
                             mapName, ip.Name, p.Name, mapVars.Count()),
                             Utils.PRINT_TAG.AV_WARNING);
                         continue;
@@ -507,6 +520,27 @@ namespace AvHarnessInstrumentation
             }
         }
 
+
+        public class PruneNonAssertProcs : StandardVisitor
+        {
+            HashSet<string> assertProcs = null;
+            public PruneNonAssertProcs(IEnumerable<string> assertProcs)
+            {
+                this.assertProcs = new HashSet<string>(assertProcs);
+            }
+            public override Implementation VisitImplementation(Implementation node)
+            {
+                if (!assertProcs.Contains(node.Name))
+                    return base.VisitImplementation(node);
+                return node;
+            }
+            public override Cmd VisitAssertCmd(AssertCmd node)
+            {
+                node.Expr = Expr.True; 
+                return base.VisitAssertCmd(node);
+            }
+
+        }
     }
 
     // Replace "assume x == NULL" with 

@@ -22,23 +22,21 @@ namespace ExplainError
     public enum STATUS
     {
         SUCCESS,         /* the returned constraint suppresses error */
-        PARTIALCOVER,    /* will be deprecated */
         TIMEOUT,         /* analysis timed out */
         INCONCLUSIVE,    /* analysis was imprecise */
-        ILLEGAL          /* some unexpected condition encountered */
+        ILLEGAL          /* input program does not pass sanity check */
     };
 
     public enum COVERMODE
     {
-        MONOMIAL,       /* only consider a monomial overcover (clausal under cover for resulting block) */
-        FULL,           /* only consider full DNF overcover   (CNF under cover for the resulting block) */
-        FULL_IF_NO_MONOMIAL  /* only consider full if no monomial overcover other than true */
+        MONOMIAL,       /* a single clause resulting block */
+        FULL,           /* CNF with multiple clauses resulting block */
+        FULL_IF_NO_MONOMIAL  /* only consider full if no monomial other than false is found */
     };
 
     public class Toplevel
     {
         # region Analysis flags
-        public const string CAPTURESTATE_ATTRIBUTE_NAME = "captureState";
         private const int MAX_TIMEOUT = 100;
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
 
@@ -69,7 +67,6 @@ namespace ExplainError
         //Display options
         private static bool showBoogieExprs = false;
         public static bool useFieldMapAttribute = true; //shoudl always use it, not exposing
-        public static bool dontUsePruningWhileEliminatingUpdates = false; // if false, uses a prover to sel(upd(m,i,v),j) --> {v, sel(m,j), ite(i=j, v, sel(m,j))}
         public static bool checkIfExprFalseCalled = false; //HACK!
         private static int timeout = MAX_TIMEOUT; // seconds
         private static bool verbose = false;
@@ -182,20 +179,12 @@ namespace ExplainError
                 //SimplifyAssumesUsingForwardPass();
                 ComputePreCmdSeq(impl.Blocks[0].Cmds, skipAssumes, out preInDnfForm, out eeSlicedSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
-                //10/29/14: [shuvendu] Not sure what CheckNecessayDisjuncts does exactly, we will pretend it returns true, but need the check for semantically true
-                //expressions (CheckIfTrueDisjunct). We have extracted it out of CheckNecessaryDisjuncts call now
-                if (true /*CheckNecessaryDisjuncts(ref preInDnfForm)*/)
-                {
-                    CheckIfTrueDisjunct(ref preInDnfForm);
-                    Console.WriteLine("SUCCESS!! Returned set of cubes are necessary and minimal ....");
-                    Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
-                    returnStatus = STATUS.SUCCESS;
-                }
-                else
-                {
-                    Console.WriteLine(">>>> WARNING: The returned set is not necessary (incomplete)....");
-                    returnStatus = STATUS.PARTIALCOVER;
-                }
+
+                CheckNecessaryDisjuncts(ref preInDnfForm);
+                CheckIfTrueDisjunct(ref preInDnfForm);
+                Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
+                returnStatus = STATUS.SUCCESS;
+
                 currImpl = null;
                 sw.Stop();
                 var preStrings = DisplayDisjunctsOnConsole(preInDnfForm);
@@ -264,8 +253,8 @@ namespace ExplainError
         # region Top-level routines for computing and massaging Pre
 
         /// <summary>
-        /// Will compute a DNF form of precondition for statements upto the last assume {:captureState "Start"} true
-        /// or all the statements, if no such assume exists
+        /// Will compute a DNF form of precondition 
+        /// or all the statements
         /// Performs a static slicing of the trace
         /// </summary>
         /// <param name="cmdseq"></param>
@@ -289,12 +278,13 @@ namespace ExplainError
             eeRelevantSourceLines = new List<Tuple<string, int, string>>();
             var allSourceLines = new List<Tuple<string, int>>();
 
-            var FindSourceLineInfo = new Func<QKeyValue, Tuple<string,int>> (kv => 
+            var FindSourceLineInfo = new Func<Cmd, Tuple<string,int>> (cmd => 
                 {
-                    var sourceFile = QKeyValue.FindStringAttribute(kv, "sourcefile");
-                    var sourceLine = QKeyValue.FindIntAttribute(kv, "sourceline", -1);
-                    if (sourceFile != null && sourceLine != -1)
-                        return Tuple.Create(sourceFile, sourceLine);
+                    string sourceFile; 
+                    int sourceLine, col; 
+                    bool keepCmd;
+                    if (cba.PrintConcurrentProgramPath.getSourceInfo(cmd, out sourceFile, out sourceLine, out col, out keepCmd))
+                        return Tuple.Create(sourceFile, sourceLine);                        
                     return null;
                 });
 
@@ -314,22 +304,23 @@ namespace ExplainError
             {
                 //if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
+                var si = FindSourceLineInfo(cmd); //with SMACK, we cannot trust lineinfo to be in assert true anymore
+                if (si != null) //a line with sourcefile/sourceline info
+                {
+                    //only count valid sourcefiles
+                    if (si.Item1 != "?")
+                    {
+                        allSourceLines.Add(Tuple.Create(si.Item1, si.Item2));
+                        if (lastStmtsAdded.Count > 0)
+                            eeRelevantSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
+                    }
+                    lastStmtsAdded.Clear();  //reset it after considering sourceline
+                    continue;
+                }
                 if (cmd is AssertCmd)
                 {
                     if (IsTrueAssert((AssertCmd)cmd))
                     {
-                        var si = FindSourceLineInfo(((AssertCmd)cmd).Attributes);
-                        if (si != null) //a line with sourcefile/sourceline info
-                        {
-                            //only count valid sourcefiles
-                            if (si.Item1 != "?")
-                            {
-                                allSourceLines.Add(Tuple.Create(si.Item1, si.Item2));
-                                if (lastStmtsAdded.Count > 0)
-                                    eeRelevantSourceLines.Add(Tuple.Create(si.Item1, si.Item2, string.Join("\t", lastStmtsAdded)));
-                            }
-                            lastStmtsAdded.Clear();  //reset it after considering sourceline
-                        }
                         continue; 
                     } else
                     {
@@ -348,12 +339,6 @@ namespace ExplainError
                 }
                 else if (cmd is AssumeCmd)
                 {
-                    string captureStateLoc;
-                    if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc))
-                    {
-                        Debug.Assert(branchJoinStack.Count == 0, "Expecting the branchJoin stack to be empty at a captureStateLoc ");
-                        break; //compute pre now
-                    }
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
                         //if (verbose) Console.WriteLine("--- Block {0}", cmd);
@@ -567,7 +552,7 @@ namespace ExplainError
                 }
             }
             Console.WriteLine("\n\n-------------------- Pre at {0} in DNF [Size = {1}] ---------------------",
-                        captureStateLoc == null ? "Start" : "CaptureState at " + captureStateLoc, preDnf.Count);
+                        "Start", preDnf.Count);
             var feasCnt = 0;
             var prunedCubesFromDnf = new HashSet<List<Expr>>(); //string form of exprs
             foreach (var cube in preDnf)
@@ -633,24 +618,12 @@ namespace ExplainError
             throw new NotImplementedException();
         }
 
-        class InjectNecessaryDisjuncts : StandardVisitor
-        {
-            Expr exprToAssume;
-            public InjectNecessaryDisjuncts(Expr c)
-            {
-                exprToAssume = c;
-            }
-            public override Cmd VisitAssumeCmd(AssumeCmd cmd)
-            {
-                string captureStateLoc;
-                if (ContainsCaptureStateAttribute((AssumeCmd)cmd, out captureStateLoc) &&
-                    captureStateLoc != null)
-                {
-                    return base.VisitAssumeCmd(new AssumeCmd(Token.NoToken, exprToAssume));
-                }
-                return base.VisitAssumeCmd(cmd);
-            }
-        }
+        /// <summary>
+        /// Given a DNF (d1 || d2 || d3), with corresponds to a block !d1 && !d2 && !d3
+        /// remove !di greedily if the rest still blocks 
+        /// </summary>
+        /// <param name="preInDnfForm"></param>
+        /// <returns></returns>
         private static bool CheckNecessaryDisjuncts(ref HashSet<List<Expr>> preInDnfForm)
         {
             if (!checkIfExprFalseCalled)
@@ -659,26 +632,24 @@ namespace ExplainError
             Debug.Assert(proc != null, "The proc of currImpl is null");
             Expr disjunct = ExprListSetToDNFExpr(preInDnfForm);
             var oldCmds = new List<Cmd>(currImpl.Blocks[0].Cmds);
-            var t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-            t.VisitImplementation(currImpl); //changes currImpl as well
+            currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
             var result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
             Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
-            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds to have the captureState
-            if (!result) return false;
+            currImpl.Blocks[0].Cmds = new List<Cmd>(oldCmds); //restore the cmds 
+            if (!result) return false; //sanity check that the entire CNF is a block to start with
+
             //now try to greedily minimize
             var retain = new HashSet<List<Expr>>();
-
             foreach (var d in preInDnfForm)
             {
                 var tmp = new HashSet<List<Expr>>(preInDnfForm);
                 tmp.Remove(d); //remove 1 element and check the rest
                 disjunct = ExprListSetToDNFExpr(tmp);
-                t = new InjectNecessaryDisjuncts(ExprUtil.Not(disjunct));
-                t.VisitImplementation(currImpl); //changes currImpl as well
+                currImpl.Blocks[0].Cmds.Insert(0, BoogieAstFactory.MkAssume(ExprUtil.Not(disjunct)));
                 result = (VCVerifier.MyVerifyImplementation(currImpl) == VC.ConditionGeneration.Outcome.Correct);
                 Console.WriteLine("Disjunct = {0}, IsNecessary= {1}", disjunct, result);
                 if (!result) retain.Add(d); //necessary
-                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds to have the captureState
+                currImpl.Blocks[0].Cmds = oldCmds; //restore the cmds 
             }
             if (retain.Count > 0) //else keep preInDnfForm possibly non-minimal
                 preInDnfForm = retain;
@@ -742,6 +713,8 @@ namespace ExplainError
             foreach (var c in cubeLiterals)
             {
                 //apply the display filters first (the RewriteITEFixPoint is very expensive, only apply locally)
+                if (VCVerifier.CheckIfExprFalse(currImpl, c)  || VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(c)))
+                    continue;//remove any true/false predicate
                 if (!LiteralInVocabulary(c)) continue;
                 toDisplay.Add(c);
             }
@@ -911,20 +884,29 @@ namespace ExplainError
         private static Expr CreateITE(Expr p)
         {
             CheckTimeout("Inside CreateITE");
-            var pn = p as NAryExpr;
-            if (pn == null) return p;
-            if (pn.Fun.FunctionName == "MapSelect")
+            if (p is NAryExpr)
             {
-                return EliminateUpdates(pn.Args[0], pn.Args[1]);
-            }
-            List<Expr> args = new List<Expr>();
-            var pArgs = new List<Expr>(pn.Args);
-            foreach (Expr a in pArgs /*pn.Args*/)  //Collection was modified; enumeration operation may not execute (???)
+                var pn = p as NAryExpr;
+                if (pn.Fun.FunctionName == "MapSelect")
+                {
+                    return EliminateUpdates(pn.Args[0], pn.Args[1]);
+                }
+                List<Expr> args = new List<Expr>();
+                var pArgs = new List<Expr>(pn.Args);
+                foreach (Expr a in pArgs /*pn.Args*/)  //Collection was modified; enumeration operation may not execute (???)
+                {
+                    var b = CreateITE(a);
+                    args.Add(b);
+                }
+                return ExprUtil.NAryExpr(pn.Fun, args);
+            } else if (p is QuantifierExpr)
             {
-                var b = CreateITE(a);
-                args.Add(b);
+                var qn = p as QuantifierExpr;
+                var tmpBody = CreateITE(qn.Body);
+                qn.Body = tmpBody;
+                return p;
             }
-            return ExprUtil.NAryExpr(pn.Fun, args);
+            return p;
         }
         private static Expr EliminateUpdates(Expr map, Expr index)
         {
@@ -941,32 +923,14 @@ namespace ExplainError
             var k = m.Args[2];
             var eq = ExprUtil.Eq(index, j);
             var l = Expr.Select(i, index);
-            if (IsInconsistentWithContext(eq))
-            {
-                Console.Write("+");
-                return CreateITE(l); //else
-            }
-            else if (IsInconsistentWithContext(ExprUtil.Not(eq)))
-            {
-                Console.Write("-");
-                return CreateITE(k); //then
-            }
+
             Console.Write("*");
             var a = CreateITE(eq);
             var b = CreateITE(k);
             var c = CreateITE(l);
             return ExprUtil.Ite(a, b, c);
         }
-        //Is eq inconsistent with the context
-        private static bool IsInconsistentWithContext(Expr e)
-        {
-            //turning it on may be unsound M[x:=1][y] != 1 ==> x != y, but simplifying it to M[y] != 1 is not equivalent            
-            if (dontUsePruningWhileEliminatingUpdates) return false;
-            if (currPre == null) return false;
-            var res = VCVerifier.CheckIfExprFalse(currImpl, ExprUtil.And(currPre, e));
-            Console.Write(".");
-            return res;
-        }
+
         private static Expr TryRewriteITE(Expr e)
         { //Try to apply a rewrite rule if applicable
             CheckTimeout("Inside TryRewriteITE");
@@ -1008,16 +972,24 @@ namespace ExplainError
         {
             CheckTimeout("FlattenITE start");
             Expr a, b, c;
-            var e = expr as NAryExpr;
-            if (e == null) return expr;
-            var args = new List<Expr>();
-            foreach (Expr arg in e.Args)
-                args.Add(FlattenITE(arg));
-            var f = ExprUtil.NAryExpr(e.Fun, args);
-            if (!IsIteExpr(f, out a, out b, out c)) return f; //
-            return ExprUtil.Or(
-                ExprUtil.And(a, b),
-                ExprUtil.And(ExprUtil.Not(a), c));
+            if (expr is NAryExpr)
+            {
+                var e = expr as NAryExpr;
+                var args = new List<Expr>();
+                foreach (Expr arg in e.Args)
+                    args.Add(FlattenITE(arg));
+                var f = ExprUtil.NAryExpr(e.Fun, args);
+                if (!IsIteExpr(f, out a, out b, out c)) return f; //
+                return ExprUtil.Or(
+                    ExprUtil.And(a, b),
+                    ExprUtil.And(ExprUtil.Not(a), c));
+            } else if (expr is QuantifierExpr)
+            {
+                var qn = expr as QuantifierExpr;
+                qn.Body = FlattenITE(qn.Body);
+                return expr;
+            }
+            return expr;
         }
         private static bool IsIteExpr(Expr expr, out Expr a, out Expr b, out Expr c)
         {
@@ -1032,14 +1004,22 @@ namespace ExplainError
         }
         private static Expr EliminateITE(Expr p)
         {
-            var e = p as NAryExpr;
-            if (e == null) return p;
-            if (ExprUtil.IsRelationalOp(e.Fun))
-                return EliminateITERelationalExpr(e);
-            var args = new List<Expr>();
-            foreach (Expr a in e.Args)
-                args.Add(EliminateITE(a));
-            return ExprUtil.NAryExpr(e.Fun, args);
+            if (p is NAryExpr)
+            {
+                var e = p as NAryExpr;
+                if (ExprUtil.IsRelationalOp(e.Fun))
+                    return EliminateITERelationalExpr(e);
+                var args = new List<Expr>();
+                foreach (Expr a in e.Args)
+                    args.Add(EliminateITE(a));
+                return ExprUtil.NAryExpr(e.Fun, args);
+            } else if (p is QuantifierExpr)
+            {
+                var qn = p as QuantifierExpr;
+                qn.Body = EliminateITE(qn.Body);
+                return p;
+            }
+            return p;
         }
         private static Expr EliminateITERelationalExpr(NAryExpr x)
         {
@@ -1218,7 +1198,6 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
-                if (CheckBooleanFlag(a, "dontUsePruningWhileEliminatingUpdates", ref dontUsePruningWhileEliminatingUpdates)) continue;
                 int eeCoverOptAsInt = 0;
                 if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt))
                 {
@@ -1238,7 +1217,6 @@ namespace ExplainError
                 Console.WriteLine("\n  ---- ExplainError options ----------------------------------------\n");
                 Console.WriteLine("  Boolean options: use /option or /option+ to set, use /option- to unset");
                 Console.WriteLine("  /verbose:                      Makes output verbose");
-                //Console.WriteLine("  /showPreAtAllCapturedStates    Show Pre at any place {:captureState} is specified, default only Start");
                 Console.WriteLine("  /onlySlicAssumes:              Ignore assumes that do not have {:slic} attribute");
                 Console.WriteLine("  /onlyDisplayAliasingInPre:     Only display aliasing (x == y) constaints where both sides are non constants");
                 Console.WriteLine("  /onlyDisplayMapExpressions:    Only display expressions with at least one map expression (e.g. m[e] <> e'");
@@ -1283,12 +1261,7 @@ namespace ExplainError
             }
             return true;
         }
-        private static bool ContainsCaptureStateAttribute(AssumeCmd assumeCmd, out string captureStateLoc)
-        {
-            captureStateLoc = QKeyValue.FindStringAttribute(assumeCmd.Attributes, CAPTURESTATE_ATTRIBUTE_NAME);
-            //return (captureStateLoc != null);
-            return captureStateLoc == "Start";
-        }
+
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
@@ -1468,6 +1441,22 @@ namespace ExplainError
             //we want to keep x[y := z][w] != z constaints that give rise to y != w aliasing constraints
             return true;
         }
+
+        /// <summary>
+        /// checks if c is a != b
+        /// </summary>
+        /// <param name="c"></param>
+        /// <returns></returns>
+        private static bool IsNeqComparison(Expr c)
+        {
+            var expr = c as NAryExpr;
+            if (expr == null) return false;
+            var binOp = expr.Fun as BinaryOperator;
+            if (binOp == null) return false;
+            if (binOp.Op != BinaryOperator.Opcode.Neq) return false;
+            return true;
+        }
+
         private static bool ContainsMapExpression(Expr c)
         {
             var a = c as NAryExpr;
@@ -1536,7 +1525,28 @@ namespace ExplainError
                 return LiteralInVocabularyNew(c);
             }
             else
-                return !LiteralNotInVocabularyOld(c);
+                return LiteralInVocabularyAux(c); //!LiteralNotInVocabularyOld(c);
+        }
+
+        /// <summary>
+        /// c is matched by (a) at least 1 positive filter, and (b) no negative filters
+        /// </summary>
+        /// <param name="c"></param>
+        /// <returns></returns>
+        private static bool LiteralInVocabularyAux(Expr c)
+        {
+            //Console.Write("Atom:{0}\t", c);
+            //Check if it matches any of the negative filters
+            if (onlyDisplayAliasingInPre && IsNeqComparison(c) /*!IsAliasingConstraint(c)*/) return false;   //definitely not matches
+            if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return false;
+            if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return false;
+            if (!displayGuardVariables && ContainsGuardVar(c)) return false;  //definitely not matches
+
+            //Check if it matches any of the positive filters
+            if (noFilters) return true; //anything matches
+            if (displayTypeStateVariables && ContainsTypeStateVar(c)) return true;  //definitely matches
+            if (diplayPropertyMaps && ContainsPropertyMap(c)) return true;
+            return true;
         }
 
         private static bool LiteralNotInVocabularyOld(Expr c)

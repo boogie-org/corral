@@ -1731,15 +1731,7 @@ namespace cba
             updatePermanentVars(info);
 
             var ccmd = cmd as CallCmd;
-            if (ccmd != null && ccmd.callee == "boogie_si_record_li2bpl_int")
-            {
-                var cexpr = QKeyValue.FindStringAttribute(ccmd.Attributes, "cexpr");
-                if (cexpr == null || cexpr == "") return;
-                if (info == null || !info.hasIntVar("si_arg")) return;
-                dataValuesCurrent += string.Format("^{0}={1}", cexpr.Replace(' ', '_'), info.getIntVal("si_arg"));
-                return;
-            }
-            if (ccmd != null && ccmd.callee == "boogie_si_record_li2bpl_bv32")
+            if (ccmd != null && ccmd.callee.StartsWith(VerificationPass.recordArgProcPrefix))
             {
                 var cexpr = QKeyValue.FindStringAttribute(ccmd.Attributes, "cexpr");
                 if (cexpr == null || cexpr == "") return;

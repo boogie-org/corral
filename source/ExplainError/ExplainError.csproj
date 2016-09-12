@@ -55,6 +55,10 @@
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CoreLib\CoreLib.csproj">
+      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
+      <Name>CoreLib</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\boogie\Source\AbsInt\AbsInt.csproj">
       <Project>{0efa3e43-690b-48dc-a72c-384a3ea7f31f}</Project>
       <Name>AbsInt</Name>

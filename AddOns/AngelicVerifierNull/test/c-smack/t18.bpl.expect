@@ -1,0 +1,5 @@
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> x_3 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> $M.1[x] != NULL
+[TAG: AV_OUTPUT] Found free variables :: alloc___58
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc func with expr !($p6 == NULL)

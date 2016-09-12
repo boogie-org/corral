@@ -24,6 +24,9 @@ namespace PropInst
                 return;
             }
 
+            if (args.Any(s => s == "/break"))
+                System.Diagnostics.Debugger.Launch();
+
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -139,11 +142,14 @@ namespace PropInst
                                 newOutParams.Add(new LocalVariable(v.tok, v.TypedIdent));
 
                             impl = new Implementation(proc.tok, proc.Name, proc.TypeParameters, newInParams, newOutParams, new List<Variable>(), new List<Block>());
+                            impl.Proc = proc;
 
-
-                            _program.AddTopLevelDeclaration(impl);
+                            //_program.AddTopLevelDeclaration(impl);
                         }
                         InjectCode(impl, anyParamsPosition, anyParamsAttributes, anyParamsPositionOut, anyParamsAttributesOut, procSig, rule, paramSubstitution);
+                        if (dwf is Procedure && impl.Blocks.Count > 0)
+                            _program.AddTopLevelDeclaration(impl);
+                        //TODO: sig matching is broken, so is the stat
                         Stats.count("Times " + PropertyKeyWords.ProcedureRule + " injected code");
                         //only take the first match
                         return;
@@ -176,6 +182,8 @@ namespace PropInst
                     if (anyParamsAttributes == null
                         || ExprMatchVisitor.AreAttributesASubset(anyParamsAttributes, impl.Proc.InParams[i].Attributes))
                     {
+                        if (!procSig.InParams[anyParamsPosition].TypedIdent.Type.Equals(p.TypedIdent.Type))
+                            continue; //skip parameters that don't match type
                         var id = new IdentifierExpr(Token.NoToken, p.Name, p.TypedIdent.Type, true);
                         var substitution = new Dictionary<Declaration, Expr> {{procSig.InParams[anyParamsPosition], id}};
                         foreach (var kvp in paramSubstitution)
@@ -288,11 +296,49 @@ namespace PropInst
                         }
                         else
                         {
-                            foreach (var subsPair in substitutions)
+                            // overfit useafterfree example
+                            // only instantiate #this once
+                            //foreach (var templateCmd in rule.InsertionTemplate)
+                            //{
+                            //    if (templateCmd is CallCmd && (templateCmd as CallCmd).Proc.Name.Equals("#this"))
+                            //        ret.AddRange(new List<Cmd> { cmd });
+                            //    else
+                            //    {
+                            //        foreach (var subsPair in substitutions)
+                            //        {
+                            //            var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                            //            //ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                            //            ret.AddRange(sv.VisitCmdSeq(new List<Cmd> { templateCmd }));
+                            //        }
+                            //    }
+                            //}
+                            // refactor substitutions
+                            var visitCmdIndex = 0;
+                            List<Cmd> visitCmds = new List<Cmd>();
+                            while (visitCmdIndex < rule.InsertionTemplate.Count)
                             {
-                                var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
-                                ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                                var visitCmd = rule.InsertionTemplate[visitCmdIndex];
+                                if (visitCmd is CallCmd && (visitCmd as CallCmd).Proc.Name.Equals("#this"))
+                                {
+                                    foreach (var subsPair in substitutions)
+                                    {
+                                        var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                                        //ret.AddRange(sv.VisitCmdSeq(rule.InsertionTemplate));
+                                        ret.AddRange(sv.VisitCmdSeq(new List<Cmd>(visitCmds)));
+                                    }
+                                    ret.AddRange(new List<Cmd> { cmd });
+                                    visitCmds.Clear();
+                                } else
+                                {
+                                    visitCmds.Add(visitCmd);
+                                }
+                                visitCmdIndex++;
                             }
+                           foreach (var subsPair in substitutions)
+                           {
+                                var sv = new SubstitionVisitor(subsPair.Item1, subsPair.Item2, cmd);
+                                ret.AddRange(sv.VisitCmdSeq(new List<Cmd>(visitCmds)));
+                           }
                         }
                         //the rule yielded a match --> done
                         Stats.count("Times " + PropertyKeyWords.CmdRule + " injected code");
@@ -353,22 +399,29 @@ namespace PropInst
 
             if (matchCallee != null && BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.AnyArgs, matchCallee.Attributes))
             {
-                var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
-
+                //var anyArgsExpr = (NAryExpr) toMatch.Ins[0];
+                var anyArgsExpr = toMatch.Ins[0];
 
                 var atLeastOneMatch = false;
 
-                foreach (var arg in cmd.Ins)
+                foreach (var argCombo in cmd.Ins.Zip(cmd.Proc.InParams, Tuple.Create))
                 {
-                    var emv = new ExprMatchVisitor(anyArgsExpr);
-                    emv.VisitExpr(arg);
-
-                    if (emv.Matches)
+                    var cmdArg = argCombo.Item1;
+                    var procArg = argCombo.Item2;
+                    // also match param type and attribute
+                    if (procArg.TypedIdent.Type.Equals(matchCallee.InParams[0].TypedIdent.Type)
+                        && ExprMatchVisitor.AreAttributesASubset(matchCallee.InParams[0].Attributes, procArg.Attributes))
                     {
-                        atLeastOneMatch = true;
-                        substitutions.Add(
-                            new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
-                                emv.Substitution, emv.FunctionSubstitution));
+                        var emv = new ExprMatchVisitor(anyArgsExpr);
+                        emv.VisitExpr(cmdArg);
+
+                        if (emv.Matches)
+                        {
+                            atLeastOneMatch = true;
+                            substitutions.Add(
+                                new Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>(
+                                    emv.Substitution, emv.FunctionSubstitution));
+                        }
                     }
                 }
                 if (!atLeastOneMatch)

@@ -29,6 +29,8 @@ namespace AvHarnessInstrumentation
         public static bool markAssumesAsSlic = false;
         // Use only provided entrypoints
         public static bool useProvidedEntryPoints = false;
+        // User provided entrypoint
+        public static string userEntryPoint = null;
         // do deadcode detection
         public static bool deadCodeDetect = false;
         // allocate parameters for procedures
@@ -43,8 +45,18 @@ namespace AvHarnessInstrumentation
         public static int inlineDepth = -1;
         // unroll depth for bounding fixpoint depth
         public static int unrollDepth = -1;
+        // Kill the process after these many seconds
+        public static int killAfter = 0;
         // stubs file
         public static string stubsfile = null;
+        // only keep assertions in these procedures if non-null
+        public static HashSet<string> assertProcs = null;
+        //include a procedure p if 
+        //(ePP == null || p \in ePP) && (ePE == null || p \not\in ePE)
+        public static HashSet<string> entryPointProcs = null;
+        public static HashSet<string> entryPointExcludes = null; 
+        // delay AA
+        public static bool delayAA = false;
     }
 
     public class Driver
@@ -359,6 +371,10 @@ namespace AvHarnessInstrumentation
                             .Iter(AddAnnotation)));
             }
 
+            // Only keep assertions in assertProc procedures
+            if (Options.assertProcs != null)
+                (new Instrumentations.PruneNonAssertProcs(Options.assertProcs)).Visit(init);
+
             // Inline procedures supplied with {:inline} annotation
             cba.Driver.InlineProcedures(init);
 
@@ -366,6 +382,25 @@ namespace AvHarnessInstrumentation
             init.RemoveTopLevelDeclarations(decl => (decl is Implementation) &&
                 (BoogieUtil.checkAttrExists("inline", decl.Attributes) ||
                  BoogieUtil.checkAttrExists("inline", (decl as Implementation).Proc.Attributes)));
+
+            // Restrict entrypoints to those provided explicitly (overrides any other way to providing entryPoints)
+            if (Options.entryPointProcs != null)
+            {
+                //only consider the user provided entry points in command line
+                Options.useHarnessTag = false;
+                Options.useProvidedEntryPoints = true;
+                init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Iter(d => d.Attributes = BoogieUtil.removeAttr("entrypoint", d.Attributes));
+            }
+            var matchesEntryPointExclude = new Func<string, bool>(s =>
+            {
+                return Options.entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s));
+            });
+            init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                .Where(d => d is Procedure || d is Implementation)
+                .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
+                .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
+                .Iter(d => d.AddAttribute("entrypoint"));
 
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
@@ -388,7 +423,7 @@ namespace AvHarnessInstrumentation
 
             //resolve+typecheck wo bothering about modSets
             CommandLineOptions.Clo.DoModSetAnalysis = true;
-            init = BoogieUtil.ReResolve(init);
+            init = BoogieUtil.ReResolveInMem(init);
             CommandLineOptions.Clo.DoModSetAnalysis = false;
 
             // Update mod sets
@@ -396,6 +431,7 @@ namespace AvHarnessInstrumentation
 
             if (Options.AddMapSelectNonNullAssumptions)
                 (new Instrumentations.AssertMapSelectsNonNull()).Visit(init);
+
 
             BoogieUtil.pruneProcs(init, AvnAnnotations.CORRAL_MAIN_PROC);
 
@@ -430,6 +466,9 @@ namespace AvHarnessInstrumentation
 
             if (args.Any(s => s == "/noAA:1"))
                 Options.UseAliasAnalysisForAssertions = false;
+
+            if (args.Any(s => s == "/delayAA"))
+                Options.delayAA = true;
 
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;
@@ -476,6 +515,27 @@ namespace AvHarnessInstrumentation
             args.Where(s => s.StartsWith("/unknownProc:"))
                 .Iter(s => Options.unknownProcs.Add(s.Substring("/unknownProc:".Length)));
 
+            args.Where(s => s.StartsWith("/killAfter:"))
+                .Iter(s => Options.killAfter = int.Parse(s.Substring("/killAfter:".Length)));
+
+            args.Where(s => s.StartsWith("/assertProc:"))
+                .Iter(s =>
+                    {
+                        if (Options.assertProcs == null) { Options.assertProcs = new HashSet<string>(); }
+                        Options.assertProcs.Add(s.Substring("/assertProc:".Length));
+                    });
+            args.Where(s => s.StartsWith("/entryPointProc:"))
+                .Iter(s =>
+                {
+                    if (Options.entryPointProcs == null) { Options.entryPointProcs = new HashSet<string>(); }
+                    Options.entryPointProcs.Add(s.Substring("/entryPointProc:".Length));
+                });
+            args.Where(s => s.StartsWith("/entryPointExcludes:"))
+                .Iter(s =>
+                {
+                    if (Options.entryPointExcludes == null) { Options.entryPointExcludes = new HashSet<string>(); }
+                    Options.entryPointExcludes.Add(s.Substring("/entryPointExcludes:".Length));
+                });
             if (Options.unknownTypes.Count == 0)
                 Options.unknownTypes.Add("int");
         }
@@ -502,33 +562,50 @@ namespace AvHarnessInstrumentation
             var sw = new Stopwatch();
             sw.Start();
 
+            if (Options.killAfter > 0)
+            {
+                var timer = new System.Timers.Timer(Options.killAfter * 1000);
+                timer.Elapsed += (sender, e) => HandleTimer(sw);
+                timer.Start();
+            }
+
             try
             {
                 // Get the program, install the harness and do basic instrumentation
                 var inprog = GetProgram(args[0]);
-                var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
+                
 
                 Utils.Print(string.Format("#Procs : {0}", inprog.TopLevelDeclarations.OfType<Implementation>().Count()), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#EntryPoints : {0}", harnessInstrumentation.entrypoints.Count), Utils.PRINT_TAG.AV_STATS);
                 Utils.Print(string.Format("#AssertsBeforeAA : {0}", AssertCountVisitor.Count(inprog)), Utils.PRINT_TAG.AV_STATS);
 
-                // Run alias analysis
-                Stats.resume("alias.analysis");
-                Console.WriteLine("Running alias analysis");
-                program = RunAliasAnalysis(program);
-                Stats.stop("alias.analysis");
-
-                Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
-
-                // run Houdini pass
-                if (Options.HoudiniPass)
+                if (Options.delayAA)
                 {
-                    Utils.Print("Running Houdini Pass");
-                    program = RunHoudiniPass(program);
-                    Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    PruneRedundantEntryPoints(inprog);
+                    BoogieUtil.PrintProgram(inprog, args[1]);
                 }
+                else
+                {
+                    var program = new PersistentProgram(inprog, AvnAnnotations.CORRAL_MAIN_PROC, 0);
 
-                program.writeToFile(args[1]);
+                    // Run alias analysis
+                    Stats.resume("alias.analysis");
+                    Console.WriteLine("Running alias analysis");
+                    program = RunAliasAnalysis(program);
+                    Stats.stop("alias.analysis");
+
+                    Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+
+                    // run Houdini pass
+                    if (Options.HoudiniPass)
+                    {
+                        Utils.Print("Running Houdini Pass");
+                        program = RunHoudiniPass(program);
+                        Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    }
+
+                    program.writeToFile(args[1]);
+                }
             }
             catch (Exception e)
             {
@@ -544,6 +621,15 @@ namespace AvHarnessInstrumentation
             }
         }
 
+        public static void HandleTimer(Stopwatch sw)
+        {
+            Utils.Print("AvHarnessInstrumentation failed with: Timeout", Utils.PRINT_TAG.AV_OUTPUT);
+            Stats.printStats();
+            Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
+
+            // Kill self
+            Process.GetCurrentProcess().Kill();
+        }
 
         public static PersistentProgram RunHoudiniPass(PersistentProgram prog)
         {
@@ -629,7 +715,7 @@ namespace AvHarnessInstrumentation
                     Stats.resume("inlining");
 
                     Stats.resume("read.write");
-                    program = BoogieUtil.ReResolve(program);
+                    program = BoogieUtil.ReResolveInMem(program);
                     Stats.stop("read.write");
 
                     var op = CommandLineOptions.Clo.InlineDepth;
@@ -644,9 +730,11 @@ namespace AvHarnessInstrumentation
                     Stats.stop("inlining");
                 }
 
+                /* TODO: Is this needed?
                 Stats.resume("read.write");
-                program = BoogieUtil.ReResolve(program);
+                program = BoogieUtil.ReResolveInMem(program);
                 Stats.stop("read.write");
+                */
 
                 // Make sure that aliasing queries are on identifiers only
                 var af =
@@ -670,6 +758,7 @@ namespace AvHarnessInstrumentation
             var origProgram = inp.getProgram();
 
             AliasAnalysis.PruneAliasingQueries.Prune(origProgram, res);
+
             if (pruneEP) PruneRedundantEntryPoints(origProgram);
 
             return new PersistentProgram(origProgram, inp.mainProcName, inp.contextBound);

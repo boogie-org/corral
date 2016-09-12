@@ -166,6 +166,30 @@ namespace cba.Util
         }
     }
 
+    public class FunctionsUsed : FixedVisitor
+    {
+        HashSet<string> funcsUsed;
+
+        FunctionsUsed()
+        {
+            funcsUsed = new HashSet<string>();
+        }
+
+        public static HashSet<string> GetFunctionsUsed(Absy node)
+        {
+            var fu = new FunctionsUsed();
+            fu.Visit(node);
+            return fu.funcsUsed;
+        }
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            funcsUsed.Add(node.Fun.FunctionName);
+            return base.VisitNAryExpr(node);
+        }
+
+    }
+
     // Use this class to find a variable of a particular name
     public class FindVars : FixedVisitor
     {

@@ -11,7 +11,7 @@ namespace RunEE
     class Driver
     {
         public static int ExplainErrorTimeout = 1000000;
-        public static int ExplainErrorFilters = 0;
+        public static int ExplainErrorFilters = 1;
 
         static void Main(string[] args)
         {

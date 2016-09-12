@@ -1598,6 +1598,7 @@ namespace cba.Util
 
             // Extract loops, we don't want cycles in the CFG            
             program.ExtractLoops(out irreducible);
+            RemoveVarsFromAttributes.Prune(program);
 
             if (GVN.doGVN)
             {
@@ -1662,6 +1663,10 @@ namespace cba.Util
             // Remove unreachble blocks
             impl.PruneUnreachableBlocks();
 
+            // Live variable analysis
+            CbaLiveVariableAnalysis.ClearLiveVariables(impl);
+            CbaLiveVariableAnalysis.ComputeLiveVariables(impl, null);
+        
             // create CFG graph
             var graph = new Graph<Block>();
 
@@ -1762,13 +1767,16 @@ namespace cba.Util
 
             foreach (var blk in sortedBlockList)
             {
+                var lvars = HashSetExtras<Variable>.Intersection(new HashSet<Variable>(blk.liveVarsBefore), variables);
+
                 // compute reachDefIn
                 if (blk == impl.Blocks[0])
                 {
                     // entry block
                     reachDefIn[blk] = new Dictionary<Variable, int>();
-                    variables.OfType<LocalVariable>().Iter(v => reachDefIn[blk].Add(v, 0));
-                    variables.OfType<Formal>().Iter(v => reachDefIn[blk].Add(v, 1));
+    
+                    lvars.OfType<LocalVariable>().Iter(v => reachDefIn[blk].Add(v, 0));
+                    lvars.OfType<Formal>().Iter(v => reachDefIn[blk].Add(v, 1));
                 }
                 else
                 {
@@ -1778,11 +1786,15 @@ namespace cba.Util
 
                     reachDefIn[blk] = new Dictionary<Variable, int>();
                     if (graph.Predecessors(blk).Count() == 1)
-                        reachDefIn[blk] = new Dictionary<Variable, int>(reachDefOut[graph.Predecessors(blk).First()]);
+                    {
+                        var pred = graph.Predecessors(blk).First();
+                        foreach (var v in lvars)
+                            reachDefIn[blk].Add(v, reachDefOut[pred][v]);
+                    }
                     else
                     {
                         // union
-                        foreach (var v in variables)
+                        foreach (var v in lvars)
                         {
                             var versions = new HashSet<int>(graph.Predecessors(blk).Select(pred => reachDefOut[pred][v]));
                             Debug.Assert(versions.Count() != 0);
@@ -1803,13 +1815,13 @@ namespace cba.Util
                         }
                     }
                 }
-
+                
                 // Now that we have reachDefIn, compute reachDefOut
                 var defsOut = new Dictionary<Variable, int>(reachDefIn[blk]);
 
                 foreach (Cmd cmd in blk.Cmds)
                 {
-                    defsOut = ProcessCmd(cmd, defsOut, maxVersion, varInstances);
+                    ProcessCmd(cmd, defsOut, maxVersion, varInstances, variables);
                 }
                 reachDefOut[blk] = defsOut;
 
@@ -1829,6 +1841,8 @@ namespace cba.Util
             // Add the new local variables
             impl.LocVars.AddRange(newVars.Values);
 
+            // drop unnecessary information
+            CbaLiveVariableAnalysis.ClearLiveVariables(impl);
         }
 
         // phiNodes: block -> Variable -> (out-version :: [in-versions])
@@ -1963,7 +1977,7 @@ namespace cba.Util
             return callCmd;
         }
 
-        private Dictionary<Variable, int> ProcessCmd(Cmd cmd, Dictionary<Variable, int> defsIn, Dictionary<Variable, int> maxVersion, Func<Variable, int, Variable> varInstances)
+        private void ProcessCmd(Cmd cmd, Dictionary<Variable, int> defsIn, Dictionary<Variable, int> maxVersion, Func<Variable, int, Variable> varInstances, HashSet<Variable> toInstrument)
         {
             var renamer = new Func<Expr, Dictionary<Variable, int>, Expr>((e, d) =>
                 Substituter.Apply(new Substitution(v => 
@@ -1973,113 +1987,96 @@ namespace cba.Util
                 }), e)
                 );
 
-            var defsOut = new Dictionary<Variable, int>();
+            var defsOut = defsIn; // alias!
+
             if (cmd is PredicateCmd)
             {
-                defsOut = new Dictionary<Variable, int>(defsIn);
                 // rename variables
                 (cmd as PredicateCmd).Expr = renamer((cmd as PredicateCmd).Expr, defsIn);
             }
             else if (cmd is HavocCmd)
             {
-                var hvars = new HashSet<Variable>((cmd as HavocCmd).Vars.OfType<IdentifierExpr>().Select(ie => ie.Decl).Where(v => defsIn.ContainsKey(v)));
-                foreach (var tup in defsIn)
+                var nhvars = new List<IdentifierExpr>();
+                foreach (var ie in (cmd as HavocCmd).Vars)
                 {
-                    var v = tup.Key;
-                    if (hvars.Contains(v))
+                    var v = ie.Decl;
+                    if (toInstrument.Contains(v))
                     {
                         var max = maxVersion[v] + 1;
                         maxVersion[v] = max;
                         defsOut[v] = max;
-                    }
-                    else
-                    {
-                        defsOut[v] = defsIn[v];
-                    }
-                }
-                var nhvars = new List<IdentifierExpr>();
-                foreach (var ie in (cmd as HavocCmd).Vars.OfType<IdentifierExpr>())
-                {
-                    if (defsOut.ContainsKey(ie.Decl))
-                    {
-                        nhvars.Add(Expr.Ident(varInstances(ie.Decl, defsOut[ie.Decl])));
+                        nhvars.Add(Expr.Ident(varInstances(v, max)));
                     }
                     else
                     {
                         nhvars.Add(ie);
                     }
-                }
 
+                }
+                (cmd as HavocCmd).Vars = nhvars;
             }
             else if (cmd is AssignCmd)
             {
                 var acmd = cmd as AssignCmd;
-                var assignedVars = new HashSet<Variable>();
-                acmd.Lhss.Iter(lhs => assignedVars.Add(lhs.DeepAssignedVariable));
-
-                foreach (var tup in defsIn)
-                {
-                    var v = tup.Key;
-                    if (assignedVars.Contains(v))
-                    {
-                        var max = maxVersion[v] + 1;
-                        maxVersion[v] = max;
-                        defsOut[v] = max;
-                    }
-                    else
-                    {
-                        defsOut[v] = defsIn[v];
-                    }
-                }
 
                 // Note: here we use the assumption that SSA is only done for scalar variables
                 // Hence, we only need to worry about SimpleAssignLhs
                 acmd.Rhss = new List<Expr>(acmd.Rhss.Select(e => renamer(e, defsIn)));
-                for (int i = 0; i < acmd.Lhss.Count; i++) 
+                for (int i = 0; i < acmd.Lhss.Count; i++)
                 {
                     var lhs = acmd.Lhss[i];
-                    if (lhs is SimpleAssignLhs && defsIn.ContainsKey((lhs as SimpleAssignLhs).AssignedVariable.Decl))
-                    {
-                        var v = (lhs as SimpleAssignLhs).AssignedVariable.Decl;
-                        acmd.SetAssignCmdLhs(i, new SimpleAssignLhs(lhs.tok, Expr.Ident(varInstances(v, defsOut[v]))));
-                    }
-                    else if(lhs is MapAssignLhs)
+                    if (lhs is MapAssignLhs)
                     {
                         var mlhs = lhs as MapAssignLhs;
                         mlhs.Indexes = new List<Expr>(mlhs.Indexes.Select(e => renamer(e, defsIn)));
+                    }
+                }
+
+                for (int i = 0; i < acmd.Lhss.Count; i++) 
+                {
+                    var lhs = acmd.Lhss[i] as SimpleAssignLhs;
+                    if (lhs == null) continue;
+
+                    if (toInstrument.Contains(lhs.AssignedVariable.Decl))
+                    {
+                        var v = (lhs as SimpleAssignLhs).AssignedVariable.Decl;
+
+                        var max = maxVersion[v] + 1;
+                        maxVersion[v] = max;
+                        defsOut[v] = max;
+
+                        acmd.SetAssignCmdLhs(i, new SimpleAssignLhs(lhs.tok, Expr.Ident(varInstances(v, max))));
                     }
                 }
             }
             else if (cmd is CallCmd)
             {
                 var ccmd = cmd as CallCmd;
-                var assignedVars = new HashSet<Variable>();
-                ccmd.Outs.Iter(ie => assignedVars.Add(ie.Decl));
+                ccmd.Ins = new List<Expr>(ccmd.Ins.Select(e => renamer(e, defsIn)));
 
-                foreach (var tup in defsIn)
+                var outs = new List<IdentifierExpr>();
+                for(int i = 0; i < ccmd.Outs.Count; i++)
                 {
-                    var v = tup.Key;
-                    if (assignedVars.Contains(v))
+                    var v = ccmd.Outs[i].Decl;
+                    if (toInstrument.Contains(v))
                     {
                         var max = maxVersion[v] + 1;
                         maxVersion[v] = max;
                         defsOut[v] = max;
+                        outs.Add(Expr.Ident(varInstances(v, max)));
                     }
                     else
                     {
-                        defsOut[v] = defsIn[v];
+                        outs.Add(Expr.Ident(v));
                     }
                 }
 
-                ccmd.Ins = new List<Expr>(ccmd.Ins.Select(e => renamer(e, defsIn)));
-                ccmd.Outs = new List<IdentifierExpr>(ccmd.Outs.Select(e => renamer(e, defsOut) as IdentifierExpr));
+                ccmd.Outs = outs;
             }
             else
             {
                 Debug.Assert(false);
             }
-
-            return defsOut;
         }
     }
 
