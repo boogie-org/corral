@@ -1,4 +1,4 @@
-// RUN: %si "%s" "%t0.bpl"
+// RUN: %si "%s" "%t0.bpl" /checkNULL
 // RUN: %avh "%t0.bpl" "%t1.bpl" /noAA /unknownProc:malloc /unknownProc:$alloc
 // RUN: %avn "%t1.bpl" /nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:ignoreAllAssumes- /EE:onlySlicAssumes- | %grep > %t3
 // RUN: %diff "%s.expect" %t3

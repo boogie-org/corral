@@ -16,6 +16,8 @@ type i56 = int;
 
 type i64 = int;
 
+type i88 = int;
+
 type i96 = int;
 
 type i128 = int;
@@ -203,39 +205,39 @@ const .str2: int;
 
 axiom .str2 == NULL - 46;
 
-const .str1262: int;
+const .str1409: int;
 
-axiom .str1262 == NULL - 107;
+axiom .str1409 == NULL - 107;
 
-const .str1263: int;
+const .str1410: int;
 
-axiom .str1263 == NULL - 170;
+axiom .str1410 == NULL - 170;
 
-const .str1264: int;
+const .str1411: int;
 
-axiom .str1264 == NULL - 273;
+axiom .str1411 == NULL - 273;
 
 const y: int;
 
 axiom y == NULL - 277;
 
-const __SMACK_dummy: int;
+const {:allocated} __SMACK_dummy: int;
 
 axiom __SMACK_dummy == NULL - 285;
 
-const __SMACK_code: int;
+const {:allocated} __SMACK_code: int;
 
 axiom __SMACK_code == NULL - 293;
 
-procedure __SMACK_code.ref($p0: int);
+procedure __SMACK_code.ref({:pointer} $p0: int);
 
 
 
-const exit: int;
+const {:allocated} exit: int;
 
 axiom exit == NULL - 301;
 
-const __SMACK_decls: int;
+const {:allocated} __SMACK_decls: int;
 
 axiom __SMACK_decls == NULL - 309;
 
@@ -247,6 +249,8 @@ function {:inline} $bitcast.ref.ref(i: int) : int
 function {:bvbuiltin "bvadd"} $add.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvadd"} $add.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvadd"} $add.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvadd"} $add.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -270,6 +274,8 @@ function {:bvbuiltin "bvsub"} $sub.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvsub"} $sub.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvsub"} $sub.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvsub"} $sub.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvsub"} $sub.bv56(i1: bv56, i2: bv56) : bv56;
@@ -291,6 +297,8 @@ function {:bvbuiltin "bvsub"} $sub.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvmul"} $mul.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvmul"} $mul.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvmul"} $mul.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvmul"} $mul.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -314,6 +322,8 @@ function {:bvbuiltin "bvudiv"} $udiv.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvudiv"} $udiv.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvudiv"} $udiv.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvudiv"} $udiv.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvudiv"} $udiv.bv56(i1: bv56, i2: bv56) : bv56;
@@ -335,6 +345,8 @@ function {:bvbuiltin "bvudiv"} $udiv.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvsdiv"} $sdiv.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvsdiv"} $sdiv.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvsdiv"} $sdiv.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvsdiv"} $sdiv.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -358,6 +370,8 @@ function {:bvbuiltin "bvsmod"} $smod.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvsmod"} $smod.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvsmod"} $smod.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvsmod"} $smod.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvsmod"} $smod.bv56(i1: bv56, i2: bv56) : bv56;
@@ -380,6 +394,8 @@ function {:bvbuiltin "bvsrem"} $srem.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvsrem"} $srem.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvsrem"} $srem.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvsrem"} $srem.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvsrem"} $srem.bv56(i1: bv56, i2: bv56) : bv56;
@@ -401,6 +417,8 @@ function {:bvbuiltin "bvsrem"} $srem.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvurem"} $urem.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvurem"} $urem.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvurem"} $urem.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvurem"} $urem.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -428,6 +446,11 @@ function {:inline} $min.bv128(i1: bv128, i2: bv128) : bv128
 function {:inline} $min.bv96(i1: bv96, i2: bv96) : bv96
 {
   (if $slt.bv96.bool(i1, i2) then i1 else i2)
+}
+
+function {:inline} $min.bv88(i1: bv88, i2: bv88) : bv88
+{
+  (if $slt.bv88.bool(i1, i2) then i1 else i2)
 }
 
 function {:inline} $min.bv64(i1: bv64, i2: bv64) : bv64
@@ -485,6 +508,11 @@ function {:inline} $max.bv96(i1: bv96, i2: bv96) : bv96
   (if $sgt.bv96.bool(i1, i2) then i1 else i2)
 }
 
+function {:inline} $max.bv88(i1: bv88, i2: bv88) : bv88
+{
+  (if $sgt.bv88.bool(i1, i2) then i1 else i2)
+}
+
 function {:inline} $max.bv64(i1: bv64, i2: bv64) : bv64
 {
   (if $sgt.bv64.bool(i1, i2) then i1 else i2)
@@ -538,6 +566,11 @@ function {:inline} $umin.bv128(i1: bv128, i2: bv128) : bv128
 function {:inline} $umin.bv96(i1: bv96, i2: bv96) : bv96
 {
   (if $ult.bv96.bool(i1, i2) then i1 else i2)
+}
+
+function {:inline} $umin.bv88(i1: bv88, i2: bv88) : bv88
+{
+  (if $ult.bv88.bool(i1, i2) then i1 else i2)
 }
 
 function {:inline} $umin.bv64(i1: bv64, i2: bv64) : bv64
@@ -595,6 +628,11 @@ function {:inline} $umax.bv96(i1: bv96, i2: bv96) : bv96
   (if $ugt.bv96.bool(i1, i2) then i1 else i2)
 }
 
+function {:inline} $umax.bv88(i1: bv88, i2: bv88) : bv88
+{
+  (if $ugt.bv88.bool(i1, i2) then i1 else i2)
+}
+
 function {:inline} $umax.bv64(i1: bv64, i2: bv64) : bv64
 {
   (if $ugt.bv64.bool(i1, i2) then i1 else i2)
@@ -644,6 +682,8 @@ function {:bvbuiltin "bvshl"} $shl.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvshl"} $shl.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvshl"} $shl.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvshl"} $shl.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvshl"} $shl.bv56(i1: bv56, i2: bv56) : bv56;
@@ -665,6 +705,8 @@ function {:bvbuiltin "bvshl"} $shl.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvlshr"} $lshr.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvlshr"} $lshr.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvlshr"} $lshr.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvlshr"} $lshr.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -688,6 +730,8 @@ function {:bvbuiltin "bvashr"} $ashr.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvashr"} $ashr.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvashr"} $ashr.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvashr"} $ashr.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvashr"} $ashr.bv56(i1: bv56, i2: bv56) : bv56;
@@ -709,6 +753,8 @@ function {:bvbuiltin "bvashr"} $ashr.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvnot"} $not.bv128(i: bv128) : bv128;
 
 function {:bvbuiltin "bvnot"} $not.bv96(i: bv96) : bv96;
+
+function {:bvbuiltin "bvnot"} $not.bv88(i: bv88) : bv88;
 
 function {:bvbuiltin "bvnot"} $not.bv64(i: bv64) : bv64;
 
@@ -732,6 +778,8 @@ function {:bvbuiltin "bvand"} $and.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvand"} $and.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvand"} $and.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvand"} $and.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvand"} $and.bv56(i1: bv56, i2: bv56) : bv56;
@@ -753,6 +801,8 @@ function {:bvbuiltin "bvand"} $and.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvor"} $or.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvor"} $or.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvor"} $or.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvor"} $or.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -776,6 +826,8 @@ function {:bvbuiltin "bvxor"} $xor.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvxor"} $xor.bv96(i1: bv96, i2: bv96) : bv96;
 
+function {:bvbuiltin "bvxor"} $xor.bv88(i1: bv88, i2: bv88) : bv88;
+
 function {:bvbuiltin "bvxor"} $xor.bv64(i1: bv64, i2: bv64) : bv64;
 
 function {:bvbuiltin "bvxor"} $xor.bv56(i1: bv56, i2: bv56) : bv56;
@@ -797,6 +849,8 @@ function {:bvbuiltin "bvxor"} $xor.bv1(i1: bv1, i2: bv1) : bv1;
 function {:bvbuiltin "bvnand"} $nand.bv128(i1: bv128, i2: bv128) : bv128;
 
 function {:bvbuiltin "bvnand"} $nand.bv96(i1: bv96, i2: bv96) : bv96;
+
+function {:bvbuiltin "bvnand"} $nand.bv88(i1: bv88, i2: bv88) : bv88;
 
 function {:bvbuiltin "bvnand"} $nand.bv64(i1: bv64, i2: bv64) : bv64;
 
@@ -832,6 +886,16 @@ function {:inline} $eq.bv96.bool(i1: bv96, i2: bv96) : bool
 }
 
 function {:inline} $eq.bv96(i1: bv96, i2: bv96) : bv1
+{
+  (if i1 == i2 then 1bv1 else 0bv1)
+}
+
+function {:inline} $eq.bv88.bool(i1: bv88, i2: bv88) : bool
+{
+  i1 == i2
+}
+
+function {:inline} $eq.bv88(i1: bv88, i2: bv88) : bv1
 {
   (if i1 == i2 then 1bv1 else 0bv1)
 }
@@ -946,6 +1010,16 @@ function {:inline} $ne.bv96(i1: bv96, i2: bv96) : bv1
   (if i1 != i2 then 1bv1 else 0bv1)
 }
 
+function {:inline} $ne.bv88.bool(i1: bv88, i2: bv88) : bool
+{
+  i1 != i2
+}
+
+function {:inline} $ne.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if i1 != i2 then 1bv1 else 0bv1)
+}
+
 function {:inline} $ne.bv64.bool(i1: bv64, i2: bv64) : bool
 {
   i1 != i2
@@ -1050,6 +1124,13 @@ function {:inline} $ule.bv96(i1: bv96, i2: bv96) : bv1
   (if $ule.bv96.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
+function {:bvbuiltin "bvule"} $ule.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $ule.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $ule.bv88.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
 function {:bvbuiltin "bvule"} $ule.bv64.bool(i1: bv64, i2: bv64) : bool;
 
 function {:inline} $ule.bv64(i1: bv64, i2: bv64) : bv1
@@ -1125,6 +1206,13 @@ function {:bvbuiltin "bvult"} $ult.bv96.bool(i1: bv96, i2: bv96) : bool;
 function {:inline} $ult.bv96(i1: bv96, i2: bv96) : bv1
 {
   (if $ult.bv96.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
+function {:bvbuiltin "bvult"} $ult.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $ult.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $ult.bv88.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
 function {:bvbuiltin "bvult"} $ult.bv64.bool(i1: bv64, i2: bv64) : bool;
@@ -1204,6 +1292,13 @@ function {:inline} $uge.bv96(i1: bv96, i2: bv96) : bv1
   (if $uge.bv96.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
+function {:bvbuiltin "bvuge"} $uge.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $uge.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $uge.bv88.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
 function {:bvbuiltin "bvuge"} $uge.bv64.bool(i1: bv64, i2: bv64) : bool;
 
 function {:inline} $uge.bv64(i1: bv64, i2: bv64) : bv1
@@ -1279,6 +1374,13 @@ function {:bvbuiltin "bvugt"} $ugt.bv96.bool(i1: bv96, i2: bv96) : bool;
 function {:inline} $ugt.bv96(i1: bv96, i2: bv96) : bv1
 {
   (if $ugt.bv96.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
+function {:bvbuiltin "bvugt"} $ugt.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $ugt.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $ugt.bv88.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
 function {:bvbuiltin "bvugt"} $ugt.bv64.bool(i1: bv64, i2: bv64) : bool;
@@ -1358,6 +1460,13 @@ function {:inline} $sle.bv96(i1: bv96, i2: bv96) : bv1
   (if $sle.bv96.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
+function {:bvbuiltin "bvsle"} $sle.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $sle.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $sle.bv88.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
 function {:bvbuiltin "bvsle"} $sle.bv64.bool(i1: bv64, i2: bv64) : bool;
 
 function {:inline} $sle.bv64(i1: bv64, i2: bv64) : bv1
@@ -1433,6 +1542,13 @@ function {:bvbuiltin "bvslt"} $slt.bv96.bool(i1: bv96, i2: bv96) : bool;
 function {:inline} $slt.bv96(i1: bv96, i2: bv96) : bv1
 {
   (if $slt.bv96.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
+function {:bvbuiltin "bvslt"} $slt.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $slt.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $slt.bv88.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
 function {:bvbuiltin "bvslt"} $slt.bv64.bool(i1: bv64, i2: bv64) : bool;
@@ -1512,6 +1628,13 @@ function {:inline} $sge.bv96(i1: bv96, i2: bv96) : bv1
   (if $sge.bv96.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
+function {:bvbuiltin "bvsge"} $sge.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $sge.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $sge.bv88.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
 function {:bvbuiltin "bvsge"} $sge.bv64.bool(i1: bv64, i2: bv64) : bool;
 
 function {:inline} $sge.bv64(i1: bv64, i2: bv64) : bv1
@@ -1589,6 +1712,13 @@ function {:inline} $sgt.bv96(i1: bv96, i2: bv96) : bv1
   (if $sgt.bv96.bool(i1, i2) then 1bv1 else 0bv1)
 }
 
+function {:bvbuiltin "bvsgt"} $sgt.bv88.bool(i1: bv88, i2: bv88) : bool;
+
+function {:inline} $sgt.bv88(i1: bv88, i2: bv88) : bv1
+{
+  (if $sgt.bv88.bool(i1, i2) then 1bv1 else 0bv1)
+}
+
 function {:bvbuiltin "bvsgt"} $sgt.bv64.bool(i1: bv64, i2: bv64) : bool;
 
 function {:inline} $sgt.bv64(i1: bv64, i2: bv64) : bv1
@@ -1657,6 +1787,11 @@ function {:inline} $trunc.bv128.bv96(i: bv128) : bv96
   i[96:0]
 }
 
+function {:inline} $trunc.bv128.bv88(i: bv128) : bv88
+{
+  i[88:0]
+}
+
 function {:inline} $trunc.bv128.bv64(i: bv128) : bv64
 {
   i[64:0]
@@ -1702,6 +1837,11 @@ function {:inline} $trunc.bv128.bv1(i: bv128) : bv1
   i[1:0]
 }
 
+function {:inline} $trunc.bv96.bv88(i: bv96) : bv88
+{
+  i[88:0]
+}
+
 function {:inline} $trunc.bv96.bv64(i: bv96) : bv64
 {
   i[64:0]
@@ -1743,6 +1883,51 @@ function {:inline} $trunc.bv96.bv8(i: bv96) : bv8
 }
 
 function {:inline} $trunc.bv96.bv1(i: bv96) : bv1
+{
+  i[1:0]
+}
+
+function {:inline} $trunc.bv88.bv64(i: bv88) : bv64
+{
+  i[64:0]
+}
+
+function {:inline} $trunc.bv88.bv56(i: bv88) : bv56
+{
+  i[56:0]
+}
+
+function {:inline} $trunc.bv88.bv48(i: bv88) : bv48
+{
+  i[48:0]
+}
+
+function {:inline} $trunc.bv88.bv40(i: bv88) : bv40
+{
+  i[40:0]
+}
+
+function {:inline} $trunc.bv88.bv32(i: bv88) : bv32
+{
+  i[32:0]
+}
+
+function {:inline} $trunc.bv88.bv24(i: bv88) : bv24
+{
+  i[24:0]
+}
+
+function {:inline} $trunc.bv88.bv16(i: bv88) : bv16
+{
+  i[16:0]
+}
+
+function {:inline} $trunc.bv88.bv8(i: bv88) : bv8
+{
+  i[8:0]
+}
+
+function {:inline} $trunc.bv88.bv1(i: bv88) : bv1
 {
   i[1:0]
 }
@@ -1962,6 +2147,11 @@ function {:inline} $zext.bv1.bv64(i: bv1) : bv64
   (if i == 0bv1 then 0bv64 else 1bv64)
 }
 
+function {:inline} $zext.bv1.bv88(i: bv1) : bv88
+{
+  (if i == 0bv1 then 0bv88 else 1bv88)
+}
+
 function {:inline} $zext.bv1.bv96(i: bv1) : bv96
 {
   (if i == 0bv1 then 0bv96 else 1bv96)
@@ -1986,6 +2176,8 @@ function {:bvbuiltin "(_ zero_extend 48)"} $zext.bv8.bv56(i: bv8) : bv56;
 
 function {:bvbuiltin "(_ zero_extend 56)"} $zext.bv8.bv64(i: bv8) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 80)"} $zext.bv8.bv88(i: bv8) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 88)"} $zext.bv8.bv96(i: bv8) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 120)"} $zext.bv8.bv128(i: bv8) : bv128;
@@ -2002,6 +2194,8 @@ function {:bvbuiltin "(_ zero_extend 40)"} $zext.bv16.bv56(i: bv16) : bv56;
 
 function {:bvbuiltin "(_ zero_extend 48)"} $zext.bv16.bv64(i: bv16) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 72)"} $zext.bv16.bv88(i: bv16) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 80)"} $zext.bv16.bv96(i: bv16) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 112)"} $zext.bv16.bv128(i: bv16) : bv128;
@@ -2016,6 +2210,8 @@ function {:bvbuiltin "(_ zero_extend 32)"} $zext.bv24.bv56(i: bv24) : bv56;
 
 function {:bvbuiltin "(_ zero_extend 40)"} $zext.bv24.bv64(i: bv24) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 64)"} $zext.bv24.bv88(i: bv24) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 72)"} $zext.bv24.bv96(i: bv24) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 104)"} $zext.bv24.bv128(i: bv24) : bv128;
@@ -2028,6 +2224,8 @@ function {:bvbuiltin "(_ zero_extend 24)"} $zext.bv32.bv56(i: bv32) : bv56;
 
 function {:bvbuiltin "(_ zero_extend 32)"} $zext.bv32.bv64(i: bv32) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 56)"} $zext.bv32.bv88(i: bv32) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 64)"} $zext.bv32.bv96(i: bv32) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 96)"} $zext.bv32.bv128(i: bv32) : bv128;
@@ -2038,11 +2236,15 @@ function {:bvbuiltin "(_ zero_extend 16)"} $zext.bv40.bv56(i: bv40) : bv56;
 
 function {:bvbuiltin "(_ zero_extend 24)"} $zext.bv40.bv64(i: bv40) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 48)"} $zext.bv40.bv88(i: bv40) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 56)"} $zext.bv40.bv96(i: bv40) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 88)"} $zext.bv40.bv128(i: bv40) : bv128;
 
 function {:bvbuiltin "(_ zero_extend 16)"} $zext.bv48.bv64(i: bv48) : bv64;
+
+function {:bvbuiltin "(_ zero_extend 40)"} $zext.bv48.bv88(i: bv48) : bv88;
 
 function {:bvbuiltin "(_ zero_extend 48)"} $zext.bv48.bv96(i: bv48) : bv96;
 
@@ -2050,13 +2252,21 @@ function {:bvbuiltin "(_ zero_extend 80)"} $zext.bv48.bv128(i: bv48) : bv128;
 
 function {:bvbuiltin "(_ zero_extend 8)"} $zext.bv56.bv64(i: bv56) : bv64;
 
+function {:bvbuiltin "(_ zero_extend 32)"} $zext.bv56.bv88(i: bv56) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 40)"} $zext.bv56.bv96(i: bv56) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 72)"} $zext.bv56.bv128(i: bv56) : bv128;
 
+function {:bvbuiltin "(_ zero_extend 24)"} $zext.bv64.bv88(i: bv64) : bv88;
+
 function {:bvbuiltin "(_ zero_extend 32)"} $zext.bv64.bv96(i: bv64) : bv96;
 
 function {:bvbuiltin "(_ zero_extend 64)"} $zext.bv64.bv128(i: bv64) : bv128;
+
+function {:bvbuiltin "(_ zero_extend 8)"} $zext.bv88.bv96(i: bv88) : bv96;
+
+function {:bvbuiltin "(_ zero_extend 40)"} $zext.bv88.bv128(i: bv88) : bv128;
 
 function {:bvbuiltin "(_ zero_extend 32)"} $zext.bv96.bv128(i: bv96) : bv128;
 
@@ -2100,6 +2310,11 @@ function {:inline} $sext.bv1.bv64(i: bv1) : bv64
   (if i == 0bv1 then 0bv64 else 18446744073709551615bv64)
 }
 
+function {:inline} $sext.bv1.bv88(i: bv1) : bv88
+{
+  (if i == 0bv1 then 0bv88 else 309485009821345068724781055bv88)
+}
+
 function {:inline} $sext.bv1.bv96(i: bv1) : bv96
 {
   (if i == 0bv1 then 0bv96 else 79228162514264337593543950335bv96)
@@ -2124,6 +2339,8 @@ function {:bvbuiltin "(_ sign_extend 48)"} $sext.bv8.bv56(i: bv8) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 56)"} $sext.bv8.bv64(i: bv8) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 80)"} $sext.bv8.bv88(i: bv8) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 88)"} $sext.bv8.bv96(i: bv8) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 120)"} $sext.bv8.bv128(i: bv8) : bv128;
@@ -2140,6 +2357,8 @@ function {:bvbuiltin "(_ sign_extend 40)"} $sext.bv16.bv56(i: bv16) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 48)"} $sext.bv16.bv64(i: bv16) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 72)"} $sext.bv16.bv88(i: bv16) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 80)"} $sext.bv16.bv96(i: bv16) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 112)"} $sext.bv16.bv128(i: bv16) : bv128;
@@ -2154,6 +2373,8 @@ function {:bvbuiltin "(_ sign_extend 32)"} $sext.bv24.bv56(i: bv24) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 40)"} $sext.bv24.bv64(i: bv24) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 64)"} $sext.bv24.bv88(i: bv24) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 72)"} $sext.bv24.bv96(i: bv24) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 104)"} $sext.bv24.bv128(i: bv24) : bv128;
@@ -2166,6 +2387,8 @@ function {:bvbuiltin "(_ sign_extend 24)"} $sext.bv32.bv56(i: bv32) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 32)"} $sext.bv32.bv64(i: bv32) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 56)"} $sext.bv32.bv88(i: bv32) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 64)"} $sext.bv32.bv96(i: bv32) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 96)"} $sext.bv32.bv128(i: bv32) : bv128;
@@ -2176,6 +2399,8 @@ function {:bvbuiltin "(_ sign_extend 16)"} $sext.bv40.bv56(i: bv40) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 24)"} $sext.bv40.bv64(i: bv40) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 48)"} $sext.bv40.bv88(i: bv40) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 56)"} $sext.bv40.bv96(i: bv40) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 88)"} $sext.bv40.bv128(i: bv40) : bv128;
@@ -2184,19 +2409,29 @@ function {:bvbuiltin "(_ sign_extend 8)"} $sext.bv48.bv56(i: bv48) : bv56;
 
 function {:bvbuiltin "(_ sign_extend 16)"} $sext.bv48.bv64(i: bv48) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 40)"} $sext.bv48.bv88(i: bv48) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 48)"} $sext.bv48.bv96(i: bv48) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 80)"} $sext.bv48.bv128(i: bv48) : bv128;
 
 function {:bvbuiltin "(_ sign_extend 8)"} $sext.bv56.bv64(i: bv56) : bv64;
 
+function {:bvbuiltin "(_ sign_extend 32)"} $sext.bv56.bv88(i: bv56) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 40)"} $sext.bv56.bv96(i: bv56) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 72)"} $sext.bv56.bv128(i: bv56) : bv128;
 
+function {:bvbuiltin "(_ sign_extend 24)"} $sext.bv64.bv88(i: bv64) : bv88;
+
 function {:bvbuiltin "(_ sign_extend 32)"} $sext.bv64.bv96(i: bv64) : bv96;
 
 function {:bvbuiltin "(_ sign_extend 64)"} $sext.bv64.bv128(i: bv64) : bv128;
+
+function {:bvbuiltin "(_ sign_extend 8)"} $sext.bv88.bv96(i: bv88) : bv96;
+
+function {:bvbuiltin "(_ sign_extend 40)"} $sext.bv88.bv128(i: bv88) : bv128;
 
 function {:bvbuiltin "(_ sign_extend 32)"} $sext.bv96.bv128(i: bv96) : bv128;
 
@@ -2206,6 +2441,11 @@ function {:inline} $add.i128(i1: int, i2: int) : int
 }
 
 function {:inline} $add.i96(i1: int, i2: int) : int
+{
+  i1 + i2
+}
+
+function {:inline} $add.i88(i1: int, i2: int) : int
 {
   i1 + i2
 }
@@ -2265,6 +2505,11 @@ function {:inline} $sub.i96(i1: int, i2: int) : int
   i1 - i2
 }
 
+function {:inline} $sub.i88(i1: int, i2: int) : int
+{
+  i1 - i2
+}
+
 function {:inline} $sub.i64(i1: int, i2: int) : int
 {
   i1 - i2
@@ -2316,6 +2561,11 @@ function {:inline} $mul.i128(i1: int, i2: int) : int
 }
 
 function {:inline} $mul.i96(i1: int, i2: int) : int
+{
+  i1 * i2
+}
+
+function {:inline} $mul.i88(i1: int, i2: int) : int
 {
   i1 * i2
 }
@@ -2385,6 +2635,8 @@ function {:builtin "div"} $sdiv.i128(i1: int, i2: int) : int;
 
 function {:builtin "div"} $sdiv.i96(i1: int, i2: int) : int;
 
+function {:builtin "div"} $sdiv.i88(i1: int, i2: int) : int;
+
 function {:builtin "div"} $sdiv.i64(i1: int, i2: int) : int;
 
 function {:builtin "div"} $sdiv.i56(i1: int, i2: int) : int;
@@ -2406,6 +2658,8 @@ function {:builtin "div"} $sdiv.i1(i1: int, i2: int) : int;
 function {:builtin "mod"} $smod.i128(i1: int, i2: int) : int;
 
 function {:builtin "mod"} $smod.i96(i1: int, i2: int) : int;
+
+function {:builtin "mod"} $smod.i88(i1: int, i2: int) : int;
 
 function {:builtin "mod"} $smod.i64(i1: int, i2: int) : int;
 
@@ -2429,6 +2683,8 @@ function {:builtin "rem"} $srem.i128(i1: int, i2: int) : int;
 
 function {:builtin "rem"} $srem.i96(i1: int, i2: int) : int;
 
+function {:builtin "rem"} $srem.i88(i1: int, i2: int) : int;
+
 function {:builtin "rem"} $srem.i64(i1: int, i2: int) : int;
 
 function {:builtin "rem"} $srem.i56(i1: int, i2: int) : int;
@@ -2451,6 +2707,8 @@ function {:builtin "div"} $udiv.i128(i1: int, i2: int) : int;
 
 function {:builtin "div"} $udiv.i96(i1: int, i2: int) : int;
 
+function {:builtin "div"} $udiv.i88(i1: int, i2: int) : int;
+
 function {:builtin "div"} $udiv.i64(i1: int, i2: int) : int;
 
 function {:builtin "div"} $udiv.i56(i1: int, i2: int) : int;
@@ -2472,6 +2730,8 @@ function {:builtin "div"} $udiv.i1(i1: int, i2: int) : int;
 function {:builtin "rem"} $urem.i128(i1: int, i2: int) : int;
 
 function {:builtin "rem"} $urem.i96(i1: int, i2: int) : int;
+
+function {:builtin "rem"} $urem.i88(i1: int, i2: int) : int;
 
 function {:builtin "rem"} $urem.i64(i1: int, i2: int) : int;
 
@@ -2497,6 +2757,11 @@ function {:inline} $smin.i128(i1: int, i2: int) : int
 }
 
 function {:inline} $smin.i96(i1: int, i2: int) : int
+{
+  (if i1 < i2 then i1 else i2)
+}
+
+function {:inline} $smin.i88(i1: int, i2: int) : int
 {
   (if i1 < i2 then i1 else i2)
 }
@@ -2556,6 +2821,11 @@ function {:inline} $smax.i96(i1: int, i2: int) : int
   (if i1 > i2 then i1 else i2)
 }
 
+function {:inline} $smax.i88(i1: int, i2: int) : int
+{
+  (if i1 > i2 then i1 else i2)
+}
+
 function {:inline} $smax.i64(i1: int, i2: int) : int
 {
   (if i1 > i2 then i1 else i2)
@@ -2607,6 +2877,11 @@ function {:inline} $umin.i128(i1: int, i2: int) : int
 }
 
 function {:inline} $umin.i96(i1: int, i2: int) : int
+{
+  (if i1 < i2 then i1 else i2)
+}
+
+function {:inline} $umin.i88(i1: int, i2: int) : int
 {
   (if i1 < i2 then i1 else i2)
 }
@@ -2666,6 +2941,11 @@ function {:inline} $umax.i96(i1: int, i2: int) : int
   (if i1 > i2 then i1 else i2)
 }
 
+function {:inline} $umax.i88(i1: int, i2: int) : int
+{
+  (if i1 > i2 then i1 else i2)
+}
+
 function {:inline} $umax.i64(i1: int, i2: int) : int
 {
   (if i1 > i2 then i1 else i2)
@@ -2715,6 +2995,8 @@ function $shl.i128(i1: int, i2: int) : int;
 
 function $shl.i96(i1: int, i2: int) : int;
 
+function $shl.i88(i1: int, i2: int) : int;
+
 function $shl.i64(i1: int, i2: int) : int;
 
 function $shl.i56(i1: int, i2: int) : int;
@@ -2736,6 +3018,8 @@ function $shl.i1(i1: int, i2: int) : int;
 function $lshr.i128(i1: int, i2: int) : int;
 
 function $lshr.i96(i1: int, i2: int) : int;
+
+function $lshr.i88(i1: int, i2: int) : int;
 
 function $lshr.i64(i1: int, i2: int) : int;
 
@@ -2759,6 +3043,8 @@ function $ashr.i128(i1: int, i2: int) : int;
 
 function $ashr.i96(i1: int, i2: int) : int;
 
+function $ashr.i88(i1: int, i2: int) : int;
+
 function $ashr.i64(i1: int, i2: int) : int;
 
 function $ashr.i56(i1: int, i2: int) : int;
@@ -2780,6 +3066,8 @@ function $ashr.i1(i1: int, i2: int) : int;
 function $not.i128(i: int) : int;
 
 function $not.i96(i: int) : int;
+
+function $not.i88(i: int) : int;
 
 function $not.i64(i: int) : int;
 
@@ -2803,6 +3091,8 @@ function $and.i128(i1: int, i2: int) : int;
 
 function $and.i96(i1: int, i2: int) : int;
 
+function $and.i88(i1: int, i2: int) : int;
+
 function $and.i64(i1: int, i2: int) : int;
 
 function $and.i56(i1: int, i2: int) : int;
@@ -2824,6 +3114,8 @@ function $and.i1(i1: int, i2: int) : int;
 function $or.i128(i1: int, i2: int) : int;
 
 function $or.i96(i1: int, i2: int) : int;
+
+function $or.i88(i1: int, i2: int) : int;
 
 function $or.i64(i1: int, i2: int) : int;
 
@@ -2847,6 +3139,8 @@ function $xor.i128(i1: int, i2: int) : int;
 
 function $xor.i96(i1: int, i2: int) : int;
 
+function $xor.i88(i1: int, i2: int) : int;
+
 function $xor.i64(i1: int, i2: int) : int;
 
 function $xor.i56(i1: int, i2: int) : int;
@@ -2868,6 +3162,8 @@ function $xor.i1(i1: int, i2: int) : int;
 function $nand.i128(i1: int, i2: int) : int;
 
 function $nand.i96(i1: int, i2: int) : int;
+
+function $nand.i88(i1: int, i2: int) : int;
 
 function $nand.i64(i1: int, i2: int) : int;
 
@@ -2903,6 +3199,16 @@ function {:inline} $eq.i96.bool(i1: int, i2: int) : bool
 }
 
 function {:inline} $eq.i96(i1: int, i2: int) : int
+{
+  (if i1 == i2 then 1 else NULL)
+}
+
+function {:inline} $eq.i88.bool(i1: int, i2: int) : bool
+{
+  i1 == i2
+}
+
+function {:inline} $eq.i88(i1: int, i2: int) : int
 {
   (if i1 == i2 then 1 else NULL)
 }
@@ -3017,6 +3323,16 @@ function {:inline} $ne.i96(i1: int, i2: int) : int
   (if i1 != i2 then 1 else NULL)
 }
 
+function {:inline} $ne.i88.bool(i1: int, i2: int) : bool
+{
+  i1 != i2
+}
+
+function {:inline} $ne.i88(i1: int, i2: int) : int
+{
+  (if i1 != i2 then 1 else NULL)
+}
+
 function {:inline} $ne.i64.bool(i1: int, i2: int) : bool
 {
   i1 != i2
@@ -3123,6 +3439,16 @@ function {:inline} $ule.i96.bool(i1: int, i2: int) : bool
 }
 
 function {:inline} $ule.i96(i1: int, i2: int) : int
+{
+  (if i1 <= i2 then 1 else NULL)
+}
+
+function {:inline} $ule.i88.bool(i1: int, i2: int) : bool
+{
+  i1 <= i2
+}
+
+function {:inline} $ule.i88(i1: int, i2: int) : int
 {
   (if i1 <= i2 then 1 else NULL)
 }
@@ -3237,6 +3563,16 @@ function {:inline} $ult.i96(i1: int, i2: int) : int
   (if i1 < i2 then 1 else NULL)
 }
 
+function {:inline} $ult.i88.bool(i1: int, i2: int) : bool
+{
+  i1 < i2
+}
+
+function {:inline} $ult.i88(i1: int, i2: int) : int
+{
+  (if i1 < i2 then 1 else NULL)
+}
+
 function {:inline} $ult.i64.bool(i1: int, i2: int) : bool
 {
   i1 < i2
@@ -3343,6 +3679,16 @@ function {:inline} $uge.i96.bool(i1: int, i2: int) : bool
 }
 
 function {:inline} $uge.i96(i1: int, i2: int) : int
+{
+  (if i1 >= i2 then 1 else NULL)
+}
+
+function {:inline} $uge.i88.bool(i1: int, i2: int) : bool
+{
+  i1 >= i2
+}
+
+function {:inline} $uge.i88(i1: int, i2: int) : int
 {
   (if i1 >= i2 then 1 else NULL)
 }
@@ -3457,6 +3803,16 @@ function {:inline} $ugt.i96(i1: int, i2: int) : int
   (if i1 > i2 then 1 else NULL)
 }
 
+function {:inline} $ugt.i88.bool(i1: int, i2: int) : bool
+{
+  i1 > i2
+}
+
+function {:inline} $ugt.i88(i1: int, i2: int) : int
+{
+  (if i1 > i2 then 1 else NULL)
+}
+
 function {:inline} $ugt.i64.bool(i1: int, i2: int) : bool
 {
   i1 > i2
@@ -3563,6 +3919,16 @@ function {:inline} $sle.i96.bool(i1: int, i2: int) : bool
 }
 
 function {:inline} $sle.i96(i1: int, i2: int) : int
+{
+  (if i1 <= i2 then 1 else NULL)
+}
+
+function {:inline} $sle.i88.bool(i1: int, i2: int) : bool
+{
+  i1 <= i2
+}
+
+function {:inline} $sle.i88(i1: int, i2: int) : int
 {
   (if i1 <= i2 then 1 else NULL)
 }
@@ -3677,6 +4043,16 @@ function {:inline} $slt.i96(i1: int, i2: int) : int
   (if i1 < i2 then 1 else NULL)
 }
 
+function {:inline} $slt.i88.bool(i1: int, i2: int) : bool
+{
+  i1 < i2
+}
+
+function {:inline} $slt.i88(i1: int, i2: int) : int
+{
+  (if i1 < i2 then 1 else NULL)
+}
+
 function {:inline} $slt.i64.bool(i1: int, i2: int) : bool
 {
   i1 < i2
@@ -3787,6 +4163,16 @@ function {:inline} $sge.i96(i1: int, i2: int) : int
   (if i1 >= i2 then 1 else NULL)
 }
 
+function {:inline} $sge.i88.bool(i1: int, i2: int) : bool
+{
+  i1 >= i2
+}
+
+function {:inline} $sge.i88(i1: int, i2: int) : int
+{
+  (if i1 >= i2 then 1 else NULL)
+}
+
 function {:inline} $sge.i64.bool(i1: int, i2: int) : bool
 {
   i1 >= i2
@@ -3893,6 +4279,16 @@ function {:inline} $sgt.i96.bool(i1: int, i2: int) : bool
 }
 
 function {:inline} $sgt.i96(i1: int, i2: int) : int
+{
+  (if i1 > i2 then 1 else NULL)
+}
+
+function {:inline} $sgt.i88.bool(i1: int, i2: int) : bool
+{
+  i1 > i2
+}
+
+function {:inline} $sgt.i88(i1: int, i2: int) : int
 {
   (if i1 > i2 then 1 else NULL)
 }
@@ -4016,6 +4412,11 @@ function {:inline} $trunc.i128.i96(i: int) : int
   i
 }
 
+function {:inline} $trunc.i128.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $trunc.i128.i64(i: int) : int
 {
   i
@@ -4066,6 +4467,11 @@ function {:inline} $trunc.i96.i64(i: int) : int
   i
 }
 
+function {:inline} $trunc.i96.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $trunc.i96.i56(i: int) : int
 {
   i
@@ -4102,6 +4508,56 @@ function {:inline} $trunc.i96.i8(i: int) : int
 }
 
 function {:inline} $trunc.i96.i1(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i64(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i88(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i56(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i48(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i40(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i32(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i24(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i16(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i8(i: int) : int
+{
+  i
+}
+
+function {:inline} $trunc.i88.i1(i: int) : int
 {
   i
 }
@@ -4326,6 +4782,11 @@ function {:inline} $zext.i1.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i1.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i1.i96(i: int) : int
 {
   i
@@ -4371,6 +4832,11 @@ function {:inline} $zext.i8.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i8.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i8.i96(i: int) : int
 {
   i
@@ -4411,6 +4877,11 @@ function {:inline} $zext.i16.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i16.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i16.i96(i: int) : int
 {
   i
@@ -4446,6 +4917,11 @@ function {:inline} $zext.i24.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i24.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i24.i96(i: int) : int
 {
   i
@@ -4476,6 +4952,11 @@ function {:inline} $zext.i32.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i32.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i32.i96(i: int) : int
 {
   i
@@ -4501,6 +4982,11 @@ function {:inline} $zext.i40.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i40.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i40.i96(i: int) : int
 {
   i
@@ -4521,6 +5007,11 @@ function {:inline} $zext.i48.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i48.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i48.i96(i: int) : int
 {
   i
@@ -4536,6 +5027,11 @@ function {:inline} $zext.i56.i64(i: int) : int
   i
 }
 
+function {:inline} $zext.i56.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i56.i96(i: int) : int
 {
   i
@@ -4546,12 +5042,27 @@ function {:inline} $zext.i56.i128(i: int) : int
   i
 }
 
+function {:inline} $zext.i64.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $zext.i64.i96(i: int) : int
 {
   i
 }
 
 function {:inline} $zext.i64.i128(i: int) : int
+{
+  i
+}
+
+function {:inline} $zext.i88.i96(i: int) : int
+{
+  i
+}
+
+function {:inline} $zext.i88.i128(i: int) : int
 {
   i
 }
@@ -4601,6 +5112,11 @@ function {:inline} $sext.i1.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i1.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i1.i96(i: int) : int
 {
   i
@@ -4646,6 +5162,11 @@ function {:inline} $sext.i8.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i8.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i8.i96(i: int) : int
 {
   i
@@ -4686,6 +5207,11 @@ function {:inline} $sext.i16.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i16.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i16.i96(i: int) : int
 {
   i
@@ -4721,6 +5247,11 @@ function {:inline} $sext.i24.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i24.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i24.i96(i: int) : int
 {
   i
@@ -4751,6 +5282,11 @@ function {:inline} $sext.i32.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i32.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i32.i96(i: int) : int
 {
   i
@@ -4776,6 +5312,11 @@ function {:inline} $sext.i40.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i40.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i40.i96(i: int) : int
 {
   i
@@ -4796,6 +5337,11 @@ function {:inline} $sext.i48.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i48.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i48.i96(i: int) : int
 {
   i
@@ -4811,6 +5357,11 @@ function {:inline} $sext.i56.i64(i: int) : int
   i
 }
 
+function {:inline} $sext.i56.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i56.i96(i: int) : int
 {
   i
@@ -4821,12 +5372,27 @@ function {:inline} $sext.i56.i128(i: int) : int
   i
 }
 
+function {:inline} $sext.i64.i88(i: int) : int
+{
+  i
+}
+
 function {:inline} $sext.i64.i96(i: int) : int
 {
   i
 }
 
 function {:inline} $sext.i64.i128(i: int) : int
+{
+  i
+}
+
+function {:inline} $sext.i88.i96(i: int) : int
+{
+  i
+}
+
+function {:inline} $sext.i88.i128(i: int) : int
 {
   i
 }
@@ -4900,6 +5466,14 @@ function $fp2ui.float.i96(f: int) : int;
 function $si2fp.i96.float(i: int) : int;
 
 function $ui2fp.i96.float(i: int) : int;
+
+function $fp2si.float.i88(f: int) : int;
+
+function $fp2ui.float.i88(f: int) : int;
+
+function $si2fp.i88.float(i: int) : int;
+
+function $ui2fp.i88.float(i: int) : int;
 
 function $fp2si.float.i64(f: int) : int;
 
@@ -4985,6 +5559,14 @@ function $si2fp.bv96.float(i: bv96) : int;
 
 function $ui2fp.bv96.float(i: bv96) : int;
 
+function $fp2si.float.bv88(f: int) : bv88;
+
+function $fp2ui.float.bv88(f: int) : bv88;
+
+function $si2fp.bv88.float(i: bv88) : int;
+
+function $ui2fp.bv88.float(i: bv88) : int;
+
 function $fp2si.float.bv64(f: int) : bv64;
 
 function $fp2ui.float.bv64(f: int) : bv64;
@@ -5066,6 +5648,14 @@ axiom (forall f: int :: $ui2fp.i96.float($fp2ui.float.i96(f)) == f);
 axiom (forall i: int :: $fp2si.float.i96($si2fp.i96.float(i)) == i);
 
 axiom (forall f: int :: $si2fp.i96.float($fp2si.float.i96(f)) == f);
+
+axiom (forall i: int :: $fp2ui.float.i88($ui2fp.i88.float(i)) == i);
+
+axiom (forall f: int :: $ui2fp.i88.float($fp2ui.float.i88(f)) == f);
+
+axiom (forall i: int :: $fp2si.float.i88($si2fp.i88.float(i)) == i);
+
+axiom (forall f: int :: $si2fp.i88.float($fp2si.float.i88(f)) == f);
 
 axiom (forall i: int :: $fp2ui.float.i64($ui2fp.i64.float(i)) == i);
 
@@ -5152,6 +5742,11 @@ function {:inline} $load.i96(M: [ref]i96, p: int) : int
   M[p]
 }
 
+function {:inline} $load.i88(M: [ref]i88, p: int) : int
+{
+  M[p]
+}
+
 function {:inline} $load.i64(M: [ref]i64, p: int) : int
 {
   M[p]
@@ -5198,6 +5793,11 @@ function {:inline} $load.bv128(M: [ref]bv128, p: int) : bv128
 }
 
 function {:inline} $load.bv96(M: [ref]bv96, p: int) : bv96
+{
+  M[p]
+}
+
+function {:inline} $load.bv88(M: [ref]bv88, p: int) : bv88
 {
   M[p]
 }
@@ -5252,6 +5852,11 @@ function {:inline} $load.bytes.bv96(M: [ref]bv8, p: int) : bv96
   M[p + 4 + 4 + 3] ++ M[p + 4 + 4 + 2] ++ M[p + 4 + 4 + 1] ++ M[p + 4 + 4] ++ (M[p + 4 + 3] ++ M[p + 4 + 2] ++ M[p + 4 + 1] ++ M[p + 4]) ++ (M[p + 3] ++ M[p + 2] ++ M[p + 1] ++ M[p])
 }
 
+function {:inline} $load.bytes.bv88(M: [ref]bv8, p: int) : bv88
+{
+  M[p + 4 + 4 + 2] ++ M[p + 4 + 4 + 1] ++ M[p + 4 + 4] ++ (M[p + 4 + 3] ++ M[p + 4 + 2] ++ M[p + 4 + 1] ++ M[p + 4]) ++ (M[p + 3] ++ M[p + 2] ++ M[p + 1] ++ M[p])
+}
+
 function {:inline} $load.bytes.bv64(M: [ref]bv8, p: int) : bv64
 {
   M[p + 4 + 3] ++ M[p + 4 + 2] ++ M[p + 4 + 1] ++ M[p + 4] ++ (M[p + 3] ++ M[p + 2] ++ M[p + 1] ++ M[p])
@@ -5298,6 +5903,11 @@ function {:inline} $store.i128(M: [ref]i128, p: int, v: int) : [ref]i128
 }
 
 function {:inline} $store.i96(M: [ref]i96, p: int, v: int) : [ref]i96
+{
+  M[p := v]
+}
+
+function {:inline} $store.i88(M: [ref]i88, p: int, v: int) : [ref]i88
 {
   M[p := v]
 }
@@ -5352,6 +5962,11 @@ function {:inline} $store.bv96(M: [ref]bv96, p: int, v: bv96) : [ref]bv96
   M[p := v]
 }
 
+function {:inline} $store.bv88(M: [ref]bv88, p: int, v: bv88) : [ref]bv88
+{
+  M[p := v]
+}
+
 function {:inline} $store.bv64(M: [ref]bv64, p: int, v: bv64) : [ref]bv64
 {
   M[p := v]
@@ -5400,6 +6015,11 @@ function {:inline} $store.bytes.bv128(M: [ref]bv8, p: int, v: bv128) : [ref]bv8
 function {:inline} $store.bytes.bv96(M: [ref]bv8, p: int, v: bv96) : [ref]bv8
 {
   M[p := v[8:0]][p + 1 := v[16:8]][p + 2 := v[24:16]][p + 3 := v[32:24]][p + 4 := v[40:32]][p + 5 := v[48:40]][p + 6 := v[56:48]][p + 7 := v[64:56]][p + 7 := v[72:64]][p + 8 := v[80:72]][p + 9 := v[88:80]][p + 10 := v[96:88]]
+}
+
+function {:inline} $store.bytes.bv88(M: [ref]bv8, p: int, v: bv88) : [ref]bv8
+{
+  M[p := v[8:0]][p + 1 := v[16:8]][p + 2 := v[24:16]][p + 3 := v[32:24]][p + 4 := v[40:32]][p + 5 := v[48:40]][p + 6 := v[56:48]][p + 7 := v[64:56]][p + 7 := v[72:64]][p + 8 := v[80:72]][p + 9 := v[88:80]]
 }
 
 function {:inline} $store.bytes.bv64(M: [ref]bv8, p: int, v: bv64) : [ref]bv8
@@ -5510,6 +6130,10 @@ procedure boogie_si_record_i64(i: int);
 
 
 
+procedure boogie_si_record_i88(i: int);
+
+
+
 procedure boogie_si_record_i96(i: int);
 
 
@@ -5551,6 +6175,10 @@ procedure boogie_si_record_bv56(i: bv56);
 
 
 procedure boogie_si_record_bv64(i: bv64);
+
+
+
+procedure boogie_si_record_bv88(i: bv88);
 
 
 
@@ -5619,19 +6247,19 @@ var $exnv: int;
 
 function $extractvalue(p: int, i: int) : int;
 
-const __SMACK_top_decl: int;
+const {:allocated} __SMACK_top_decl: int;
 
 axiom __SMACK_top_decl == NULL - 317;
 
-procedure __SMACK_top_decl.ref($p0: int);
+procedure __SMACK_top_decl.ref({:pointer} $p0: int);
 
 
 
-const __SMACK_init_func_memory_model: int;
+const {:allocated} __SMACK_init_func_memory_model: int;
 
 axiom __SMACK_init_func_memory_model == NULL - 325;
 
-const foo: int;
+const {:allocated} foo: int;
 
 axiom foo == NULL - 333;
 
@@ -5654,7 +6282,7 @@ implementation foo()
     call $p0 := malloc(4);
     assume {:sourceloc "t23.c", 6, 12} true;
     $p1 := $p0;
-    call {:cexpr "x"} boogie_si_record_ref($p1);
+    call {:cexpr "x"} boogie_si_record_ref($p0);
     assume {:sourceloc "t23.c", 9, 7} true;
     $i2 := $M.1;
     assume {:sourceloc "t23.c", 9, 7} true;
@@ -5690,7 +6318,7 @@ implementation foo()
 
 
 
-const malloc: int;
+const {:allocated} malloc: int;
 
 axiom malloc == NULL - 341;
 
@@ -5709,7 +6337,7 @@ implementation malloc($i0: int) returns ($r: int)
 
 
 
-const llvm.dbg.value: int;
+const {:allocated} llvm.dbg.value: int;
 
 axiom llvm.dbg.value == NULL - 349;
 
@@ -5717,7 +6345,7 @@ procedure llvm.dbg.value({:scalar} $p0: int, {:scalar} $i1: int, {:scalar} $p2: 
 
 
 
-const __SMACK_static_init: int;
+const {:allocated} __SMACK_static_init: int;
 
 axiom __SMACK_static_init == NULL - 357;
 
