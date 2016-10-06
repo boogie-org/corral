@@ -1,0 +1,46 @@
+//Probe before use property
+// idea: if a pointer is used that is 1. a user pointer and 2. has not been probed, then this is a bug
+// a user pointer is a pointer that is probed somewhere in the program or that is passed to the program at an entrypoint
+
+GlobalDeclarations
+{
+  var {:propertyMap} isUserPtr : [int] bool;
+  var {:propertyMap} validProbe : [int] bool;
+  function {:ReachableStates} MustReach(bool) : bool;
+}
+
+TemplateVariables
+{
+  var p : int;
+}
+
+CmdRule
+{
+  assume {:nonnull} p != NULL;
+}
+-->
+{
+  assert(!isUserPtr[p] || validProbe[p]);
+  #this;
+}
+
+
+ProcedureRule
+{
+  procedure ProbeForRead( p1 : int, p2 : int, p3 : int);
+  procedure ProbeForWrite( p1 : int, p2 :int, p3 : int);
+}
+-->
+{
+  assume MustReach(isUserPtr[p1] && !validProbe[p1]);
+  validProbe[p1] := true;
+}
+
+ProcedureRule
+{
+  procedure {:entrypoint} {:#AnyProcedure} proc( {:pointer} {:#AnyParameters} a : int ) returns ({:#AnyParameters} r : int);
+}
+-->
+{
+  isUserPtr[a] := true;
+}

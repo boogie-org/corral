@@ -1,0 +1,44 @@
+// use after free property
+// idea: if a memory address is freed and then used afterwards, this is a bug
+// note: does not rely on entrypoints in any way --> can be applied to any or all procedures in a given program
+// note: relies on a list of freeing procedures (see ProcedureRule below)
+// looking for a mem_access is done here looking for assert {:nonnull} !alias... --> should work for the driver bpls that Ankush was working on
+
+GlobalDeclarations
+{
+var {:propertyMap} validFree : [int] bool;
+}
+
+
+TemplateVariables
+{
+var p : int;
+function f(int, int) : bool;
+}
+
+CmdRule
+{
+assert {:nonnull} !f(p, NULL);
+}
+-->
+{
+assert(validFree[p]);
+//#this;
+}
+
+ProcedureRule
+{
+procedure {:#NoImplementation} ExFreeCallBack( p1 : int);
+procedure {:#NoImplementation} ExFreePool( p1 : int);
+procedure {:#NoImplementation} ExFreePoolWithTag( p1 : int, p2 : int);
+procedure {:#NoImplementation} RtlFreeUnicodeString( p1 : int);
+procedure {:#NoImplementation} ZwFreeVirtualMemory( p1 : int, p2 : int, p3 :int, p4 : int) returns (i : int);
+procedure {:#NoImplementation} AuthzBasepFreeSecurityAttributesList( p1 : int);
+procedure {:#NoImplementation} {:#NameMatches "\w*[Ff]ree\w*"} fmFree( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+procedure {:#NoImplementation} {:#NameMatches "\w*[Dd]elete\w*"} fmDelete( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+}
+-->
+{
+assert(validFree[p1]);
+validFree[p1] := false;
+}

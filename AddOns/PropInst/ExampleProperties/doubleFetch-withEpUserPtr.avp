@@ -1,0 +1,101 @@
+////////////
+// double fetch property
+// idea: if memory array is pointed to by a user pointer, then accessing some memory cell in it twice is a bug.
+// a user pointer is a pointer that is probed somewhere or that is passed at an entrypoint
+////////////
+
+GlobalDeclarations
+{
+var {:propertyMap} hasBeenRead : [int] bool;
+var {:propertyMap} isUserPtr : [int] bool;
+function {:ReachableStates} MustReach(x: bool) : bool;
+}
+
+TemplateVariables
+{
+var {:#IdentifierExpr} base : int;
+var e1, off, c1 : int;
+procedure {:#AnyArguments} prc(a : int) returns (r : int);
+var Mem : [int] int;
+function f(int) : int;
+function g(int) : int;
+
+var p1, p2, p3 : int;
+}
+
+
+// when a pointer is probed sometime, that means it is a user pointer (at least the programmer thought so..)
+// the mustReach ensures that we cannot block with the statement !isUserPtr(p1) for some other path (violating the double fetch but not visiting the probe) as that would make the mustReach condition unreachable. (roughly, the effect of the must reach is that p1 is a userPtr "anywhere" in the program, from the perspective of the blocking mechanism..)
+CmdRule
+{
+ call ProbeForRead(p1, p2, p3);
+ call ProbeForWrite(p1, p2, p3);
+}
+-->
+{
+assume MustReach(isUserPtr[p1]);
+isUserPtr[p1] := true;
+#this;
+}
+
+// a pointer passed at an entry point is a user pointer
+ProcedureRule
+{
+ procedure {:entrypoint} {:#AnyProcedure} entryProc( {:pointer} {:#AnyParameters} a : int );
+}
+-->
+{
+ isUserPtr[a] := true;
+}
+
+//////////
+// CmdRules for different memory access patterns
+//////////
+CmdRule
+{
+e1 := Mem[f(g(base))];
+call e1 := prc(Mem[f(g(base))]);
+}
+-->
+{
+assert !isUserPtr[base] || !hasBeenRead[f(g(base))];
+hasBeenRead[f(g(base))] := true;
+#this;
+}
+
+CmdRule
+{
+e1 := Mem[f(base + off * c1)];
+call e1 := prc(Mem[f(base + off * c1)]);
+}
+-->
+{
+assert !isUserPtr[base] || !hasBeenRead[f(base + off * c1)];
+hasBeenRead[f(base + off * c1)] := true;
+#this;
+}
+
+CmdRule
+{
+e1 := Mem[f(base + c1)];
+call e1 := prc(Mem[f(base + c1)]);
+}
+-->
+{
+assert !isUserPtr[base] || !hasBeenRead[f(base + c1)];
+hasBeenRead[f(base + c1)] := true;
+#this;
+}
+
+CmdRule
+{
+e1 := Mem[f(base)];
+call e1 := prc(Mem[f(base)]);
+}
+-->
+{
+assert !isUserPtr[base] || !hasBeenRead[f(base)];
+hasBeenRead[f(base)] := true;
+#this;
+}
+
