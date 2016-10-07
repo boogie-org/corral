@@ -69,14 +69,15 @@ namespace AvHarnessInstrumentation
                     // skip this impl if it is not marked as an entrypoint
                     if (useProvidedEntryPoints && !QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         continue;
+
+                    impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
+                    impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
+
                     // skip initialization procedure
                     if (QKeyValue.FindBoolAttribute(impl.Attributes, AvnAnnotations.InitialializationProcAttr) ||
                         QKeyValue.FindBoolAttribute(impl.Proc.Attributes, AvnAnnotations.InitialializationProcAttr))
                         continue;
 
-
-                    impl.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Attributes);
-                    impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
                     entrypoints.Add(impl.Name);
 
                     //allocate params
