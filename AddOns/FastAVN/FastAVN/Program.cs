@@ -474,8 +474,22 @@ namespace FastAVN
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
-                    var wd = Path.Combine(Environment.CurrentDirectory, TruncatePath(impl.Name));
-                    DirsCreated.Add(TruncatePath(impl.Name));
+
+                    var name = impl.Name;
+                    // clash of lower-case names?
+                    if (implNames.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
+                    {
+                        lock (counter_lock)
+                        {
+                            name = string.Format("{0}_{1}", name, trunc_counter);
+                            trunc_counter++;
+                        }
+                    }
+
+                    var tp = TruncatePath(name);
+                    var wd = Path.Combine(Environment.CurrentDirectory, tp);
+                    
+                    DirsCreated.Add(tp);
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
@@ -529,8 +543,20 @@ namespace FastAVN
                 {
                     if (!impls.TryTake(out impl)) { break; }
 
-                    var wd = Path.Combine(Environment.CurrentDirectory, TruncatePath(impl.Name));
-                    DirsCreated.Add(TruncatePath(impl.Name));
+                    var name = impl.Name;
+                    // clash of lower-case names?
+                    if (implNames.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
+                    {
+                        lock (counter_lock)
+                        {
+                            name = string.Format("{0}_{1}", name, trunc_counter);
+                            trunc_counter++;
+                        }
+                    }
+
+                    var tp = TruncatePath(name);
+                    var wd = Path.Combine(Environment.CurrentDirectory, tp);
+                    DirsCreated.Add(tp);
 
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
@@ -709,7 +735,7 @@ namespace FastAVN
                 lock (fslock)
                 {
                     // collect and merge bugs
-                    var bugs = collectBugs(Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName));
+                    var bugs = collectBugs(Path.Combine(wd, bugReportFileName));
                     bugs.Iter(b =>
                     {
                         if (!mergedBugs.ContainsKey(b)) mergedBugs[b] = 0;
