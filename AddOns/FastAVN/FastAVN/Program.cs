@@ -601,7 +601,14 @@ namespace FastAVN
                         }
                     }
 
-                    BoogieUtil.pruneProcs(newprogram, impl.Name);
+                    var topLevelProcs = new HashSet<string> { impl.Name };
+
+                    // corralExtraInit, if any
+                    newprogram.TopLevelDeclarations.OfType<Implementation>()
+                        .Where(im => QKeyValue.FindBoolAttribute(im.Attributes, AvUtil.AvnAnnotations.InitialializationProcAttr))
+                        .Iter(im => topLevelProcs.Add(im.Name));                   
+
+                    BoogieUtil.pruneProcs(newprogram, topLevelProcs);
 
                     // Remove unnecessary decls
                     var globalsUsed = new HashSet<string>();
