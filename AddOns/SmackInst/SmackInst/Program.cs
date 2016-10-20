@@ -26,6 +26,7 @@ namespace SmackInst
         public static bool count = false;
         public static bool onlyCount = false;
         public static bool checkNULL = false;
+        public static bool checkUAF = false;
         public static bool printCallGraph = false;
 
         public static bool detectDeadCode = false;
@@ -61,6 +62,9 @@ namespace SmackInst
 
             if (args.Any(a => a == "/checkNULL"))
                 checkNULL = true;
+
+            if (args.Any(a => a == "/checkUAF"))
+                checkUAF = true;
 
             if (args.Any(a => a == "/printCallGraph"))
                 printCallGraph = true;
@@ -185,9 +189,15 @@ namespace SmackInst
                 ddc.Run(program);
             }
             // if we don't check NULL, stop here
-            if (!checkNULL)
+            if (!checkNULL && !checkUAF)
                 return program;
 
+            if (checkUAF) {
+                var iu = new InstrumentUAF();
+                iu.Instrument(program, nil);
+                program.AddTopLevelDeclaration(new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0))));
+                return program;
+            }
 			// Remove literal constants
 			var CE = new ConstantElimination();
 			CE.Run (program);
@@ -918,5 +928,50 @@ namespace SmackInst
  			return node;
 		}
 	}
+
+    public class InstrumentUAF : FixedVisitor
+    {
+        Expr nil;
+        public void Instrument(Program program, Constant nil)
+        {
+            this.nil = Expr.Ident(nil);
+            Visit(program);
+        }
+
+        public AssumeCmd MkAssume(Expr e)
+        {
+            return new AssumeCmd(Token.NoToken, Expr.Neq(e, nil), new QKeyValue(Token.NoToken, "nonnull", new List<object>() { }, null));
+        }
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            var varDecls = new Dictionary<string, string>();
+            var cb = new CollectBasePointer(varDecls);
+            cb.VisitImplementation(node);
+            foreach (var b in node.Blocks)
+            {
+                var newCmds = new List<Cmd>();
+                foreach (var c in b.Cmds)
+                {
+                    if (c is AssignCmd) {
+                        var asnCmd = c as AssignCmd;
+                        var reads = new GatherMemAccesses();
+                        asnCmd.Rhss.Iter(e => reads.VisitExpr(e));
+                        foreach (var tup in reads.accesses)
+                        {
+                            var ptr = tup.Item2;
+                            string basePtr;
+                            if (varDecls.TryGetValue(ptr.ToString(), out basePtr))
+                                newCmds.Add(MkAssume(Expr.Ident(BoogieAstFactory.MkFormal(basePtr, btype.Int, true))));
+                            else
+                                newCmds.Add(MkAssume(ptr));
+                        }
+                    }
+                    newCmds.Add(c);
+                }
+                b.cmds = newCmds;
+            }
+            return node;
+        }
+    }
 
 }

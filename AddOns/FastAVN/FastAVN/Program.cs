@@ -129,17 +129,25 @@ namespace FastAVN
 
             try
             {
+                if (Directory.Exists(bug_folder))
+                {
+                    Utils.Print(string.Format("WARNING!! Removing {0} folder", bug_folder));
+                    Directory.Delete(Path.Combine(Directory.GetCurrentDirectory(), bug_folder), true);
+                }
+            }
+            catch(IOException)
+            {
+                Utils.Print(string.Format("ERROR removing folder {0}", bug_folder));
+            }
+
+            try
+            {
                 Stats.resume("fastavn");
 
                 if (Driver.mergeEntryPointBugsOnly)
                 {
                     // collate bugs
                     printingOutput = true;
-                    if (Directory.Exists(bug_folder))
-                    {
-                        Utils.Print(string.Format("WARNING!! Removing {0} folder", bug_folder));
-                        Directory.Delete(Path.Combine(Directory.GetCurrentDirectory(), bug_folder), true);
-                    }
                     HashSet<string> epNames = new HashSet<string>(Directory.GetDirectories(@"."));
                     epNames = new HashSet<string>(epNames.Select(s => Path.GetFileName(s)));
                     printBugs(ref mergedBugs, epNames.Count);
@@ -428,11 +436,13 @@ namespace FastAVN
 
         public static void HandleTimer(HashSet<string> epNames)
         {
-            Console.WriteLine("FastAvn deadline reached; consolidating results");
-
             deadlineReached = true;
-            KillSpawnedProcesses();
+            var killed = KillSpawnedProcesses();
+            killed += (epNames.Count - Worker.DirsCreated.Count);
 
+            Console.WriteLine("FastAvn deadline reached; consolidating results");
+            Console.WriteLine("Stopping approximately {0} instances of AV", killed);
+        
             // Sleep for 5 seconds
             System.Threading.Thread.Sleep(5 * 1000);
 
@@ -461,7 +471,7 @@ namespace FastAVN
 
             public Worker(Program program, ConcurrentBag<Implementation> impls)
             {
-                this.program = program;
+                this.program = program; 
                 this.impls = impls;
                 this.implNames = new HashSet<string>();
                 impls.Iter(im => implNames.Add(im.Name));
@@ -766,14 +776,17 @@ namespace FastAVN
                 .Kill();
         }
 
-        public static void KillSpawnedProcesses()
+        public static int KillSpawnedProcesses()
         {
+            var killed = 0;
             lock (RemoteExec.SpawnedProcesses)
             {
+                killed = RemoteExec.SpawnedProcesses.Count;
                 foreach (var p in RemoteExec.SpawnedProcesses)
                     p.Kill();
                 RemoteExec.SpawnedProcesses.Clear();
             }
+            return killed;
         }
 
         private static void mergeBugs(HashSet<string> entryPoints)
@@ -844,6 +857,10 @@ namespace FastAVN
                 {
                     File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
                     File.Copy(shortest_trace[bug].Item3, Path.Combine(trace_path, stack_filename));
+                    // create another copy of the buggy trace (for easy viewing with SDV)
+                    var subdir = string.Format("Bug{0}", index);
+                    Directory.CreateDirectory(Path.Combine(bug_folder, subdir));
+                    File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, subdir, "defect.tt"));
                 }
                 catch (FileNotFoundException)
                 {
