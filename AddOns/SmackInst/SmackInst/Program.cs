@@ -952,6 +952,15 @@ namespace SmackInst
                 var newCmds = new List<Cmd>();
                 foreach (var c in b.Cmds)
                 {
+                    if (c is AssumeCmd) {
+                        var asmCmd = c as AssumeCmd;
+                        if (BoogieUtil.checkAttrExists("nonnull", asmCmd.Attributes)) {
+                            var expr = asmCmd.Expr as NAryExpr;
+                            expr.Args[1] = nil;
+                            newCmds.Add(c);
+                            continue;
+                        }
+                    }
                     if (c is AssignCmd) {
                         var asnCmd = c as AssignCmd;
                         var reads = new GatherMemAccesses();
