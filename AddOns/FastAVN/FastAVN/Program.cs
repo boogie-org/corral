@@ -572,7 +572,12 @@ namespace FastAVN
                     RemoteExec.CleanDirectory(wd);
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
 
+                    var initProc = program.TopLevelDeclarations.OfType<Implementation>()
+                        .Where(im => QKeyValue.FindBoolAttribute(im.Attributes, AvUtil.AvnAnnotations.InitialializationProcAttr))
+                        .FirstOrDefault();
+
                     var reachable = BoogieUtil.GetReachableNodes(impl.Name, CallGraph);
+                    if (initProc != null) reachable.UnionWith(BoogieUtil.GetReachableNodes(initProc.Name, CallGraph));
 
                     var newprogram = new Program();
 
@@ -584,6 +589,12 @@ namespace FastAVN
                     if (cutoff > 0)
                     {
                         var pruneAway = ProcsAfterDepth(impl.Name, cutoff);
+                        if (initProc != null)
+                        {
+                            BoogieUtil.GetReachableNodes(initProc.Name, CallGraph)
+                                .Iter(s => pruneAway.Remove(s));
+                        }
+
                         Debug.Assert(!pruneAway.Contains(impl.Name));
 
                         if (blockingDepth > 0)
@@ -612,11 +623,7 @@ namespace FastAVN
                     }
 
                     var topLevelProcs = new HashSet<string> { impl.Name };
-
-                    // corralExtraInit, if any
-                    newprogram.TopLevelDeclarations.OfType<Implementation>()
-                        .Where(im => QKeyValue.FindBoolAttribute(im.Attributes, AvUtil.AvnAnnotations.InitialializationProcAttr))
-                        .Iter(im => topLevelProcs.Add(im.Name));                   
+                    if(initProc != null) topLevelProcs.Add(initProc.Name);                
 
                     BoogieUtil.pruneProcs(newprogram, topLevelProcs);
 
