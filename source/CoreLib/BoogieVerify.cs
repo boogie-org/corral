@@ -34,6 +34,7 @@ namespace cba.Util
         public static string assertsPassed = "assertsPassed";
         public static bool assertsPassedIsInt = false;
         public static bool useDuality = false;
+        public static HashSet<string> procsHitRecBound = new HashSet<string>();
 
         // TODO: move this elsewhere
         public static HashSet<string> ignoreAssertMethods;
@@ -317,6 +318,7 @@ namespace cba.Util
             }
             else if (vcgen is CoreLib.StratifiedInlining)
             {
+                procsHitRecBound = (vcgen as CoreLib.StratifiedInlining).procsHitRecBound;
                 CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
                 vcSize = (vcgen as CoreLib.StratifiedInlining).stats.vcSize;
                 if (options.CallTree != null)

@@ -981,12 +981,22 @@ namespace AngelicVerifierNull
 
             cba.ErrorTrace cexTrace = null;
             var corralStart = DateTime.Now;
+            var outcome = true;
             try
             {
+                BoogieVerify.procsHitRecBound = new HashSet<string>();
+
                 Stats.count("count.check.refine");
                 Stats.resume("check.and.refine");
-                cba.Driver.checkAndRefine(inputProg, refinementState, null, out cexTrace);
+                outcome = cba.Driver.checkAndRefine(inputProg, refinementState, null, out cexTrace);
                 Stats.stop("check.and.refine");
+
+                if(outcome && BoogieVerify.procsHitRecBound != null)
+                {
+                    Console.Write("Procedures that hit the recursion bound: ");
+                    BoogieVerify.procsHitRecBound.Iter(s => Console.Write("{0} ", s));
+                    Console.WriteLine();
+                }
             }
             catch (Exception)
             {

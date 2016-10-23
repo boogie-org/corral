@@ -198,6 +198,9 @@ namespace CoreLib
         /* extra Recursion bound */
         public Dictionary<string, int> extraRecBound;
 
+        /* Procedures that hit the recursion bound */
+        public HashSet<string> procsHitRecBound;
+
         private DI di;
 
         /* Forced inline procs */
@@ -1235,6 +1238,7 @@ namespace CoreLib
                         StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
+                        procsHitRecBound.Add(cs.callSite.calleeName);
                         //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
                         boundHit = true;
                     }
@@ -1522,6 +1526,8 @@ namespace CoreLib
         {
             startTime = DateTime.UtcNow;
 
+            procsHitRecBound = new HashSet<string>();
+
             // Find all procedures that are "forced inline"
             forceInlineProcs.UnionWith(program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(p => BoogieUtil.checkAttrExists(ForceInlineAttr, p.Attributes) || BoogieUtil.checkAttrExists(ForceInlineAttr, p.Proc.Attributes))
@@ -1668,6 +1674,8 @@ namespace CoreLib
                     1;
                 while (true)
                 {
+                    procsHitRecBound = new HashSet<string>();
+
                     outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
 
                     // timeout?
