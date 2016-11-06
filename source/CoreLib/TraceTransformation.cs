@@ -248,10 +248,13 @@ namespace cba
                 var it = trans[trans_index];
 
                 // Does tblock have enough instructions for this transformation to apply?
-                if (count + it.Size > tblock.Cmds.Count)
-                    break;
+                //if (count + it.Size <= tblock.Cmds.Count ||
+                //    (it.correspondingInstr >= 0 && count + it.correspondingInstr <= tblock.Cmds.Count )
+                //    break;
 
                 var inst = it.mapBackTrace(tblock.Cmds, count, tinfo);
+                if (inst == null) break;
+
                 ret.addInstr(inst);
                 
                 // Are we done?
@@ -279,7 +282,7 @@ namespace cba
         // This is the instruction in "to" that "from" directly
         // corresponds to. It is used to borrow over InstrInfo.
         // (-1) means none.
-        private int correspondingInstr;
+        public int correspondingInstr { get; private set; }
 
         public int Size
         {
@@ -377,7 +380,9 @@ namespace cba
         public ErrorTraceInstr mapBackTrace(List<ErrorTraceInstr> trace, int start, ModifyTrans tinfo)
         {
             Debug.Assert(start >= 0);
-            Debug.Assert(start + to.Count - 1 < trace.Count);
+            if (!(start + to.Count - 1 < trace.Count ||
+                (correspondingInstr >= 0 && start + correspondingInstr < trace.Count)))
+                return null;
 
             // Find the "info" for "from". It is obtained from the 
             // corresponding instruction, if one is provided. Else
@@ -391,7 +396,7 @@ namespace cba
             {
                 // Default info (invalid)
                 info = new InstrInfo();
-                for (int i = start; i < start + to.Count; i++)
+                for (int i = start; i < start + to.Count && i < trace.Count; i++)
                 {
                     if (trace[i].info.isValid)
                     {
