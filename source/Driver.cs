@@ -211,11 +211,16 @@ namespace cba
             // Transformations that don't require a mapBack
             /////
 
-            // infer loop bound (assuming program is sequential)
+            // infer loop bound 
             if (config.maxStaticLoopBound > 0)
             {
-                // abstract away globals
-                var abs = new VariableSlicePass(new VarSet());
+                // abstract away globals (except for thread_locals)
+                var thread_locals = new HashSet<string>(inputProg.getProgram()
+                    .TopLevelDeclarations.OfType<GlobalVariable>()
+                    .Where(gv => QKeyValue.FindBoolAttribute(gv.Attributes, LanguageSemantics.ThreadLocalAttr))
+                    .Select(gv => gv.Name));
+                var abs = new VariableSlicePass(VarSet.ToVarSet(thread_locals, inputProg.getProgram()));
+
                 var lprog = abs.run(inputProg);
 
                 // extract loops
