@@ -414,14 +414,14 @@ namespace SmackInst
             program.AddTopLevelDeclarations(aliasQfuncs);
         }
 
-        public override Cmd VisitAssumeCmd(AssumeCmd node)
-        {
-            if (BoogieUtil.checkAttrExists("partition", node.Attributes))
-            {
-                node.Attributes = new QKeyValue(Token.NoToken, "fpcondition", new List<object>(), node.Attributes);
-            }
-            return node;
-        }
+        //public override Cmd VisitAssumeCmd(AssumeCmd node)
+        //{
+        //    if (BoogieUtil.checkAttrExists("partition", node.Attributes))
+        //    {
+        //        node.Attributes = new QKeyValue(Token.NoToken, "fpcondition", new List<object>(), node.Attributes);
+        //    }
+        //    return node;
+        //}
 
         AssumeCmd MkAssume(Expr funcPtr, Expr callee)
         {
@@ -462,7 +462,11 @@ namespace SmackInst
                     var callee = callCmd.callee;
                     // watch out: varg functions have trailing arg types in function name
                     callee = callee.Split('.')[0];
-                    newCmds.Add(MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int)));
+                    var aaCmd = MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int));
+                    aaCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
+                        new QKeyValue(Token.NoToken, "slic", new List<object>(), aaCmd.Attributes));
+                    newCmds.Add(aaCmd);
+                    //newCmds.Add(MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int)));
                     newCmds.Add(cmd);
                 }
                 else
