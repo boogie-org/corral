@@ -8,6 +8,16 @@ import os
 from subprocess import call
 import subprocess
 
+import sys
+import linecache
+
+def traceit(frame, event, arg):
+    if event == "line":
+        lineno = frame.f_lineno
+        filename = frame.f_globals["__file__"]
+        print ("file  " + filename + " line " + str(lineno))
+    return traceit
+
 
 #############################
 # Constants
@@ -16,7 +26,19 @@ avnPath = "e:\\temp\\smv\\smv-fastavn-10-21-2016\\analysisPlugins\\avn\\bin"
 propInstPath = "e:\\corral\\AddOns\\PropInst\\PropInst\\bin\\debug\\PropInst"
 propertyFile = "e:\\corral\\AddOns\\AngelicVerifierNull\\test\\c-smack\\useafterfree-windows.avp"
 testBpl = "test_uaf.bpl"
-bplDirRoot = "e:\\temp\\avKernel2016\\BPL\\onecore\\ds\\security\\appid\\runtime\\"
+bplDirRoot = "e:\\temp\\avKernel2016\\BPL\\"
+
+NUM_THREADS = 7
+MAXCNT = 1000
+
+q = queue.Queue()
+
+def worker_thread():
+    while True:
+        item = q.get()
+        process_bpl(item)
+        q.task_done()
+        print_flush("after q.taskdone...")
 
 # print and flush
 def print_flush(s):
@@ -24,33 +46,44 @@ def print_flush(s):
     sys.stdout.flush()
 
 # find all the BPLs in a root director
-def process_bpls(rootDir):
+def put_tasks_in_q(rootDir):
+    cnt = 0
     os.environ["PATH"] += os.pathsep + avnPath
     print_flush("rootdir = " + rootDir)
     for root, dirs, files in os.walk(rootDir):
         for file in files:
+            if cnt > MAXCNT: break
             if (file == "li2c_prog.bpl"):
-                process_bpl_file(root, file)
+                print_flush("Adding " + root + " to q with cnt = " + str(cnt))
+                q.put((root,file))
+                cnt  = cnt + 1
+
+def process_bpl(f):
+    process_bpl_file(f[0], f[1])
 
 # process a li2c_prog.bpl file
 def process_bpl_file(root, bplFile):
     print_flush ("+++++++++ Starting process for %s ++++++++++++++" % (root))
-    os.chdir(root)
-    call ([propInstPath, 
-           propertyFile, 
-           bplFile, 
-           testBpl])
+    p = subprocess.Popen([propInstPath, propertyFile, bplFile, testBpl], cwd = root)
+    p.wait()
     process_smv_process(root, testBpl)
 
 def process_smv_process(root, bplFile):
     try:
-        subprocess.Popen(['avn.cmd', bplFile, '/cloud'], cwd = root)
+        p = subprocess.Popen(['avn.cmd', bplFile, '/cloud'], cwd = root)
+        p.wait()
     except: 
         print_flush("process_smv_process:Failed")
 
-# run_smv main
-process_bpls(bplDirRoot)
-    
+# put all tasks in queue
+put_tasks_in_q(bplDirRoot)
+
+for i in range(NUM_THREADS):
+    t = threading.Thread(target=worker_thread)
+    t.daemon = True
+    t.start()
+
+q.join()   
 
 ################################################
 # deprecated stuff
