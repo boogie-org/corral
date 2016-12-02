@@ -35,6 +35,7 @@ namespace cba.Util
         public static bool assertsPassedIsInt = false;
         public static bool useDuality = false;
         public static HashSet<string> procsHitRecBound = new HashSet<string>();
+        public static bool PrintImplsBeingVerified = false;
 
         // TODO: move this elsewhere
         public static HashSet<string> ignoreAssertMethods;
@@ -195,7 +196,8 @@ namespace cba.Util
 
             foreach (var impl in mains)
             {
-                Log.WriteLine(Log.Debug, "Verifying implementation " + impl.Name);
+                if(PrintImplsBeingVerified) 
+                    Log.WriteLine(Log.Verbose, "Verifying implementation " + impl.Name);
 
                 List<Counterexample> errors;
 

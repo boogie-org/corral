@@ -175,6 +175,7 @@ namespace cba
 
             // Set general options
             BoogieVerify.options = options;
+            BoogieVerify.PrintImplsBeingVerified = true;
 
             // Set rec. bound
             var oldBound = CommandLineOptions.Clo.RecursionBound;
@@ -193,6 +194,7 @@ namespace cba
             }
 
             CommandLineOptions.Clo.RecursionBound = oldBound;
+            BoogieVerify.PrintImplsBeingVerified = false;
             timeTaken = (DateTime.Now - start);
 
             return loopBounds;

@@ -105,9 +105,11 @@ namespace cba.Util
         public const int Error = 3;
         public const int Normal = 1;
         public const int Debug = 2;
+        public const int Verbose = 5;
 
         public static bool noDebuggingOutput = false;
         public static bool printMemUsage = false;
+        public static int verbose_level = 0;
 
         public static TokenTextWriter debugOut = null;
 
@@ -166,6 +168,12 @@ namespace cba.Util
                     break;
                 case Normal:
                     Console.Write(msg, args);
+                    break;
+                case Verbose:
+                    if(verbose_level > 0)
+                    {
+                        Console.Write(msg, args);
+                    }
                     break;
             }
             
