@@ -31,6 +31,8 @@ namespace SmackInst
 
         public static bool detectDeadCode = false;
 
+        public static bool checkMemSafety = false;
+
         static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -71,6 +73,10 @@ namespace SmackInst
 
             if (args.Any(a => a == "/detectDeadCode"))
                 detectDeadCode = true;
+
+            if (args.Any(a => a == "/checkMemorySafety"))
+                checkMemSafety = true;
+
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -79,9 +85,69 @@ namespace SmackInst
 
             // Read the input file
             var program = BoogieUtil.ReadAndResolve(args[0], false);
-            
+
             // SMACK does not add globals to modify clauses
             //BoogieUtil.DoModSetAnalysis(program);
+
+            if (checkMemSafety) {
+                Procedure checkProc = program.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == "__SMACK_check_memory_safety").FirstOrDefault();
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if (impl.Name == "__SMACK_check_memory_safety")
+                        continue;
+                    if (impl.Name.StartsWith("__SMACK_static_init"))
+                        continue;
+                    foreach (var block in impl.Blocks)
+                    {
+                        //var block = impl.Blocks.FirstOrDefault();
+                        var newCmds = new List<Cmd>();
+                        foreach (var cmd in block.cmds)
+                        {
+                            if (cmd is AssignCmd)
+                            {
+                                var asnCmd = cmd as AssignCmd;
+                                var rhs = asnCmd.Rhss.FirstOrDefault();
+                                if (rhs is NAryExpr)
+                                {
+                                    var fcExpr = rhs as NAryExpr;
+                                    if (fcExpr.Fun.FunctionName.StartsWith("$load") || fcExpr.Fun.FunctionName.StartsWith("$store"))
+                                    {
+                                        char[] delim = { '.' };
+                                        var type = fcExpr.Fun.FunctionName.Split(delim)[1];
+                                        var size = 0;
+                                        if (type == "ref")
+                                            size = 8;
+                                        else
+                                            size = Int32.Parse(type.Substring(1)) / 8;
+                                        var ptr = fcExpr.Args[1];
+                                        //Console.WriteLine(ptr.ToString());
+                                        var sizeExpr = Expr.Ident(size.ToString(), btype.Int);
+                                        var paramList = new List<Expr>();
+                                        paramList.Add(ptr);
+                                        paramList.Add(sizeExpr);
+                                        var callCmd = new CallCmd(Token.NoToken, "__SMACK_check_memory_safety", paramList, new List<IdentifierExpr>());
+                                        newCmds.Add(callCmd);
+                                    }
+                                }
+                            }
+                            if (cmd is CallCmd)
+                            {
+                                var callCmd = cmd as CallCmd;
+                                if (callCmd.callee.StartsWith("corral_fix_context_"))
+                                    continue;
+                            }
+                            if (cmd is AssertCmd)
+                            {
+                                continue;
+                            }
+                            newCmds.Add(cmd);
+                        }
+                        block.cmds = newCmds;
+                    }
+                }
+                BoogieUtil.PrintProgram(program, args[1]);
+                return;
+            }
 
             if (printCallGraph)
             {
@@ -496,10 +562,10 @@ namespace SmackInst
         public void Run(Program program)
         {
             VisitProgram(program);
-            Console.WriteLine("#Procs:" + program.Implementations.Count());
-            Console.WriteLine("Unique line count: " + lines.Count);
-            //files.Iter(f => Console.WriteLine(f));
-            Console.WriteLine("Line count of all files contained: " + OpenAndCount());
+            //Console.WriteLine("#Procs:" + program.Implementations.Count());
+            //Console.WriteLine("Unique line count: " + lines.Count);
+            files.Iter(f => Console.WriteLine(f));
+            //Console.WriteLine("Line count of all files contained: " + OpenAndCount());
         }
 
         public int OpenAndCount()
