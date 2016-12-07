@@ -377,6 +377,16 @@ namespace cba
                     if (config.NumCex > 1)
                         traceName += (config.NumCex - cex);
 
+                    if (config.traceProgram != null && !config.noTraceOnDisk)
+                    {
+                        // dump out the trace
+                        var tinfo = new cba.InsertionTrans();
+                        var traceProg = new cba.RestrictToTrace(inputProg.getProgram(), tinfo);
+                        traceProg.addTrace(cexTrace);
+                        Console.WriteLine("Dumping trace as file {0}", config.traceProgram);
+                        BoogieUtil.PrintProgram(traceProg.getProgram(), config.traceProgram);
+                    }
+
                     if (GlobalConfig.genCTrace)
                     {
                         PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, config.noTraceOnDisk ? null : traceName);

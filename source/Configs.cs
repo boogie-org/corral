@@ -59,6 +59,7 @@ namespace cba
         public bool genCTrace { get; private set; }
         public bool noTrace { get; private set; }
         public bool noTraceOnDisk { get; private set; }
+        public string traceProgram { get; private set; }
 
         public bool computeStats { get; private set; }
 
@@ -267,6 +268,7 @@ namespace cba
             genCTrace = false;
             noTrace = false;
             noTraceOnDisk = false;
+            traceProgram = null;
             computeStats = false;
             printProgress = false;
             inputFile = null;
@@ -622,6 +624,11 @@ namespace cba
             else if (flag == "/noTraceOnDisk")
             {
                 noTraceOnDisk = true;
+            }
+            else if (flag.StartsWith("/traceProgram:"))
+            {
+                var split = flag.Split(sep);
+                traceProgram = split[1];
             }
             else if (flag == "/catchAll")
             {
