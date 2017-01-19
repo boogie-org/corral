@@ -538,6 +538,9 @@ namespace SmackInst
     {
         string pattern = @"^devirtbounce\d*$";
         List<Function> aliasQfuncs = new List<Function>();
+        Procedure specialPtrFunc = null;
+        Procedure specialScalarFunc = null;
+        Procedure currProc;
         int counter = 0;
         //List<Procedure> angelicDispatch = new List<Procedure>();
 
@@ -546,6 +549,10 @@ namespace SmackInst
             program.Implementations.Where(impl => Regex.IsMatch(impl.Proc.Name, pattern))
                 .Iter(impl => VisitImplementation(impl));
             program.AddTopLevelDeclarations(aliasQfuncs);
+            if (specialPtrFunc != null)
+                program.AddTopLevelDeclaration(specialPtrFunc);
+            if (specialScalarFunc != null)
+                program.AddTopLevelDeclaration(specialScalarFunc);
         }
 
         //public override Cmd VisitAssumeCmd(AssumeCmd node)
@@ -556,6 +563,11 @@ namespace SmackInst
         //    }
         //    return node;
         //}
+        public override Implementation VisitImplementation(Implementation node)
+        {
+            currProc = node.Proc;
+            return base.VisitImplementation(node);
+        }
 
         AssumeCmd MkAssume(Expr funcPtr, Expr callee)
         {
@@ -586,7 +598,37 @@ namespace SmackInst
                     {
                         //node.TransferCmd = new ReturnCmd(Token.NoToken);
                         // create a stub
-                        newCmds.Add(cmd);
+                        //newCmds.Add(cmd);
+                        // we want to add a call to a stub procedure in case AA decides that the function pointer never gets any address
+                        // we need to create three types of stub procedures:
+                        // 1) no returning value (actually just let it return)
+                        // 2) returning a pointer
+                        // 3) returning a scalar
+                        if (currProc.OutParams.Count > 0)
+                        {
+                            Variable procRet = currProc.OutParams[0];
+                            if (BoogieUtil.checkAttrExists("scalar", procRet.Attributes))
+                            {
+                                if (specialScalarFunc == null)
+                                {
+                                    // make a procedure
+                                    specialScalarFunc = new Procedure(Token.NoToken, "$devirtbounce_special_scalar", new List<TypeVariable>(), new List<Variable>(), currProc.OutParams, new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                                }
+                                CallCmd callCmd = new CallCmd(Token.NoToken, specialScalarFunc.Name, new List<Expr>(), new List<IdentifierExpr>() { Expr.Ident(procRet) });
+                                newCmds.Add(callCmd);
+                            }
+                            else
+                            {
+                                if (specialPtrFunc == null)
+                                {
+                                    // make a procedure
+                                    specialPtrFunc = new Procedure(Token.NoToken, "$devirtbounce_special_pointer", new List<TypeVariable>(), new List<Variable>(), currProc.OutParams, new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                                }
+                                CallCmd callCmd = new CallCmd(Token.NoToken, specialPtrFunc.Name, new List<Expr>(), new List<IdentifierExpr>() { Expr.Ident(procRet) });
+                                newCmds.Add(callCmd);
+                            }
+                        }
+                        node.TransferCmd = new ReturnCmd(Token.NoToken);
                     }
                 }
                 else if (cmd is CallCmd)
