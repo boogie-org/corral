@@ -33,6 +33,8 @@ namespace SmackInst
 
         public static bool checkMemSafety = false;
 
+        public static bool visualizeHeap = false;
+
         static void Main(string[] args)
         {
             if (args.Length < 2)
@@ -77,6 +79,8 @@ namespace SmackInst
             if (args.Any(a => a == "/checkMemorySafety"))
                 checkMemSafety = true;
 
+            if (args.Any(a => a == "/visualizeHeap"))
+                visualizeHeap = true;
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.PrintInstrumented = true;
@@ -139,6 +143,70 @@ namespace SmackInst
                             if (cmd is AssertCmd)
                             {
                                 continue;
+                            }
+                            newCmds.Add(cmd);
+                        }
+                        block.cmds = newCmds;
+                    }
+                }
+                BoogieUtil.PrintProgram(program, args[1]);
+                return;
+            }
+
+            if (visualizeHeap)
+            {
+                Procedure printProc = program.TopLevelDeclarations.OfType<Procedure>().Where(x => x.Name == "boogie_si_record_ref").FirstOrDefault();
+                foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if (impl.Name.StartsWith("__SMACK_static_init"))
+                        continue;
+                    foreach (var block in impl.Blocks)
+                    {
+                        //var block = impl.Blocks.FirstOrDefault();
+                        var newCmds = new List<Cmd>();
+                        foreach (var cmd in block.cmds)
+                        {
+                            if (cmd is AssignCmd)
+                            {
+                                var asnCmd = cmd as AssignCmd;
+                                var rhs = asnCmd.Rhss.FirstOrDefault();
+                                if (rhs is NAryExpr)
+                                {
+                                    var fcExpr = rhs as NAryExpr;
+                                    if (fcExpr.Fun.FunctionName.StartsWith("$load"))
+                                    {
+                                        var region = fcExpr.Args[0];
+                                        if (region.ToString().Equals("$M.0"))
+                                        {
+                                            var val = asnCmd.Lhss.FirstOrDefault().AsExpr;
+                                            var ptr = fcExpr.Args[1];
+                                            List<Expr> paramList = new List<Expr>();
+                                            paramList.Add(val);
+                                            var callCmd = new CallCmd(Token.NoToken, "boogie_si_record_ref", paramList, new List<IdentifierExpr>());
+                                            List<Object> attrib = new List<Object>();
+                                            attrib.Add(val.ToString());
+                                            callCmd.Attributes = new QKeyValue(Token.NoToken, "cexpr", attrib, callCmd.Attributes);
+                                            newCmds.Add(cmd);
+                                            newCmds.Add(callCmd);
+                                            continue;
+                                        }
+                                    }
+                                    if (fcExpr.Fun.FunctionName.StartsWith("$store"))
+                                    {
+                                        var region = fcExpr.Args[0];
+                                        if (region.ToString().Equals("$M.0"))
+                                        {
+                                            var val = fcExpr.Args[2];
+                                            List<Expr> paramList = new List<Expr>();
+                                            paramList.Add(val);
+                                            var callCmd = new CallCmd(Token.NoToken, "boogie_si_record_ref", paramList, new List<IdentifierExpr>());
+                                            List<Object> attrib = new List<Object>();
+                                            attrib.Add(val.ToString());
+                                            callCmd.Attributes = new QKeyValue(Token.NoToken, "cexpr", attrib, callCmd.Attributes);
+                                            newCmds.Add(callCmd);
+                                        }
+                                    }
+                                }
                             }
                             newCmds.Add(cmd);
                         }
@@ -562,10 +630,10 @@ namespace SmackInst
         public void Run(Program program)
         {
             VisitProgram(program);
-            //Console.WriteLine("#Procs:" + program.Implementations.Count());
-            //Console.WriteLine("Unique line count: " + lines.Count);
+            Console.WriteLine("#Procs:" + program.Implementations.Count());
+            Console.WriteLine("Unique line count: " + lines.Count);
             files.Iter(f => Console.WriteLine(f));
-            //Console.WriteLine("Line count of all files contained: " + OpenAndCount());
+            Console.WriteLine("Line count of all files contained: " + OpenAndCount());
         }
 
         public int OpenAndCount()
