@@ -127,6 +127,23 @@ namespace FastAVN
             Debug.Assert(avnPath != null && avHarnessInstrPath != null, "Cannot find executables");
             Debug.Assert(blockingDepth < 0 || approximationDepth < 0, "Cannot do both blockingDepth and angelicDepth");
 
+            {
+                InitializeCorralandBoogie();
+
+                var p = BoogieUtil.ReadAndOnlyResolve(args[0]);
+                var callGraph = BoogieUtil.GetCallGraph(p);
+                
+                for (int i = 10; i <= 10; i++)
+                {
+                    var pruned = 
+                        CallGraphPruning.DisplayPruning(callGraph, i, $"pruned_{i}.dot");
+
+                    Console.WriteLine("With k = {0}, pruned away {1} of {2}", i, (callGraph.Nodes.Count - pruned), callGraph.Nodes.Count);
+                }
+
+                return;
+            }
+
             try
             {
                 if (Directory.Exists(bug_folder))
