@@ -216,10 +216,12 @@ namespace FastAVN
 
                         var cg = BoogieUtil.GetCallGraph(program);
                         var pruned = CallGraphPruning.FindPrunedEntryPoints(cg, 1);
+
                         var sizeBefore = entrypoints.Count;
                         entrypoints.IntersectWith(pruned);
+
                         Console.WriteLine("Used call graph pruning to remove {0} off {1} entrypoints",
-                            (sizeBefore - pruned.Count), sizeBefore);
+                            (sizeBefore - entrypoints.Count), sizeBefore);
 
                         program.AddTopLevelDeclaration(entrypoint_impl);
                     }
@@ -243,7 +245,7 @@ namespace FastAVN
                         var sizeBefore = entrypoints.Count;
                         entrypoints.IntersectWith(pruned);
                         Console.WriteLine("Used call graph pruning to remove {0} off {1} entrypoints",
-                            (sizeBefore - pruned.Count), sizeBefore);
+                            (sizeBefore - entrypoints.Count), sizeBefore);
                     }
                 }
 
