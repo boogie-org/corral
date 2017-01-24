@@ -39,6 +39,7 @@ namespace FastAVN
         static string angelic_stack = "stack";
         static string stack_extension = ".txt";
         static bool useMemNotDisk = false;
+        static bool pruneEntryPoints = false;
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -84,7 +85,9 @@ namespace FastAVN
             if (args.Any(s => s == "/splitFirst"))
                 Driver.earlySplit = true;
 
-            
+            if (args.Any(s => s == "/pruneEntryPoints"))
+                Driver.pruneEntryPoints = true;
+
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
@@ -126,23 +129,6 @@ namespace FastAVN
 
             Debug.Assert(avnPath != null && avHarnessInstrPath != null, "Cannot find executables");
             Debug.Assert(blockingDepth < 0 || approximationDepth < 0, "Cannot do both blockingDepth and angelicDepth");
-
-            {
-                InitializeCorralandBoogie();
-
-                var p = BoogieUtil.ReadAndOnlyResolve(args[0]);
-                var callGraph = BoogieUtil.GetCallGraph(p);
-                
-                for (int i = 10; i <= 10; i++)
-                {
-                    var pruned = 
-                        CallGraphPruning.DisplayPruning(callGraph, i, $"pruned_{i}.dot");
-
-                    Console.WriteLine("With k = {0}, pruned away {1} of {2}", i, (callGraph.Nodes.Count - pruned), callGraph.Nodes.Count);
-                }
-
-                return;
-            }
 
             try
             {
@@ -220,6 +206,24 @@ namespace FastAVN
                             .Where(cc => QKeyValue.FindBoolAttribute(cc.Attributes, AvUtil.AvnAnnotations.AvhEntryPointAttr))
                             .Iter(cc => entrypoints.Add(cc.callee));
                     }
+
+                    if (pruneEntryPoints)
+                    {
+                        // remove entrypoint_impl
+                        var smallerDecls = new List<Declaration>(program.TopLevelDeclarations);
+                        smallerDecls.Remove(entrypoint_impl);
+                        program.TopLevelDeclarations = smallerDecls;
+
+                        var cg = BoogieUtil.GetCallGraph(program);
+                        var pruned = CallGraphPruning.FindPrunedEntryPoints(cg, 1);
+                        var sizeBefore = entrypoints.Count;
+                        entrypoints.IntersectWith(pruned);
+                        Console.WriteLine("Used call graph pruning to remove {0} off {1} entrypoints",
+                            (sizeBefore - pruned.Count), sizeBefore);
+
+                        program.AddTopLevelDeclaration(entrypoint_impl);
+                    }
+
                 }
                 else
                 {
@@ -231,6 +235,16 @@ namespace FastAVN
                         BoogieUtil.procsThatMaySatisfyPredicate(program, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
 
                     entrypoints.IntersectWith(mayReach);
+
+                    if(pruneEntryPoints)
+                    {
+                        var cg = BoogieUtil.GetCallGraph(program);
+                        var pruned = CallGraphPruning.FindPrunedEntryPoints(cg, 1);
+                        var sizeBefore = entrypoints.Count;
+                        entrypoints.IntersectWith(pruned);
+                        Console.WriteLine("Used call graph pruning to remove {0} off {1} entrypoints",
+                            (sizeBefore - pruned.Count), sizeBefore);
+                    }
                 }
 
                 // do reachability analysis on procedures
