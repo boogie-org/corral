@@ -168,6 +168,8 @@ namespace FastAVN
 
                 var inputfile = args[0];
                 var entrypoints = new HashSet<string>();
+                var allEps = new HashSet<string>();
+
                 Program program;
 
                 if (!earlySplit)
@@ -207,6 +209,8 @@ namespace FastAVN
                             .Iter(cc => entrypoints.Add(cc.callee));
                     }
 
+                    allEps = new HashSet<string>(entrypoints);
+
                     if (pruneEntryPoints)
                     {
                         // remove entrypoint_impl
@@ -238,6 +242,8 @@ namespace FastAVN
 
                     entrypoints.IntersectWith(mayReach);
 
+                    allEps = new HashSet<string>(entrypoints);
+
                     if(pruneEntryPoints)
                     {
                         var cg = BoogieUtil.GetCallGraph(program);
@@ -250,7 +256,7 @@ namespace FastAVN
                 }
 
                 // do reachability analysis on procedures
-                RunAVN(program, entrypoints);
+                RunAVN(program, entrypoints, allEps);
 
                 Stats.stop("fastavn");
                 Stats.printStats();
@@ -382,7 +388,7 @@ namespace FastAVN
         /// Run AVN binary on sliced programs
         /// </summary>
         /// <param name="prog">Original program</param>
-        private static void RunAVN(Program prog, HashSet<string> epNames)
+        private static void RunAVN(Program prog, HashSet<string> epNames, HashSet<string> allEps)
         {
             // compute and stash some common information
             if (!earlySplit)
@@ -440,7 +446,7 @@ namespace FastAVN
             var threads = new List<Thread>();
             for (int i = 0; i < numThreads; i++)
             {
-                var w = new Worker(prog, entrypoints);
+                var w = new Worker(prog, entrypoints, allEps);
                 if(!earlySplit)
                     threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
                 else
@@ -497,17 +503,16 @@ namespace FastAVN
         {
             ConcurrentBag<Implementation> impls;
             public static ConcurrentBag<string> DirsCreated = new ConcurrentBag<string>();
-            HashSet<string> implNames;
+            HashSet<string> allEps;
             Program program;
             static string counter_lock = "counter_lock";
             static int trunc_counter = 0;
 
-            public Worker(Program program, ConcurrentBag<Implementation> impls)
+            public Worker(Program program, ConcurrentBag<Implementation> impls, HashSet<string> allEps)
             {
                 this.program = program; 
                 this.impls = impls;
-                this.implNames = new HashSet<string>();
-                impls.Iter(im => implNames.Add(im.Name));
+                this.allEps = allEps;
             }
 
             public void RunSplitAndAv()
@@ -520,7 +525,7 @@ namespace FastAVN
 
                     var name = impl.Name;
                     // clash of lower-case names?
-                    if (implNames.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
+                    if (allEps.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
                     {
                         lock (counter_lock)
                         {
@@ -551,7 +556,7 @@ namespace FastAVN
                     }
 
                     // slice the program by entrypoints
-                    Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
+                    Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, allEps);
                     BoogieUtil.pruneProcs(shallowP,
                         shallowP.TopLevelDeclarations.OfType<Procedure>()
                         .Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
@@ -588,7 +593,7 @@ namespace FastAVN
 
                     var name = impl.Name;
                     // clash of lower-case names?
-                    if (implNames.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
+                    if (allEps.Any(s => s != impl.Name && s.ToLower() == impl.Name.ToLower()))
                     {
                         lock (counter_lock)
                         {
