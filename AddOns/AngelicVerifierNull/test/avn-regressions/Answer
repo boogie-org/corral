@@ -1,0 +1,101 @@
+
+-------------------- t1.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t1_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+
+-------------------- t2_err.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t2_err_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+
+-------------------- t3_err.bpl --------------------
+[TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no NULL constant declared in the input program
+
+-------------------- t4.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t4_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+
+-------------------- t5.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t5_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> x_3 != NULL)
+
+-------------------- t6.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t6_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> x_3 != NULL)
+
+-------------------- t7.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t7_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> field[x_2] != NULL)
+
+-------------------- t8.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t8_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_4(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_3(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_5(x_3) ==> arr[x_3] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+
+-------------------- t9.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing t9_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> x_1 != NULL)
+
+-------------------- pruned.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing pruned_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(x == NULL)
+
+-------------------- empty_forall.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing empty_forall_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> arr[42] != NULL
+
+-------------------- null.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing null_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr b != NULL
+
+-------------------- generalize.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing generalize_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1 + 1] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1 + 2] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> b[x_2] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall _z: int :: b[_z] > 0)
+
+-------------------- rec.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing rec_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr false
+
+-------------------- eeSlice3.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice3_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1
+
+-------------------- eeSlice4.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice4_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr z == 1
+
+-------------------- eeSlice5.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice5_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1
+
+-------------------- eeSlice6.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice6_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1
+
+-------------------- eeSlice61.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice61_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1
