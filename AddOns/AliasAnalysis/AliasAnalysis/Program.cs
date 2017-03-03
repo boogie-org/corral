@@ -136,7 +136,8 @@ namespace AliasAnalysis
         Function AllocationSites;
         Dictionary<string, Constant> asToAS;
 
-        PruneAliasingQueries(AliasAnalysisResults result, Function AllocationSites, Dictionary<string, Constant> asToAS)
+        PruneAliasingQueries(AliasAnalysisResults result, Function AllocationSites, 
+            Dictionary<string, Constant> asToAS)
         {
             this.result = result;
             this.AllocationSites = AllocationSites;
@@ -207,9 +208,20 @@ namespace AliasAnalysis
                 {
                     return Expr.False;
                 }
-                else
+                else if(fcall.Func.Body == null)
                 {
                     return Expr.Eq(node.Args[0], node.Args[1]);
+                }
+                else
+                {
+                    var subst = new Substitution(v =>
+                    {
+                        if (v.Name == fcall.Func.InParams[0].Name) return node.Args[0];
+                        if (v.Name == fcall.Func.InParams[1].Name) return node.Args[1];
+                        return Expr.Ident(v);
+                    });
+
+                    return Substituter.Apply(subst, fcall.Func.Body);
                 }
             }
 
@@ -231,12 +243,20 @@ namespace AliasAnalysis
             {
                 if (nary.Args.Any(a => a == Expr.True))
                     return Expr.True;
+                if (nary.Args[0] == Expr.False)
+                    return nary.Args[1];
+                if (nary.Args[1] == Expr.False)
+                    return nary.Args[0];
             }
             if (nary != null && nary.Fun is BinaryOperator
                 && (nary.Fun as BinaryOperator).Op == BinaryOperator.Opcode.And)
             {
                 if (nary.Args.Any(a => a == Expr.False))
                     return Expr.False;
+                if (nary.Args[0] == Expr.True)
+                    return nary.Args[1];
+                if (nary.Args[1] == Expr.True)
+                    return nary.Args[0];
             }
             if (nary != null && nary.Fun is UnaryOperator
                 && (nary.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not
@@ -244,6 +264,13 @@ namespace AliasAnalysis
                 && (nary.Args[0] as LiteralExpr).IsFalse)
             {
                 return Expr.True;
+            }
+            if (nary != null && nary.Fun is UnaryOperator
+                && (nary.Fun as UnaryOperator).Op == UnaryOperator.Opcode.Not
+                && nary.Args[0] is LiteralExpr
+                && (nary.Args[0] as LiteralExpr).IsTrue)
+            {
+                return Expr.False;
             }
 
             return ret;
