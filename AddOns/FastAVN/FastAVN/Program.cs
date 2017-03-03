@@ -39,6 +39,7 @@ namespace FastAVN
         static string angelic_stack = "stack";
         static string stack_extension = ".txt";
         static bool useMemNotDisk = false;
+        static bool keepLongestTrace = false;
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -84,6 +85,8 @@ namespace FastAVN
             if (args.Any(s => s == "/splitFirst"))
                 Driver.earlySplit = true;
 
+            if (args.Any(s => s == "/keepLongestTrace"))
+                Driver.keepLongestTrace = true;
             
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -833,7 +836,13 @@ namespace FastAVN
 
                         if (shortest_trace.ContainsKey(bug_info))
                         {
-                            if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
+                            if (!keepLongestTrace)
+                            {
+                                if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
+                            } else
+                            {
+                                if (metric > shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
+                            }
                         }
                         else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file, stack_file));
                         traceNum++;
