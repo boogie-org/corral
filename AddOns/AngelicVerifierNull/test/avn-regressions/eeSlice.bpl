@@ -3,20 +3,6 @@
 var g1:int;
 var g2:int;
 
-procedure {:entrypoint} Main() {
-  var a: int ;
-  var r: int ;
-  call g1 := unknown(1) ;
-  call g2 := unknown(1) ;
-  if (*) {
-    call a := unknown(1) ;
-    call r := A(a) ;
-  }
-  if (*) {
-    call a := unknown(1) ;
-    call r := B(a) ;
-  }
-}
 
 procedure A(x:int) returns (r:int)
 {
@@ -49,6 +35,8 @@ procedure B(x:int) returns (r:int)
    return; 
 }
 
-procedure {:AngelicUnknown} unknown(a:int) returns (b:int);
+procedure {:allocator "full"} malloc_full(a: int) returns (b: int);
 const {:allocated} NULL: int;
+
 axiom NULL == 0;
+procedure {:allocator} malloc(a:int) returns (b:int);

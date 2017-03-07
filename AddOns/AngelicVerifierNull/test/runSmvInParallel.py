@@ -22,13 +22,13 @@ def traceit(frame, event, arg):
 #############################
 # Constants
 #############################
-avnPath = "e:\\temp\\smv\\smv-fastavn-10-21-2016\\analysisPlugins\\avn\\bin"
+avnPath = "e:\\temp\\smv\\smv-fastavn-11-18-2016\\analysisPlugins\\avn\\bin"
 propInstPath = "e:\\corral\\AddOns\\PropInst\\PropInst\\bin\\debug\\PropInst"
 propertyFile = "e:\\corral\\AddOns\\AngelicVerifierNull\\test\\c-smack\\useafterfree-windows.avp"
 testBpl = "test_uaf.bpl"
-bplDirRoot = "e:\\temp\\avKernel2016\\BPL\\"
+bplDirRoot = "e:\\temp\\avKernel2016\\BPL.11.29\\"
 
-NUM_THREADS = 7
+NUM_THREADS = 30
 MAXCNT = 1000
 
 q = queue.Queue()
