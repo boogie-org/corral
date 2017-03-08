@@ -304,4 +304,33 @@ namespace PropInstUtils
             return base.VisitIdentifierExpr(node);
         }
     }
+
+    public class MkUniqueFnVisitor: FixedVisitor
+    {
+        private HashSet<Function> uniqFuncs;
+        private Program program;
+
+        public MkUniqueFnVisitor(Program prog) { program = prog;  uniqFuncs = new HashSet<Function>();}
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var nArgs = node.Args.Select(x => base.VisitExpr(x)).ToList();
+            node.Args = nArgs;
+            var fcall = node.Fun as FunctionCall;
+            if (fcall != null && fcall.Func.HasAttribute("mkUniqueFn"))
+            {
+                var x = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", node.Args[0].Type), true);
+                var y = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", node.Args[1].Type), true);
+                var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", node.Type), false);
+
+                var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
+                    new List<Variable> {x, y}, r);
+                f.AddAttribute("inline", new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(1)));
+                uniqFuncs.Add(f);
+                program.AddTopLevelDeclaration(f);
+                node.Fun = new FunctionCall(f);
+            }
+            return node;
+        }
+    }
 }

@@ -51,6 +51,9 @@ namespace PropInst
             // InsertAtBeginningRule: find insertion sites (Procedures), insert code there
             InstrumentProcedureRule.Instrument(boogieProgram, rules.OfType<InsertAtBeginningRule>());
 
+            // make functions with {:mkUniqueFn} unique
+            (new MkUniqueFnVisitor(boogieProgram)).Visit(boogieProgram);
+
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
