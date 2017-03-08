@@ -319,9 +319,9 @@ namespace PropInstUtils
             var fcall = node.Fun as FunctionCall;
             if (fcall != null && fcall.Func.HasAttribute("mkUniqueFn"))
             {
-                var x = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", node.Args[0].Type), true);
-                var y = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", node.Args[1].Type), true);
-                var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", node.Type), false);
+                var x = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", fcall.Func.InParams[0].TypedIdent.Type), true);
+                var y = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", fcall.Func.InParams[1].TypedIdent.Type), true);
+                var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", fcall.Func.OutParams[0].TypedIdent.Type), false);
 
                 var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
                     new List<Variable> {x, y}, r);
