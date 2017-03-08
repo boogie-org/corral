@@ -1,0 +1,16 @@
+
+-------------------- uaf0.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing uaf0_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> validFree[x_1])
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr validFree[p] || p == 0
+
+-------------------- uaf1.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing uaf1_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> validFree[x_1])
+
+-------------------- df0.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing df0_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> validFree[x_1])
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr validFree[p] || p == 0
