@@ -5,21 +5,18 @@ set HEXE=..\..\AvHarnessInstrumentation\bin\Debug\AvHarnessInstrumentation.exe
 set BGEXE=..\..\AngelicVerifierNull\bin\debug\AngelicVerifierNull.exe
 set PROPEXE=..\..\..\PropInst\PropInst\bin\Debug\PropInst.exe
 set OPTS= /traceSlicing
-set len=3
+set c=0
 set bpl=
 set propfile=
 
-set bpls[0]=uaf0.bpl
-set bpls[1]=uaf1.bpl
-set bpls[2]=df0.bpl
-set propfiles[0]=useafterfree-windows.avp
-set propfiles[1]=useafterfree-windows.avp
-set propfiles[2]=useafterfree-windows.avp
+call:add uaf0.bpl useafterfree-windows.avp
+call:add uaf1.bpl useafterfree-windows.avp
+call:add df0.bpl useafterfree-windows.avp
 
 REM for %%f in (eeSlice3.bpl) do (
 set i=0
 :loop
-if %i% equ %len% goto :eof
+if %i% equ %c% goto :eof
   echo.
   set bpl=!bpls[%i%]!
   set propfile=!propfiles[%i%]!
@@ -32,3 +29,8 @@ if %i% equ %len% goto :eof
   )
 set /a i=%i%+1
 goto loop
+
+:add
+set bpls[%c%]=%~1
+set propfiles[%c%]=%~2
+set /a c=%c%+1
