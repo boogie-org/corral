@@ -319,12 +319,17 @@ namespace PropInstUtils
             var fcall = node.Fun as FunctionCall;
             if (fcall != null && fcall.Func.HasAttribute("mkUniqueFn"))
             {
-                var x = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", fcall.Func.InParams[0].TypedIdent.Type), true);
-                var y = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "y", fcall.Func.InParams[1].TypedIdent.Type), true);
+                var formals = new List<Variable>();
+                fcall.Func.InParams.Iter(a =>
+                    {
+                        var cnt = formals.Count;
+                        var z = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x"+cnt, a.TypedIdent.Type), true);
+                        formals.Add(z);
+                    });
                 var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", fcall.Func.OutParams[0].TypedIdent.Type), false);
 
                 var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
-                    new List<Variable> { x, y }, r) ;
+                    formals, r) ;
                 //inherit all attributes other than mkUniqueFn
                 f.Attributes = BoogieUtil.removeAttr("mkUniqueFn", fcall.Func.Attributes);
                 f.Body = fcall.Func.Body;
