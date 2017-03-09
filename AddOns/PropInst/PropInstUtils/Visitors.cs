@@ -324,8 +324,10 @@ namespace PropInstUtils
                 var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", fcall.Func.OutParams[0].TypedIdent.Type), false);
 
                 var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
-                    new List<Variable> {x, y}, r);
-                f.AddAttribute("inline", new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(1)));
+                    new List<Variable> { x, y }, r) ;
+                //inherit all attributes other than mkUniqueFn
+                f.Attributes = BoogieUtil.removeAttr("mkUniqueFn", fcall.Func.Attributes);
+                f.Body = fcall.Func.Body;
                 uniqFuncs.Add(f);
                 program.AddTopLevelDeclaration(f);
                 node.Fun = new FunctionCall(f);

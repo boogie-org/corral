@@ -51,6 +51,6 @@ procedure {:#NameMatches "[fF]ree"} {:#NoImplementation} builtin_free({:pointer}
 {
     validFree[p1] := if (p1 == 0) then validFree[p1] else false;
     call freedNondet := freedNondetFn();
-    freedp := if (freedNondetFn) then p1 else freedp;
+    freedp := if (freedNondet && p1 != 0) then p1 else freedp;
 }
 
