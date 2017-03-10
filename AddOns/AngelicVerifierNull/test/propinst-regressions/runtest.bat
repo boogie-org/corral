@@ -9,9 +9,9 @@ set c=0
 set bpl=
 set propfile=
 
-call:add uaf0.bpl useafterfree-windows.avp
-call:add uaf1.bpl useafterfree-windows.avp
-call:add df0.bpl useafterfree-windows.avp
+call:add uaf0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
+call:add uaf1.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
+call:add df0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add uaf2.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows-alias.avp
 
 REM for %%f in (eeSlice3.bpl) do (
