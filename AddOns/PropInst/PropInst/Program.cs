@@ -230,15 +230,17 @@ namespace PropInst
     class InstrumentCmdRule
     {
         private readonly IEnumerable<CmdRule> _rules;
+        private readonly Program _prog; 
 
-        private InstrumentCmdRule(IEnumerable<CmdRule> pRules)
+        private InstrumentCmdRule(Program program, IEnumerable<CmdRule> pRules)
         {
+            _prog = program;
             _rules = pRules;
         }
 
         public static void Instrument(Program program, IEnumerable<CmdRule> ins)
         {
-            var im = new InstrumentCmdRule(ins);
+            var im = new InstrumentCmdRule(program, ins);
 
             program.TopLevelDeclarations
                 .OfType<Implementation>()
@@ -352,7 +354,7 @@ namespace PropInst
             return new List<Cmd>() { cmd };
         }
 
-        private static bool MatchCallCmd(CallCmd cmd, CmdRule rule, CallCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
+        private bool MatchCallCmd(CallCmd cmd, CmdRule rule, CallCmd toMatch, out List<Tuple<Dictionary<Declaration, Expr>, Dictionary<string, IAppliable>>> substitutions)
         {
             // question:    why do we have a list of substitutions, here?
             // answer:      the reason (right now) is AnyArgs: many arguments may match, the current semantics 
@@ -366,6 +368,17 @@ namespace PropInst
             if (matchCallee != null)
             {
                 // procedure is declared in TemplateVariables
+                if (matchCallee.HasAttribute(ExprMatchVisitor.BoogieKeyWords.NoImplementation))
+                {
+                    var hasImpl = false;
+                    _prog.Implementations
+                        .Iter(i => 
+                        {
+                            if (i.Name == cmd.Proc.Name) hasImpl = true;
+                        });
+                    //no match
+                    if (hasImpl) return false;
+                }
             }
             else if (toMatch.callee == cmd.Proc.Name)
             {

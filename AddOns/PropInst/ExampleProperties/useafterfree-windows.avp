@@ -10,7 +10,7 @@ function {:ReachableStates} NonNULL(bool) : bool;
 TemplateVariables
 {
 var p : int;
-procedure {:#AnyArguments} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
+procedure {:#AnyArguments} {:#NoImplementation} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
 }
 
 
