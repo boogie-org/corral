@@ -2,14 +2,28 @@ GlobalDeclarations
 {
 var {:propertyMap} validFree : [int] bool;
 //this is not being expanded
-function {:inline true} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
+function {:inline} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
 function {:ReachableStates} NonNULL(bool) : bool;
 var freedp: int; //aliases every freed pointer
 var freedNondet: bool;
 procedure  freedNondetFn() returns (r:bool);
 function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithFreed(p:int, q:int) returns (bool) {true}
 
-procedure aliases(p1:int) ; //{freedp := p1; return;}
+procedure aliases(p1:int) {
+    call freedNondet := freedNondetFn();
+    goto L1, L2;
+ 
+L1:
+   assume p1 != 0;
+   freedp := if (freedNondet) then p1 else freedp;
+   return;
+ 
+L2: 
+   return;
+}
+
+//checking the presence of extra procedures on instrumentation
+procedure dontCareProc(x:int, y:int) returns (r:int){r := x + y; return;}
 
 }
 
@@ -29,61 +43,31 @@ CmdRule
 -->
 {
   #this;
-  //assert isValid(p, validFree); //the inlined function is not expanded
   assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); 
 }
 
 //Any parameter should be allocated
 CmdRule
 {
-call anyProc(p);
+    call anyProc(p);
 }
 -->
 {
-assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); //the inlined function is not expanded
-#this;
+    assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); //the inlined function is not expanded
+    #this;
 }
 
 
 //Any stub *[fF]ree* is considered a free
 ProcedureRule
 {
-procedure {:#NameMatches "[fF]ree"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
+    procedure {:#NameMatches "[fF]ree"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
 }
 -->
 {
     validFree[p1] := if (p1 == 0) then validFree[p1] else false;
-    call freedNondet := freedNondetFn();
     call aliases(p1);
-    freedp := if (freedNondet && p1 != 0) then p1 else freedp;
 }
 
-
-///////// For testing below /////////////////
-
-////Any parameter to an external procedure should be allocated
-////Must come after the rule for free as only the first matching rule is retained
-//ProcedureRule
-//{
-//procedure {:#NameMatches ".*"} {:#NoImplementation} stubproc3({:pointer} p1 : int, {:pointer} p2:int, {:pointer} p3:int);
-//}
-//-->
-//{
-//  assert (!aliasesWithFreed(p1, freedp) || validFree[p1] || p1 == 0); 
-//  assert (!aliasesWithFreed(p3, freedp) || validFree[p3] || p3 == 0); 
-//  //the inlined function is not expanded
-//}
-
-
-//ProcedureRule
-//{
-//procedure {:#NameMatches ".*"} {:#NoImplementation} stubproc({:pointer} p1 : int);
-//}
-//-->
-//{
-//  assert (!aliasesWithFreed(p1, freedp) || validFree[p1] || p1 == 0); 
-//  //the inlined function is not expanded
-//}
-//
 
 

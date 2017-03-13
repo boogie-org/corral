@@ -26,13 +26,16 @@ namespace PropInst
 
     public class CmdRule : Rule
     {
+
+        private const string helperProc1Name = "helperProc1";
+        private const string helperProc2Name = "helperProc2";
         private const string CmdTemplate = "{0}\n" +
                                             //for our special keyword representing the match:
                                            "procedure {{:This}} #this();" +
-                                           "procedure helperProc1() {{\n" +
+                                           "procedure " + helperProc1Name + "() {{\n" +
                                            "  {1}" +
                                            "}}\n" +
-                                           "procedure helperProc2() {{\n" +
+                                           "procedure " + helperProc2Name + "() {{\n" +
                                            "  {2}" +
                                            "}}\n";
 
@@ -59,11 +62,20 @@ namespace PropInst
             Parser.Parse(progString, "dummy.bpl", out prog);
             BoogieUtil.ResolveProgram(prog, "dummy.bpl");
 
+            //Looking for implementations at Element[0,1] breaks if GlobalDeclarations have
+            //implementations. Instead, looking up by name
+
             CmdsToMatch = new List<Cmd>();
-            CmdsToMatch.AddRange(prog.Implementations.ElementAt(0).Blocks.First().Cmds);
+            var impl1 = prog.Implementations.FirstOrDefault(x => x.Name == helperProc1Name);
+            Debug.Assert(impl1 != null, "Unable to find " + helperProc1Name);
+            //CmdsToMatch.AddRange(prog.Implementations.ElementAt(0).Blocks.First().Cmds);
+            CmdsToMatch.AddRange(impl1.Blocks.First().Cmds);
 
             InsertionTemplate = new List<Cmd>();
-            InsertionTemplate.AddRange(prog.Implementations.ElementAt(1).Blocks.First().Cmds);
+            var impl2 = prog.Implementations.FirstOrDefault(x => x.Name == helperProc2Name);
+            Debug.Assert(impl2 != null, "Unable to find " + helperProc2Name);
+            //InsertionTemplate.AddRange(prog.Implementations.ElementAt(1).Blocks.First().Cmds);
+            InsertionTemplate.AddRange(impl2.Blocks.First().Cmds);
             Prog = prog;
         }
     }
@@ -96,7 +108,12 @@ namespace PropInst
                 Parser.Parse(progString, "dummy.bpl", out prog);
                 BoogieUtil.ResolveProgram(prog, "dummy.bpl");
 
-                ProcedureToMatchToInsertion.Add(prog.Implementations.First(), prog.Implementations.First().Blocks.First().Cmds);
+                //Assumes that the only Implementation(s) correspond to those from ProcedureRule, and not in GlobalDeclarations
+                //Debug.Assert(prog.Implementations.Count() == 1, "No implementations in property file allowed other than in ProcedureRule");
+                //ProcedureToMatchToInsertion.Add(prog.Implementations.First(), prog.Implementations.First().Blocks.First().Cmds);
+
+                //HACKY!!! Assumes that Implementations are ordered as they appear in the file, and GlobalDeclarations appear ahead of PF
+                ProcedureToMatchToInsertion.Add(prog.Implementations.Last(), prog.Implementations.Last().Blocks.First().Cmds);
             }
         }
     }

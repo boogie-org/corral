@@ -45,6 +45,9 @@ namespace PropInst
             Parser.Parse(globalDeclarations, "dummy.bpl", out dummyProg);
             boogieProgram.AddTopLevelDeclarations(dummyProg.TopLevelDeclarations);
 
+            //resolve the program with the new declarations which may include funcs and procs with bodies
+            boogieProgram.Resolve();
+
             // CmdRule: find insertions sites (Commands), insert code there
             InstrumentCmdRule.Instrument(boogieProgram, rules.OfType<CmdRule>());
 
