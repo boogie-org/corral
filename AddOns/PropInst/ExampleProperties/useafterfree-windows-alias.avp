@@ -4,8 +4,8 @@ var {:propertyMap} validFree : [int] bool;
 //this is not being expanded
 function {:inline} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
 function {:ReachableStates} NonNULL(bool) : bool;
-var freedp: int; //aliases every freed pointer
-var freedNondet: bool;
+var {:AllocatorVar} freedp: int; //aliases every freed pointer
+var {:AllocatorVar} freedNondet: bool;
 procedure  freedNondetFn() returns (r:bool);
 function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithFreed(p:int, q:int) returns (bool) {true}
 
@@ -14,7 +14,7 @@ procedure aliases(p1:int) {
     goto L1, L2;
  
 L1:
-   assume p1 != 0;
+   assume p1 != NULL;
    freedp := if (freedNondet) then p1 else freedp;
    return;
  
