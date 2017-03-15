@@ -1272,7 +1272,7 @@ namespace cba.Util
             // now the positive cases
 
             // the same function is used
-            if (naeToConsume.Fun.Equals(node.Fun))
+            if (naeToConsume.Fun.FunctionName == node.Fun.FunctionName)
             {
                 _toConsume.Pop();
                 naeToConsume.Args.Reverse().Iter(arg => _toConsume.Push(arg));

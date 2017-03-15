@@ -32,9 +32,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="CorralUtil">
-      <HintPath>..\..\..\bin\Debug\CorralUtil.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -95,6 +92,10 @@
     <ProjectReference Include="..\..\..\boogie\Source\VCGeneration\VCGeneration.csproj">
       <Project>{e1f10180-c7b9-4147-b51f-fa1b701966dc}</Project>
       <Name>VCGeneration</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\source\Util\CorralUtil.csproj">
+      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
+      <Name>CorralUtil</Name>
     </ProjectReference>
     <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj">
       <Project>{d2fe84cf-a502-4941-877e-5f82dafe4d57}</Project>
