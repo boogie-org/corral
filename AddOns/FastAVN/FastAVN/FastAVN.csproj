@@ -131,6 +131,10 @@
       <Project>{04d1ebfe-f934-44d2-86c6-407bc99ae00a}</Project>
       <Name>AvUtil</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\PropInst\PropInst\PropInst.csproj">
+      <Project>{2e6d6d14-3927-4a7e-8af3-2e87d220797d}</Project>
+      <Name>PropInst</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
