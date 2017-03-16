@@ -25,6 +25,11 @@ L2:
 //checking the presence of extra procedures on instrumentation
 procedure dontCareProc(x:int, y:int) returns (r:int){r := x + y; return;}
 
+//a procedure that will be called from CorralExtraInit
+procedure {:corralExtraInitExtension} cEIE() {
+    assume (forall x:int :: validFree[x]); 
+}
+
 }
 
 

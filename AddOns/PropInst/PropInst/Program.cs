@@ -57,10 +57,31 @@ namespace PropInst
             // make functions with {:mkUniqueFn} unique
             (new MkUniqueFnVisitor(boogieProgram)).Visit(boogieProgram);
 
+            //augment the CorralExtraInit procedure (perform this after Matching/instrumentation)
+            AugmentCorralExtraInit(boogieProgram);
+
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
             Stats.printStats();
+        }
+
+        private static void AugmentCorralExtraInit(Program boogieProgram)
+        {
+            var augProcs = boogieProgram
+            .Procedures
+            .Where(x => x.HasAttribute(ExprMatchVisitor.BoogieKeyWords.CorralExtraInitExtn));
+
+            //ensure that each such procedure has 0 inp and 0 out params
+            Debug.Assert(augProcs.All(x => (x.InParams.Count() + x.OutParams.Count() == 0)),
+                "Procedures with " + ExprMatchVisitor.BoogieKeyWords.CorralExtraInitExtn + "attribute cannot have any input/output params");
+
+            var corralExtraInit = boogieProgram.Implementations.FirstOrDefault(x => x.Name == "CorralExtraInit");
+            if (corralExtraInit == null) return;
+
+            augProcs.Iter
+                (c =>
+                corralExtraInit.Blocks.First().Cmds.Add(new CallCmd(Token.NoToken, c.Name, new List<Expr>(), new List<IdentifierExpr>())));
         }
 
         private static void CreateRulesFromProperty(IEnumerable<string> propLines, out string globalDeclarations, out List<Rule> rules)

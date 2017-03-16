@@ -1457,14 +1457,18 @@ namespace cba.Util
             public const string AnyProcedure = "#AnyProcedure";
             // any IdentifierExpr
             public const string IdExpr = "#IdentifierExpr";
+            //make all applications to unique instances of the function
+            public const string MkUniqueFn = "mkUniqueFn";
             // matching a name with a regex
             public const string NameMatches = "#NameMatches";
             // does not match a name
             public const string NameNotMatches = "#NameNotMatches";
             // procedure must be declared but not implemented
             public const string NoImplementation = "#NoImplementation";
+            //procedure to call in CorralExtraInit
+            public const string CorralExtraInitExtn = "corralExtraInitExtension";
 
-            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NameNotMatches, NoImplementation };
+            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NameNotMatches, NoImplementation, CorralExtraInitExtn };
         }
     }
 }

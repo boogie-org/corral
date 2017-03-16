@@ -25,3 +25,7 @@ procedure bar({:pointer} x:int, {:pointer} y:int, z:int)
 }
 
 const NULL : int;
+
+procedure CorralExtraInit(){
+
+}

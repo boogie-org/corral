@@ -339,7 +339,7 @@ namespace PropInstUtils
             var nArgs = node.Args.Select(x => base.VisitExpr(x)).ToList();
             node.Args = nArgs;
             var fcall = node.Fun as FunctionCall;
-            if (fcall != null && fcall.Func.HasAttribute("mkUniqueFn"))
+            if (fcall != null && fcall.Func.HasAttribute(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn))
             {
                 var formals = new List<Variable>();
                 fcall.Func.InParams.Iter(a =>
@@ -353,7 +353,7 @@ namespace PropInstUtils
                 var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
                     formals, r) ;
                 //inherit all attributes other than mkUniqueFn
-                f.Attributes = BoogieUtil.removeAttr("mkUniqueFn", fcall.Func.Attributes);
+                f.Attributes = BoogieUtil.removeAttr(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn, fcall.Func.Attributes);
                 f.Body = fcall.Func.Body;
                 uniqFuncs.Add(f);
                 program.AddTopLevelDeclaration(f);
