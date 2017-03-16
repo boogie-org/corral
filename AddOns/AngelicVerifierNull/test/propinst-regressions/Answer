@@ -31,3 +31,12 @@
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr validFree[p] || p == 0
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_3(x_1) ==> validFree[x_1 + 1])
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> validFree[x_2])
+
+-------------------- irql0.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing irql0_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> x_1 <= 2)
+
+-------------------- null0.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing null0_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(ax == NULL)

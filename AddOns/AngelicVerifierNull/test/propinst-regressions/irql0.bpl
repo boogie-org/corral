@@ -6,3 +6,4 @@ procedure foo()
 
 function MaxIrqlFn(x:int): bool;
 
+const NULL: int;

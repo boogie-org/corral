@@ -14,6 +14,8 @@ call:add uaf1.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add df0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add uaf2.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows-alias.avp
 call:add uaf3.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows-alias.avp
+call:add irql0.bpl ..\..\..\PropInst\ExampleProperties\checkIrql-razzle.avp
+call:add null0.bpl ..\..\..\PropInst\ExampleProperties\nullcheck-razzle.avp
 
 REM for %%f in (eeSlice3.bpl) do (
 set i=0
