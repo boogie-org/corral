@@ -59,9 +59,10 @@ CmdRule
 
 
 //Any stub *[fF]ree* is considered a free
+//Exclude methods such as RtlFreeUnicodeString that free fields
 ProcedureRule
 {
-    procedure {:#NameMatches "[fF]ree"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
+    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
 }
 -->
 {

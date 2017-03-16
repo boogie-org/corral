@@ -211,7 +211,7 @@ namespace PropInstUtils
             }
 
             // match procedure name
-
+            // Positive filters: AnyProcedure, NameMatches, ByName
             if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.AnyProcedure, toMatch.Attributes))
             {
                 //do nothing
@@ -219,6 +219,7 @@ namespace PropInstUtils
             else if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.NameMatches, toMatch.Attributes))
             {
                 var nmAttrParams = BoogieUtil.getAttr(ExprMatchVisitor.BoogieKeyWords.NameMatches, toMatch.Attributes);
+                Debug.Assert(nmAttrParams.Count() == 1, "Expecting exactly one #NameMatches attribute, found " + nmAttrParams.Count());
                 var regex = nmAttrParams.First().ToString();
                 var m = Regex.Match(dwf.Name, regex);
                 if (m.Success)
@@ -233,6 +234,27 @@ namespace PropInstUtils
             else if (toMatch.Name != dwf.Name)
             {
                 return false;
+            }
+
+            //Negative filter: NameNotMatches (can be multiple of them)
+            if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.NameNotMatches, toMatch.Attributes))
+            {
+                //get the params from multiple matching key
+                var getAttrRepeated = new Func<QKeyValue, string, IList<IList<object>>>((attr, name) =>
+                {
+                    var ret = new List<IList<object>>();
+                    for (; attr != null; attr = attr.Next)
+                    {
+                        if (attr.Key == name) ret.Add(attr.Params);
+                    }
+                    return ret;
+                });
+
+                var nmAttrParams = getAttrRepeated(toMatch.Attributes, ExprMatchVisitor.BoogieKeyWords.NameNotMatches);
+                foreach(var nm in nmAttrParams)
+                {
+                    if (Regex.Match(dwf.Name, nm.First().ToString()).Success) return false;
+                }
             }
 
             // if the procedure name is matched, it may still be that we are looking only for stubs

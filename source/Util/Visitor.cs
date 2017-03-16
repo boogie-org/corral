@@ -1459,10 +1459,12 @@ namespace cba.Util
             public const string IdExpr = "#IdentifierExpr";
             // matching a name with a regex
             public const string NameMatches = "#NameMatches";
+            // does not match a name
+            public const string NameNotMatches = "#NameNotMatches";
             // procedure must be declared but not implemented
             public const string NoImplementation = "#NoImplementation";
 
-            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NoImplementation };
+            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NameNotMatches, NoImplementation };
         }
     }
 }

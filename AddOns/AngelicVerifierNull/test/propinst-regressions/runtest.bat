@@ -13,6 +13,7 @@ call:add uaf0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add uaf1.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add df0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows.avp
 call:add uaf2.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows-alias.avp
+call:add uaf3.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-windows-alias.avp
 
 REM for %%f in (eeSlice3.bpl) do (
 set i=0
