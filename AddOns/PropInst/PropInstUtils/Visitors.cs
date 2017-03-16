@@ -344,8 +344,7 @@ namespace PropInstUtils
                 var formals = new List<Variable>();
                 fcall.Func.InParams.Iter(a =>
                     {
-                        var cnt = formals.Count;
-                        var z = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x"+cnt, a.TypedIdent.Type), true);
+                        var z = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, a.Name, a.TypedIdent.Type), true);
                         formals.Add(z);
                     });
                 var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", fcall.Func.OutParams[0].TypedIdent.Type), false);
