@@ -1,6 +1,7 @@
 
 procedure foo()
 {
+   assume true;
    assume MaxIrqlFn(2);
 }
 
