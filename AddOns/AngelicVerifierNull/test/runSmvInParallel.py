@@ -19,18 +19,21 @@ def traceit(frame, event, arg):
     return traceit
 
 
+###############
+# Parameters 
+###############
+
+smvpath = "e:\\temp\\smv\\smv-fastavn-03-16-2017"
+bplDirRoot = "e:\\temp\\avKernel2016\\BPL.3.16.2017\\"
+
 #############################
 # Constants
 #############################
-# avnPath = "e:\\temp\\smv\\smv-fastavn-11-18-2016\\analysisPlugins\\avn\\bin"
-avnPath = "e:\\temp\\smv\\smv-fastavn-03-16-2017\\analysisPlugins\\avn\\bin"
-# propInstPath = "e:\\corral\\AddOns\\PropInst\\PropInst\\bin\\debug\\PropInst"
-propInstPath = avnPath
-#propertyFile = "e:\\corral\\AddOns\\AngelicVerifierNull\\test\\c-smack\\useafterfree-windows.avp"
-propertyFile = "e:\\corral\\AddOns\\PropInst\\ExampleProperties\\useafterfree-windows-alias.avp"
+avnPath = smvpath + "\\analysisPlugins\\avn\\bin"
+propInstPath = avnPath + "\\engine\\PropInst"
+propertyFile = avnPath + "\\engine\\useafterfree-razzle.avp"
+
 testBpl = "test_uaf.bpl"
-# bplDirRoot = "e:\\temp\\avKernel2016\\BPL.11.29\\"
-bplDirRoot = "e:\\temp\\avKernel2016\\BPL.03.16.17\\"
 
 NUM_THREADS = 30
 MAXCNT = 1000

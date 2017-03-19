@@ -4,7 +4,7 @@
 procedure Free({:pointer} x : int);
 procedure RtlFreeDontMatch({:pointer} x : int);
 procedure BogusFree({:pointer} x : int);
-
+procedure FreeWithTwoArgs(x: int, {:pointer} y:int);
 
 
 var M : [int]int;
@@ -22,6 +22,7 @@ procedure bar({:pointer} x:int, {:pointer} y:int, z:int)
      M[x] := y + z;
      call RtlFreeDontMatch(y);
      call BogusFree(y);
+     call FreeWithTwoArgs(x, y); 
 }
 
 const NULL : int;
