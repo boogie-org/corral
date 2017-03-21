@@ -1,0 +1,28 @@
+GlobalDeclarations
+{
+  var irql_current: int;
+}
+
+TemplateVariables
+{
+var n : int;
+}
+
+CmdRule
+{
+assume MaxIrqlFn(n);
+}
+-->
+{
+assert irql_current <= n; 
+}
+
+CmdRule
+{
+assume MinIrqlFn(n);
+}
+-->
+{
+assert irql_current >= n; 
+}
+

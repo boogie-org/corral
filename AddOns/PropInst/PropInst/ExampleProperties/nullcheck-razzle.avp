@@ -1,0 +1,23 @@
+GlobalDeclarations
+{
+function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasQ(p:int, q:int) returns (bool) { p == q }
+}
+
+
+TemplateVariables
+{
+var p : int;
+}
+
+
+//Check every dereference 
+CmdRule
+{
+  assume {:nonnull} p != NULL;
+}
+-->
+{
+  assert !aliasQ(p, NULL); 
+}
+
+

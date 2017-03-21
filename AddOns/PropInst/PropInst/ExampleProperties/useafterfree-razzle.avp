@@ -1,0 +1,79 @@
+GlobalDeclarations
+{
+var {:propertyMap} validFree : [int] bool;
+//this is not being expanded
+function {:inline} isValid(p : int, m : [int]bool) returns(bool) {m[p] || p == 0}
+function {:ReachableStates} NonNULL(bool) : bool;
+var {:AllocatorVar} freedp: int; //aliases every freed pointer
+var {:AllocatorVar} freedNondet: bool;
+procedure  freedNondetFn() returns (r:bool);
+function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithFreed(p:int, q:int) returns (bool) {true}
+
+procedure aliases(p1:int) {
+    call freedNondet := freedNondetFn();
+    goto L1, L2;
+ 
+L1:
+   assume p1 != NULL;
+   freedp := if (freedNondet) then p1 else freedp;
+   return;
+ 
+L2: 
+   return;
+}
+
+//checking the presence of extra procedures on instrumentation
+procedure dontCareProc(x:int, y:int) returns (r:int){r := x + y; return;}
+
+//a procedure that will be called from CorralExtraInit
+procedure {:corralExtraInitExtension} cEIE() {
+    assume (forall x:int :: validFree[x]); 
+}
+
+}
+
+
+TemplateVariables
+{
+var p : int;
+procedure {:#AnyArguments}  {:#NoImplementation} anyProc({:pointer} q : int) returns( {:#AnyParameters} r: int);
+}
+
+
+//Check every dereference is that of a allocated pointer
+CmdRule
+{
+  assume {:nonnull} p != NULL;
+}
+-->
+{
+  #this;
+  assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); 
+}
+
+//Any parameter should be allocated
+CmdRule
+{
+    call anyProc(p);
+}
+-->
+{
+    assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); //the inlined function is not expanded
+    #this;
+}
+
+
+//Any stub *[fF]ree* is considered a free
+//Exclude methods such as RtlFreeUnicodeString that free fields
+ProcedureRule
+{
+    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
+}
+-->
+{
+    validFree[p1] := if (p1 == 0) then validFree[p1] else false;
+    call aliases(p1);
+}
+
+
+

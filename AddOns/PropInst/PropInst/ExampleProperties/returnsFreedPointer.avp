@@ -1,0 +1,30 @@
+GlobalDeclarations
+{
+ var hasBeenFreed : [int] bool;
+}
+
+TemplateVariables
+{
+procedure {:#AnyArguments} prc() returns (r : int);
+var p : int;
+}
+
+CmdRule
+{
+call p := prc();
+}
+-->
+{
+#this;
+assert !hasBeenFreed[p];
+}
+
+InsertAtBeginningRule
+{
+ procedure {:#NoImplementation} {:#NameMatches "\w*[Ff]ree\w*"} fmFree( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+procedure {:#NoImplementation} {:#NameMatches "\w*[Dd]elete\w*"} fmDelete( p1 : int, {:#AnyParameters} a : int) returns ( {:#AnyParameters} r : int);
+}
+-->
+{
+ hasBeenFreed[p] := true;
+}
