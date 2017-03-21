@@ -9,13 +9,13 @@ set c=0
 set bpl=
 set propfile=
 
-call:add uaf0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-razzle.avp
-call:add uaf1.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-razzle.avp
-call:add df0.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-razzle.avp
-call:add uaf2.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-razzle.avp
-call:add uaf3.bpl ..\..\..\PropInst\ExampleProperties\useafterfree-razzle.avp
-call:add irql0.bpl ..\..\..\PropInst\ExampleProperties\checkIrql-razzle.avp
-call:add null0.bpl ..\..\..\PropInst\ExampleProperties\nullcheck-razzle.avp
+call:add uaf0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\useafterfree-razzle.avp
+call:add uaf1.bpl ..\..\..\PropInst\PropInst\ExampleProperties\useafterfree-razzle.avp
+call:add df0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\useafterfree-razzle.avp
+call:add uaf2.bpl ..\..\..\PropInst\PropInst\ExampleProperties\useafterfree-razzle.avp
+call:add uaf3.bpl ..\..\..\PropInst\PropInst\ExampleProperties\useafterfree-razzle.avp
+call:add irql0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\checkIrql-razzle.avp
+call:add null0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\nullcheck-razzle.avp
 
 REM for %%f in (eeSlice3.bpl) do (
 set i=0
