@@ -30,6 +30,7 @@ call:add eeSlice4.bpl "/traceSlicing"
 call:add eeSlice5.bpl "/traceSlicing"
 call:add eeSlice6.bpl "/traceSlicing"
 call:add eeSlice61.bpl "/traceSlicing"
+call:add eeSlice2.bpl "/traceSlicing /repeatEEWithControlFlow"
 
 
 set i=0
@@ -42,7 +43,7 @@ if %i% equ %c% goto :eof
   for %%f in (%bpl%) do (
     del /Q %%~nf_hinst.bpl 2> delout
     %HEXE% %%f  %%~nf_hinst.bpl %OPTS% %* | findstr AV_OUTPUT
-    if exist %%~nf_hinst.bpl %BGEXE% %%~nf_hinst.bpl %opt%* | findstr AV_OUTPUT
+    if exist %%~nf_hinst.bpl %BGEXE% %%~nf_hinst.bpl %opt% %*| findstr AV_OUTPUT
   )
 
 set /a i=%i%+1

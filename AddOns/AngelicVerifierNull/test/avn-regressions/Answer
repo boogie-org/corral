@@ -99,3 +99,8 @@
 [TAG: AV_OUTPUT] ----- Analyzing eeSlice61_hinst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr a == 1
+
+-------------------- eeSlice2.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eeSlice2_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr b == 1
