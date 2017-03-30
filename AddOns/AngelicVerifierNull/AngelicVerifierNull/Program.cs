@@ -26,6 +26,8 @@ namespace AngelicVerifierNull
         public static bool useEbasic = true;
         // Don't use EE to block paths
         public static bool useEE = true;
+        // Rerun EE second time to obtain the path condition 
+        public static bool repeatEEWithControlFlow = false;
         // Perform trace slicing
         public static bool TraceSlicing = false;
         // Flags for EE
@@ -212,6 +214,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/noEE"))
                 Options.useEE = false;
+
+            if (args.Any(s => s == "/repeatEEWithControlFlow"))
+                Options.repeatEEWithControlFlow = true; 
 
             if (args.Any(s => s == "/dontGeneralize"))
                 Options.generalize = false;
@@ -1445,13 +1450,19 @@ namespace AngelicVerifierNull
 
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {
-                    if (explain.Count == 1 && explain[0].TrimEnd(new char[]{' ', '\t'}) == Expr.True.ToString())
-                        status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr) Expr.True);
+                    if (explain.Count == 1 && explain[0].TrimEnd(new char[] { ' ', '\t' }) == Expr.True.ToString())
+                    {
+                        status = Tuple.Create(REFINE_ACTIONS.SHOW_AND_SUPPRESS, (Expr)Expr.True);
+                        if (Options.repeatEEWithControlFlow)
+                        {
+                            RerunEEWithControlFlow(nprog, mainImpl, ref eeStatus, eeflags, ref eeComplexExprs, ref preDisjuncts, skipAssumes, ref tmpEESlicedSourceLines, ref explain);
+                        }
+                    }                       
                     else if (explain.Count > 0)
                     {
                         var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
                         blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
-                        
+
                         /* HACK: We should existentially quantify demonic non-determinism, but currently we just
                          * avoiding blocking */
                         var vu = new VarsUsed(); vu.Visit(blockExpr);
@@ -1498,6 +1509,22 @@ namespace AngelicVerifierNull
             }
             CommandLineOptions.Install(clo);
             return status;
+        }
+
+        private static void RerunEEWithControlFlow(Program nprog, Implementation mainImpl, ref ExplainError.STATUS eeStatus, List<string> eeflags, ref Dictionary<string, string> eeComplexExprs, ref HashSet<List<Expr>> preDisjuncts, HashSet<AssumeCmd> skipAssumes, ref List<Tuple<string, int, string>> tmpEESlicedSourceLines, ref List<string> explain)
+        {
+            //Rerun EE to obtain the control flow condition
+            eeflags.Add("/noFilters+");
+            eeflags.Add("/ignoreAllAssumes-");
+            eeflags.Add("/onlySlicAssumes- ");
+
+            explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1,
+                eeflags.Concat(" "),
+                controlFlowDependencyInformation,
+                skipAssumes,
+                out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
+            Utils.Print(String.Format("The output of ExplainError-ControlFlow => Status = {0} Exprs = ({1})",
+                eeStatus, explain != null ? String.Join(", ", explain) : ""));
         }
 
         private static Expr createFilterFromString(string templateVariables, string nfs)
