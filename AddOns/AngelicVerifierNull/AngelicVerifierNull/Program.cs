@@ -1465,7 +1465,7 @@ namespace AngelicVerifierNull
                     Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                         eeStatus, explain != null ? String.Join(", ", explain) : ""));
                     //Remove this flag as we may repeatEEWithControlFlow
-                    eeflags.Add("/eliminateMapUpdates-");                  
+                    eeflags.Remove("/eliminateMapUpdates-");                  
                 }
 
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
