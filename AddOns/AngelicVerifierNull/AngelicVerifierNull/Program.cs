@@ -28,6 +28,8 @@ namespace AngelicVerifierNull
         public static bool useEE = true;
         // Rerun EE second time to obtain the path condition 
         public static bool repeatEEWithControlFlow = false;
+        // Retry EE without map update elimination in case of timeouts
+        public static bool retryEEWithoutMapUpdElimOnTimeout = false; 
         // Perform trace slicing
         public static bool TraceSlicing = false;
         // Flags for EE
@@ -216,7 +218,10 @@ namespace AngelicVerifierNull
                 Options.useEE = false;
 
             if (args.Any(s => s == "/repeatEEWithControlFlow"))
-                Options.repeatEEWithControlFlow = true; 
+                Options.repeatEEWithControlFlow = true;
+
+            if (args.Any(s => s == "/retryEEWithoutMapUpdElimOnTimeout"))
+                Options.retryEEWithoutMapUpdElimOnTimeout = true; 
 
             if (args.Any(s => s == "/dontGeneralize"))
                 Options.generalize = false;
@@ -1447,6 +1452,21 @@ namespace AngelicVerifierNull
                     out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
                 Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
                     eeStatus, explain != null ? String.Join(", ", explain) : ""));
+
+                //if EE returns timeout, retry without eliminating updates
+                if (Options.retryEEWithoutMapUpdElimOnTimeout && eeStatus == ExplainError.STATUS.TIMEOUT)
+                {
+                    eeflags.Add("/eliminateMapUpdates-");
+                    Utils.Print("Retrying ExplainError with eliminateMapUpdates off...");
+                    explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "),
+                        controlFlowDependencyInformation,
+                        skipAssumes,
+                        out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
+                    Utils.Print(String.Format("The output of ExplainError => Status = {0} Exprs = ({1})",
+                        eeStatus, explain != null ? String.Join(", ", explain) : ""));
+                    //Remove this flag as we may repeatEEWithControlFlow
+                    eeflags.Add("/eliminateMapUpdates-");                  
+                }
 
                 if (eeStatus == ExplainError.STATUS.SUCCESS)
                 {

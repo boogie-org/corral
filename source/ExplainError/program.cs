@@ -47,6 +47,9 @@ namespace ExplainError
         private static bool onlySlicAssumes = false;
         private static bool ignoreAllAssumes = false; //default = false
 
+        //don't eliminate map updates
+        private static bool eliminateMapUpdates = true; 
+
         //flags to define syntactic filters on atoms
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
@@ -505,7 +508,10 @@ namespace ExplainError
             Expr t = Expr.True;
             var nc = new List<Expr>();
             foreach (var c in cubeLiterals)
-                nc.Add(FlattenITE(RewriteITEFixPoint(CreateITE(c))));
+                if (eliminateMapUpdates)
+                    nc.Add(FlattenITE(RewriteITEFixPoint(CreateITE(c))));
+                else
+                    nc.Add(c);
             t = ExprUtil.ConjoinExprsBalanced(nc); //TODO: perform NNF should just take nc
             if (VCVerifier.CheckIfExprFalse(currImpl, t))
                 throw new Exception("Something wrong in ExplainError as EE thinks the trace looks infeasible");
@@ -1196,6 +1202,7 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "onlyDisplayMapExpressions", ref onlyDisplayMapExpressions)) continue;
                 if (CheckBooleanFlag(a, "dontDisplayComparisonsWithConsts", ref dontDisplayComparisonsWithConsts)) continue;
                 if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
+                if (CheckBooleanFlag(a, "eliminateMapUpdates", ref eliminateMapUpdates)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
                 if (CheckBooleanFlag(a, "showBoogieExprs", ref showBoogieExprs)) continue;
                 int eeCoverOptAsInt = 0;
