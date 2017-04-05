@@ -40,6 +40,7 @@ namespace FastAVN
         static string stack_extension = ".txt";
         static bool useMemNotDisk = false;
         static bool keepLongestTrace = false;
+        static bool useProvidedEntryPoints = false;
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -84,6 +85,12 @@ namespace FastAVN
 
             if (args.Any(s => s == "/splitFirst"))
                 Driver.earlySplit = true;
+
+            if (args.Any(s => s == "/useEntryPoints"))
+            {
+                avHarnessInstrArgs += "/useEntryPoints ";
+                useProvidedEntryPoints = true;
+            }
 
             if (args.Any(s => s == "/keepLongestTrace"))
                 Driver.keepLongestTrace = true;
@@ -211,6 +218,7 @@ namespace FastAVN
                 {
                     program = BoogieUtil.ReadAndOnlyResolve(inputfile);
                     program.TopLevelDeclarations.OfType<Implementation>()
+                        .Where(impl => !useProvidedEntryPoints || QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint") || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
                         .Iter(impl => entrypoints.Add(impl.Name));
 
                     var mayReach = 
