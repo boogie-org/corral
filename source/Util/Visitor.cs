@@ -1466,10 +1466,12 @@ namespace cba.Util
             public const string NameNotMatches = "#NameNotMatches";
             // procedure must be declared but not implemented
             public const string NoImplementation = "#NoImplementation";
+            // replace procedure body (instead of inserting at its beginning)
+            public const string ReplaceImplementation = "#ReplaceImplementation";
             //procedure to call in CorralExtraInit
             public const string CorralExtraInitExtn = "corralExtraInitExtension";
 
-            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NameNotMatches, NoImplementation, CorralExtraInitExtn };
+            public static string[] AllKeywords = { AnyParams, AnyArgs, AnyExpr, AnyLhss, AnyType, AnyProcedure, IdExpr, NameMatches, NameNotMatches, NoImplementation, ReplaceImplementation, CorralExtraInitExtn };
         }
     }
 }

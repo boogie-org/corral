@@ -218,7 +218,7 @@ namespace PropInst
 
                         var sv = new SubstitionVisitor(substitution);
                         var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
-                        if (impl.Blocks.Count > 0)
+                        if (impl.Blocks.Count > 0 && !QKeyValue.FindBoolAttribute(procSig.Attributes, ExprMatchVisitor.BoogieKeyWords.ReplaceImplementation))
                         {
                             impl.Blocks.Insert(0,
                                 BoogieAstFactory.MkBlock(newCmds,
@@ -226,6 +226,7 @@ namespace PropInst
                         }
                         else
                         {
+                            impl.Blocks = new List<Block>();
                             impl.Blocks.Add(
                                 BoogieAstFactory.MkBlock(newCmds));
                         }
@@ -236,7 +237,7 @@ namespace PropInst
             {
                 var sv = new SubstitionVisitor(paramSubstitution);
                 var newCmds = sv.VisitCmdSeq(rule.ProcedureToMatchToInsertion[procSig]);
-                if (impl.Blocks.Count > 0)
+                if (impl.Blocks.Count > 0 && !QKeyValue.FindBoolAttribute(procSig.Attributes, ExprMatchVisitor.BoogieKeyWords.ReplaceImplementation))
                 {
                     impl.Blocks.Insert(0,
                         BoogieAstFactory.MkBlock(newCmds,
@@ -244,6 +245,7 @@ namespace PropInst
                 }
                 else
                 {
+                    impl.Blocks = new List<Block>();
                     impl.Blocks.Add(
                         BoogieAstFactory.MkBlock(newCmds));
                 }
