@@ -32,6 +32,7 @@ namespace FastAVN
         static string mergedBugReportName = "bugs.txt";
         static string mergedBugReportCSV = "results.csv";
         static int numThreads = 4; // default number of parallel AVN instances
+        static int numSplitThreads = 4; // default number of parallel splitting instances
         static string angelic = "Angelic";
         static string trace_extension = ".tt";
         static string bug_folder = "Bugs";
@@ -109,6 +110,10 @@ namespace FastAVN
 
             args.Where(s => s.StartsWith("/numThreads:"))
                 .Iter(s => numThreads = int.Parse(s.Substring("/numThreads:".Length)));
+            numSplitThreads = numThreads;
+
+            args.Where(s => s.StartsWith("/numSplitThreads:"))
+                .Iter(s => numSplitThreads = int.Parse(s.Substring("/numSplitThreads:".Length)));
 
             args.Where(s => s.StartsWith("/killAfter:"))
                 .Iter(s => deadline = int.Parse(s.Substring("/killAfter:".Length)));
@@ -415,6 +420,8 @@ namespace FastAVN
                 Console.WriteLine("Ignoring small deadline of {0} seconds", deadline);
             }
 
+            Worker.SplittingSem = new Semaphore(numSplitThreads, numSplitThreads);
+
             var threads = new List<Thread>();
             for (int i = 0; i < numThreads; i++)
             {
@@ -479,6 +486,7 @@ namespace FastAVN
             Program program;
             static string counter_lock = "counter_lock";
             static int trunc_counter = 0;
+            public static Semaphore SplittingSem;
 
             public Worker(Program program, ConcurrentBag<Implementation> impls)
             {
@@ -515,29 +523,10 @@ namespace FastAVN
                     Directory.CreateDirectory(wd); // create new directory for each entrypoint
                     RemoteExec.CleanDirectory(wd);
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
-                    Program newprogram;
 
-                    // Each entrypoint should have its own copy of program
-                    if (useMemNotDisk)
-                    {
-                        newprogram = BoogieUtil.ReResolveInMem(program);
-                    }
-                    else
-                    {
-                        BoogieUtil.PrintProgram(program, pruneFile);
-                        newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile);
-                    }
-
-                    // slice the program by entrypoints
-                    Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
-                    BoogieUtil.pruneProcs(shallowP,
-                        shallowP.TopLevelDeclarations.OfType<Procedure>()
-                        .Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
-                        .Select(proc => proc.Name)
-                        .FirstOrDefault());
-
-                    File.Delete(pruneFile);
-                    BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
+                    SplittingSem.WaitOne();
+                    SimpleSplitAndCreateProgram(impl, pruneFile);
+                    SplittingSem.Release();
 
                     if (Driver.createEntryPointBplsOnly)
                     {
@@ -583,92 +572,14 @@ namespace FastAVN
                     RemoteExec.CleanDirectory(wd);
                     var pruneFile = Path.Combine(wd, "pruneSlice.bpl");
 
-                    var initProc = program.TopLevelDeclarations.OfType<Implementation>()
-                        .Where(im => QKeyValue.FindBoolAttribute(im.Attributes, AvUtil.AvnAnnotations.InitialializationProcAttr))
-                        .FirstOrDefault();
+                    SplittingSem.WaitOne();
+                    var success = SplitAndCreateProgram(impl, wd, pruneFile);
+                    SplittingSem.Release();
 
-                    var reachable = BoogieUtil.GetReachableNodes(impl.Name, CallGraph);
-                    if (initProc != null) reachable.UnionWith(BoogieUtil.GetReachableNodes(initProc.Name, CallGraph));
-
-                    var newprogram = new Program();
-
-                    newprogram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
-                        reachable.Contains((decl as Implementation).Name)));
-
-                    // Prune program
-                    var cutoff = approximationDepth < 0 ? blockingDepth : approximationDepth;
-                    if (cutoff > 0)
+                    if(!success)
                     {
-                        var pruneAway = ProcsAfterDepth(impl.Name, cutoff);
-                        if (initProc != null)
-                        {
-                            BoogieUtil.GetReachableNodes(initProc.Name, CallGraph)
-                                .Iter(s => pruneAway.Remove(s));
-                        }
-
-                        Debug.Assert(!pruneAway.Contains(impl.Name));
-
-                        if (blockingDepth > 0)
-                        {
-                            // add assume false
-                            var pimpls = new HashSet<Implementation>(newprogram.TopLevelDeclarations.OfType<Implementation>()
-                                .Where(i => pruneAway.Contains(i.Name)));
-                            foreach (var i in pimpls)
-                            {
-                                var fd = new FixedDuplicator(false);
-                                var copy = fd.VisitImplementation(i);
-                                copy.Blocks.Clear();
-                                copy.Blocks.Add(new Block(Token.NoToken, "start",
-                                    new List<Cmd> { BoogieAstFactory.MkAssume(Expr.False) },
-                                    new ReturnCmd(Token.NoToken)));
-                                newprogram.RemoveTopLevelDeclaration(i);
-                                newprogram.AddTopLevelDeclaration(copy);
-                            }
-                        }
-                        else
-                        {
-                            // delete the impl
-                            newprogram.RemoveTopLevelDeclarations(decl => decl is Implementation &&
-                                pruneAway.Contains((decl as Implementation).Name));
-                        }
-                    }
-
-                    var topLevelProcs = new HashSet<string> { impl.Name };
-                    if(initProc != null) topLevelProcs.Add(initProc.Name);                
-
-                    BoogieUtil.pruneProcs(newprogram, topLevelProcs);
-
-                    // Remove unnecessary decls
-                    var globalsUsed = new HashSet<string>();
-                    var functionsUsed = new HashSet<string>();
-                    newprogram.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable) && !(decl is Function))
-                        .Iter(decl =>
-                        {
-                            if(DeclToGlobalsUsed.ContainsKey(decl))
-                                globalsUsed.UnionWith(DeclToGlobalsUsed[decl]);
-                            if(DeclToFunctionsUsed.ContainsKey(decl))
-                                functionsUsed.UnionWith(DeclToFunctionsUsed[decl]);
-                        });
-
-                    newprogram.RemoveTopLevelDeclarations(decl => decl is GlobalVariable
-                        && !globalsUsed.Contains((decl as GlobalVariable).Name));
-                    newprogram.RemoveTopLevelDeclarations(decl => decl is Function
-                        && !functionsUsed.Contains((decl as Function).Name));
-
-                    Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name,
-                        newprogram.TopLevelDeclarations.OfType<Implementation>().Count());
-
-                    var mayReach =
-                        BoogieUtil.procsThatMaySatisfyPredicate(newprogram, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
-
-                    if (!mayReach.Contains(impl.Name))
-                    {
-                        PostProcess(impl.Name, wd, new List<string> { "Assert not reachable" });
                         continue;
                     }
-
-
-                    BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
                     if (Driver.createEntryPointBplsOnly)
                     {
@@ -702,6 +613,127 @@ namespace FastAVN
                     PostProcess(impl.Name, wd, hinstOut.Concat(output));
                 }
             }
+
+            private void SimpleSplitAndCreateProgram(Implementation impl, string pruneFile)
+            {
+                Program newprogram;
+
+                // Each entrypoint should have its own copy of program
+                if (useMemNotDisk)
+                {
+                    newprogram = BoogieUtil.ReResolveInMem(program);
+                }
+                else
+                {
+                    BoogieUtil.PrintProgram(program, pruneFile);
+                    newprogram = BoogieUtil.ReadAndOnlyResolve(pruneFile);
+                }
+
+                // slice the program by entrypoints
+                Program shallowP = pruneDeepProcs(newprogram, ref edges, impl.Name, approximationDepth, implNames);
+                BoogieUtil.pruneProcs(shallowP,
+                    shallowP.TopLevelDeclarations.OfType<Procedure>()
+                    .Where(proc => BoogieUtil.checkAttrExists("entrypoint", proc.Attributes))
+                    .Select(proc => proc.Name)
+                    .FirstOrDefault());
+
+                File.Delete(pruneFile);
+                BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
+            }
+
+            private bool SplitAndCreateProgram(Implementation impl, string wd, string pruneFile)
+            {
+                var initProc = program.TopLevelDeclarations.OfType<Implementation>()
+                    .Where(im => QKeyValue.FindBoolAttribute(im.Attributes, AvUtil.AvnAnnotations.InitialializationProcAttr))
+                    .FirstOrDefault();
+
+                var reachable = BoogieUtil.GetReachableNodes(impl.Name, CallGraph);
+                if (initProc != null) reachable.UnionWith(BoogieUtil.GetReachableNodes(initProc.Name, CallGraph));
+
+
+                var newprogram = new Program();
+
+                newprogram.AddTopLevelDeclarations(program.TopLevelDeclarations.Where(decl => !(decl is Implementation) ||
+                    reachable.Contains((decl as Implementation).Name)));
+
+                // Prune program
+                var cutoff = approximationDepth < 0 ? blockingDepth : approximationDepth;
+                if (cutoff > 0)
+                {
+                    var pruneAway = ProcsAfterDepth(impl.Name, cutoff);
+                    if (initProc != null)
+                    {
+                        BoogieUtil.GetReachableNodes(initProc.Name, CallGraph)
+                            .Iter(s => pruneAway.Remove(s));
+                    }
+
+                    Debug.Assert(!pruneAway.Contains(impl.Name));
+
+                    if (blockingDepth > 0)
+                    {
+                        // add assume false
+                        var pimpls = new HashSet<Implementation>(newprogram.TopLevelDeclarations.OfType<Implementation>()
+                            .Where(i => pruneAway.Contains(i.Name)));
+                        foreach (var i in pimpls)
+                        {
+                            var fd = new FixedDuplicator(false);
+                            var copy = fd.VisitImplementation(i);
+                            copy.Blocks.Clear();
+                            copy.Blocks.Add(new Block(Token.NoToken, "start",
+                                new List<Cmd> { BoogieAstFactory.MkAssume(Expr.False) },
+                                new ReturnCmd(Token.NoToken)));
+                            newprogram.RemoveTopLevelDeclaration(i);
+                            newprogram.AddTopLevelDeclaration(copy);
+                        }
+                    }
+                    else
+                    {
+                        // delete the impl
+                        newprogram.RemoveTopLevelDeclarations(decl => decl is Implementation &&
+                            pruneAway.Contains((decl as Implementation).Name));
+                    }
+                }
+
+                var topLevelProcs = new HashSet<string> { impl.Name };
+                if (initProc != null) topLevelProcs.Add(initProc.Name);
+
+                BoogieUtil.pruneProcs(newprogram, topLevelProcs);
+
+                // Remove unnecessary decls
+                var globalsUsed = new HashSet<string>();
+                var functionsUsed = new HashSet<string>();
+                newprogram.TopLevelDeclarations.Where(decl => !(decl is GlobalVariable) && !(decl is Function))
+                    .Iter(decl =>
+                    {
+                        if (DeclToGlobalsUsed.ContainsKey(decl))
+                            globalsUsed.UnionWith(DeclToGlobalsUsed[decl]);
+                        if (DeclToFunctionsUsed.ContainsKey(decl))
+                            functionsUsed.UnionWith(DeclToFunctionsUsed[decl]);
+                    });
+
+                newprogram.RemoveTopLevelDeclarations(decl => decl is GlobalVariable
+                    && !globalsUsed.Contains((decl as GlobalVariable).Name));
+                newprogram.RemoveTopLevelDeclarations(decl => decl is Function
+                    && !functionsUsed.Contains((decl as Function).Name));
+
+                Console.WriteLine("Running entrypoint {0} ({1} procs) {{", impl.Name,
+                    newprogram.TopLevelDeclarations.OfType<Implementation>().Count());
+
+                var mayReach =
+                    BoogieUtil.procsThatMaySatisfyPredicate(newprogram, cmd => (cmd is AssertCmd && !BoogieUtil.isAssertTrue(cmd)));
+
+                if (!mayReach.Contains(impl.Name))
+                {
+                    PostProcess(impl.Name, wd, new List<string> { "Assert not reachable" });
+                    return false;
+                }
+
+
+                BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
+
+                return true;
+            }
+
 
             static string TruncatePath(string implName)
             {
