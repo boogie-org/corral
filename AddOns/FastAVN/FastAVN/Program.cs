@@ -41,6 +41,7 @@ namespace FastAVN
         static bool useMemNotDisk = false;
         static bool keepLongestTrace = false;
         static bool useProvidedEntryPoints = false;
+        static bool onlyUseRootsAsEntryPoints = false;
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -90,6 +91,11 @@ namespace FastAVN
             {
                 avHarnessInstrArgs += "/useEntryPoints ";
                 useProvidedEntryPoints = true;
+            }
+
+            if (args.Any(s => s == "/onlyUseRootsAsEntryPoints"))
+            {
+                onlyUseRootsAsEntryPoints = true;
             }
 
             if (args.Any(s => s == "/keepLongestTrace"))
@@ -391,11 +397,26 @@ namespace FastAVN
                 return entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s)); 
             });
 
+            //only roots 
+            HashSet<string> nonRootImpls = null;
+            if (onlyUseRootsAsEntryPoints)
+            {
+                nonRootImpls = new HashSet<string>();
+                if (!earlySplit)
+                {
+                    edges.Iter(x => x.Value.Iter(y => nonRootImpls.Add(y)));
+                }
+                else {
+                    CallGraph.Edges.Iter(x => nonRootImpls.Add(x.Item2));
+                }
+            }
+
             // entrypoints
             var entrypoints = new ConcurrentBag<Implementation>(prog.TopLevelDeclarations.OfType<Implementation>()
                 .Where(impl => epNames.Contains(impl.Name))
                 .Where(impl => entryPointProcs == null || entryPointProcs.Contains(impl.Name))
-                .Where(impl => entryPointExcludes == null || !matchesEntryPointExclude(impl.Name)));
+                .Where(impl => entryPointExcludes == null || !matchesEntryPointExclude(impl.Name))
+                .Where(impl => nonRootImpls == null || !nonRootImpls.Contains(impl.Name)));
 
             // deadline
             if (deadline > 0)
