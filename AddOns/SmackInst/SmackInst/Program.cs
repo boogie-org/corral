@@ -972,6 +972,10 @@ namespace SmackInst
                 var newcmds = new List<Cmd>();
                 foreach (Cmd cmd in block.Cmds)
                 {
+                    if (cmd is AssumeCmd && BoogieUtil.checkAttrExists("nonnull", (cmd as AssumeCmd).Attributes))
+                    {
+                      continue;
+                    }
                     if (cmd is AssignCmd) newcmds.AddRange(ProcessAssign(cmd as AssignCmd, varDecls));
                     else if (cmd is AssumeCmd) newcmds.AddRange(ProcessAssume(cmd as AssumeCmd, varDecls));
                     else if (cmd is CallCmd) newcmds.AddRange(ProcessCall(cmd as CallCmd, varDecls));
