@@ -51,6 +51,9 @@ namespace cba
             }
         }
 
+        // additional variables to record
+        public static HashSet<string> varsToRecord = new HashSet<string>();
+
         // static inlining?
         public static int staticInlining = 0;
 

@@ -846,6 +846,9 @@ namespace FastAVN
             // failing location -> (metric_val, path_to_tt_file, path_to_stack_file)
             Dictionary<string, Tuple<int, string, string>> shortest_trace = new Dictionary<string, Tuple<int, string, string>>();
 
+            var bugInfoToInconsistencyNum = new Dictionary<string, string>();
+            var inconsistencyToTraceSet = new Dictionary<string, HashSet<int>>();
+
             foreach (string impl in entryPoints)
             {
                 if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), impl))) continue;
@@ -854,7 +857,7 @@ namespace FastAVN
 
                 string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
                 if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
-                int traceNum = 0;
+
 
                 try
                 {
@@ -865,12 +868,20 @@ namespace FastAVN
                         if (line.Contains("mustFail") && !line.Contains("notmustFail"))
                             continue;
                         // extract line from bug report but ignore the entrypoint info
-                        string bug_info = line.Substring(0, line.LastIndexOf(","));
-                        string file_name = angelic + traceNum.ToString() + trace_extension;
-                        string stack_filename = angelic + traceNum.ToString() + angelic_stack + stack_extension;
+                        var tokens = line.Split(',');
+                        string bug_info = tokens.Where((s, i) => i < tokens.Length - 2).Concat(",");
+
+                        var traceNumTokens = tokens.Last().Split('.');
+                        var inconsistencyNum = traceNumTokens.Length == 2 ? ("," + traceNumTokens[0]) : "";
+
+                        bug_info += inconsistencyNum;
+                        bugInfoToInconsistencyNum[bug_info] = inconsistencyNum;
+
+                        string file_name = angelic + tokens.Last() + trace_extension;
+                        string stack_filename = angelic + tokens.Last() + angelic_stack + stack_extension;
                         string trace_file = Path.Combine(Directory.GetCurrentDirectory(), impl, file_name);
                         string stack_file = Path.Combine(Directory.GetCurrentDirectory(), impl, stack_filename);
-                        int metric = getMetric(traceNum, trace_file);
+                        int metric = getMetric(trace_file);
 
                         if (dbg) Utils.Print(string.Format("Bug File -> {0} {1}", bug_info, trace_file), Utils.PRINT_TAG.AV_DEBUG);
                         if (dbg) Utils.Print(string.Format("Metric -> {0}", metric), Utils.PRINT_TAG.AV_DEBUG);
@@ -886,7 +897,6 @@ namespace FastAVN
                             }
                         }
                         else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file, stack_file));
-                        traceNum++;
                     }
 
                 }
@@ -905,7 +915,25 @@ namespace FastAVN
             string trace_path = Path.Combine(Directory.GetCurrentDirectory(), bug_folder);
             int index = 0;
             Directory.CreateDirectory(bug_folder);
-            
+
+            foreach (string bug in shortest_trace.Keys)
+            {
+                if (bugInfoToInconsistencyNum[bug] == "") continue;
+                if (!inconsistencyToTraceSet.ContainsKey(bugInfoToInconsistencyNum[bug]))
+                {
+                    inconsistencyToTraceSet.Add(bugInfoToInconsistencyNum[bug], new HashSet<int>());
+                }
+                inconsistencyToTraceSet[bugInfoToInconsistencyNum[bug]].Add(index);
+                index++;
+            }
+
+            var ToMsg = new Func<HashSet<int>, string>(hs =>
+            {
+                var msg = string.Format("Inconsistency Bug Set: {{ {0} }}", hs.Select(i => i.ToString()).Concat(","));
+                return msg.Replace(' ', '_');
+            });
+
+            index = 0;
             foreach (string bug in shortest_trace.Keys)
             {
                 string file_name = bug_filename + index.ToString() + trace_extension;
@@ -917,7 +945,20 @@ namespace FastAVN
                     // create another copy of the buggy trace (for easy viewing with SDV)
                     var subdir = string.Format("Bug{0}", index);
                     Directory.CreateDirectory(Path.Combine(bug_folder, subdir));
-                    File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, subdir, "defect.tt"));
+                    if (bugInfoToInconsistencyNum[bug] == "")
+                    {
+                        File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, subdir, "defect.tt"));
+                    }
+                    else
+                    {
+                        var msg = ToMsg(inconsistencyToTraceSet[bugInfoToInconsistencyNum[bug]]);
+                        var lines = File.ReadAllLines(shortest_trace[bug].Item2);
+                        for (int i = 0; i < lines.Length; i++)
+                        {
+                            lines[i] = lines[i].Replace("====Auto=====", "====Auto=====^" + msg);
+                        }
+                        File.WriteAllLines(Path.Combine(trace_path, subdir, "defect.tt"), lines);
+                    }
                 }
                 catch (FileNotFoundException)
                 {
@@ -937,7 +978,7 @@ namespace FastAVN
             }
         }
 
-        private static int getMetric(int traceno, string trace_file)
+        private static int getMetric(string trace_file)
         {
             int num_lines = 0;
 

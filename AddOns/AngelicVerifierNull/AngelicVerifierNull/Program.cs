@@ -67,6 +67,7 @@ namespace AngelicVerifierNull
 
         static string boogieOpts = "";
         static string corralOpts = "";
+        public static HashSet<string> recordVars = new HashSet<string>();
         static int timeout = 0;
         static int timeoutRelax = 100;
         public static bool allocateParameters = true; //allocating parameters for procedures
@@ -244,6 +245,9 @@ namespace AngelicVerifierNull
             args.Where(s => s.StartsWith("/killAfter:"))
                 .Iter(s => Options.killAfter = int.Parse(s.Substring("/killAfter:".Length)));
 
+            args.Where(s => s.StartsWith("/recordVar:"))
+                .Iter(s => Driver.recordVars.Add(s.Substring("/recordVar:".Length)));
+
             if (args.Any(s => s == "/traceSlicing"))
                 Options.TraceSlicing = true;
 
@@ -267,7 +271,7 @@ namespace AngelicVerifierNull
             if (resultsfilename != null)
             {
                 ResultsFile = new System.IO.StreamWriter(resultsfilename);
-                ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status"); // result file header
+                ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status,Trace Number"); // result file header
                 ResultsFile.Flush();
             }
         }
@@ -298,6 +302,9 @@ namespace AngelicVerifierNull
             corralOpts += " doesntExist.bpl /track:alloc /track:$Alloc /useProverEvaluate /printVerify ";
             var config = cba.Configs.parseCommandLine(corralOpts.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
             config.boogieOpts += boogieOpts;
+            cba.GlobalConfig.varsToRecord = new HashSet<string>(recordVars);
+            config.trackedVars.UnionWith(recordVars);
+
             cba.Driver.Initialize(config);
 
             cba.VerificationPass.usePruning = false;
@@ -728,6 +735,8 @@ namespace AngelicVerifierNull
             traces = "{" + traces + "}";
             Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: Failing traces {0}", traces), Utils.PRINT_TAG.AV_OUTPUT);
 
+            int c;
+
             if (Driver.printTraceMode == PRINT_TRACE_MODE.Sdv)
             {
                 if (traceInfos.Count() == 1)
@@ -738,19 +747,18 @@ namespace AngelicVerifierNull
                 }
                 else
                 {
-                    int c = 0;
+                    c = 0;
                     foreach (var t in traceInfos)
                     {
-                        System.IO.File.Copy(traceInfos.First().TraceName + ".tt", "Angelic" + AngelicCount + "." + (c) + ".tt", true);
-                        System.IO.File.Copy(traceInfos.First().TraceName + ".txt", "Angelic" + AngelicCount + "." + (c) + ".txt", true);
-                        System.IO.File.Copy(traceInfos.First().TraceName + "stack.txt", "Angelic" + AngelicCount + "." + (c) + "stack.txt", true);
+                        System.IO.File.Copy(t.TraceName + ".tt", "Angelic" + AngelicCount + "." + (c) + ".tt", true);
+                        System.IO.File.Copy(t.TraceName + ".txt", "Angelic" + AngelicCount + "." + (c) + ".txt", true);
+                        System.IO.File.Copy(t.TraceName + "stack.txt", "Angelic" + AngelicCount + "." + (c) + "stack.txt", true);
                         c++;
                     }
                 }
             }
 
-            AngelicCount++;
-
+            c = 0;
             foreach (var traceInfo in traceInfos)
             {
                 var tok = instr.SuppressAssert(traceInfo.TraceProgram);
@@ -759,6 +767,9 @@ namespace AngelicVerifierNull
                 var failingProc = instr.GetFailingAssertProcName(tok);
 
                 var output = "";
+
+                var traceNumber = traceInfos.Count() == 1 ? AngelicCount.ToString() : (AngelicCount + "." + c);
+
                 // screen output
                 if (traceInfo.AssertLoc != null)
                 {
@@ -769,8 +780,8 @@ namespace AngelicVerifierNull
                     // format: Description, Src File, Line, Procedure, EntryPoint
                     if (ResultsFile != null)
                     {
-                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4}",
-                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, failStatus);
+                        ResultsFile.WriteLine("Assertion {0} failed,{1},{2},{3},{4},{5}",
+                            failingAssert.Expr.ToString(), traceInfo.AssertLoc.Item1, traceInfo.AssertLoc.Item2, failingProc, failStatus, traceNumber);
                         ResultsFile.Flush();
                     }
                 }
@@ -782,7 +793,10 @@ namespace AngelicVerifierNull
 
                 Console.WriteLine("{0}", output);
                 Utils.Print(string.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);
+                c++;
             }
+
+            AngelicCount++;
 
             //if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
             //    Utils.Print(String.Format("ANGELIC_VERIFIER_WARNING: {0}", output), Utils.PRINT_TAG.AV_OUTPUT);

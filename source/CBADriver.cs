@@ -73,6 +73,12 @@ namespace cba
                 recordK.Add(cp2.varKName); recordK.Add(cp2.tidVarName);
             }
 
+            if (GlobalConfig.varsToRecord.Count != 0)
+            {
+                recordK.UnionWith(GlobalConfig.varsToRecord);
+                recordK.IntersectWith(trackedVars.Variables);
+            }
+
             // Now verify  
             VerificationPass cp4 = new VerificationPass(true, recordK);
             curr = cp4.run(curr);
