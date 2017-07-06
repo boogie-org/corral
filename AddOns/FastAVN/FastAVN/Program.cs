@@ -368,6 +368,12 @@ namespace FastAVN
         /// <param name="prog">Original program</param>
         private static void RunAVN(Program prog, HashSet<string> epNames)
         {
+            if(epNames.Count == 0)
+            {
+                Console.WriteLine("No entrypoints. All verified.");
+                return;
+            }
+
             // compute and stash some common information
             if (!earlySplit)
             {
@@ -417,6 +423,12 @@ namespace FastAVN
                 .Where(impl => entryPointProcs == null || entryPointProcs.Contains(impl.Name))
                 .Where(impl => entryPointExcludes == null || !matchesEntryPointExclude(impl.Name))
                 .Where(impl => nonRootImpls == null || !nonRootImpls.Contains(impl.Name)));
+
+            if(entrypoints.Count == 0)
+            {
+                Console.WriteLine("No entrypoints. All verified.");
+                return;
+            }
 
             // deadline
             if (deadline > 0)

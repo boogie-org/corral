@@ -594,17 +594,31 @@ namespace AvHarnessInstrumentation
                     program = RunAliasAnalysis(program);
                     Stats.stop("alias.analysis");
 
-                    Utils.Print(string.Format("#AssertsAfterAA : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                    var assertCnt = AssertCountVisitor.Count(program.getProgram());
+                    Utils.Print(string.Format("#AssertsAfterAA : {0}", assertCnt), Utils.PRINT_TAG.AV_STATS);
 
                     // run Houdini pass
                     if (Options.HoudiniPass)
                     {
                         Utils.Print("Running Houdini Pass");
                         program = RunHoudiniPass(program);
-                        Utils.Print(string.Format("#Asserts : {0}", AssertCountVisitor.Count(program.getProgram())), Utils.PRINT_TAG.AV_STATS);
+                        assertCnt = AssertCountVisitor.Count(program.getProgram());
+                        Utils.Print(string.Format("#Asserts : {0}", assertCnt), Utils.PRINT_TAG.AV_STATS);
                     }
 
-                    program.writeToFile(args[1]);
+                    if (assertCnt == 0)
+                    {
+                        // program has been proved correct
+                        // Write a trivial program
+                        System.IO.File.WriteAllLines(args[1], new string[]
+                        {
+                            "procedure {:entrypoint} {:NoVerificationNecessary} dummy() { }"
+                        });
+                    }
+                    else
+                    {
+                        program.writeToFile(args[1]);
+                    }
                 }
             }
             catch (Exception e)
