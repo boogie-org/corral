@@ -544,7 +544,7 @@ namespace AngelicVerifierNull
         public Tuple<string, int> PrintErrorTrace(cba.ErrorTrace trace, string filename, List<Tuple<string, int, string>> eeSlicedSourceLines, string failStatus)
         {
             trace = mapBackTrace(trace);
-            
+
             if (Driver.printTraceMode == Driver.PRINT_TRACE_MODE.Boogie)
             {
                 cba.PrintProgramPath.print(input, trace, filename);
@@ -564,7 +564,7 @@ namespace AngelicVerifierNull
                 cba.PrintSdvPath.failStatus = failStatus;
 
                 
-                cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
+                cba.PrintSdvPath.Print(input.getProgram(), trace, Driver.recordVars, "",
                     filename + ".tt", filename + "stack.txt");
 
                 if (cba.PrintSdvPath.abortMessage != null)
@@ -579,7 +579,7 @@ namespace AngelicVerifierNull
                     return null;
                 cba.PrintSdvPath.failingLocation = Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
 
-                cba.PrintSdvPath.Print(input.getProgram(), trace, new HashSet<string>(), "",
+                cba.PrintSdvPath.Print(input.getProgram(), trace, Driver.recordVars, "",
                     filename + ".tt", filename + "stack.txt");
 
                 if (cba.PrintSdvPath.abortMessage != null)
