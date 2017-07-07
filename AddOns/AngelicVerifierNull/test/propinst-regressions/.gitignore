@@ -1,0 +1,10 @@
+*_pinst.bpl
+*_pinst_hinst.bpl
+*_pinst_hinst_inst.bpl
+*_trace.txt
+Trace*.bpl
+ee*.bpl
+Output
+delout
+temp_rar.bpl
+last_query.bpl

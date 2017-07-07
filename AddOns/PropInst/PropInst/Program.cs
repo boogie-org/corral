@@ -146,14 +146,14 @@ namespace PropInst
                 foreach (var procSig in rule.ProcedureToMatchToInsertion.Keys)
                 {
 					// match references attribute
-					bool matchRefs = QKeyValue.FindBoolAttribute(procSig.Attributes, ExprMatchVisitor.BoogieKeyWords.MatchRefs);
+					bool matchPtrs = QKeyValue.FindBoolAttribute(procSig.Attributes, ExprMatchVisitor.BoogieKeyWords.MatchPtrs);
 
 					int anyParamsPosition;
                     QKeyValue anyParamsAttributes;
                     int anyParamsPositionOut;
                     QKeyValue anyParamsAttributesOut;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out anyParamsAttributesOut, out anyParamsPositionOut, out paramSubstitution, matchRefs))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out anyParamsAttributesOut, out anyParamsPositionOut, out paramSubstitution, matchPtrs))
                     {
                         Implementation impl = null;
                         if (dwf is Implementation)

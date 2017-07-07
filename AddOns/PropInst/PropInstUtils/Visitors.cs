@@ -197,7 +197,7 @@ namespace PropInstUtils
 
     public class ProcedureSigMatcher
     {
-        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution, bool matchRefs)
+        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution, bool matchPtrs)
         {
             toMatchAnyParamsAttributes = null;
             anyParamsPosition = int.MaxValue;
@@ -265,15 +265,15 @@ namespace PropInstUtils
                         return false;
             }
 
-            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.Proc.InParams, toMatch.Proc.InParams, dwf.InParams, matchRefs)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.Proc.InParams, toMatch.Proc.InParams, dwf.InParams, matchPtrs)) return false;
 
-            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.Proc.OutParams, toMatch.Proc.OutParams, dwf.OutParams, matchRefs)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.Proc.OutParams, toMatch.Proc.OutParams, dwf.OutParams, matchPtrs)) return false;
 
             return true;
         }
 
         private static bool MatchParams(ref QKeyValue toMatchAnyParamsAttributes, ref int anyParamsPosition,
-            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, bool matchRefs)
+            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, bool matchPtrs)
         {
             // match procedure parameters
             for (var i = 0; i < toMatchInParams.Count; i++)
@@ -302,9 +302,9 @@ namespace PropInstUtils
                 if (!toMatchInParams[i].TypedIdent.Type.Equals(dwfInParams[i].TypedIdent.Type))
                     return false;
 
-				// if {:#MatchRefs} attribute is present, check if parameter references match
-				if (matchRefs)
-					if (!MatchRefs(toMatchInParams[i], dwfInParams[i]))
+				// if {:#MatchPtrs} attribute is present, check if pointer references match
+				if (matchPtrs)
+					if (!MatchPtrs(toMatchInParams[i], dwfInParams[i]))
 						return false;
 
 				paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
@@ -313,18 +313,18 @@ namespace PropInstUtils
         }
 
 		// Checks if the parameter references in 'var1' matches with that of 'var2'
-		private static bool MatchRefs(Variable var1, Variable var2)
+		private static bool MatchPtrs(Variable var1, Variable var2)
 		{
-			HashSet<string> refs1 = GetRefsInVar(var1);
-			HashSet<string> refs2 = GetRefsInVar(var2);
+			HashSet<string> ptrs1 = GetPtrsInVar(var1);
+			HashSet<string> ptrs2 = GetPtrsInVar(var2);
 
-			if (refs1.Count != refs2.Count)
+			if (ptrs1.Count != ptrs2.Count)
 				return false;
 
 			bool disjoint = true;
-			foreach (string str in refs1)
+			foreach (string str in ptrs1)
 			{
-				if (!refs2.Contains(str))
+				if (!ptrs2.Contains(str))
 				{
 					disjoint = false;
 					break;
@@ -335,13 +335,13 @@ namespace PropInstUtils
 		}
 
 		// Returns the parameter references of 'var'
-		private static HashSet<string> GetRefsInVar(Variable var)
+		private static HashSet<string> GetPtrsInVar(Variable var)
 		{
 			HashSet<string> refs = new HashSet<string>();
 
 			for (QKeyValue kv = var.Attributes; kv != null; kv = kv.Next)
 			{
-				if (kv.Key.Equals("ref"))
+				if (kv.Key.Equals("ptr"))
 				{
 					foreach (string str in kv.Params)
 						refs.Add(str);
