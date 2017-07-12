@@ -4318,7 +4318,15 @@ namespace CoreLib
                                     Model.Func f = model.TryGetFunc(name);
                                     if (f != null)
                                     {
-                                        args.Add(f.GetConstant());
+                                        var val = f.GetConstant();
+                                        if (val is Model.DatatypeValue)
+                                        {
+                                            args.Add(GenerateTraceValue(val));
+                                        }
+                                        else
+                                        {
+                                            args.Add(val);
+                                        }
                                     }
                                 }
                                 else
@@ -4337,6 +4345,49 @@ namespace CoreLib
             Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, model, svc.info.mvInfo, si.prover.Context);
             newCounterexample.AddCalleeCounterexample(calleeCounterexamples);
             return newCounterexample;
+        }
+
+        private String GenerateTraceValue(Model.Element element)
+        {
+            var str = new System.IO.StringWriter();
+            if (element is Model.DatatypeValue)
+            {
+                var val = (Model.DatatypeValue)element;
+                if (val.ConstructorName == "_" && val.Arguments[0].ToString() == "(as-array)")
+                {
+                    var parens = val.Arguments[1].ToString();
+                    var func = element.Model.TryGetFunc(parens.Substring(1, parens.Length - 2));
+                    if (func != null)
+                    {
+                        str.Write("{");
+                        var appCount = 0;
+                        foreach (var app in func.Apps)
+                        {
+                            if (appCount++ > 0)
+                                str.Write(", ");
+                            str.Write("[");
+                            var argCount = 0;
+                            foreach (var arg in app.Args)
+                            {
+                                if (argCount++ > 0)
+                                    str.Write(", ");
+                                str.Write(GenerateTraceValue(arg));
+                            }
+                            str.Write("]: {0}", GenerateTraceValue(app.Result));
+                        }
+                        if (func.Else != null)
+                        {
+                            if (func.AppCount > 0)
+                                str.Write(", ");
+                            str.Write("*: {0}", GenerateTraceValue(func.Else));
+                        }
+                        str.Write("}");
+                    }
+                }
+            }
+            if (str.ToString() == "")
+                str.Write(element.ToString());
+            return str.ToString();
         }
     }
 
