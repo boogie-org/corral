@@ -840,14 +840,24 @@ namespace FastAVN
             return killed;
         }
 
+        class TraceInfo
+        {
+            public int metric_value;
+            public List<Tuple<string, string>> traces;
+
+            public TraceInfo()
+            {
+                metric_value = 0;
+                traces = new List<Tuple<string, string>>();
+            }
+        }
+
         private static void mergeBugs(HashSet<string> entryPoints)
         {
             bool dbg = false;
-            // failing location -> (metric_val, path_to_tt_file, path_to_stack_file)
-            Dictionary<string, Tuple<int, string, string>> shortest_trace = new Dictionary<string, Tuple<int, string, string>>();
-
-            var bugInfoToInconsistencyNum = new Dictionary<string, string>();
-            var inconsistencyToTraceSet = new Dictionary<string, HashSet<int>>();
+            var sep = "###";
+            // failing location -> TraceInfo
+            var shortest_trace = new Dictionary<string, TraceInfo>();
 
             foreach (string impl in entryPoints)
             {
@@ -858,6 +868,8 @@ namespace FastAVN
                 string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
                 if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
 
+                // (assert, metric, inconsistencySet, trace_file, stack_file)
+                var traces = new List<Tuple<string, int, int, string, string>>();
 
                 try
                 {
@@ -872,10 +884,7 @@ namespace FastAVN
                         string bug_info = tokens.Where((s, i) => i < tokens.Length - 2).Concat(",");
 
                         var traceNumTokens = tokens.Last().Split('.');
-                        var inconsistencyNum = traceNumTokens.Length == 2 ? ("," + traceNumTokens[0]) : "";
-
-                        bug_info += inconsistencyNum;
-                        bugInfoToInconsistencyNum[bug_info] = inconsistencyNum;
+                        var inconsistencyNum = traceNumTokens.Length == 2 ? Int32.Parse(traceNumTokens[0]) : -1;
 
                         string file_name = angelic + tokens.Last() + trace_extension;
                         string stack_filename = angelic + tokens.Last() + angelic_stack + stack_extension;
@@ -886,17 +895,7 @@ namespace FastAVN
                         if (dbg) Utils.Print(string.Format("Bug File -> {0} {1}", bug_info, trace_file), Utils.PRINT_TAG.AV_DEBUG);
                         if (dbg) Utils.Print(string.Format("Metric -> {0}", metric), Utils.PRINT_TAG.AV_DEBUG);
 
-                        if (shortest_trace.ContainsKey(bug_info))
-                        {
-                            if (!keepLongestTrace)
-                            {
-                                if (metric < shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
-                            } else
-                            {
-                                if (metric > shortest_trace[bug_info].Item1) shortest_trace[bug_info] = Tuple.Create(metric, trace_file, stack_file);
-                            }
-                        }
-                        else shortest_trace.Add(bug_info, Tuple.Create(metric, trace_file, stack_file));
+                        traces.Add(Tuple.Create(bug_info, metric, inconsistencyNum, trace_file, stack_file));
                     }
 
                 }
@@ -910,22 +909,83 @@ namespace FastAVN
                     Console.WriteLine(e.Message);
                     Console.WriteLine(e.StackTrace);
                 }
+
+                // inconsistencySet -> asserts
+                var inconsistencySetAsserts = new Dictionary<int, List<string>>();
+                // inconsistencySet -> TraceInfo
+                var inconsistencySetTraceInfo = new Dictionary<int, TraceInfo>();
+
+                foreach (var tup in traces.Where(t => t.Item3 >= 0))
+                {
+                    if (!inconsistencySetAsserts.ContainsKey(tup.Item3))
+                    {
+                        inconsistencySetAsserts.Add(tup.Item3, new List<string>());
+                        inconsistencySetTraceInfo.Add(tup.Item3, new TraceInfo());
+                    }
+                    inconsistencySetAsserts[tup.Item3].Add(tup.Item1);
+                    inconsistencySetTraceInfo[tup.Item3].metric_value += tup.Item2;
+                    inconsistencySetTraceInfo[tup.Item3].traces.Add(Tuple.Create(tup.Item4, tup.Item5));
+                }
+                inconsistencySetAsserts.Iter(tup => tup.Value.Sort());
+
+                // merge non-inconsistency bugs
+                foreach (var tup in traces.Where(t => t.Item3 < 0))
+                {
+                    var tinfo = new TraceInfo();
+
+                    if (!shortest_trace.ContainsKey(tup.Item1))
+                    {
+                        tinfo.metric_value = tup.Item2;
+                        tinfo.traces.Add(Tuple.Create(tup.Item4, tup.Item5));
+                        shortest_trace.Add(tup.Item1, tinfo);
+                    }
+                    else if (shortest_trace[tup.Item1].metric_value > tup.Item2)
+                    {
+                        shortest_trace[tup.Item1].metric_value = tup.Item2;
+                        shortest_trace[tup.Item1].traces = new List<Tuple<string, string>> { Tuple.Create(tup.Item4, tup.Item5) };
+                    }
+                    continue;
+                }
+
+
+
+                // merge inconsistency bugs
+                foreach (var tup in inconsistencySetAsserts)
+                {
+                    // check if any strict assert-subset already exists
+                    var discard = false;
+                    var assertSet = tup.Value;
+                    var prefix = "";
+                    for (int i = 0; i < assertSet.Count - 1; i++)
+                    {
+                        prefix += assertSet[i] + sep;
+                        if (shortest_trace.ContainsKey(prefix))
+                        {
+                            discard = true;
+                            break;
+                        }
+                    }
+
+                    if (discard)
+                    {
+                        continue;
+                    }
+
+                    prefix += assertSet[assertSet.Count - 1];
+                    if (!shortest_trace.ContainsKey(prefix))
+                    {
+                        shortest_trace.Add(prefix, inconsistencySetTraceInfo[tup.Key]);
+                    }
+                    else if (shortest_trace[prefix].metric_value > inconsistencySetTraceInfo[tup.Key].metric_value)
+                    {
+                        shortest_trace[prefix] = inconsistencySetTraceInfo[tup.Key];
+                    }
+                }
             }
 
             string trace_path = Path.Combine(Directory.GetCurrentDirectory(), bug_folder);
             int index = 0;
             Directory.CreateDirectory(bug_folder);
-
-            foreach (string bug in shortest_trace.Keys)
-            {
-                if (bugInfoToInconsistencyNum[bug] == "") continue;
-                if (!inconsistencyToTraceSet.ContainsKey(bugInfoToInconsistencyNum[bug]))
-                {
-                    inconsistencyToTraceSet.Add(bugInfoToInconsistencyNum[bug], new HashSet<int>());
-                }
-                inconsistencyToTraceSet[bugInfoToInconsistencyNum[bug]].Add(index);
-                index++;
-            }
 
             var ToMsg = new Func<HashSet<int>, string>(hs =>
             {
@@ -936,35 +996,45 @@ namespace FastAVN
             index = 0;
             foreach (string bug in shortest_trace.Keys)
             {
-                string file_name = bug_filename + index.ToString() + trace_extension;
-                string stack_filename = bug_filename + index.ToString() + angelic_stack + stack_extension;
-                try
+                var inconsistencySet = new HashSet<int>();
+                if (shortest_trace[bug].traces.Count > 1)
                 {
-                    File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, file_name));
-                    File.Copy(shortest_trace[bug].Item3, Path.Combine(trace_path, stack_filename));
-                    // create another copy of the buggy trace (for easy viewing with SDV)
-                    var subdir = string.Format("Bug{0}", index);
-                    Directory.CreateDirectory(Path.Combine(bug_folder, subdir));
-                    if (bugInfoToInconsistencyNum[bug] == "")
+                    for (int i = 0; i < shortest_trace[bug].traces.Count; i++)
+                        inconsistencySet.Add(index + i);
+                }
+
+                foreach (var tup in shortest_trace[bug].traces)
+                {
+                    string file_name = bug_filename + index.ToString() + trace_extension;
+                    string stack_filename = bug_filename + index.ToString() + angelic_stack + stack_extension;
+                    try
                     {
-                        File.Copy(shortest_trace[bug].Item2, Path.Combine(trace_path, subdir, "defect.tt"));
-                    }
-                    else
-                    {
-                        var msg = ToMsg(inconsistencyToTraceSet[bugInfoToInconsistencyNum[bug]]);
-                        var lines = File.ReadAllLines(shortest_trace[bug].Item2);
-                        for (int i = 0; i < lines.Length; i++)
+                        File.Copy(tup.Item1, Path.Combine(trace_path, file_name));
+                        File.Copy(tup.Item2, Path.Combine(trace_path, stack_filename));
+                        // create another copy of the buggy trace (for easy viewing with SDV)
+                        var subdir = string.Format("Bug{0}", index);
+                        Directory.CreateDirectory(Path.Combine(bug_folder, subdir));
+                        if (inconsistencySet.Count == 0)
                         {
-                            lines[i] = lines[i].Replace("====Auto=====", "====Auto=====^" + msg);
+                            File.Copy(tup.Item1, Path.Combine(trace_path, subdir, "defect.tt"));
                         }
-                        File.WriteAllLines(Path.Combine(trace_path, subdir, "defect.tt"), lines);
+                        else
+                        {
+                            var msg = ToMsg(inconsistencySet);
+                            var lines = File.ReadAllLines(tup.Item1);
+                            for (int i = 0; i < lines.Length; i++)
+                            {
+                                lines[i] = lines[i].Replace("====Auto=====", "====Auto=====^" + msg);
+                            }
+                            File.WriteAllLines(Path.Combine(trace_path, subdir, "defect.tt"), lines);
+                        }
                     }
+                    catch (FileNotFoundException)
+                    {
+                        Utils.Print(string.Format("Trace file not found: {0}", tup.Item1));
+                    }
+                    index++;
                 }
-                catch (FileNotFoundException)
-                {
-                    Utils.Print(string.Format("Trace file not found: {0}", shortest_trace[bug].Item2));
-                }
-                index++;
             }
 
             using (StreamWriter bugReportWriter = new StreamWriter(Path.Combine(Directory.GetCurrentDirectory(), mergedBugReportCSV)))
@@ -973,7 +1043,8 @@ namespace FastAVN
                 foreach (string bug in shortest_trace.Keys)
                 {
                     Stats.count("#Bugs");
-                    bugReportWriter.WriteLine(bug);
+                    var report = bug.Replace(sep, Environment.NewLine);
+                    bugReportWriter.WriteLine(report);
                 }
             }
         }
