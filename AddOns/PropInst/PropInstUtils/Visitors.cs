@@ -265,9 +265,9 @@ namespace PropInstUtils
                         return false;
             }
 
-            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.Proc.InParams, toMatch.Proc.InParams, dwf.InParams, matchPtrs)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams, matchPtrs)) return false;
 
-            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.Proc.OutParams, toMatch.Proc.OutParams, dwf.OutParams, matchPtrs)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams, matchPtrs)) return false;
 
             return true;
         }
@@ -304,7 +304,7 @@ namespace PropInstUtils
 
 				// if {:#MatchPtrs} attribute is present, check if pointer references match
 				if (matchPtrs)
-					if (!MatchPtrs(toMatchInParams[i], dwfInParams[i]))
+					if (!MatchPtrs(toMatchProcInParams[i], dwfInParams[i]))
 						return false;
 
 				paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));

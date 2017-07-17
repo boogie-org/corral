@@ -32,11 +32,9 @@ ProcedureRule
 }
 -->
 {
-	// TODO
 	assert irql_current <= 1;
 	return;
 }
-
 
 ProcedureRule
 {
@@ -44,7 +42,27 @@ ProcedureRule
 }
 -->
 {
-	// TODO
 	assert irql_current <= 2;
+	return;
+}
+
+
+ProcedureRule
+{
+	procedure {:#ReplaceImplementation} {:#MatchPtrs} foo({:pointer} {:ptr "Mem_T.INT"} x0: int, {:pointer} {:ptr "Mem_T.VOID"} x1: int);
+}
+-->
+{
+	assert irql_current <= x0;
+	return;
+}
+
+ProcedureRule
+{
+	procedure {:#ReplaceImplementation} {:#MatchPtrs} foo({:pointer} {:ptr "Mem_T.VOID"} x0: int, {:pointer} {:ptr "Mem_T.INT"} x1: int);
+}
+-->
+{
+	assert irql_current <= x1;
 	return;
 }
