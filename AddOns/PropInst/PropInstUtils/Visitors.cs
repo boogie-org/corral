@@ -265,15 +265,21 @@ namespace PropInstUtils
                         return false;
             }
 
-            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams, matchPtrs)) return false;
+			Procedure dwfProc = null;
+			if (dwf is Implementation)
+				dwfProc = ((Implementation)dwf).Proc;
+			else if (dwf is Procedure)
+				dwfProc = (Procedure)dwf;
 
-            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams, matchPtrs)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams,dwfProc.InParams, matchPtrs)) return false;
+
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams,dwfProc.OutParams, matchPtrs)) return false;
 
             return true;
         }
 
         private static bool MatchParams(ref QKeyValue toMatchAnyParamsAttributes, ref int anyParamsPosition,
-            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, bool matchPtrs)
+            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, List<Variable> dwfProcInParams, bool matchPtrs)
         {
             // match procedure parameters
             for (var i = 0; i < toMatchInParams.Count; i++)
@@ -304,7 +310,7 @@ namespace PropInstUtils
 
 				// if {:#MatchPtrs} attribute is present, check if pointer references match
 				if (matchPtrs)
-					if (!MatchPtrs(toMatchProcInParams[i], dwfInParams[i]))
+					if (!MatchPtrs(toMatchProcInParams[i], dwfProcInParams[i]))
 						return false;
 
 				paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
