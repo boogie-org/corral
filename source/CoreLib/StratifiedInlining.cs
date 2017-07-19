@@ -4364,29 +4364,29 @@ namespace CoreLib
                         foreach (var app in func.Apps)
                         {
                             if (appCount++ > 0)
-                                str.Write(", ");
-                            str.Write("[");
+                                str.Write(",");
+                            str.Write("\"");
                             var argCount = 0;
                             foreach (var arg in app.Args)
                             {
                                 if (argCount++ > 0)
-                                    str.Write(", ");
+                                    str.Write(",");
                                 str.Write(GenerateTraceValue(arg));
                             }
-                            str.Write("]: {0}", GenerateTraceValue(app.Result));
+                            str.Write("\":{0}", GenerateTraceValue(app.Result));
                         }
                         if (func.Else != null)
                         {
                             if (func.AppCount > 0)
-                                str.Write(", ");
-                            str.Write("*: {0}", GenerateTraceValue(func.Else));
+                                str.Write(",");
+                            str.Write("\"*\":{0}", GenerateTraceValue(func.Else));
                         }
                         str.Write("}");
                     }
                 }
             }
             if (str.ToString() == "")
-                str.Write(element.ToString());
+                str.Write(element.ToString().Replace(" ", "").Replace("(", "").Replace(")", ""));
             return str.ToString();
         }
     }
