@@ -385,6 +385,19 @@ namespace FastAVN
                 // for populating pred/succ cache
                 CallGraph.Successors(CallGraph.Nodes.First());
 
+                // function call graph
+                var funcCallGraph = new Microsoft.Boogie.GraphUtil.Graph<string>();
+                prog.TopLevelDeclarations.OfType<Function>()
+                    .Iter(f => funcCallGraph.Nodes.Add(f.Name));
+
+                foreach(var func in prog.TopLevelDeclarations.OfType<Function>())
+                {
+                    if (func.Body == null) continue;
+                    var vu = new VarsUsed();
+                    vu.VisitExpr(func.Body);
+                    vu.functionsUsed.Iter(used => funcCallGraph.AddEdge(func.Name, used));
+                }
+
                 DeclToFunctionsUsed = new Dictionary<Declaration, HashSet<string>>();
                 DeclToGlobalsUsed = new Dictionary<Declaration, HashSet<string>>();
 
@@ -394,7 +407,7 @@ namespace FastAVN
                     vu.VisitDeclaration(decl);
 
                     DeclToGlobalsUsed.Add(decl, vu.globalsUsed);
-                    DeclToFunctionsUsed.Add(decl, vu.functionsUsed);
+                    DeclToFunctionsUsed.Add(decl, BoogieUtil.GetReachableNodes<string>(vu.functionsUsed, funcCallGraph));
                 }
             }
 
