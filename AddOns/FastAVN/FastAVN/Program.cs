@@ -681,8 +681,8 @@ namespace FastAVN
 
                     var topLevelProcs = new HashSet<string> { impl.Name };
                     if(initProc != null) topLevelProcs.Add(initProc.Name);    
-                    //Add {:entrypoint} add attribute to initProc
-                    if (initProc!= null) initProc.AddAttribute("entrypoint");
+                    //Add {:entrypoint} add attribute to impl
+                    impl.Proc.AddAttribute("entrypoint");
 
                     BoogieUtil.pruneProcs(newprogram, topLevelProcs);
 
