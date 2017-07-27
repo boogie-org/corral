@@ -31,7 +31,8 @@
       <Path value="[$smvOutputDir]" /> 
       <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
       <!-- <Command value="fastavn" arguments="build\test_inst.bpl /splitFirst /createEntrypointBplsOnly /useEntryPoints  >createep.txt 2>createep.err" /> -->
-      <Command value="fastavn" arguments="build\test_inst.bpl /splitFirst /createEntrypointBplsOnly  /entryPointProc:_ZN2Js15JavascriptArray23EntryPopJavascriptArrayEPNS_13ScriptContextEPS0_ >createep.txt 2>createep.err" /> 
+      <!-- <Command value="fastavn" arguments="build\test_inst.bpl /splitFirst /createEntrypointBplsOnly  /entryPointProc:_ZN2Js15JavascriptArray23EntryPopJavascriptArrayEPNS_13ScriptContextEPS0_ >createep.txt 2>createep.err" /> -->
+     <Command value="fastavn" arguments="build\test_inst.bpl /splitFirst /createEntrypointBplsOnly   /entryPointProc:_ZN2Js15JavascriptArray3PopEPNS_13ScriptContextEPv >createep.txt 2>createep.err" /> 
     </Action>
     
 <!--    <Action name="CheckEntryPoints" nextAction="MergeResults"  executeOn="cloud" > -->
