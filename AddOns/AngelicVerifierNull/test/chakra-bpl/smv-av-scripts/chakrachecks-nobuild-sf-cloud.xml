@@ -27,6 +27,14 @@
     </Action>
     -->    
 
+
+    <Action name="SmackInst" nextAction="CreateEntryPoints">
+      <Path value="[$smvOutputDir]" /> 
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+     <Command value="smackinst" arguments="build\test.bpl build\test_inst.bpl  > smackinst.txt 2>smackinst.err" /> 
+    </Action>
+
+
     <Action name="CreateEntryPoints" nextAction="CheckEntryPoints">
       <Path value="[$smvOutputDir]" /> 
       <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
