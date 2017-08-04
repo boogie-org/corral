@@ -119,6 +119,7 @@ GOTO EXIT
 :CHAKRACHECK
 REM if exist smv (rmdir /s /q smv)
 REM mkdir smv
+del /Q/S *.tt 
 echo "Executing ChakraCheck AV"
 "%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %2 %3 %4
 GOTO EXIT
