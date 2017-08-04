@@ -1,0 +1,58 @@
+GlobalDeclarations
+{
+var {:propertyMap} __dType : [ref]int; //{0:generic, 1:int, 2:float}
+var __oldType : int; 
+var __newType : int;
+}
+
+TemplateVariables
+{
+var p : int; 
+var t: int;
+var b: int;
+
+procedure {:#AnyArguments}  {:#NameMatches "^ThisIsAnUpcallArg$"} upCallProc(q : int) returns( {:#AnyParameters} r: int);
+procedure {:#AnyArguments}  {:#NameMatches "^TemplateSpecializedProc$"} templSplProc(q : int, r:int) returns( {:#AnyParameters} r: int);
+procedure {:#AnyArguments}  {:#NameMatches "^IsJSArrayType$"} isDTypeProc(q : int, r:int, bl: int) returns( {:#AnyParameters} r: int);
+}
+
+CmdRule
+{
+   call upCallProc(p);
+}
+-->
+{
+   __oldType := __dtype[p];
+   //record_boogie "__oldType" __oldType
+   call {:cexpr "oldDynType"} boogie_si_record_li2bpl_int(__oldType);
+   havoc __newType;
+   __dtype[p] := __newType;
+   assume (__dtype[p] == __oldType || __dtype[p] == 0);
+   //record_boogie "__newType" __oldType
+   call {:cexpr "newDynType"} boogie_si_record_li2bpl_int(__newType);
+}
+
+CmdRule
+{
+   call templSplProc(p, t);
+}
+-->
+{
+   call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dtype[p]);
+   assert(__dtype[p] == t);
+}
+
+CmdRule
+{
+   call isDTypeProc(p, t, b);
+}
+-->
+{
+   call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dtype[p]);
+   call {:cexpr "isType"} boogie_si_record_li2bpl_int(t);
+   assume((b != 0) <==> (__dtype[p] == t));
+}
+
+
+
+
