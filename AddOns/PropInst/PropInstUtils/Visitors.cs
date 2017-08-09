@@ -131,8 +131,11 @@ namespace PropInstUtils
 
         public override Cmd VisitAssertCmd(AssertCmd node)
         {
-            return new AssertCmd(node.tok, VisitExpr(node.Expr));
-        }
+			if ( node.Attributes == null)
+				return new AssertCmd(node.tok, VisitExpr(node.Expr));
+			else
+				return new AssertCmd(node.tok, VisitExpr(node.Expr), (QKeyValue)node.Attributes.Clone());
+		}
 
         public override Cmd VisitAssumeCmd(AssumeCmd node)
         {
