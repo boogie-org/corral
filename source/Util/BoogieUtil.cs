@@ -266,8 +266,13 @@ namespace cba.Util
         // Get reachable nodes
         public static HashSet<Node> GetReachableNodes<Node>(Node n, Graph<Node> graph) where Node : class
         {
-            var ret = new HashSet<Node>{ n };
-            var frontier = new HashSet<Node> { n };
+            return GetReachableNodes<Node>(new HashSet<Node> { n }, graph);
+        }
+
+        public static HashSet<Node> GetReachableNodes<Node>(HashSet<Node> source, Graph<Node> graph) where Node : class
+        {
+            var ret = new HashSet<Node>(source);
+            var frontier = new HashSet<Node>(source);
 
             while (frontier.Count > 0)
             {
@@ -279,7 +284,6 @@ namespace cba.Util
             }
             return ret;
         }
-
         public static HashSet<string> getVarsModified(Cmd cmd, HashSet<string> procsWithImpl)
         {
             var ret = new HashSet<string>();

@@ -396,12 +396,15 @@ namespace AvHarnessInstrumentation
             {
                 return Options.entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s));
             });
-            init.TopLevelDeclarations.OfType<NamedDeclaration>()
-                .Where(d => d is Procedure || d is Implementation)
-                .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
-                .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
-                .Iter(d => d.AddAttribute("entrypoint"));
-
+            //when both entryPointProcs == null and entryPointExcludes == null, it should not add any entrypointProcs
+            if (Options.entryPointProcs != null || Options.entryPointExcludes != null)
+            {
+                init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Where(d => d is Procedure || d is Implementation)
+                    .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
+                    .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
+                    .Iter(d => d.AddAttribute("entrypoint"));
+            }
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
             {
