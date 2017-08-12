@@ -117,11 +117,12 @@ mkdir smv
 GOTO EXIT
 
 :CHAKRACHECK
-REM if exist smv (rmdir /s /q smv)
-REM mkdir smv
-del /Q/S *.tt 
+if exist smv (rmdir /s /q smv)
+mkdir smv
+mkdir smv\build
+xcopy %2 smv\build\test.bpl
 echo "Executing ChakraCheck AV"
-"%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %2 %3 %4
+"%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %3 %4 %5
 GOTO EXIT
 
 :CLEAN
@@ -130,7 +131,7 @@ GOTO EXIT
 
 :HELP
 echo.
-echo "Usage: smv [/nullcheck | /useafterfree | /chakracheck | /clean] [/debug]"
+echo "Usage: smv [/nullcheck | /useafterfree | /chakracheck <file.bpl> | /clean] [/debug]"
 echo.
 
 :EXIT
