@@ -228,11 +228,6 @@ namespace SmackInst
                 return;
             }
 
-            if(chakraTypeConfusionAnnotsFile != null)
-            {
-                (new InstrumentTypeConfusionChakra(chakraTypeConfusionAnnotsFile, program)).InstrumentCode();
-            }
-
             // Preprocess program: count lines + replace Root
             program = preProcess(program, count || onlyCount, oldRoot, newRoot);
 
@@ -332,6 +327,10 @@ namespace SmackInst
                 var ddc = new SimpleDeadcodeDectectionVisitor();
                 ddc.Run(program);
             }
+
+            if (chakraTypeConfusionAnnotsFile != null)
+                (new InstrumentTypeConfusionChakra(chakraTypeConfusionAnnotsFile, program)).InstrumentCode();
+
             // if we don't check NULL, stop here
             if (!checkNULL && !checkUAF)
                 return program;
@@ -371,6 +370,7 @@ namespace SmackInst
 
             if (initMem)
                 InitMemory(program);
+
 
             return program;
         }
@@ -1188,8 +1188,11 @@ namespace SmackInst
         Program prog;
         HashSet<Tuple<string, HashSet<int>>> upcallFuncs;
         HashSet<Tuple<string, int>> isTypeFuncs;
-        HashSet<Tuple<string, int, int>> typePreCondFuncs; 
+        HashSet<Tuple<string, int, int>> typePreCondFuncs;
 
+        const string upcallFuncName = "ThisIsAnUpcallArg";
+        const string isTypeFuncName = "IsJSArrayType";
+        const string typePreCondFuncName = "TemplateSpecializedProc";
 
         public InstrumentTypeConfusionChakra(string fname, Program pr)
         {
@@ -1248,13 +1251,13 @@ namespace SmackInst
             var tVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "t", btype.Int), true);
             var rVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", btype.Int), true);
 
-            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "ThisIsTypePrecondCall", 
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, typePreCondFuncName, 
                 new List<TypeVariable>(), new List<Variable>() { iVar, tVar }, new List<Variable>(), 
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
-            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "ThisIsTypeCall",
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, isTypeFuncName,
                 new List<TypeVariable>(), new List<Variable>() { iVar, tVar, rVar }, new List<Variable>(),
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
-            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, "ThisIsUpcall",
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, upcallFuncName,
                 new List<TypeVariable>(), new List<Variable>() { iVar }, new List<Variable>(),
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
 
@@ -1271,16 +1274,15 @@ namespace SmackInst
                             newCmds.Add(cmd);
                             continue;
                         }
-                        var proc = callCmd.Proc;
                         HashSet<int> pArgs;
                         int argPos;
                         int typeId;
-                        if (IsUpCall(proc, out pArgs))
+                        if (IsUpCall(callCmd.callee, out pArgs))
                             newCmds.AddRange(InstrumentUpcall(callCmd, pArgs));
-                        else if (IsIsType(proc, out typeId))
+                        else if (IsIsType(callCmd.callee, out typeId))
                             newCmds.AddRange(InstrumentIsTypeCall(callCmd, typeId));
-                        else if (IsTypePrecondFuncs(proc, out argPos, out typeId))
-                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, typeId, argPos));
+                        else if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
+                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
                         else newCmds.Add(callCmd);
 
                     }
@@ -1293,15 +1295,15 @@ namespace SmackInst
         {
             var retCmds = new List<Cmd>();
             Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsTypePrecond function " + callCmd.Proc.Name);
-            var nCmd = new CallCmd(Token.NoToken, "ThisIsTypePrecondCall", new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
+            var nCmd = new CallCmd(Token.NoToken, typePreCondFuncName, 
+                new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
             retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }
 
-        private bool IsTypePrecondFuncs(Procedure proc, out int pos, out int typeId)
+        private bool IsTypePrecondFuncs(string pName, out int pos, out int typeId)
         {
-            var pName = proc.Name;
             pos = -1; typeId = -1;
             var found = typePreCondFuncs.Where(x => x.Item1 == pName);
             if (found.Count() > 0)
@@ -1318,16 +1320,15 @@ namespace SmackInst
             var retCmds = new List<Cmd>();
             var retExprs = callCmd.Outs;
             Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
-            var nCmd = new CallCmd(Token.NoToken, "ThisIsTypeCall", new List<Expr>() {retExprs[0], callCmd.Ins[0], Expr.Literal(typeId) }, 
+            var nCmd = new CallCmd(Token.NoToken, isTypeFuncName, new List<Expr>() {retExprs[0], callCmd.Ins[0], Expr.Literal(typeId) }, 
                 new List<IdentifierExpr>());
             retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }
 
-        private bool IsIsType(Procedure proc, out int typeId)
+        private bool IsIsType(string pName, out int typeId)
         {
-            var pName = proc.Name;
             typeId = -1;
             var found = isTypeFuncs.Where(x => x.Item1 == pName);
             if (found.Count() > 0)
@@ -1345,7 +1346,7 @@ namespace SmackInst
             foreach (var pos in pArgs)
             {
                 Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
-                var nCmd = new CallCmd(Token.NoToken, "ThisIsUpcall", new List<Expr>() {callCmd.Ins[pos]},
+                var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() {callCmd.Ins[pos]},
                     new List<IdentifierExpr>());
                 retCmds.Add(nCmd);
             }
@@ -1353,9 +1354,8 @@ namespace SmackInst
             throw new NotImplementedException();
         }
 
-        private bool IsUpCall(Procedure proc, out HashSet<int> pArgs)
+        private bool IsUpCall(string pName, out HashSet<int> pArgs)
         {
-            var pName = proc.Name;
             pArgs = new HashSet<int>();
             var found = upcallFuncs.Where(x => x.Item1 == pName);
             if (found.Count() > 0)

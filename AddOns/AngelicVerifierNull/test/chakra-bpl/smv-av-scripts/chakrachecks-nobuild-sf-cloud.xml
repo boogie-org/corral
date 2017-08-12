@@ -19,20 +19,18 @@
     </Action>
     -->
 
-    <!--
-    <Action name="InstrumentChecks" nextAction="CreateEntryPoints">
-      <Path value="[$smvOutputDir]" /> 
-      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
-      <Command value="propinst" arguments="%nullcheckap%\bin\engine\exampleproperties\useafterfree-razzle.avp build\test.bpl build\test_inst.bpl > inst.txt 2>inst.err" />
-    </Action>
-    -->    
-
 
     <Action name="SmackInst" nextAction="CreateEntryPoints">
       <Path value="[$smvOutputDir]" /> 
       <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
      <!-- <Command value="smackinst" arguments="build\test.bpl build\test_inst.bpl /replaceRoot /oldRoot:../../ /newRoot:d:\temp\ChakraCore\ > smackinst.txt 2>smackinst.err" /> -->
-     <Command value="smackinst" arguments="build\test.bpl build\test_inst.bpl /replaceRoot /oldRoot:/home/wky/code/ChakraCore/ /newRoot:d:\temp\ChakraCore\ > smackinst.txt 2>smackinst.err" /> 
+     <Command value="smackinst" arguments="build\test.bpl build\test_inst.bpl /replaceRoot /oldRoot:/home/wky/code/ChakraCore/ /newRoot:d:\temp\ChakraCore\   /chakraTypeConfusionFile:%nullcheckap%\bin\engine\exampleproperties\chakra-type-confusion-annots.txt > smackinst.txt 2>smackinst.err" /> 
+    </Action>
+
+    <Action name="InstrumentChecks" nextAction="CreateEntryPoints">
+      <Path value="[$smvOutputDir]" /> 
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+      <Command value="propinst" arguments="%nullcheckap%\bin\engine\exampleproperties\type-confusion.avp build\test.bpl build\test_inst.bpl > inst.txt 2>inst.err" />
     </Action>
 
 
