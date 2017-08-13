@@ -52,7 +52,7 @@
       <!-- <Command value="avharnessinstrumentation" arguments="pruneSlice.bpl hinst.bpl /useEntryPoints /entryPointProc:[$epDirName] /unknownProc:malloc /unknownProc:$alloc /killAfter:1000  > avh.txt 2> avh.err" /> -->
       <!-- File name truncation changes the name of the directory --> 
       <Command value="avharnessinstrumentation" arguments="pruneSlice.bpl hinst.bpl  /useEntryPoints /unknownProc:malloc /unknownProc:$alloc /killAfter:1000  > avh.txt 2> avh.err" /> 
-      <Command value="angelicverifiernull" arguments="hinst.bpl /sdv /blockOnFreeVars /timeoutEE:1000 /timeout:1000 /killAfter:3600  /traceSlicing /noEbasic /EE:ignoreAllAssumes+ /dontGeneralize /dumpResults:results.txt /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- /copt:recursionBound:3 >check.txt 2>check.err" />
+      <Command value="angelicverifiernull" arguments="hinst.bpl /sdv /blockOnFreeVars /timeoutEE:1000 /timeout:1000 /killAfter:3600  /traceSlicing /noEbasic /EE:ignoreAllAssumes+ /dontGeneralize /dumpResults:results.txt /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- /EE:onlyDisplayAliasingInPre- /copt:recursionBound:3 >check.txt 2>check.err" />
       <!-- <Command value="del" arguments="/f /q *.bpl" />     -->
     </Action>
     
