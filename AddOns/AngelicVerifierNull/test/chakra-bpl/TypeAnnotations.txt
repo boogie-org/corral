@@ -1,3 +1,7 @@
+
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIPvEEvjT_, 0, 0 // member func, this ptr, type: 0 (JavascriptArray)
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIiEEvjT_, 0, 1 // member func, this ptr, type: 0 (JavascriptNativeIntArray)
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIdEEvjT_, 0, 2 // member func, this ptr, type: 0 (JavascriptNativeFloatArray)
 Upcall: _ZN2Js15JavascriptArray19DirectGetItemAtFullEjPPv, 0 // member function, 0 denotes this ptr
 Upcall: _ZN2Js24JavascriptNativeIntArray19DirectGetItemAtFullEjPPv, 0 // member function, 0 denotes this ptr
 Upcall: _ZN2Js26JavascriptNativeFloatArray19DirectGetItemAtFullEjPPv, 0 // member function, 0 denotes this ptr
@@ -55,3 +59,6 @@ SpecTemp: _ZN2Js15JavascriptArray16TemplatedGetItemINS_24JavascriptNativeIntArra
 SpecTemp: _ZN2Js15JavascriptArray16TemplatedGetItemINS_24JavascriptNativeIntArrayEEEiPT_mPPvPNS_13ScriptContextEb, 0, 1
 SpecTemp: _ZN2Js15JavascriptArray16TemplatedGetItemINS_26JavascriptNativeFloatArrayEEEiPT_jPPvPNS_13ScriptContextEb, 0, 2
 SpecTemp: _ZN2Js15JavascriptArray16TemplatedGetItemINS_26JavascriptNativeFloatArrayEEEiPT_mPPvPNS_13ScriptContextEb, 0, 2
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIPvEEvjT_, 0, 0 // member func, this ptr, type: 0 (JavascriptArray)
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIiEEvjT_, 0, 1 // member func, this ptr, type: 0 (JavascriptNativeIntArray)
+SpecTemp: _ZN2Js15JavascriptArray15DirectSetItemAtIdEEvjT_, 0, 2 // member func, this ptr, type: 0 (JavascriptNativeFloatArray)
