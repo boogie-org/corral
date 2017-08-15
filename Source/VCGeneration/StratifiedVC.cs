@@ -11,6 +11,8 @@ using Microsoft.Boogie.GraphUtil;
 using System.Diagnostics.Contracts;
 using Microsoft.Basetypes;
 using Microsoft.Boogie.VCExprAST;
+using RefinementFuzzing;
+using Common;
 
 namespace VC {
   using Bpl = Microsoft.Boogie;
@@ -278,7 +280,7 @@ namespace VC {
           return ret;
       }
   }
-
+		
 
   public class CallSite {
     public string calleeName;
@@ -643,6 +645,25 @@ namespace VC {
     public Dictionary<string, StratifiedInliningInfo> implName2StratifiedInliningInfo;
     public ProverInterface prover;
 
+		public StratifiedVCGenBase(StratifiedVCGenBase vcGenBase, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers, ProverInterface proverPreAllocated)
+			: base(vcGenBase.program, logFilePath, appendLogFile, checkers)
+		{
+			// In this case, only create a new prover
+			this.implName2StratifiedInliningInfo = new Dictionary<string, StratifiedInliningInfo>();
+			foreach (string n in vcGenBase.implName2StratifiedInliningInfo.Keys)
+				this.implName2StratifiedInliningInfo[n] = vcGenBase.implName2StratifiedInliningInfo[n];
+			//this.implName2StratifiedInliningInfo[n] = new StratifiedInliningInfo(vcGenBase.implName2StratifiedInliningInfo[n]);
+
+			if (!RefinementFuzzing.Settings.preAllocateProvers)
+				prover = ProverInterface.CreateProver(program, logFilePath, appendLogFile, CommandLineOptions.Clo.ProverKillTime);
+			else
+			{
+				Contract.Assert(proverPreAllocated != null);
+				prover = proverPreAllocated;
+			}
+		}
+
+
     public StratifiedVCGenBase(Program program, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers, Action<Implementation> PassiveImplInstrumentation)
       : base(program, logFilePath, appendLogFile, checkers) {
       implName2StratifiedInliningInfo = new Dictionary<string, StratifiedInliningInfo>();
@@ -836,6 +857,44 @@ namespace VC {
     public int vcsize = 0;
     private HashSet<string> procsThatReachedRecBound;
     private Dictionary<string, int> extraRecBound;
+	private static bool useConcurrentSolver = false;
+
+
+	public HashSet<string> procsToSkip;
+
+	public StratifiedVCGen(bool usePrevCallTree, HashSet<string> prevCallTree,
+			HashSet<string> procsToSkip, Dictionary<string, int> extraRecBound,
+			Program program, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers)
+			: this(program, logFilePath, appendLogFile, checkers)
+	{
+			this.procsToSkip = new HashSet<string>(procsToSkip);
+			this.extraRecBound = new Dictionary<string, int>(extraRecBound);
+
+			if (usePrevCallTree)
+			{
+				callTree = prevCallTree;
+				PersistCallTree = true;
+			}
+			else
+			{
+				PersistCallTree = false;
+			}
+	}
+
+		public StratifiedVCGen(StratifiedVCGen vcgen, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers, ProverInterface prover)
+			: base(vcgen, logFilePath, appendLogFile, checkers, prover)
+		{
+			PersistCallTree = false;
+			procsThatReachedRecBound = new HashSet<string>();
+			procsToSkip = new HashSet<string>();
+			extraRecBound = new Dictionary<string, int>();
+
+			vcgen.procsThatReachedRecBound.Union(vcgen.procsThatReachedRecBound);
+			vcgen.procsToSkip.Union(vcgen.procsToSkip);
+			vcgen.extraRecBound.Union(vcgen.extraRecBound);
+		}
+
+
 
     public StratifiedVCGen(bool usePrevCallTree, HashSet<string> prevCallTree, 
                            Program program, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers) 
@@ -848,6 +907,10 @@ namespace VC {
       else {
         PersistCallTree = false;
       }
+
+			this.procsToSkip = new HashSet<string>(procsToSkip);
+			this.extraRecBound = new Dictionary<string, int>(extraRecBound);
+
     }
 
     public StratifiedVCGen(Program program, string/*?*/ logFilePath, bool appendLogFile, List<Checker> checkers)
@@ -856,6 +919,7 @@ namespace VC {
       procsThatReachedRecBound = new HashSet<string>();
 
       extraRecBound = new Dictionary<string, int>();
+	  procsToSkip = new HashSet<string>();
       program.TopLevelDeclarations.OfType<Implementation>()
           .Iter(impl =>
           {
@@ -913,23 +977,6 @@ namespace VC {
       }
     }
 
-    // Store important information related to a single VerifyImplementation query
-    public class VerificationState {
-      // The call tree
-      public FCallHandler calls;
-      public ApiChecker checker;
-      // For statistics
-      public int vcSize;
-      public int expansionCount;
-
-      public VerificationState(VCExpr vcMain, FCallHandler calls, ProverInterface prover, ProverInterface.ErrorHandler reporter) {
-        prover.Assert(vcMain, true);
-        this.calls = calls;
-        this.checker = new ApiChecker(prover, reporter);
-        vcSize = 0;
-        expansionCount = 0;
-      }
-    }
 
     class FindLeastOORException : Exception
     {
@@ -1136,7 +1183,1613 @@ namespace VC {
       }
     }
 
-    public override Outcome VerifyImplementation(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
+	public override Outcome VerifyImplementation(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
+		Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
+
+			if (false) // TODO: Read from command-line argument
+				return VerifyImplementationSI(impl, callback);
+			else
+				return VerifyImplementationConcurrent(impl, callback);
+				
+	}
+
+
+		public ProverStackBookkeeping proverStackBookkeeper;
+
+		//public enum VerifyResult { Verified, Partitioned, BugFound, Errors, NoMoreConstraintPartition, Interrupted };
+
+		public double timeTaken = 0;
+		public int numCalls = 0;
+		public int threadsSpawned = 0;
+
+		/*
+		 * TODO: This is the PRIMARY method. Needs to be merged with the new code in "verifyImplementationSI()"
+		 */
+		public VerifyResult SolvePartition(SoftPartition softPartition,
+			VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+		{
+
+			//lock (softPartition)
+			{
+				RefinementFuzzing.Settings.WritePrimaryLog(proverStackBookkeeper.id, softPartition.Id, "SolvePartition", "Entered");
+
+				//int bound = CommandLineOptions.Clo.NonUniformUnfolding ? CommandLineOptions.Clo.RecursionBound : 1;
+				int bound = CommandLineOptions.Clo.RecursionBound;
+
+				int done = 0;
+
+				int iters = 0;
+
+				int state = 0;
+
+				var computeUnderBound = true;
+
+				FCallHandler calls = vState.calls;
+
+				List<HashSet<int>> candidatesInCounterexamples = new List<HashSet<int>>();
+
+				if (siblingRunningPartitions != null && siblingRunningPartitions.Count > 0)
+				{
+					siblingRunningPartitions.Iter<SoftPartition>(n => candidatesInCounterexamples.Add(new HashSet<int>(n.lastInlined)));
+				}
+
+				// Record current time
+				var startTime = DateTime.UtcNow;
+				numCalls++;
+
+				Outcome ret = Outcome.ReachedBound;
+
+				StratifiedInliningErrorReporter reporter = vState.checker.reporter as StratifiedInliningErrorReporter;
+
+				partitions = new List<SoftPartition>();
+				VerifyResult retval = VerifyResult.Errors;
+
+				Random rand = new Random();
+
+				// for blocking candidates (and focusing on a counterexample)
+				var block = new HashSet<int>();
+
+				uint total_cex_size = 0;
+				uint num_cex = 0;
+
+				VCExpr coveredCEXs = VCExpressionGenerator.True;
+
+				// Start with an empty block in optimized case
+
+				if (!RefinementFuzzing.Settings.useOptimizedProverStack)
+					softPartition.blockedCandidates.Iter<int>(n => block.Add(n));
+
+				reporter.currSoftPartition = softPartition;
+
+				Contract.Assert(vState.checker.prover == proverStackBookkeeper.getMainProver());
+				//Contract.Assert(vState.summaryDB.prover5 == proverStackBookkeeper.getInterpolatingProver());
+
+				if (bookKeeper != null && bookKeeper != proverStackBookkeeper)
+				{
+					// This is flaky --- a better solution would have been to not use these aliases at all
+					proverStackBookkeeper = bookKeeper;
+					vState.checker.prover = proverStackBookkeeper.getMainProver();
+					//vState.summaryDB.prover5 = proverStackBookkeeper.getInterpolatingProver();
+					//Contract.Assert(false);
+				}
+
+				//lock (RefinementFuzzing.Settings.lockThis)  [removed on 15th Sept]
+				{
+					if (RefinementFuzzing.Settings.useOptimizedProverStack)
+					{
+						// assert VC
+						if (proverStackBookkeeper.getProverStackStatus().Count == 0 && softPartition.prefixVC != null)
+						{
+							//AssertTraceVC(softPartition, vState, prover, proverStackBookkeeper);
+							//proverStackBookkeeper.isTraceProver = true;
+						}
+						else
+						{
+							OptimizedAssertVC(softPartition, vState, prover, proverStackBookkeeper);
+							//proverStackBookkeeper.isTraceProver = false;
+
+							if (RefinementFuzzing.Settings.instantlyPropagateSummaries)
+							{
+								// In this case, summaries are not pushed with the VCs; each candidate summary is pushed separately
+								// 
+								//if (softPartition.Id != 0)
+								{
+									// main does not have summaries
+
+									//proverStackBookkeeper.metaStack.Sync(vState);   // updates summaries -- sync the summarydb with the proverstack
+
+									// add the candidate summaries (if any)
+									/*
+									foreach (int n in softPartition.activeCandidates)
+									{
+										lock (RefinementFuzzing.Settings.lockThis)
+										{
+											VCExpr candidateSummary = vState.summaryDB.get(n, SummaryDB.SummaryType.CANDIDATE_SUMMARY);
+
+											if (candidateSummary != null)
+											{
+												if (proverStackBookkeeper.metaStack.Top().candidateSummaries.ContainsKey(n) &&
+													proverStackBookkeeper.metaStack.Top().candidateSummaries[n] == vState.summaryDB.hasCandidateSummaryVersion(n))
+													continue;
+												proverStackBookkeeper.Assert(candidateSummary, StratifiedVCGen.getNameForFormula(n, StratifiedVCGen.FormulaType.CandidateSummary, vState.summaryDB.hasCandidateSummaryVersion(n)), "SummaryCandidate: " + n + "v" + vState.summaryDB.hasCandidateSummaryVersion(n));
+												proverStackBookkeeper.metaStack.Top().candidateSummaries[n] = vState.summaryDB.hasCandidateSummaryVersion(n);
+											}
+										}
+									}
+									*/
+									// push summaries for new candidates
+									//OptimizedAssertSummaries(softPartition.activeCandidates, vState, proverStackBookkeeper);
+
+									// push summaries for stale candidates
+									//OptimizedAssertSummaries(staleAndNewCandidates, vState, proverStackBookkeeper);
+								}
+							}
+						}
+					}
+					else
+					{
+						//lock (RefinementFuzzing.Settings.lockThis) [removed on 15th Sept]
+						{
+							// create VC
+							VCExpr vc = CreateVC(softPartition, vState);
+							prover.Push();
+							prover.Assert(vc, true);
+						}
+
+					}
+				}
+
+				if (RefinementFuzzing.Settings.useConcurrentSummaryDB && RefinementFuzzing.Settings.summaryLog != null)
+				{
+					string nl = "";
+					if (RefinementFuzzing.Settings.summaryLogHTML)
+					{
+						nl = "<br>";
+					}
+
+					//SummaryDB.summaryLogFile.WriteLine("---------------------------------------------" + nl);
+					//SummaryDB.summaryLogFile.WriteLine("Partition: " + softPartition.Id + nl);
+				}
+
+
+
+				//lock (RefinementFuzzing.Settings.lockThis) 
+				{
+
+					HashSet<int> candidatesThatReachRecBound;
+
+					if (RefinementFuzzing.Settings.noInterpolationOnMainProver || RefinementFuzzing.Settings.lazySummaries)
+					{
+						prover.Push();
+						VCExpr blocked = VCExpressionGenerator.True;
+						foreach (int id in softPartition.blockedCandidates)
+						{
+							blocked = prover.VCExprGen.AndSimp(blocked, calls.getFalseExpr(id));
+						}
+						prover.Assert(blocked, true);
+					}
+
+					//List<SoftPartition> newPartitionList = new List<SoftPartition>();
+
+					// Process tasks while not done. We're done when:
+					//   case 1: (correct) We didn't find a bug (either an over-approx query was valid
+					//                     or we reached the recursion bound) and the task is "step"
+					//   case 2: (bug)     We find a bug
+					//   case 3: (internal error)   The theorem prover TimesOut of runs OutOfMemory
+					while (true) // this while loop creates the partitions
+					{
+						// Check timeout
+						if (CommandLineOptions.Clo.ProverKillTime != -1)
+						{
+							if ((DateTime.UtcNow - startTime).TotalSeconds > CommandLineOptions.Clo.ProverKillTime)
+							{
+								ret = Outcome.TimedOut;
+								break;
+							}
+						}
+
+						if (done > 0)
+						{
+							break;
+						}
+
+						//HashSet<int> partitionableSet = new HashSet<int>();
+						// softPartition.activeCandidates.Iter<int>(n => partitionableSet.Add(n));
+						// Stratified Step
+						//lock (RefinementFuzzing.Settings.lockThis)   [removed on 15th Sept]
+						{
+							//Contract.Assert(vState.checker.prover == proverStackBookkeeper.getMainProver());
+							//if (vState.checker.prover != proverStackBookkeeper.getMainProver())
+							//    Contract.Assert(false);
+
+
+							if (vState.checker.prover != proverStackBookkeeper.getMainProver())
+								Contract.Assert(false);
+
+							uint avg_cex_size = (num_cex > 0) ? total_cex_size / num_cex : 0;
+							Console.WriteLine("CEX avg size: " + avg_cex_size);
+
+							RefinementFuzzing.Settings.WritePrimaryLog(proverStackBookkeeper.id, softPartition.Id, "SolvePartition", "Calling stratifiedStep with stack " + proverStackBookkeeper.printStack());
+
+							int tokenId = 0;
+
+							if (num_cex < RefinementFuzzing.Settings.SoftPartitionBound)
+							{
+								tokenId = proverStackBookkeeper.timingStatisticsManager.StartTime(TimingStatisticManager.TimingCategories.Z3Time);
+								Settings.oTimer.StartTime(OverlappingTimingStatisticManager.TimingCategories.TotalProverTime, proverStackBookkeeper.id);
+							}
+
+							reporter.vcCache = null; // The trace prefix VC is returned in this
+
+
+							/***************** The Solving Step *********************/
+							ret = stratifiedStep1(bound, vState, block, out candidatesThatReachRecBound, softPartition.activeCandidates, candidatesInCounterexamples, avg_cex_size, coveredCEXs);
+							/********************************************************/
+
+							if (num_cex < RefinementFuzzing.Settings.SoftPartitionBound)
+							{
+								proverStackBookkeeper.timingStatisticsManager.StopTime(tokenId, TimingStatisticManager.TimingCategories.Z3Time);
+								Settings.oTimer.StopTime(OverlappingTimingStatisticManager.TimingCategories.TotalProverTime, proverStackBookkeeper.id);
+							}
+						}
+						iters++;
+
+						#region print stuff
+						if (Settings.__MYCHANGES__ && false)
+						{
+
+							RF.writer.WriteLine("------------------------------- Next Round --------------------------");
+							RF.writer.AutoFlush = true;
+							foreach (int id in calls.id2Candidate.Keys)
+							{
+								RF.writer.WriteLine("Id: " + id);
+								RF.writer.WriteLine("Name: " + calls.getProc(id));
+
+								VCExpr vcForId;
+								VCExprVar cvarForId;
+								Dictionary<VCExprVar, VCExpr> vars;
+								int parent;
+								int callId;
+								calls.id2VC.TryGetValue(id, out vcForId);
+								calls.id2ControlVar.TryGetValue(id, out cvarForId);
+								calls.id2Vars.TryGetValue(id, out vars);
+								calls.candidateParent.TryGetValue(id, out parent);
+								calls.candidate2callId.TryGetValue(id, out callId);
+
+								RF.writer.WriteLine("vcForId: " + vcForId);
+								RF.writer.WriteLine("cvarForId: " + cvarForId);
+								RF.writer.WriteLine("vars: ");
+
+								if (vars != null)
+									foreach (VCExprVar var in vars.Keys)
+									{
+										VCExpr vexp;
+										vars.TryGetValue(var, out vexp);
+										RF.writer.WriteLine("\t " + vexp);
+									}
+
+								RF.writer.WriteLine("parent: " + parent);
+								RF.writer.WriteLine("callId: " + callId);
+								RF.writer.WriteLine();
+
+								//Console.ReadKey();
+
+							}
+						}
+						#endregion
+
+
+						// Sorry, out of luck (time/memory)
+						if (ret == Outcome.Inconclusive || ret == Outcome.OutOfMemory || ret == Outcome.TimedOut)
+						{
+							RefinementFuzzing.Settings.error_msg = "ProverId: " + proverStackBookkeeper.id + " " + ((ret == Outcome.Inconclusive) ? "Inconclusive" : (ret == Outcome.OutOfMemory ? "OutOfMemory" : "TimeOut"));
+							timeTaken += (DateTime.UtcNow - startTime).TotalSeconds;
+							solTime = (DateTime.UtcNow - startTime).TotalSeconds;
+							return VerifyResult.Errors;
+							//done = 3;
+							//continue;
+						}
+
+						if (ret == Outcome.Errors && reporter.underapproximationMode)
+						{
+							timeTaken += (DateTime.UtcNow - startTime).TotalSeconds;
+							solTime = (DateTime.UtcNow - startTime).TotalSeconds;
+							return VerifyResult.BugFound;
+							// Found a bug
+							//done = 2;
+						}
+						else if (ret == Outcome.Correct)
+						{
+							// Compute Interpolant as summary -- no new partition created
+
+							if (partitions.Count() > 0)
+								retval = VerifyResult.Partitioned;
+							else if (siblingRunningPartitions != null && siblingRunningPartitions.Count > 0)
+							{
+								// we could not find a counterexample with the constraints on the siblings
+								retval = VerifyResult.NoMoreConstraintPartition;
+							}
+							else
+							{
+
+								retval = VerifyResult.Verified;
+
+								HashSet<int> candidatesInUnsatCore = null;
+								/*
+								if (RefinementFuzzing.Settings.reduceInterpolationUsingUnsatCore)
+								{
+									List<string> unsatCore = prover.GetUnsatCore(); // use the interpolating prover as it has names of formulae
+
+									// for debugging
+									unsatCore.Iter<string>(n => Console.WriteLine(n));
+
+									candidatesInUnsatCore = new HashSet<int>();
+									foreach (string name in unsatCore)
+									{
+										StratifiedVCGen.FormulaType ftype;
+
+										if (name.StartsWith("candidate_vc_neg"))
+											Contract.Assert(false);
+
+										if (!name.StartsWith("candidate_vc_"))
+											continue;
+
+										int id = SummaryDB.getIdFromFormulaName(name, out ftype);
+
+										if (ftype == FormulaType.VC)
+										{
+											candidatesInUnsatCore.Add(id);
+										}
+									}
+									Contract.Assert(unsatCore != null);
+									Console.WriteLine("");
+								}
+
+								if (RefinementFuzzing.Settings.lazyLazySummaries)
+								{
+									proverStackBookkeeper.pendingInterpolation = softPartition;
+									proverStackBookkeeper.deferredPartitions.Add(softPartition.Id);
+									proverStackBookkeeper.candidatesInUnsatCore = candidatesInUnsatCore;
+								}
+								else
+									RecordSummaries(softPartition, vState, candidatesInUnsatCore, calls, candidatesThatReachRecBound, block);
+									*/
+							}
+							break;
+						}
+						else if (ret == Outcome.ReachedBound)
+						{
+							if (useConcurrentSolver)
+							{
+								if (partitions.Count() > 0)
+								{
+									retval = VerifyResult.Partitioned;
+									RefinementFuzzing.Settings.reachedRecursionBound = true;
+									break;
+								}
+
+								//Contract.Assert(false); // unreachable
+								//Contract.Assert(useConcurrentSolver);
+
+								// Try to see if the interpolant from the underapprox is an invariant
+
+								//List<HoudiniPacket> checkWithHoudini = new List<HoudiniPacket>();
+
+								/*
+								lock (RefinementFuzzing.Settings.lockThis)
+								{
+									foreach (string procName in implName2StratifiedInliningInfo.Keys)
+									{
+										if (interfaceMaps.isRecorded(procName))
+											continue;
+
+										Procedure proc = implName2StratifiedInliningInfo[procName].impl.Proc;
+										List<VCExprVar> vcexprList = implName2StratifiedInliningInfo[proc.Name].interfaceExprVars;
+										interfaceMaps.recordForImplementation(proc, vcexprList);
+									}
+
+									HoudiniPacket.houdini_vcgen = prover.VCExprGen;
+									HoudiniPacket.interfaceMaps = interfaceMaps;
+								}
+								*/
+								/*
+								if (!RefinementFuzzing.Settings.noInterpolationOnMainProver)
+								{
+									if (RefinementFuzzing.Settings.useOptimizedProverStack)
+									{
+										List<Tuple<int, VCExpr, SummaryDB.SummaryApprox>> summaryDict = vState.summaryDB.computeAllSummaries(softPartition, candidatesThatReachRecBound, this, vState, proverStackBookkeeper, null);
+
+										bool trueSummaryPresent = false;
+										int anyOneId = -1;
+										foreach (Tuple<int, VCExpr, SummaryDB.SummaryApprox> summaryTuple in summaryDict)
+										{
+											int id = summaryTuple.Item1;
+
+											VCExpr summary = summaryTuple.Item2;
+											SummaryDB.SummaryApprox summaryApprox = summaryTuple.Item3;
+
+											if (summary == null)
+											{
+												Helpers.ExtraTraceInformation("Summary generation failed. Aborting!");
+												Console.WriteLine("{0}, {1}", RefinementFuzzing.Settings.vc_set.Count, RefinementFuzzing.Settings.interpolant_set.Count);
+												if (RefinementFuzzing.Settings.consoleRun)
+													Console.ReadLine();
+												System.Environment.Exit(-1);
+											}
+											else if (summary == VCExpressionGenerator.True)
+											{
+												trueSummaryPresent = true;
+												anyOneId = id;
+											}
+											else if (summaryApprox == SummaryDB.SummaryApprox.OverApprox)
+												vState.summaryDB.record(id, summary, SummaryDB.SummaryApprox.OverApprox);
+											else if (summaryApprox == SummaryDB.SummaryApprox.UnderApprox)
+											{
+												VCExpr abstractSummary = vState.summaryDB.mutateSummary(id, summary, SummaryDB.SummaryMutation.ABSTRACTION);
+												//Expr abstractExpr = VCExprToExpr(abstractSummary, new Dictionary<VCExpr, Expr>());
+
+												// pend it to be checked with Houdini
+												checkWithHoudini.Add(new HoudiniPacket(id, calls.getProc(id), summary, abstractSummary));
+											}
+											else
+												Contract.Assert(false);
+										}
+
+										if (trueSummaryPresent)
+										{
+											if (RefinementFuzzing.Settings.addInfeasibilityConstraints)
+												vState.summaryDB.recordConstraint(anyOneId, softPartition, vState);
+										}
+									}
+									else
+									{
+										foreach (int id in softPartition.lastInlined)
+										{
+											if (id == 0)
+												continue;  // main() has no summaries
+
+											VCExpr summary;
+											SummaryDB.SummaryApprox summaryApprox = vState.summaryDB.computeSummary(id,
+												softPartition.candidateUniverse,
+												softPartition.activeCandidates,
+												calls, block, candidatesThatReachRecBound, softPartition.lastInlined, out summary);
+
+											if (summary == null)
+											{
+												Helpers.ExtraTraceInformation("Summary generation failed. Aborting!");
+												Console.WriteLine("{0}, {1}", RefinementFuzzing.Settings.vc_set.Count, RefinementFuzzing.Settings.interpolant_set.Count);
+												if (RefinementFuzzing.Settings.consoleRun)
+													Console.ReadLine();
+												System.Environment.Exit(-1);
+											}
+											else if (summaryApprox == SummaryDB.SummaryApprox.OverApprox)
+												vState.summaryDB.record(id, summary, SummaryDB.SummaryApprox.OverApprox);
+											else if (summaryApprox == SummaryDB.SummaryApprox.UnderApprox)
+											{
+												VCExpr abstractSummary = vState.summaryDB.mutateSummary(id, summary, SummaryDB.SummaryMutation.ABSTRACTION);
+												//Expr abstractExpr = VCExprToExpr(abstractSummary, new Dictionary<VCExpr, Expr>());
+
+												// pend it to be checked with Houdini
+												checkWithHoudini.Add(new HoudiniPacket(id, calls.getProc(id), summary, abstractSummary));
+											}
+											else
+												Contract.Assert(false);
+										}
+									}
+								}
+
+								// Call Houdini to verify the assertions
+								if (RefinementFuzzing.Settings.UseHoudini)
+								{
+									int numCorrect = RefinementFuzzing.Settings.RunHoudini(new Tuple<object, List<HoudiniPacket>>(RefinementFuzzing.Settings.HoudiniInstance, checkWithHoudini));
+
+									foreach (HoudiniPacket houdiniPack in checkWithHoudini)
+									{
+										bool houdiniResponseTrue = houdiniPack.resultFromHoudini; // TODO: if hooudini response is positive, use it as an overapprox summary (generalized proc summary) else use it as an underapprox summary (specialized candidate summary)
+
+										if (houdiniResponseTrue)
+											vState.summaryDB.record(houdiniPack.candidateId, houdiniPack.abstractSummary, SummaryDB.SummaryApprox.OverApprox);
+										else
+										{
+											vState.summaryDB.record(houdiniPack.candidateId, houdiniPack.concreteSummary, SummaryDB.SummaryApprox.UnderApprox);
+											RefinementFuzzing.Settings.reachedRecursionBound = true;
+										}
+									}
+								}
+								else
+								{
+									foreach (HoudiniPacket houdiniPack in checkWithHoudini)
+									{
+										vState.summaryDB.record(houdiniPack.candidateId, houdiniPack.concreteSummary, SummaryDB.SummaryApprox.UnderApprox);
+									}
+
+									RefinementFuzzing.Settings.reachedRecursionBound = true;
+								}
+								*/
+								// verified under bound
+								retval = VerifyResult.Verified;
+
+								break;
+							}
+							else
+							{
+								Contract.Assert(false); // unreachable
+							}
+						}
+						else
+						{
+							// Do inlining
+							Debug.Assert(ret == Outcome.Errors && !reporter.underapproximationMode);
+							Contract.Assert(reporter.candidatesToExpand.Count != 0);
+
+							/*
+							if (RefinementFuzzing.Settings.lazyLazySummaries && proverStackBookkeeper.pendingInterpolation != null)
+							{
+								RecordSummaries(proverStackBookkeeper.pendingInterpolation, vState, proverStackBookkeeper.candidatesInUnsatCore, calls, candidatesThatReachRecBound, null);
+								proverStackBookkeeper.pendingInterpolation = null;
+								proverStackBookkeeper.deferredPartitions.Clear();
+							}
+							*/
+
+							#region expand call tree
+
+							if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+							{
+								Console.Write(">> SI Inlining: ");
+								reporter.candidatesToExpand
+									.Select(c => calls.getProc(c))
+									.Iter(c => { if (!isSkipped(c)) Console.Write("{0} ", c); });
+
+								Console.WriteLine();
+								Console.Write(">> SI Skipping: ");
+								reporter.candidatesToExpand
+									.Select(c => calls.getProc(c))
+									.Iter(c => { if (isSkipped(c)) Console.Write("{0} ", c); });
+
+								Console.WriteLine();
+							}
+
+							HashSet<int> oldCurrCandidates = new HashSet<int>();
+							calls.currCandidates.Iter<int>(n => oldCurrCandidates.Add(n));
+							//softPartition.activeCandidates.Iter<int>(n => oldCurrCandidates.Add(n));
+							//HashSet<int> oldCurrCandidates = softPartition.activeCandidates;
+
+							//HashSet<int> currCandidates = new HashSet<int>();
+							//softPartition.activeCandidates.Iter<int>(n => currCandidates.Add(n));
+							//calls.currCandidates.Iter<int>(n => currCandidates.Add(n));
+
+							// Expand and try again
+							vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion begin ;;;;;;;;;;");
+							//List<int> candidatesToExpand = new List<int>();
+							//newPartition.activeCandidates.Iter<int>(n => candidatesToExpand.Add(n));
+							//lock (RefinementFuzzing.Settings.lockThis)  [removed on 15th Sept]
+							{
+								DoExpansion(reporter.candidatesToExpand, vState);
+							}
+							vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion end ;;;;;;;;;;");
+
+							#endregion
+
+							// The active set is the "new" candidates now produced in calls.currCandidates
+							// The blocked set is all the ones that remained (i.e. were not on the path of the error, and so were not inlined)
+
+							/*
+                             * softPartition.activeCandidates are the set of all possible candidates to do our partition.
+                             * reporter.candidatesToExpand returns the candidates that are on the cex trace and are expanded.
+                             * What remains in softPartition.activeCandidates other than reporter.candidatesToExpand are
+                             * the candidates that were not on the cex trace and were not expanded -- this is computed 
+                             * in the set nonInlinedCurrCandidates. This is exactly the set that should be blocked off
+                             * this partition.
+                             */
+							// the new candidates are the children of the last inlined candidates
+							HashSet<int> newCurrCandidates = new HashSet<int>();
+							foreach (int id in reporter.candidatesToExpand)
+							{
+								calls.candidateChildren[id].Iter<int>(n => newCurrCandidates.Add(n));
+							}
+
+
+							HashSet<int> nonInlinedCurrCandidates = new HashSet<int>();
+							//                    calls.currCandidates.Iter<int>(n => { if (!oldCurrCandidates.Contains(n)) newCurrCandidates.Add(n); else staleCurrCandidates.Add(n); });
+							softPartition.activeCandidates.Iter<int>(n => { if (!reporter.candidatesToExpand.Contains(n) && !candidatesThatReachRecBound.Contains(n)) nonInlinedCurrCandidates.Add(n); });
+
+							// also block the onces that were already blocked
+							block.Iter<int>(n => nonInlinedCurrCandidates.Add(n));
+
+							if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.DisjointModuleSummaries)
+							{
+								;
+							}
+							else if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.SoftBlocking)
+							{
+								HashSet<int> allCexCandidates = new HashSet<int>();
+								candidatesInCounterexamples.Iter<HashSet<int>>(n => allCexCandidates.UnionWith(n));
+								foreach (int c in allCexCandidates)
+								{
+									if (!reporter.candidatesToExpand.Contains(c) && !candidatesThatReachRecBound.Contains(c))
+										nonInlinedCurrCandidates.Add(c);
+								}
+
+								total_cex_size += (uint)reporter.candidatesToExpand.Count;
+
+							}
+							else if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.EnumerateAll)
+							{
+								VCExpr v = VCExpressionGenerator.False;
+								reporter.candidatesToExpand.Iter<int>(n => v = prover.VCExprGen.OrSimp(v, calls.getFalseExpr(n)));
+								coveredCEXs = prover.VCExprGen.AndSimp(coveredCEXs, v);
+							}
+							else
+								Contract.Assert(false);
+
+							num_cex++;
+
+							SoftPartition newPartition = new SoftPartition(softPartition, newCurrCandidates, nonInlinedCurrCandidates, reporter.candidatesToExpand, candidatesThatReachRecBound, reporter.vcCache);
+							reporter.vcCache = null;
+							candidatesThatReachRecBound.Clear();
+							partitions.Add(newPartition);
+
+							/*
+                             * Note: A list with no activeCandidates means that it has no more function calls within it;
+                             * note that it does not imply that the partition is verified (the intraprocedural paths still need
+                             * to be verified).
+                             */
+
+							// block all the candidates expanded
+							//reporter.candidatesToExpand.Iter<int>(n => block.Add(n));
+							//reporter.candidatesToExpand.Iter<int>(n => candidatesInCounterexamples.Add(n));
+							candidatesInCounterexamples.Add(new HashSet<int>(reporter.candidatesToExpand));
+
+							//newPartitionList.Add(newPartition);
+
+							if (Settings.traversalStyle == Settings.TraversalStyle.DepthFirst)
+							{
+								retval = VerifyResult.Partitioned;
+								break;      // probe into this new partition lower level partition instead of creating new partitions
+							}
+							else if (Settings.traversalStyle == Settings.TraversalStyle.DefaultBreadthFirst)
+							{
+								// Don't create more partitions if you don't have the budget
+								int min = Settings.SoftPartitionBound < vState.threadBudget ? Settings.SoftPartitionBound : vState.threadBudget;
+								//if (partitions.Count >= Settings.SoftPartitionBound)
+								if (partitions.Count >= min)
+								{
+									retval = VerifyResult.Partitioned;
+									break;
+								}
+
+								if (maxPartitions != -1 && partitions.Count >= maxPartitions)
+								{
+									retval = VerifyResult.Partitioned;
+									break;
+								}
+							}
+							else if (Settings.traversalStyle == Settings.TraversalStyle.RandomizedDepthFirst)
+							{
+								if (partitions.Count >= Settings.enumerationBound)
+								{
+									retval = VerifyResult.Partitioned;
+									break;
+								}
+							}
+							else if (Settings.traversalStyle == Settings.TraversalStyle.CostBasedSelection)
+							{
+								if (partitions.Count >= Settings.enumerationBound)
+								{
+									retval = VerifyResult.Partitioned;
+									break;
+								}
+							}
+							else
+								Contract.Assert(false);
+						}
+					}
+
+					if (RefinementFuzzing.Settings.noInterpolationOnMainProver || RefinementFuzzing.Settings.lazySummaries)
+					{
+						prover.Pop();
+					}
+
+					if (RefinementFuzzing.Settings.useOptimizedProverStack)
+					{
+						//int top = proverStackBookkeeper.Pop(); // Pop the non-inlined candidates VC
+						//Contract.Assert(top == -1);
+					}
+					else
+					{
+						prover.Pop();
+					}
+
+					solTime = (DateTime.UtcNow - startTime).TotalSeconds;
+
+					timeTaken += solTime;
+
+					if (RefinementFuzzing.Settings.constructExplorationGraph)
+					{
+						softPartition.graphNode.solutionTime.Enqueue((int)Math.Round(solTime));
+					}
+
+					string msg = "";
+					if (retval == VerifyResult.Verified)
+					{
+						msg += "verified";
+					}
+					else if (retval == VerifyResult.Partitioned)
+					{
+						msg += "partitioned (";
+						foreach (SoftPartition s in partitions)
+						{
+							msg += s.Id + ",";
+						}
+						msg += ")";
+					}
+					else if (retval == VerifyResult.BugFound)
+					{
+						msg += "bug found";
+					}
+
+					if (partitions.Count > 3)
+						Console.Write("");
+
+					RefinementFuzzing.Settings.WritePrimaryLog(proverStackBookkeeper.id, softPartition.Id, "SolvePartition", "Returning with " + msg);
+
+					return retval;
+
+					Contract.Assert(false);  // unreachable
+					return VerifyResult.Errors;
+
+
+					#region expand call tree
+
+					foreach (SoftPartition sp in partitions)
+					{
+						if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+						{
+							Console.Write(">> SI Inlining: ");
+							reporter.candidatesToExpand
+								.Select(c => calls.getProc(c))
+								.Iter(c => { if (!isSkipped(c)) Console.Write("{0} ", c); });
+
+							Console.WriteLine();
+							Console.Write(">> SI Skipping: ");
+							reporter.candidatesToExpand
+								.Select(c => calls.getProc(c))
+								.Iter(c => { if (isSkipped(c)) Console.Write("{0} ", c); });
+
+							Console.WriteLine();
+						}
+
+						// Expand and try again
+						vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion begin ;;;;;;;;;;");
+						List<int> candidatesToExpand = new List<int>();
+						sp.activeCandidates.Iter<int>(n => candidatesToExpand.Add(n));
+						DoExpansion(candidatesToExpand, vState);
+						vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion end ;;;;;;;;;;");
+					}
+						
+					#endregion
+				}
+			}
+		}
+
+		public bool isSkipped(string procName)
+		{
+			return procsToSkip.Contains(procName);
+		}
+		public bool isSkipped(int candidate, FCallHandler calls)
+		{
+			return isSkipped(calls.getProc(candidate));
+		}
+
+
+		public enum BoundType { ATLEAST, ATMOST };
+
+		// Encodes a condition to say that at most "bound" of the expressions in exprList can be true
+		private VCExpr conditionWithBounds(HashSet<VCExpr> exprList, uint bound, BoundType boundType)
+		{
+			VCExpr bigNumBound = prover.VCExprGen.Integer(BigNum.FromUInt(bound + 1));
+			VCExpr finalExpr = prover.VCExprGen.Integer(BigNum.ZERO);
+
+			foreach (VCExpr expr in exprList)
+			{
+				VCExpr res = prover.VCExprGen.Function(VCExpressionGenerator.IfThenElseOp, expr, prover.VCExprGen.Integer(BigNum.ONE), prover.VCExprGen.Integer(BigNum.ZERO));
+				finalExpr = prover.VCExprGen.Add(finalExpr, res);
+			}
+
+			if (boundType == BoundType.ATMOST)
+				finalExpr = prover.VCExprGen.Gt(bigNumBound, finalExpr);
+			else if (boundType == BoundType.ATLEAST)
+				finalExpr = prover.VCExprGen.Gt(finalExpr, bigNumBound);
+			else
+				Contract.Assert(false);
+
+
+			return finalExpr;
+		}
+
+
+		private VCExpr CreateVC(SoftPartition softPartition, VerificationState vState)
+		{
+			// add all the activeCandidates and their parents
+			HashSet<int> candidatesAddedInVC = new HashSet<int>();
+			Queue<int> pendingCandidates = new Queue<int>();
+
+			softPartition.activeCandidates.Iter<int>(n => pendingCandidates.Enqueue(n));
+
+			VCExpr vc = VCExpressionGenerator.True;
+
+			foreach (int id in softPartition.candidateUniverse)
+			{
+				// impose both the inlined function as well as the summary
+				// the inlined function is an overapproximation --- so the summary can still help
+
+				vc = vState.checker.prover.VCExprGen.And(vc, vState.calls.id2VC[id]);
+				//RefinementFuzzing.Settings.vc_set.Add(vc);
+
+				//VCExpr summary = vState.summaryDB.get(id, RefinementFuzzing.Settings.SummaryTypeInUse);
+
+				/*
+				if (summary != null)
+				{
+					vc = vState.checker.prover.VCExprGen.And(vc, summary);
+					//RefinementFuzzing.Settings.vc_set.Add(vc);
+				}
+				*/
+			}
+
+			/*
+			foreach (int id in softPartition.activeCandidates)
+			{
+				// for the active candidates, inline the summary (if available)
+				//VCExpr summary = vState.summaryDB.get(id, RefinementFuzzing.Settings.SummaryTypeInUse);
+
+				if (summary != null)
+				{
+					vc = vState.checker.prover.VCExprGen.And(vc, summary);
+					//RefinementFuzzing.Settings.vc_set.Add(vc);
+				}
+
+				if (RefinementFuzzing.Settings.FreshParamCopies)
+				{
+					vc = vState.checker.prover.VCExprGen.And(vc, vState.calls.id2FreshParamAsgn[id]);
+				}
+
+				// Candidates that reach recursion bound
+				int idBound = vState.calls.getRecursionBound(id);
+				int sd = vState.calls.getStackDepth(id);
+				if (!(idBound <= CommandLineOptions.Clo.RecursionBound && (CommandLineOptions.Clo.StackDepthBound == 0 || sd <= CommandLineOptions.Clo.StackDepthBound)))
+					vc = vState.checker.prover.VCExprGen.And(vc, vState.calls.getFalseExpr(id));
+			}
+			*/
+
+			foreach (int id in softPartition.candidatesReachingRecBound)
+			{
+				// for the active candidates, inline the summary (if available)
+
+				vc = vState.checker.prover.VCExprGen.And(vc, vState.calls.getFalseExpr(id));
+				//RefinementFuzzing.Settings.vc_set.Add(vc);
+
+			}
+
+
+			/*
+            while (pendingCandidates.Count > 0) {
+                int id = pendingCandidates.Dequeue();
+                vc = vState.checker.prover.VCExprGen.And(vc, vState.calls.id2VC[id]);
+                candidatesAddedInVC.Add(id);
+
+                if (id != 0 && !candidatesAddedInVC.Contains(id) && !pendingCandidates.Contains(id))
+                    pendingCandidates.Enqueue(vState.calls.candidateParent[id]);
+            }
+             * */
+
+			// TODO: Add summary for open calls in the partition
+
+			return vc;
+		}
+
+		public enum FormulaType { VC, PartitionBlockedSet, Summary, CandidateSummary, PrefixTrace, NONE };
+
+		public static string getNameForFormula(int id, FormulaType ftype, int minor_id = -1)
+		{
+			string prefix = "";
+
+			if (ftype == FormulaType.VC)
+				prefix = "candidate_vc_";
+			else if (ftype == FormulaType.PartitionBlockedSet)
+				prefix = "blocked_";
+			else if (ftype == FormulaType.Summary)
+				prefix = "summary_";
+			else if (ftype == FormulaType.CandidateSummary)
+				prefix = "candidate_summary_";
+			else if (ftype == FormulaType.PrefixTrace)
+				prefix = "prefix_trace_";
+			else
+				Contract.Assert(false);
+
+			if (id < 0)
+				prefix += "neg_" + (-1 * id);
+			else
+				prefix += id;
+
+			if (ftype == FormulaType.Summary)
+				prefix += "_v" + minor_id;
+			else if (ftype == FormulaType.CandidateSummary)
+				prefix += "_q" + minor_id;
+
+			return prefix;
+		}
+
+		private void OptimizedAssertVC(SoftPartition softPartition, VerificationState vState, ProverInterface prover, ProverStackBookkeeping proverStackBookkeeper)
+		{
+			// add all the activeCandidates and their parents
+			//HashSet<int> candidatesAddedInVC = new HashSet<int>();
+			//Queue<int> pendingCandidates = new Queue<int>();
+
+			//softPartition.activeCandidates.Iter<int>(n => pendingCandidates.Enqueue(n));
+
+			List<int> proverStack = proverStackBookkeeper.getProverStackStatus().ToList();
+
+			Contract.Assert(proverStack.Count == 0                  // starting with an empty stack
+				|| proverStack.Contains(softPartition.Id)           // while going up --- stack needs to be popped
+				|| proverStack.Contains(softPartition.parent.Id));  // while going down --- softPartition needs to be pushed
+
+			SoftPartition s = softPartition;
+
+			/*
+            while (s != null && proverStackBookkeeper.Count() - 1 < s.level)
+            {
+                s = s.parent;
+            }
+             * */
+
+			//Contract.Assert((s == null && proverStackBookkeeper.Count() == 0) || s.level == proverStackBookkeeper.Count() - 1);
+			//Contract.Assert((s == null && proverStackBookkeeper.Count() == 0) || );
+
+			/*
+            while (s != null && proverStackBookkeeper.Count() > 0 && (s.Id != proverStackBookkeeper.Top() || proverStackBookkeeper.stalePartitions.Contains(s)))
+            {
+                s = s.parent;
+                proverStackBookkeeper.Pop();
+            }
+             * */
+
+			SoftPartition s1 = softPartition;
+			List<int> spList = new List<int>(); // set of all partitions that need to be present on prover stack
+			while (s1 != null)
+			{
+				spList.Add(s1.Id);
+				s1 = s1.parent;
+			}
+
+			IEnumerable<int> remainingPartitions = spList.Except<int>(proverStack); // partitions which are not yet on prover stack
+
+			s = null;
+			// try to pop as much as we can --- search for the least common ancestor
+			for (int i = 0; i < proverStack.Count; i++)
+			{
+				int topElem = proverStack[i];
+				if (!proverStackBookkeeper.pinnedPartitions.Contains(topElem) &&
+					!proverStackBookkeeper.deferredPartitions.Contains(topElem) &&
+					!spList.Contains(topElem))
+				{
+					proverStackBookkeeper.Pop();
+				}
+				else
+				{
+					break;
+				}
+			}
+
+
+
+			#if false
+			SoftPartition x = s;
+			// sanity check: can be removed after testing
+			for (int i = 0; i < proverStackBookkeeper.getProverStackStatus().Count; i++, x = x.parent)
+			{
+			if (proverStackBookkeeper.getProverStackStatus().ElementAt(i) > 0 && proverStackBookkeeper.getProverStackStatus().ElementAt(i) != x.Id)
+			Contract.Assert(false);
+			}
+			#endif
+
+			SoftPartition t = softPartition;
+
+			Stack<SoftPartition> vcStack = new Stack<SoftPartition>();
+
+			// need to push in the reverse order
+			while (t != null && remainingPartitions.Contains(t.Id))
+			{
+				vcStack.Push(t);
+
+				//t.stale = false;
+				if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
+					proverStackBookkeeper.stalePartitions.Remove(s);
+				t = t.parent;
+			}
+
+
+			while (vcStack.Count > 0)
+			{
+				SoftPartition sp = vcStack.Pop();
+
+				proverStackBookkeeper.Push(sp, vState);
+				//prover.Assert(vc1Tuple.Item1, true);
+				//proverStackBookkeeper.Assert(sp, getNameForFormula(vc1Tuple.Item2));
+				// lock (RefinementFuzzing.Settings.lockThis) // it looks like VCExprGen manipulations need locking
+				{
+					assertVCForPartition(sp, vState);
+				}
+			}
+
+			// TODO: Add summary for open calls in the partition
+
+			/*
+            proverStackBookkeeper.Push(-1);
+            prover.Assert(vc2, true);
+            proverStackBookkeeper.Assert(vc2, getNameForFormula(-1));
+            */
+			return;
+		}
+
+		public VCExpr getVCForCandidate(int candidateId, SoftPartition sp, VerificationState vState)
+		{
+			VCExpr vc1 = VCExpressionGenerator.True;
+
+			// impose both the inlined function as well as the summary
+			// the inlined function is an overapproximation --- so the summary can still help
+
+			vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.id2VC[candidateId]);
+			//RefinementFuzzing.Settings.vc_set.Add(vc);
+
+
+			if (RefinementFuzzing.Settings.FreshParamCopies)
+			{
+				Contract.Assert(candidateId == 0 || vState.calls.id2FreshParamAsgn.ContainsKey(candidateId));
+				//   if (vState.calls.id2FreshParamAsgn.ContainsKey(candidateId))
+				//       vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.id2FreshParamAsgn[candidateId]);
+			}
+
+			/*
+			if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
+			{
+				VCExpr summary = vState.summaryDB.get(candidateId, RefinementFuzzing.Settings.SummaryTypeInUse);
+
+				if (summary != null)
+				{
+					vc1 = vState.checker.prover.VCExprGen.And(vc1, summary);
+					//RefinementFuzzing.Settings.vc_set.Add(vc);
+				}
+			}
+			*/
+
+			foreach (int id in sp.activeCandidates)
+			{
+				if (!vState.calls.candidateParent.Keys.Contains(id))
+					Contract.Assert(false);
+
+				if (vState.calls.candidateParent[id] != candidateId)
+					continue;
+
+				/*
+				if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
+				{
+					// for the active candidates, inline the summary (if available)
+					VCExpr summary1 = vState.summaryDB.get(id, RefinementFuzzing.Settings.SummaryTypeInUse);
+
+					if (summary1 != null)
+					{
+						vc1 = vState.checker.prover.VCExprGen.And(vc1, summary1);
+						//RefinementFuzzing.Settings.vc_set.Add(vc);
+					}
+				}
+				*/
+
+				if (RefinementFuzzing.Settings.FreshParamCopies)
+				{
+					vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.id2FreshParamAsgn[id]);
+				}
+
+				// Candidates that reach recursion bound
+				int idBound = vState.calls.getRecursionBound(id);
+				int sd = vState.calls.getStackDepth(id);
+				if (!(idBound <= CommandLineOptions.Clo.RecursionBound && (CommandLineOptions.Clo.StackDepthBound == 0 || sd <= CommandLineOptions.Clo.StackDepthBound)))
+					vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.getFalseExpr(id));
+			}
+
+			/*
+            foreach (int id in sp.blockedCandidates)
+            {
+                if (vState.calls.candidateParent[id] != candidateId)
+                    continue;
+
+                // for the active candidates, inline the summary (if available)
+
+                vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.getFalseExpr(id));
+                //RefinementFuzzing.Settings.vc_set.Add(vc);
+
+            }
+             * */
+
+			foreach (int id in sp.candidatesReachingRecBound)
+			{
+				if (vState.calls.candidateParent[id] != candidateId)
+					continue;
+
+				// for the active candidates, inline the summary (if available)
+				Contract.Assert(false); // should not be reachable
+				vc1 = vState.checker.prover.VCExprGen.And(vc1, vState.calls.getFalseExpr(id));
+				//RefinementFuzzing.Settings.vc_set.Add(vc);
+
+			}
+
+			return vc1;
+		}
+
+
+		private void assertVCForPartition(SoftPartition sp, VerificationState vState)
+		{
+			VCExpr vc1 = VCExpressionGenerator.True;
+			VCExpr vc2 = VCExpressionGenerator.True;
+			//VCExpr vc3 = VCExpressionGenerator.True; // REMOVE IT
+
+			//lock (RefinementFuzzing.Settings.lockThis)  [removed on 15th Sept]
+			{
+
+				// add the VC of the last inlined "layer" (the others are already asserted deeper in the prover stack)
+				foreach (int id in sp.lastInlined)
+				{
+					//vc1 = vState.checker.prover.VCExprGen.And(vc1, getVCForCandidate(id, sp, vState));
+					vc1 = getVCForCandidate(id, sp, vState);
+
+					//vc3 = vState.checker.prover.VCExprGen.And(vc3, vc1);
+
+					proverStackBookkeeper.Assert(vc1, getNameForFormula(id, FormulaType.VC), "Partition: " + sp.Id + "; Candidate: " + id);
+				}
+
+				// REMOVE IT!
+				//proverStackBookkeeper.Assert(vc3, "Partition_" + sp.Id, "Partition: " + sp.Id + "; Candidate: ");
+
+
+				/*
+                foreach (int id in sp.activeCandidates)
+                {
+                    // for the active candidates, inline the summary (if available)
+                    VCExpr summary = vState.summaryDB.get(id, RefinementFuzzing.Settings.SummaryTypeInUse);
+
+                    if (summary != null)
+                    {
+                        vc1 = vState.checker.prover.VCExprGen.And(vc1, summary);
+                        //RefinementFuzzing.Settings.vc_set.Add(vc);
+                    }
+                }
+                */
+
+				if (!RefinementFuzzing.Settings.noInterpolationOnMainProver && !RefinementFuzzing.Settings.lazySummaries)
+				{
+					IEnumerable<int> incrementalBlocked;
+
+					if (sp.Id != 0)
+					{
+						incrementalBlocked = sp.blockedCandidates.Except(sp.parent.blockedCandidates);
+					}
+					else
+					{
+						incrementalBlocked = sp.blockedCandidates;
+					}
+
+					StringBuilder blkSet = new StringBuilder();
+					//foreach (int id in sp.blockedCandidates)
+					foreach (int id in incrementalBlocked)
+					{
+						vc2 = vState.checker.prover.VCExprGen.And(vc2, vState.calls.getFalseExpr(id));
+						//RefinementFuzzing.Settings.vc_set.Add(vc);
+
+						blkSet.Append("," + id);
+					}
+
+					proverStackBookkeeper.Assert(vc2, getNameForFormula(sp.Id, FormulaType.PartitionBlockedSet), "Partition: " + sp.Id + "; BlockedSet (incremental): " + blkSet.ToString());
+				}
+			}
+
+			/*
+            foreach (int id in sp.candidatesReachingRecBound)
+            {
+                // for the active candidates, inline the summary (if available)
+
+                vc2 = vState.checker.prover.VCExprGen.And(vc2, vState.calls.getFalseExpr(id));
+                //RefinementFuzzing.Settings.vc_set.Add(vc);
+                
+            }
+            proverStackBookkeeper.Assert(vc2, getNameForFormula(sp.Id, FormulaType.PartitionBlockedSet), "Partition: " + sp.Id + "; BlockedSet (incremental): " + blkSet.ToString());
+            */
+
+			//return vc1;
+		}
+
+
+
+		public ConcurrentSolver solver;
+		//public static InterfaceMaps interfaceMaps;
+		public static PartitionSelectionHeuristics partitionSelectionHeuristics;
+
+
+		static public ProverArrayManager proverManager;
+
+		private Outcome VerifyImplementationConcurrent(Implementation/*!*/ impl, VerifierCallback/*!*/ callback)
+		{
+			Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
+			Debug.Assert(this.program == program);
+
+			useConcurrentSolver = true;
+
+			// Flush any axioms that came with the program before we start SI on this implementation
+			prover.AssertAxioms();
+
+			// Run live variable analysis
+			if (CommandLineOptions.Clo.LiveVariableAnalysis == 2)
+			{
+				Microsoft.Boogie.InterProcGenKill.ComputeLiveVars(impl, program);
+			}
+
+			// Get the VC of the current procedure
+			StratifiedInliningInfo info = implName2StratifiedInliningInfo[impl.Name];
+			info.GenerateVC();
+			VCExpr vc = info.vcexpr;
+
+			var substForallDict = new Dictionary<VCExprVar, VCExpr>();
+			if (info.controlFlowVariable != null)
+			{
+				substForallDict.Add(prover.Context.BoogieExprTranslator.LookupVariable(info.controlFlowVariable),
+					prover.VCExprGen.Integer(BigNum.FromInt(0)));
+			}
+			VCExprSubstitution substForall = new VCExprSubstitution(substForallDict, new Dictionary<TypeVariable, Microsoft.Boogie.Type>());
+			SubstitutingVCExprVisitor subst = new SubstitutingVCExprVisitor(prover.VCExprGen);
+			Contract.Assert(subst != null);
+			vc = subst.Mutate(vc, substForall);
+
+			Dictionary<int, Absy> mainLabel2absy = info.label2absy;
+			var reporter = new StratifiedInliningErrorReporter(implName2StratifiedInliningInfo, prover, callback, info);
+
+			// Find all procedure calls in vc and put labels on them      
+			FCallHandler calls = new FCallHandler(prover.VCExprGen, implName2StratifiedInliningInfo, impl.Name, mainLabel2absy);
+			calls.setCurrProcAsMain();
+			vc = calls.Mutate(vc, true);
+			reporter.SetCandidateHandler(calls);
+			calls.id2VC.Add(0, vc);
+			calls.extraRecursion = extraRecBound;
+
+			// We'll restore the original state of the theorem prover at the end
+			// of this procedure
+			//prover.Push();
+
+			// Put all of the necessary state into one object
+			ProverInterface prover2 = null;
+			var vState = new VerificationState(vc, calls, prover, reporter, prover2, new EmptyErrorHandler());
+			vState.vcSize += SizeComputingVisitor.ComputeSize(vc);
+
+			// Create the interface maps
+			//interfaceMaps = new InterfaceMaps();
+
+
+			if (RefinementFuzzing.Settings.preAllocateProvers)
+			{
+				//Contract.Assert(RefinementFuzzing.Settings.useInterpolatingAsMainProver); // only done for this case
+				proverManager = new ProverArrayManager(RefinementFuzzing.Settings.totalThreadBudget, program, prover);
+				proverStackBookkeeper = proverManager.BorrowProver(0);
+
+				/*
+				if (RefinementFuzzing.Settings.useConcurrentSummaryDB)
+				{
+					vState.summaryDB = new ConcurrentSummaryDB(this, vState, proverStackBookkeeper.getInterpolatingProver());
+				}
+				else
+				{
+					vState.summaryDB = new SummaryDB(this, vState, proverStackBookkeeper.getInterpolatingProver());
+				}
+				*/
+			}
+			else
+			{
+				/*
+				if (RefinementFuzzing.Settings.useConcurrentSummaryDB)
+				{
+					vState.summaryDB = new ConcurrentSummaryDB(this, vState, null);
+				}
+				else
+				{
+					vState.summaryDB = new SummaryDB(this, vState, null);
+				}
+				*/
+
+				proverStackBookkeeper = new ProverStackBookkeeping(prover, 0);
+			}
+
+			/*
+			if (RefinementFuzzing.Settings.useConcurrentSummaryDB && RefinementFuzzing.Settings.summaryLog != null)
+			{
+				SummaryDB.summaryLogFile = new StreamWriter(RefinementFuzzing.Settings.summaryLog);
+
+				if (RefinementFuzzing.Settings.summaryLogHTML)
+				{
+					SummaryDB.summaryLogFile.WriteLine("<html><body>");
+				}
+			}
+			*/
+
+			/*
+            foreach (Implementation i in program.Implementations())
+            {
+                Procedure proc = i.Proc;
+                List<VCExprVar> vcexprList = implName2StratifiedInliningInfo[proc.Name].interfaceExprVars;
+                
+            }
+             */
+
+			partitionSelectionHeuristics = new PartitionSelectionHeuristics();
+
+			if (RefinementFuzzing.Settings.timeout != 0)
+			{
+				int t = RefinementFuzzing.Settings.timeout * 1000;
+
+				// Create a timer with a two second interval.
+				System.Timers.Timer aTimer = new System.Timers.Timer(t);
+				// Hook up the Elapsed event for the timer. 
+				//aTimer.Elapsed += OnTimedEvent;
+				aTimer.Enabled = true;
+			}
+
+			//SummaryDB.CollectEnvironmentVariables(program);
+
+			if (RefinementFuzzing.Settings.DoPredAbsOnSummaries)
+			{
+				//Dictionary<string, VCExpr> abstractSummaries2 = LoadStroreAbstractSummaries(null, true);
+
+				//abstractSummaries2.Keys.Iter<string>(n => vState.summaryDB.proc2Summary[n] = abstractSummaries[n]);
+
+
+			}
+
+			// Under-approx query is only needed if something was inlined since
+			// the last time an under-approx query was made
+			// TODO: introduce this
+			// bool underApproxNeeded = true;
+
+			// The recursion bound for stratified search
+
+			// 0: Pull a new soft partition from queue
+			// 1: Iterate on creating partitions
+
+			solver = new ConcurrentSolver(this, vState);
+
+			/*
+			if (CommandLineOptions.Clo.asChild)
+			{
+				DistributedContext obj = RefinementFuzzing.Settings.ResumeFromParent(CommandLineOptions.Clo.pipeName, solver) as DistributedContext;
+				Console.WriteLine("Execution of child completed!");
+
+				if (RefinementFuzzing.Settings.consoleRun)
+					Console.ReadKey();
+
+				System.Environment.Exit(0);
+			}
+			*/
+
+			List<int> entryPoints = new List<int>();
+			entryPoints.Add(0); // only '0' for the moment for the "main()" function (assuming only one entry point)
+
+			VerifyResult res = solver.Solve(entryPoints);
+
+			/*
+			if (RefinementFuzzing.Settings.summaryPrintFile != null)
+			{
+				vState.summaryDB.WriteSummaries();
+			}
+
+			if (RefinementFuzzing.Settings.useConcurrentSummaryDB && RefinementFuzzing.Settings.summaryLog != null)
+			{
+				if (RefinementFuzzing.Settings.summaryLogHTML)
+				{
+					SummaryDB.summaryLogFile.WriteLine("</body></html>");
+				}
+
+				SummaryDB.summaryLogFile.Close();
+			}
+			*/
+
+			Console.WriteLine("Houdini Statistics (VerifiedTrue = {0} / Total = {1})", RefinementFuzzing.Settings.HoudiniVerifiedTrue, RefinementFuzzing.Settings.HoudiniVerifiedTotal);
+
+			if (res == VerifyResult.Verified)
+			{
+				if (RefinementFuzzing.Settings.reachedRecursionBound)
+					Console.Out.WriteLine("Correct under recursion bound!");
+				else
+					Console.Out.WriteLine("Proof Found!");
+			}
+
+			Console.WriteLine("SolvePartition time: {0} sec", timeTaken);
+			Console.WriteLine("Number of calls to SolvePartition : {0}", numCalls);
+			Console.WriteLine("Number of threads spawned : {0}", threadsSpawned);
+
+			Console.WriteLine("Solver Times on each Thread: ");
+			proverManager.PrintTimers();
+			Settings.oTimer.PrintStatistics();
+
+			//Console.WriteLine("Lock Entered {0} times, wait time {1} sec", RefinementFuzzing.Settings.timedLock.EnterCount, RefinementFuzzing.Settings.timedLock.WaitTime);
+
+			if (RefinementFuzzing.Settings.constructExplorationGraph)
+			{
+				RefinementFuzzing.Settings.explorationGraph.WriteDot();
+
+				StreamWriter sw = new StreamWriter("funcs.txt");
+				foreach (int id in RefinementFuzzing.Settings.candidateNames.Keys)
+				{
+					sw.WriteLine(id + ": " + RefinementFuzzing.Settings.candidateNames[id]);
+				}
+
+				sw.Close();
+			}
+
+			//if (res == VerifyResult.BugFound && RefinementFuzzing.Settings.needErrorTraces)
+			if (res == VerifyResult.BugFound)
+			{
+				Contract.Assert(RefinementFuzzing.Settings.ErrPartition != null);
+
+				SoftPartition err = RefinementFuzzing.Settings.ErrPartition;
+
+				int errCandidate = -1;
+				HashSet<string> funcsInErrTrace = new HashSet<string>();
+
+				/*
+                err.lastInlined.Iter<int>(n => { if ("SLIC_ERROR_ROUTINE".Equals(RefinementFuzzing.Settings.candidateNames[n])) errCandidate = n; });
+
+                while (errCandidate > 0)
+                {
+                    string procName = RefinementFuzzing.Settings.candidateNames[errCandidate];
+                    Console.WriteLine(procName);
+
+                    Contract.Assert(err.lastInlined.Contains(errCandidate));
+
+                    err = err.parent;
+                    errCandidate = calls.candidateParent[errCandidate];
+                }
+
+                program.Emit(new TokenTextWriter("final.bpl"));
+                */
+
+				Stack<SoftPartition> st = new Stack<SoftPartition>();
+				err = RefinementFuzzing.Settings.ErrPartition;
+				while (err.Id != 0)
+				{
+					err.lastInlined.Iter<int>(n => funcsInErrTrace.Add(RefinementFuzzing.Settings.candidateNames[n].Substring(0, RefinementFuzzing.Settings.candidateNames[n].IndexOf("["))));
+					//err.lastInlined.Iter<int>(n => RefinementFuzzing.Settings.lastInliningFile.WriteLine(RefinementFuzzing.Settings.candidateNames[n]));
+					//RefinementFuzzing.Settings.lastInliningFile.WriteLine("---------------");
+					st.Push(err);
+					err = err.parent;
+				}
+
+				if (RefinementFuzzing.Settings.lastInliningFile != null)
+				{
+					while (st.Count > 0)
+					{
+						err = st.Pop();
+						err.lastInlined.Iter<int>(n => RefinementFuzzing.Settings.lastInliningFile.Write(n + ", "));
+						RefinementFuzzing.Settings.lastInliningFile.WriteLine();
+					}
+					RefinementFuzzing.Settings.lastInliningFile.Flush();
+				}
+
+				funcsInErrTrace.Add("fakeMain"); // this method is id 0, added by Corral
+				funcsInErrTrace.Add("corral_nondet");
+				funcsInErrTrace.Add("__HAVOC_malloc");
+				funcsInErrTrace.Add("__HAVOC_malloc_or_null");
+				funcsInErrTrace.Add("boogie_si_record_li2bpl_int");
+				funcsInErrTrace.Add("corralExplainErrorInit");
+				funcsInErrTrace.Add("corralExtraInit");
+
+				/*
+				DeltaDebug dbg = new DeltaDebug(CommandLineOptions.Clo.Files, funcsInErrTrace);
+				dbg.Transform("error.bpl", vState.summaryDB);
+				*/
+
+				#if false
+				Dictionary<string, Dictionary<string, Block>> extractLoopMappingInfo = null;
+				if (CommandLineOptions.Clo.ExtractLoops)
+				{
+				extractLoopMappingInfo = program.ExtractLoops();
+				}
+
+				List<Counterexample> errors = (callback as CounterexampleCollector).examples;
+				Dictionary<string, Implementation> origProg = new Dictionary<string, Implementation>();
+				calls.implName2StratifiedInliningInfo.Keys.Iter<string>(n => origProg[n] = calls.implName2StratifiedInliningInfo[n].impl);
+
+				List<BoogieErrorTrace> allErrors = new List<BoogieErrorTrace>();
+
+				if (errors != null)
+				{
+				for (int i = 0; i < errors.Count; i++)
+				{
+				errors[i].Print(1, Console.Out);
+
+				/*
+				// Map the trace across loop extraction
+				if (this is VC.VCGen && extractLoopMappingInfo != null)
+				{
+				errors[i] = (this as VC.VCGen).extractLoopTrace(errors[i], impl.Name, program, extractLoopMappingInfo);
+				}
+				*/
+
+				if (errors[i] is AssertCounterexample)
+				{
+				// Special treatment for assert counterexamples for CBA: Reconstruct
+				// trace in the input program.
+				BoogieErrorTrace.ReconstructImperativeTrace(errors[i], impl.Name, origProg);
+				allErrors.Add(new BoogieAssertErrorTrace(errors[i] as AssertCounterexample, origProg[impl.Name], program));
+				}
+				else
+				{
+				allErrors.Add(new BoogieErrorTrace(errors[i], origProg[impl.Name], program));
+				}
+
+				allErrors[i].printLabels(new TokenTextWriter("x.bpl"));
+				}
+				}
+
+				Console.WriteLine("Trace: ", allErrors);
+				#endif
+			}
+
+			// Predicate abstraction on summaries
+			if (RefinementFuzzing.Settings.DoPredAbsOnSummaries)
+			{
+				ProverStackBookkeeping bk = proverManager.BorrowProver(0);
+				bk.Reset();
+				//RefinementFuzzing.Settings.ProverVerbosity = 5;
+				//abstractSummaries = DoPredAbsUsingEnv(bk, vState.summaryDB, TokenTextWriter.environmentVariables);
+
+				//FCallHandler.candidateCount = 0;
+				//SoftPartition.totalPartitions = 0;
+				//VerifyImplementationConcurrent(impl, callback);
+				//LoadStroreAbstractSummaries(abstractSummaries, false);
+
+				/*
+				foreach (Declaration decl in freshProgram.TopLevelDeclarations)
+				{
+					if (decl is Procedure)
+					{
+						string name = (decl as Procedure).Name;
+						if (abstractSummaries.ContainsKey(name))
+						{
+							VCExpr summary = abstractSummaries[name];
+							Expr exp = Common.VCExpr2Expr.VCExprToExpr(summary, interfaceMaps.getInterfacMap(name));
+							(decl as Procedure).Ensures.Add(new Ensures(true, exp));
+						}
+					}
+					//program.TopLevelDeclarations[proc];
+				}
+
+
+				//Program freshProgram = Microsoft.Boogie.ExecutionEngine.ParseBoogieProgram(fileNames, false);
+				TokenTextWriter f = new TokenTextWriter("WithSummaries.bpl");
+				freshProgram.Emit(f);
+				f.Close();
+				*/
+			}
+
+			program.Emit(new TokenTextWriter("dump.bpl"));
+
+			if (res == VerifyResult.Verified)
+				return Outcome.Correct;
+			else if (res == VerifyResult.BugFound)
+				return Outcome.Errors;
+			else if (res == VerifyResult.Errors)
+				return Outcome.Inconclusive;  // Outcome gives finer granuality (memory, timeout, inconclusive) --- we only return inconclusive
+			else
+				Contract.Assert(false); // unreachable (Partitioned should not be returned)
+			return Outcome.Inconclusive; // unreachable
+		}
+
+    public Outcome VerifyImplementationSI(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
       Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
 
       // Record current time
@@ -1469,6 +3122,337 @@ namespace VC {
     // A counter for adding new variables
     static int newVarCnt = 0;
 
+		// A step of the stratified inlining algorithm: both under-approx and over-approx queries
+		// TODO: needs to be merged with the new code of stratifiedStep()
+		private Outcome stratifiedStep1(int bound, VerificationState vState, HashSet<int> block, out HashSet<int> candidatesThatReachRecBound, HashSet<int> activeCandidates = null, List<HashSet<int>> candidatesInCounterexamples = null, uint cex_size = 0, VCExpr coveredCEXs = null)
+		{
+			var calls = vState.calls;
+			var checker = vState.checker;
+			var prover = checker.prover;
+			var reporter = checker.reporter as StratifiedInliningErrorReporter;
+
+			List<VCExpr> assumptions;
+
+			Outcome ret;
+
+			IEnumerable<int> currCandidates;
+
+			if (useConcurrentSolver)
+			{
+				currCandidates = activeCandidates;
+				candidatesThatReachRecBound = new HashSet<int>();
+				//calls.currCandidates = activeCandidates; // Required as GenerateTraceRec() looks at calls.currCandidate to expand the trace (check "if (calls.currCandidates.Contains(calleeId))"); so important to restore calls.currCandidate
+			}
+			else
+			{
+				currCandidates = calls.currCandidates;
+				candidatesThatReachRecBound = null;
+			}
+
+			// NO UNDERAPPROXIMATIONS
+			if (!RefinementFuzzing.Settings.disableUnderapproxMode)
+			{
+				reporter.underapproximationMode = true;
+				prover.LogComment(";;;;;;;;;;;; Underapprox mode begin ;;;;;;;;;;");
+				assumptions = new List<VCExpr>();
+
+				foreach (int id in currCandidates)
+				{
+					if (!isSkipped(id, calls))
+						assumptions.Add(calls.getFalseExpr(id));
+				}
+
+				if (useConcurrentSolver)
+				{
+					// we don't even want an underapproximation outside our partition
+					foreach (int id in block)
+					{
+						if (!isSkipped(id, calls))
+							assumptions.Add(calls.getFalseExpr(id));
+					}
+				}
+
+				//lock (RefinementFuzzing.Settings.lockThis)
+				{
+					ret = checker.CheckAssumptions(assumptions);
+				}
+
+				prover.LogComment(";;;;;;;;;;;; Underapprox mode end ;;;;;;;;;;");
+
+				if (ret != Outcome.Correct)
+				{
+					// Either the query returned an error or it ran out of memory or time.
+					// In all cases, we are done.
+
+					return ret;
+				}
+
+				if (currCandidates.Count() == 0)
+				{
+					// If we didn't underapproximate, then we're done
+					return ret;
+				}
+
+			}
+
+			prover.LogComment(";;;;;;;;;;;; Overapprox mode begin ;;;;;;;;;;");
+
+			// Over-approx query
+			reporter.underapproximationMode = false;
+
+			// Push "true" for all, except:
+			// push "false" for all candidates that have reached
+			// the recursion bounds
+
+			bool allTrue = true;
+			bool allFalse = true;
+			List<VCExpr> softAssumptions = new List<VCExpr>();
+
+			assumptions = new List<VCExpr>();
+			procsThatReachedRecBound.Clear();
+
+			if (RefinementFuzzing.Settings.guideOnPathFile != null)
+			{
+				string lineStr = RefinementFuzzing.Settings.guideOnPathFile.ReadLine();
+				if (lineStr != null)
+				{
+					string[] line = lineStr.Split(',');
+					List<int> selectedCandidates = new List<int>();
+					line.Iter<string>(n => { if (!n.Equals(" ")) selectedCandidates.Add(Int32.Parse(n)); });
+
+					Console.Write("");
+
+					foreach (int n in currCandidates)
+					{
+						if (selectedCandidates.Contains(n))
+							assumptions.Add(calls.getTrueExpr(n));
+						else
+							assumptions.Add(calls.getFalseExpr(n));
+					}
+				}
+			}
+
+			foreach (int id in currCandidates)
+			{
+				if (isSkipped(id, calls)) continue;
+
+				int idBound = calls.getRecursionBound(id);
+				int sd = calls.getStackDepth(id);
+				//if (idBound <= bound && (CommandLineOptions.Clo.StackDepthBound == 0 || sd <= CommandLineOptions.Clo.StackDepthBound))
+				if (idBound <= CommandLineOptions.Clo.RecursionBound && (CommandLineOptions.Clo.StackDepthBound == 0 || sd <= CommandLineOptions.Clo.StackDepthBound))
+				{
+					if (idBound > 1)
+					{
+						softAssumptions.Add(calls.getFalseExpr(id));
+						//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
+					}
+
+					if (block.Contains(id))
+					{
+						Contract.Assert(useConcurrentSolver);
+						assumptions.Add(calls.getFalseExpr(id));
+						//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
+
+						if (!useConcurrentSolver)
+							allTrue = false;
+					}
+					else
+					{
+						allFalse = false;
+					}
+				}
+				else
+				{
+					procsThatReachedRecBound.Add(calls.getProc(id));
+					assumptions.Add(calls.getFalseExpr(id)); // Not required anymore: these are added when creating the VC
+					//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
+					allTrue = false;
+
+					if (useConcurrentSolver)
+						candidatesThatReachRecBound.Add(id);
+				}
+			}
+
+			if (useConcurrentSolver)
+			{
+				// softly block all nodes outside our partition  (note: blocked candidates is not a subset of activeCandidates)
+				foreach (int id in block)
+				{
+					if (!isSkipped(id, calls))
+					{
+						assumptions.Add(calls.getFalseExpr(id));
+						//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
+					}
+				}
+
+				if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.DisjointModuleSummaries)
+				{
+					HashSet<int> allCexCandidates = new HashSet<int>();
+					candidatesInCounterexamples.Iter<HashSet<int>>(n => allCexCandidates.UnionWith(n));
+
+					if (candidatesInCounterexamples.Count() == 1 && allCexCandidates.Contains(516))
+						Console.Write("");
+
+					// limit the subsequent partitions depending on the previously generated partitions
+					if (candidatesInCounterexamples.Count > 0)
+					{
+						VCExpr limitExpr = partitionSelectionHeuristics.ExprMissingSummaries(allCexCandidates, vState);
+						assumptions.Add(limitExpr);
+
+						// If we already have a CEX that comprizes only of candidates with summaries,
+						// we may end up getting the same CEX again and again --- block such cases
+						foreach (HashSet<int> cex in candidatesInCounterexamples)
+						{
+							VCExpr e = VCExpressionGenerator.False;
+							cex.Iter<int>(n => e = vState.checker.prover.VCExprGen.OrSimp(e, vState.calls.getFalseExpr(n)));
+							assumptions.Add(e);
+						}
+					}
+				}
+				else if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.SoftBlocking)
+				{
+					HashSet<int> allCexCandidates = new HashSet<int>();
+					candidatesInCounterexamples.Iter<HashSet<int>>(n => allCexCandidates.UnionWith(n));
+
+					uint threshold;
+
+					if (RefinementFuzzing.Settings.PartitionBoundariesSoft)
+						threshold = cex_size / 2;
+					//threshold = (uint)candidatesInCounterexamples.Count / 2;
+					else
+						threshold = 0;
+
+					if (threshold > 0)
+					{
+						HashSet<VCExpr> lst1 = new HashSet<VCExpr>();
+						foreach (int id in allCexCandidates)
+						{
+							lst1.Add(calls.getTrueExpr(id));
+						}
+
+						HashSet<VCExpr> lst2 = new HashSet<VCExpr>();
+						foreach (int id in activeCandidates)
+						{
+							if (!allCexCandidates.Contains(id))
+								lst2.Add(calls.getTrueExpr(id));
+						}
+
+						VCExpr softBlocked1 = conditionWithBounds(lst1, threshold, BoundType.ATMOST);
+						VCExpr softBlocked2 = (lst2.Count == 0) ? VCExpressionGenerator.False : conditionWithBounds(lst2, threshold, BoundType.ATLEAST);
+						VCExpr softBlocked = prover.VCExprGen.And(softBlocked1, softBlocked2);
+
+						assumptions.Add(softBlocked);
+					}
+					else
+					{
+						foreach (int id in allCexCandidates)
+						{
+							if (!isSkipped(id, calls))
+							{
+								assumptions.Add(calls.getFalseExpr(id));
+								//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
+							}
+						}
+					}
+				}
+				else if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.EnumerateAll)
+				{
+					assumptions.Add(coveredCEXs);
+				}
+				else
+					Contract.Assert(false);
+			}
+
+			if (allFalse && !RefinementFuzzing.Settings.disableUnderapproxMode)
+			{
+				// If we made all candidates false, then this is the same
+				// as the underapprox query. We already know the answer.
+				ret = Outcome.Correct;
+			}
+			else
+			{
+				if (candidatesInCounterexamples.Count > 0)
+				{
+					// this is not the "first" CEX --- let us generate the trace VC for it
+					(checker.reporter as StratifiedInliningErrorReporter).generateTrace = true;
+				}
+				else
+				{
+					// an earlier call on this prover could have set it to true
+					(checker.reporter as StratifiedInliningErrorReporter).generateTrace = false;
+				}
+
+				//lock (RefinementFuzzing.Settings.lockThis)
+				{
+					// some optimization
+					if (assumptions.Contains(VCExpressionGenerator.False))
+						ret = Outcome.Correct;
+					else
+						ret = CommandLineOptions.Clo.NonUniformUnfolding
+							? checker.CheckAssumptions(assumptions, softAssumptions)
+							: checker.CheckAssumptions(assumptions);
+				}
+			}
+
+			if (RefinementFuzzing.Settings.disableUnderapproxMode)
+			{
+				if (reporter.candidatesToExpand.Count == 0 && ret == Outcome.Errors)
+				{
+					// If we didn't overapproximate, then we're done
+					reporter.underapproximationMode = true; // it is an error on a concrete trace
+
+					// a bad hack so that the counterexample trace is printed (only printed if checker.CheckAssumptions() is called with reporter.underapproximationMode as true
+					ret = CommandLineOptions.Clo.NonUniformUnfolding
+						? checker.CheckAssumptions(assumptions, softAssumptions)
+						: checker.CheckAssumptions(assumptions);
+
+					return ret;
+				}
+			}
+
+			if (ret != Outcome.Correct && ret != Outcome.Errors)
+			{
+				// The query ran out of memory or time, that's it,
+				// we cannot do better. Give up!
+				return ret;
+			}
+
+			if (ret == Outcome.Correct)
+			{
+				// If nothing was made false, then the program is correct
+				if (allTrue)
+				{
+					return ret;
+				}
+
+				/*
+				if (useSummary)
+				{
+					// Find the set of candidates with valid over-approximations
+					var assumeTrueCandidates = new HashSet<int>(currCandidates);
+					assumeTrueCandidates.ExceptWith(block);
+					summaryComputation.compute(assumeTrueCandidates, bound);
+				}
+				*/
+
+				/*
+                if (useConcurrentSolver)
+                {
+                    return ret;
+                }*/
+
+				// Nothing more can be done with current recursion bound. 
+				return Outcome.ReachedBound;
+			}
+
+			Contract.Assert(ret == Outcome.Errors);
+
+			prover.LogComment(";;;;;;;;;;;; Overapprox mode end ;;;;;;;;;;");
+
+			return ret;
+		}
+
+
     // Does on-demand inlining -- pushes procedure bodies on the theorem prover stack.
     private void DoExpansion(List<int>/*!*/ candidates, VerificationState vState) {
       Contract.Requires(candidates != null);
@@ -1550,8 +3534,18 @@ namespace VC {
 
         exprToPush = prover.VCExprGen.And(exprToPush, expansion);
       }
-      vState.checker.prover.Assert(exprToPush, true);
-      vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
+      //vState.checker.prover.Assert(exprToPush, true);
+      //vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
+
+			if (useConcurrentSolver)
+			{
+				// create the VC (cached in id2VC) but do not assert it yet!
+			}
+			else
+			{
+				vState.checker.prover.Assert(exprToPush, true);
+				vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
+			}
     }
 
     private void SaveSubstitution(VerificationState vState, int id,
@@ -1598,7 +3592,7 @@ namespace VC {
     // -- Rename all other labels (so that calling this on the same VC results in 
     //    VCs with different labels each time)
     public class FCallHandler : MutatingVCExprVisitor<bool> {
-      Dictionary<string/*!*/, StratifiedInliningInfo/*!*/>/*!*/ implName2StratifiedInliningInfo;
+      public Dictionary<string/*!*/, StratifiedInliningInfo/*!*/>/*!*/ implName2StratifiedInliningInfo;
       public readonly Dictionary<int, Absy>/*!*/ mainLabel2absy;
       public Dictionary<BoogieCallExpr/*!*/, int>/*!*/ boogieExpr2Id;
       public Dictionary<BoogieCallExpr/*!*/, VCExpr>/*!*/ recordExpr2Var;
@@ -1610,10 +3604,12 @@ namespace VC {
       public Dictionary<int, Dictionary<Block, VCExpr>> candiate2block2controlVar;
       // Stores the candidate from which this one originated
       public Dictionary<int, int> candidateParent;
-      // Mapping from candidate Id to the "si_unique_call" id that led to 
+	  // Mapping from parents to children
+	  public Dictionary<int, List<int>> candidateChildren;
+	  // Mapping from candidate Id to the "si_unique_call" id that led to 
       // this candidate. This is useful for getting persistent names for
       // candidates
-      public Dictionary<int, int> candidate2callId;
+	  public Dictionary<int, int> candidate2callId;
       // A cache for candidate id to its persistent name
       public Dictionary<int, string> persistentNameCache;
       // Inverse of the above map
@@ -1656,6 +3652,9 @@ namespace VC {
       static int candidateCount = 1;
       public int currInlineCount;
 
+	  public int argCopyCounter = 0;
+	  public Dictionary<int, VCExpr> id2FreshParamAsgn;
+
       public Dictionary<int, Dictionary<VCExprVar, VCExpr>> id2Vars;
 
       public FCallHandler(VCExpressionGenerator/*!*/ gen,
@@ -1669,6 +3668,7 @@ namespace VC {
         this.mainProcName = mainProcName;
         this.mainLabel2absy = mainLabel2absy;
         id2Candidate = new Dictionary<int, VCExprNAry>();
+		id2FreshParamAsgn = new Dictionary<int, VCExpr>();
         id2ControlVar = new Dictionary<int, VCExprVar>();
         boogieExpr2Id = new Dictionary<BoogieCallExpr, int>();
         label2Id = new Dictionary<string, int>();
@@ -1698,7 +3698,59 @@ namespace VC {
         summaryTemp = new Dictionary<string, List<Tuple<VCExprVar, VCExpr>>>();
         allSummaryConst = new HashSet<VCExprVar>();
         id2VC = new Dictionary<int, VCExpr>();
+
+		candidateChildren = new Dictionary<int, List<int>>();
+		candidateChildren[0] = new List<int>();
       }
+
+			public FCallHandler(VCExpressionGenerator/*!*/ gen,
+				Dictionary<string/*!*/, StratifiedInliningInfo/*!*/>/*!*/ implName2StratifiedInliningInfo,
+				FCallHandler calls)
+				: base(gen)
+			{
+				Contract.Requires(gen != null);
+				Contract.Requires(cce.NonNullDictionaryAndValues(implName2StratifiedInliningInfo));
+				Contract.Requires(mainLabel2absy != null);
+				this.implName2StratifiedInliningInfo = implName2StratifiedInliningInfo;
+				this.mainProcName = calls.mainProcName;
+				this.mainLabel2absy = ConcurrentContext.Copy(calls.mainLabel2absy);
+				id2Candidate = ConcurrentContext.Copy(calls.id2Candidate);
+				id2FreshParamAsgn = ConcurrentContext.Copy(calls.id2FreshParamAsgn);
+				id2ControlVar = ConcurrentContext.Copy(calls.id2ControlVar);
+				boogieExpr2Id = ConcurrentContext.Copy(calls.boogieExpr2Id);
+				label2Id = ConcurrentContext.Copy(calls.label2Id);
+				currCandidates = ConcurrentContext.Copy(calls.currCandidates);
+				this.currInlineCount = calls.currInlineCount;
+				//this.candidateCount = calls.candidateCount;
+				this.argCopyCounter = calls.argCopyCounter;
+				currProc = calls.currProc;
+				labelRenamer = ConcurrentContext.Copy(calls.labelRenamer);
+				labelRenamerInv = ConcurrentContext.Copy(calls.labelRenamerInv);
+				candidateParent = ConcurrentContext.Copy(calls.candidateParent);
+				//callGraphMapping = new Dictionary<int, int>();
+				recursionIncrement = ConcurrentContext.Copy(calls.recursionIncrement);
+				candidate2callId = ConcurrentContext.Copy(calls.candidate2callId);
+				persistentNameCache = ConcurrentContext.Copy(calls.persistentNameCache);
+				persistentNameInv = ConcurrentContext.Copy(calls.persistentNameInv);
+				//persistentNameCache[0] = "0";
+				//persistentNameInv["0"] = 0;
+				recentlyAddedCandidates = ConcurrentContext.Copy(calls.recentlyAddedCandidates);
+				argExprMap = ConcurrentContext.Copy(calls.argExprMap);
+				recordExpr2Var = ConcurrentContext.Copy(calls.recordExpr2Var);
+
+				forcedCandidates = ConcurrentContext.Copy(calls.forcedCandidates);
+				extraRecursion = ConcurrentContext.Copy(calls.extraRecursion);
+
+				id2Vars = ConcurrentContext.Copy(calls.id2Vars, true);
+				summaryCandidates = ConcurrentContext.Copy(calls.summaryCandidates, true);
+				summaryTemp = ConcurrentContext.Copy(calls.summaryTemp, true);
+				allSummaryConst = ConcurrentContext.Copy(calls.allSummaryConst);
+				id2VC = ConcurrentContext.Copy(calls.id2VC);
+
+				candidateChildren = ConcurrentContext.DeepCopy(calls.candidateChildren);
+				candidateChildren[0] = ConcurrentContext.Copy(calls.candidateChildren[0]);
+			}
+
 
       public void Clear() {
         currCandidates = new HashSet<int>();
@@ -1799,19 +3851,112 @@ namespace VC {
         return persistentNameInv[n];
       }
 
-      private int GetNewId(VCExprNAry vc) {
-        Contract.Requires(vc != null);
-        int id = candidateCount;
+			private int GetNewId(VCExprNAry vc)
+			{
+				Contract.Requires(vc != null);
+				int id;
 
-        id2Candidate[id] = vc;
-        id2ControlVar[id] = Gen.Variable("si_control_var_bool_" + id.ToString(), Microsoft.Boogie.Type.Bool);
+				lock (RefinementFuzzing.Settings.lockThis)
+					//using (RefinementFuzzing.Settings.timedLock.Lock()) 
+				{
+					id = candidateCount;
+				}
 
-        candidateCount++;
-        currCandidates.Add(id);
-        recentlyAddedCandidates.Add(id);
+				#if false
+				if (RefinementFuzzing.Settings.FreshParamCopies)
+				{
+				List<VCExpr> newSubExprs = new List<VCExpr>();
+				VCExpr formalActualAsgn = VCExpressionGenerator.True;
+				for (int i = 0; i < vc.Count(); i++)
+				{
+				if (vc[i] is VCExprVar)
+				{
+				string name = vc[i].ToString();
 
-        return id;
-      }
+				if (name.Contains("_@copy_"))
+				name = name.Substring(0, name.IndexOf("_@copy_"));
+
+				var newVar = Gen.Variable(name + "_@copy_" + argCopyCounter, vc[i].Type);
+
+				argCopyCounter++;
+
+				newSubExprs.Add(newVar);
+				formalActualAsgn = Gen.And(formalActualAsgn, Gen.Eq(newVar, vc[i]));
+				}
+				else
+				{
+				newSubExprs.Add(vc[i]);
+				Contract.Assert(vc[i] is VCExprLiteral);
+				}
+				}
+
+				// Need to do this for tree interpolants
+				VCExprNAry newVC = Gen.Function(vc.Op,
+				newSubExprs, vc.TypeArguments) as VCExprNAry;
+
+				id2Candidate[id] = newVC;
+
+				id2FreshParamAsgn[id] = formalActualAsgn;
+
+				}
+				else
+				id2Candidate[id] = vc;
+				#endif
+
+				if (RefinementFuzzing.Settings.FreshParamCopies)
+				{
+					List<VCExpr> newSubExprs = new List<VCExpr>();
+					VCExpr formalActualAsgn = VCExpressionGenerator.True;
+					for (int i = 0; i < vc.Count(); i++)
+					{
+						string name = null;
+
+						if (vc[i] is VCExprVar)
+						{
+							name = vc[i].ToString();
+
+							if (name.Contains("_@copy_"))
+								name = name.Substring(0, name.IndexOf("_@copy_"));
+						}
+						else
+						{
+							name = "newtmp";
+
+							Contract.Assert(vc[i] is VCExprLiteral);
+						}
+
+						var newVar = Gen.Variable(name + "_@copy_" + argCopyCounter, vc[i].Type);
+
+						argCopyCounter++;
+
+						newSubExprs.Add(newVar);
+						formalActualAsgn = Gen.And(formalActualAsgn, Gen.Eq(newVar, vc[i]));
+					}
+
+					// Need to do this for tree interpolants
+					VCExprNAry newVC = Gen.Function(vc.Op,
+						newSubExprs, vc.TypeArguments) as VCExprNAry;
+
+					id2Candidate[id] = newVC;
+
+					id2FreshParamAsgn[id] = formalActualAsgn;
+
+				}
+				else
+					id2Candidate[id] = vc;
+
+				id2ControlVar[id] = Gen.Variable("si_control_var_bool_" + id.ToString(), Microsoft.Boogie.Type.Bool);
+
+				lock (RefinementFuzzing.Settings.lockThis)
+					//using (RefinementFuzzing.Settings.timedLock.Lock()) 
+				{
+					candidateCount++;
+				}
+				currCandidates.Add(id);
+				recentlyAddedCandidates.Add(id);
+
+				return id;
+			}
 
       private string GetLabel(int id) {
         Contract.Ensures(Contract.Result<string>() != null);
@@ -1950,6 +4095,10 @@ namespace VC {
             if (unique_call_id != -1)
               candidate2callId[candidateId] = unique_call_id;
 
+			// Handle
+			candidateChildren[currInlineCount].Add(candidateId);
+			candidateChildren[candidateId] = new List<int>();
+
             //return Gen.LabelPos(label, callExpr);
             return Gen.LabelPos(label, id2ControlVar[candidateId]);
           }
@@ -2087,10 +4236,14 @@ namespace VC {
     public class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler {
       Dictionary<string, StratifiedInliningInfo> implName2StratifiedInliningInfo;
       ProverInterface theoremProver;
-      VerifierCallback callback;
+      public VerifierCallback callback;
       FCallHandler calls;
-      StratifiedInliningInfo mainInfo;
+      public StratifiedInliningInfo mainInfo;
       StratifiedVC mainVC;
+
+	  public bool generateTrace;
+	  public SoftPartition currSoftPartition;
+	  public VCExpr vcCache = null;
 
       public bool underapproximationMode;
       public List<int> candidatesToExpand;
@@ -2120,6 +4273,7 @@ namespace VC {
         this.underapproximationMode = false;
         this.calls = null;
         this.candidatesToExpand = new List<int>();
+		this.generateTrace = false;
       }
 
       public StratifiedInliningErrorReporter(Dictionary<string, StratifiedInliningInfo> implName2StratifiedInliningInfo,
@@ -2135,9 +4289,30 @@ namespace VC {
         this.mainVC = mainVC;
         this.underapproximationMode = false;
         this.candidatesToExpand = new List<int>();
+		this.generateTrace = false;
       }
 
-      public void SetCandidateHandler(FCallHandler calls) {
+			public StratifiedInliningErrorReporter(Dictionary<string, StratifiedInliningInfo> implName2StratifiedInliningInfo,
+				ProverInterface theoremProver, StratifiedInliningErrorReporter parentErrReporter)
+			{
+				Contract.Requires(cce.NonNullDictionaryAndValues(implName2StratifiedInliningInfo));
+				Contract.Requires(theoremProver != null);
+				Contract.Requires(callback != null);
+				Contract.Requires(mainInfo != null);
+				this.implName2StratifiedInliningInfo = implName2StratifiedInliningInfo;
+				this.theoremProver = theoremProver;
+				this.callback = parentErrReporter.callback;
+				this.mainInfo = parentErrReporter.mainInfo;
+				this.underapproximationMode = false;
+				this.calls = null;
+				this.mainVC = parentErrReporter.mainVC;
+				this.currSoftPartition = parentErrReporter.currSoftPartition;
+				this.candidatesToExpand = ConcurrentContext.Copy(parentErrReporter.candidatesToExpand);
+				this.callSitesToExpand = ConcurrentContext.Copy(parentErrReporter.callSitesToExpand);
+				this.generateTrace = parentErrReporter.generateTrace;
+			}
+
+	  public void SetCandidateHandler(FCallHandler calls) {
         Contract.Requires(calls != null);
         this.calls = calls;
       }
