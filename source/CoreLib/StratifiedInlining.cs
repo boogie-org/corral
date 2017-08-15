@@ -3140,6 +3140,7 @@ namespace CoreLib
         /* verification */
         public Outcome VerifyImplementationSI(Implementation impl, VerifierCallback callback)
         {
+
             startTime = DateTime.UtcNow;
 
             procsHitRecBound = new HashSet<string>();
