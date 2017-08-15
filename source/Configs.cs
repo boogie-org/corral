@@ -725,7 +725,8 @@ namespace cba
             else if (flag.StartsWith("/newStratifiedInlining:"))
             {
                 newStratifiedInlining = true;
-                var split = flag.Split(sep);
+                
+				var split = flag.Split(sep);
                 newStratifiedInliningAlgo = split[1];
             }
             else if (flag == "/noArrayTheory")
