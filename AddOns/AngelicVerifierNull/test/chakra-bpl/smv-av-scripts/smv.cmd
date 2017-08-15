@@ -120,7 +120,8 @@ GOTO EXIT
 if exist smv (rmdir /s /q smv)
 mkdir smv
 mkdir smv\build
-xcopy /Y %2 smv\build\test.bpl
+xcopy /Y %2 smv\build\
+mv smv\build\%2 smv\build\test.bpl
 echo "Executing ChakraCheck AV"
 "%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %3 %4 %5
 GOTO EXIT

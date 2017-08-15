@@ -5,7 +5,24 @@ var __oldType : int;
 var __newType : int;
 procedure __nondet_havoc_repl() returns (x:int); //replacement for havoc
 
-procedure boogie_si_record_li2bpl_int(x:int); 
+//making the havoc demonic, by making it part of control flow
+procedure demonic_choice_type() returns (x:int)
+{
+    var y:int;
+    havoc y;
+    if (y == 0) {
+        x := 0;
+    }
+    if (y == 1) {
+        x := 1;
+    }
+    if (y == 2) {
+        x := 2;
+    }
+    return;
+}
+
+//procedure boogie_si_record_i32(x:int); 
 
 }
 
@@ -29,13 +46,13 @@ ProcedureRule
 {
    __oldType := __dType[p];
    //record_boogie "__oldType" __oldType
-   call {:cexpr "oldDynType"} boogie_si_record_li2bpl_int(__oldType);
-   call __newType := __nondet_havoc_repl(); //havoc __newType;
-   havoc __newType; //check if the havoc persists 
+   call {:cexpr "oldDynType"} boogie_si_record_i32(__oldType);
+   //havoc __newType; //need a demonic havoc
+   call __newType := demonic_choice_type();
    __dType[p] := __newType;
    assume (__dType[p] == __oldType || __dType[p] == 0);
    //record_boogie "__newType" __oldType
-   call {:cexpr "newDynType"} boogie_si_record_li2bpl_int(__newType);
+   call {:cexpr "newDynType"} boogie_si_record_i32(__newType);
    return;
 }
 
@@ -45,7 +62,7 @@ ProcedureRule
 }
 -->
 {
-   call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dType[p]);
+   call {:cexpr "dynType"} boogie_si_record_i32(__dType[p]);
    assert(__dType[p] == t);
    return;
 }
@@ -56,9 +73,21 @@ ProcedureRule
 }
 -->
 {
-   call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dType[p]);
-   call {:cexpr "isType"} boogie_si_record_li2bpl_int(t);
+   call {:cexpr "dynType"} boogie_si_record_i32(__dType[p]);
+   call {:cexpr "isType"} boogie_si_record_i32(t);
    assume((b != 0) <==> (__dType[p] == t));
+   return;
+}
+
+ProcedureRule
+{
+	procedure {:#ReplaceImplementation} ThisIsGetTypeIdProc (p:int, t:int);
+}
+-->
+{
+   call {:cexpr "dynType"} boogie_si_record_i32(__dType[p]);
+   call {:cexpr "isType"} boogie_si_record_i32(t);
+   assume (__dType[p] == t);
    return;
 }
 

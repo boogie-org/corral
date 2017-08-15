@@ -1189,10 +1189,12 @@ namespace SmackInst
         HashSet<Tuple<string, HashSet<int>>> upcallFuncs;
         HashSet<Tuple<string, int>> isTypeFuncs;
         HashSet<Tuple<string, int, int>> typePreCondFuncs;
+        HashSet<string> getTypeIdFuncs; 
 
         const string upcallFuncName = "ThisIsAnUpcallArg";
         const string isTypeFuncName = "IsJSArrayType";
         const string typePreCondFuncName = "TemplateSpecializedProc";
+        const string getTypeIdFuncName = "ThisIsGetTypeIdProc";
 
         public InstrumentTypeConfusionChakra(string fname, Program pr)
         {
@@ -1206,6 +1208,7 @@ namespace SmackInst
             upcallFuncs = new HashSet<Tuple<string, HashSet<int>>>();
             isTypeFuncs = new HashSet<Tuple<string, int>>();
             typePreCondFuncs = new HashSet<Tuple<string, int, int>>();
+            getTypeIdFuncs = new HashSet<string>();
 
             using (var iStream = new StreamReader(typeFile))
             {
@@ -1240,6 +1243,10 @@ namespace SmackInst
             {
                 typePreCondFuncs.Add(new Tuple<string, int, int>(strArr[1], Int32.Parse(strArr[2]), Int32.Parse(strArr[3])));
             }
+            else if (strArr[0] == "GetTypeID")
+            {
+                getTypeIdFuncs.Add(strArr[1]);
+            }
         }
 
         public void InstrumentCode()
@@ -1259,6 +1266,9 @@ namespace SmackInst
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
             prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, upcallFuncName,
                 new List<TypeVariable>(), new List<Variable>() { iVar }, new List<Variable>(),
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, getTypeIdFuncName,
+                new List<TypeVariable>(), new List<Variable>() { iVar,tVar }, new List<Variable>(),
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
 
             foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
@@ -1283,8 +1293,9 @@ namespace SmackInst
                             newCmds.AddRange(InstrumentIsTypeCall(callCmd, typeId));
                         else if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
                             newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
-                        else newCmds.Add(callCmd);
-
+                        else if (IsGetTypeId(callCmd.callee))
+                            newCmds.AddRange(InstrumentGetTypeCall(callCmd));
+                        else newCmds.Add(callCmd);                    
                     }
                     bl.Cmds = newCmds;
                 }
@@ -1365,6 +1376,23 @@ namespace SmackInst
             }
             return false;
         }
+
+        private bool IsGetTypeId(string pName)
+        {
+            return getTypeIdFuncs.Where(x => x == pName).Count() > 0;
+        }
+        private IEnumerable<Cmd> InstrumentGetTypeCall(CallCmd callCmd)
+        {
+            var retCmds = new List<Cmd>();
+            var retExprs = callCmd.Outs;
+            Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
+            var nCmd = new CallCmd(Token.NoToken, getTypeIdFuncName, new List<Expr>() {callCmd.Ins[0], retExprs[0]},
+                new List<IdentifierExpr>());
+            retCmds.Add(callCmd);
+            retCmds.Add(nCmd);
+            return retCmds;
+        }
+
     }
 
 }
