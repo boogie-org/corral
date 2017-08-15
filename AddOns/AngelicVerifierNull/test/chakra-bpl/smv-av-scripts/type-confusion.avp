@@ -3,6 +3,7 @@ GlobalDeclarations
 var {:propertyMap} __dType : [int]int; //{0:generic, 1:int, 2:float}
 var __oldType : int; 
 var __newType : int;
+procedure __nondet_havoc_repl() returns (x:int); //replacement for havoc
 
 procedure boogie_si_record_li2bpl_int(x:int); 
 
@@ -10,50 +11,54 @@ procedure boogie_si_record_li2bpl_int(x:int);
 
 TemplateVariables
 {
-var p : int; 
-var t: int;
-var b: int;
+//var p : int; 
+//var t: int;
+//var b: int;
 
-procedure   {:#NameMatches "^ThisIsAnUpcallArg$"} upCallProc(q : int);
-procedure   {:#NameMatches "^TemplateSpecializedProc$"} templSplProc(q : int, r1:int);// returns( {:#AnyParameters} r: int);
-procedure   {:#NameMatches "^IsJSArrayType$"} isDTypeProc(q : int, r1:int, bl: int) ;//returns( {:#AnyParameters} r: int);
+///// This way does not work since it matches against random procedures.
+//procedure   {:#NameMatches "^ThisIsAnUpcallArg$"} upCallProc(q : int);
+//procedure   {:#NameMatches "^TemplateSpecializedProc$"} templSplProc(q : int, r1:int);// returns( {:#AnyParameters} r: int);
+//procedure   {:#NameMatches "^IsJSArrayType$"} isDTypeProc(q : int, r1:int, bl: int) ;//returns( {:#AnyParameters} r: int);
 }
 
-CmdRule
+ProcedureRule
 {
-   call upCallProc(p); //before the call
+	procedure {:#ReplaceImplementation} ThisIsAnUpcallArg(p:int);
 }
 -->
 {
    __oldType := __dType[p];
    //record_boogie "__oldType" __oldType
    call {:cexpr "oldDynType"} boogie_si_record_li2bpl_int(__oldType);
-   havoc __newType;
+   call __newType := __nondet_havoc_repl(); //havoc __newType;
    __dType[p] := __newType;
    assume (__dType[p] == __oldType || __dType[p] == 0);
    //record_boogie "__newType" __oldType
    call {:cexpr "newDynType"} boogie_si_record_li2bpl_int(__newType);
+   return;
 }
 
-CmdRule
+ProcedureRule
 {
-   call templSplProc(p, t); //shoud be before the call
+	procedure {:#ReplaceImplementation}  TemplateSpecializedProc(p:int, t:int);
 }
 -->
 {
    call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dType[p]);
    assert(__dType[p] == t);
+   return;
 }
 
-CmdRule
+ProcedureRule
 {
-   call isDTypeProc(p, t, b); //this should be after the actual call
+	procedure {:#ReplaceImplementation} IsJSArrayType (p:int, t:int, b:int);
 }
 -->
 {
    call {:cexpr "dynType"} boogie_si_record_li2bpl_int(__dType[p]);
    call {:cexpr "isType"} boogie_si_record_li2bpl_int(t);
    assume((b != 0) <==> (__dType[p] == t));
+   return;
 }
 
 

@@ -44,8 +44,8 @@
      <!-- <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly /entryPointExcludes:devirtbounce* /entryPointExcludes:_cxx* >createep.txt 2>createep.err" />  -->
     </Action>
     
-   <!-- <Action name="CheckEntryPoints" nextAction="MergeResults"  executeOn="cloud" > -->
-<Action name="CheckEntryPoints" nextAction="MergeResults" > 
+  <!-- <Action name="CheckEntryPoints" nextAction="MergeResults" executeOn="cloud"> -->
+  <Action name="CheckEntryPoints" nextAction="MergeResults">
       <Path value="[$epDir]" />
       <Env key="nullcheckap" value="%smv%\analysisplugins\av" />
       <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
