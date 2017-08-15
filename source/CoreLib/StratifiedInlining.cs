@@ -1524,6 +1524,7 @@ namespace CoreLib
         /* verification */
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
+
             startTime = DateTime.UtcNow;
 
             procsHitRecBound = new HashSet<string>();
