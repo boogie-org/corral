@@ -1297,8 +1297,8 @@ namespace SmackInst
             Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsTypePrecond function " + callCmd.Proc.Name);
             var nCmd = new CallCmd(Token.NoToken, typePreCondFuncName, 
                 new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
+            retCmds.Add(nCmd); //adding a precondition, so should appear before the call
             retCmds.Add(callCmd);
-            retCmds.Add(nCmd);
             return retCmds;
         }
 
