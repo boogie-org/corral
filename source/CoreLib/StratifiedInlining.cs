@@ -1557,7 +1557,7 @@ namespace CoreLib
 		public override Outcome VerifyImplementation(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
 			Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
 
-			if(BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel")
+			if(BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel2")
 				return VerifyImplementationConcurrent(impl, callback);
 			else
 				return VerifyImplementationSI(impl, callback);
