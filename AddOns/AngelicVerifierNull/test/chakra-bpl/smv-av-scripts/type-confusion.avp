@@ -30,7 +30,8 @@ ProcedureRule
    __oldType := __dType[p];
    //record_boogie "__oldType" __oldType
    call {:cexpr "oldDynType"} boogie_si_record_li2bpl_int(__oldType);
-   call __newType := __nondet_havoc_repl(); //havoc __newType;
+   //call __newType := __nondet_havoc_repl(); //havoc __newType;
+   havoc __newType; //check if the havoc persists 
    __dType[p] := __newType;
    assume (__dType[p] == __oldType || __dType[p] == 0);
    //record_boogie "__newType" __oldType
