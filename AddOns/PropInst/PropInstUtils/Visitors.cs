@@ -168,6 +168,16 @@ namespace PropInstUtils
             return new AssignCmd(node.tok, lhssDispatched, rhssDispatched);
         }
 
+        public override Cmd VisitHavocCmd(HavocCmd node)
+        {
+            var dispatchedVars = new List<IdentifierExpr>();
+            foreach(var x in node.Vars)
+            {
+                dispatchedVars.Add(VisitIdentifierExpr(x) as IdentifierExpr);
+            }
+            return new HavocCmd(Token.NoToken, dispatchedVars);
+        }
+
         public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
         {
             List<Cmd> dispatchedCmds = new List<Cmd>();
@@ -189,6 +199,10 @@ namespace PropInstUtils
                 else if (c is AssumeCmd)
                 {
                     dispatchedCmds.Add(VisitAssumeCmd(c as AssumeCmd));
+                }
+                else if (c is HavocCmd)
+                {
+                    dispatchedCmds.Add(VisitHavocCmd(c as HavocCmd));
                 }
             }
 
