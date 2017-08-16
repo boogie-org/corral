@@ -1553,7 +1553,7 @@ namespace ExplainError
             if (noFilters) return true; //anything matches
             if (displayTypeStateVariables && ContainsTypeStateVar(c)) return true;  //definitely matches
             if (diplayPropertyMaps && ContainsPropertyMap(c)) return true;
-            return true;
+            return true; //should be return false??
         }
 
         private static bool LiteralNotInVocabularyOld(Expr c)
