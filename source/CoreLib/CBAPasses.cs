@@ -7,7 +7,6 @@ using System.Diagnostics;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
 
-
 namespace cba
 {
     // Main storm instrumentation pass.
