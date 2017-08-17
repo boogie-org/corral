@@ -72,6 +72,7 @@ IF /i "%1"=="/uaf:local" GOTO USEAFTERFREELOCAL
 IF /i "%1"=="/uaf:cloud" GOTO USEAFTERFREE
 IF /i "%1"=="/irqlcheck" GOTO IRQLCHECK
 IF /i "%1"=="/chakracheck" GOTO CHAKRACHECK
+IF /i "%1"=="/chakrachksym" GOTO SYMCHAKRACHECK
 IF /i "%1"=="/view" GOTO VIEWDEFECT
 IF /i "%1"=="/clean" GOTO CLEAN
 IF /i "%1"=="" GOTO HELP
@@ -126,13 +127,28 @@ echo "Executing ChakraCheck AV"
 "%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %3 %4 %5
 GOTO EXIT
 
+
+:SYMCHAKRACHECK
+echo "Exec chakracore with sym link"
+if exist smv (rmdir /s /q smv)
+if exist d:\symbolicChakraCore (rmdir /s /q d:\symbolicChakraCore)
+xcopy /Y/E/Q %2\ChakraCore d:\symbolicChakraCore
+mkdir smv
+mkdir smv\build
+xcopy /Y %2\test.bpl smv\build\
+REM mv smv\build\%2 smv\build\test.bpl
+echo "Executing ChakraCheck AV"
+"%smv%\bin\smv" /config:"%useafterfreeap%\configurations\chakrachecks-nobuild-sf-cloud.xml" /plugin:"%useafterfreeap%\bin\fastavn.dll" /analyze /cloud %3 %4 %5
+GOTO EXIT
+
+
 :CLEAN
 if exist smv ( rmdir /s /q smv > nul )
 GOTO EXIT
 
 :HELP
 echo.
-echo "Usage: smv [/nullcheck | /useafterfree | /chakracheck <file.bpl> | /clean] [/debug]"
+echo "Usage: smv [/nullcheck | /useafterfree | /chakracheck <file.bpl> | /chakrachksym <folder-with-test-bpl-sources> /clean] [/debug]"
 echo.
 
 :EXIT

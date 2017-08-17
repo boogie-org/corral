@@ -718,6 +718,9 @@ namespace FastAVN
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 
+                    //Remove {:entrypoint} attribute from impl
+                    impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
+
                     if (Driver.createEntryPointBplsOnly)
                     {
                         Console.WriteLine("Running entrypoint {0} }}", impl.Name);
