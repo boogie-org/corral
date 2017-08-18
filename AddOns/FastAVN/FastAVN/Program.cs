@@ -713,14 +713,16 @@ namespace FastAVN
                         continue;
                     }
 
-                    //FIXME: moving it as close to the printing to reduce the chance of another thread observing the {entrypoint} on this proc
-                    //Add {:entrypoint} add attribute to impl 
-                    impl.Proc.AddAttribute("entrypoint");
+                    // make a copy of impl.Proc
+                    var dup = new FixedDuplicator(true);
+                    var implProcCopy = dup.VisitProcedure(impl.Proc);
+                    // Mark entrypoint
+                    implProcCopy.AddAttribute("entrypoint");
+
+                    newprogram.RemoveTopLevelDeclaration(impl.Proc);
+                    newprogram.AddTopLevelDeclaration(implProcCopy);
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
-
-                    //Remove {:entrypoint} attribute from impl
-                    impl.Proc.Attributes = BoogieUtil.removeAttr("entrypoint", impl.Proc.Attributes);
 
                     if (Driver.createEntryPointBplsOnly)
                     {
