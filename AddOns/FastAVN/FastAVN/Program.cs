@@ -681,8 +681,6 @@ namespace FastAVN
 
                     var topLevelProcs = new HashSet<string> { impl.Name };
                     if(initProc != null) topLevelProcs.Add(initProc.Name);    
-                    //Add {:entrypoint} add attribute to impl
-                    impl.Proc.AddAttribute("entrypoint");
 
                     BoogieUtil.pruneProcs(newprogram, topLevelProcs);
 
@@ -715,6 +713,9 @@ namespace FastAVN
                         continue;
                     }
 
+                    //FIXME: moving it as close to the printing to reduce the chance of another thread observing the {entrypoint} on this proc
+                    //Add {:entrypoint} add attribute to impl 
+                    impl.Proc.AddAttribute("entrypoint");
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 

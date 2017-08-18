@@ -132,7 +132,8 @@ GOTO EXIT
 echo "Exec chakracore with sym link"
 if exist smv (rmdir /s /q smv)
 if exist d:\symbolicChakraCore (rmdir /s /q d:\symbolicChakraCore)
-xcopy /Y/E/Q %2\ChakraCore d:\symbolicChakraCore
+mkdir d:\symbolicChakraCore
+xcopy /S/Q %2\ChakraCore d:\symbolicChakraCore\
 mkdir smv
 mkdir smv\build
 xcopy /Y %2\test.bpl smv\build\

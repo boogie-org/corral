@@ -131,12 +131,14 @@ namespace PropInstUtils
 
         public override Cmd VisitAssertCmd(AssertCmd node)
         {
-            return new AssertCmd(node.tok, VisitExpr(node.Expr));
+            //lets not forget the attributes
+            return new AssertCmd(node.tok, VisitExpr(node.Expr), node.Attributes);
         }
 
         public override Cmd VisitAssumeCmd(AssumeCmd node)
         {
-            return new AssumeCmd(node.tok, VisitExpr(node.Expr));
+            //lets not forget the attributes
+            return new AssumeCmd(node.tok, VisitExpr(node.Expr), node.Attributes);
         }
 
         public override Cmd VisitAssignCmd(AssignCmd node)

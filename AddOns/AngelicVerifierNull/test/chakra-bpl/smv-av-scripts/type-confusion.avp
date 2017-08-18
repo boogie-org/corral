@@ -91,6 +91,15 @@ ProcedureRule
    return;
 }
 
-
-
-
+//Adding the following just makes AVN hang  with prover error
+////Inject a dummy  "return" into a stub for defectviewer
+//ProcedureRule
+//{
+//    procedure  {:#NameMatches ".*"} {:#NoImplementation} anystub({:pointer} p1 : int);
+//}
+//-->
+//{
+//        assume {:sourceloc "dummy-source", 00, 00} {:print "Return"} true;
+//        return;
+//}
+//
