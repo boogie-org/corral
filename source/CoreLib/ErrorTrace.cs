@@ -1287,6 +1287,7 @@ namespace cba
         private static System.Text.RegularExpressions.Regex callRegEx  = 
             new System.Text.RegularExpressions.Regex(@"Call \\""(.*)\\"" \\""(.*)\\""");
 
+        public static bool ClearDataValuesOnProcedureReturn = true;
         public static string dataValuesCurrent = "";
         public static Dictionary<string, string> dataValuesPermanent = new Dictionary<string, string>();
         public static HashSet<string> permanentVars;
@@ -1689,7 +1690,10 @@ namespace cba
                 }
             }
 
-            //dataValuesCurrent = "";
+            if (ClearDataValuesOnProcedureReturn)
+            {
+                dataValuesCurrent = "";
+            }
         }
 
         private static void gatherMemAccess(Cmd incmd, string line, InstrInfo info)

@@ -94,6 +94,7 @@ namespace AngelicVerifierNull
             // Initialize Boogie and Corral
             corralConfig = InitializeCorral();
             ProgTransformation.PersistentProgramIO.useStrings = true;
+            cba.PrintSdvPath.ClearDataValuesOnProcedureReturn = false;
 
             if (Options.killAfter > 0)
             {
