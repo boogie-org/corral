@@ -1689,7 +1689,7 @@ namespace cba
                 }
             }
 
-            dataValuesCurrent = "";
+            //dataValuesCurrent = "";
         }
 
         private static void gatherMemAccess(Cmd incmd, string line, InstrInfo info)
