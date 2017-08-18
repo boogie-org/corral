@@ -1287,15 +1287,20 @@ namespace SmackInst
                         HashSet<int> pArgs;
                         int argPos;
                         int typeId;
+                        //multiple facts may match
+                        //these commands go before the call
+                        if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
+                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
+
+                        newCmds.Add(callCmd);
+
+                        //these commands go after the call
                         if (IsUpCall(callCmd.callee, out pArgs))
                             newCmds.AddRange(InstrumentUpcall(callCmd, pArgs));
-                        else if (IsIsType(callCmd.callee, out typeId))
+                        if (IsIsType(callCmd.callee, out typeId))
                             newCmds.AddRange(InstrumentIsTypeCall(callCmd, typeId));
-                        else if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
-                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
-                        else if (IsGetTypeId(callCmd.callee))
+                        if (IsGetTypeId(callCmd.callee))
                             newCmds.AddRange(InstrumentGetTypeCall(callCmd));
-                        else newCmds.Add(callCmd);                    
                     }
                     bl.Cmds = newCmds;
                 }
@@ -1309,7 +1314,6 @@ namespace SmackInst
             var nCmd = new CallCmd(Token.NoToken, typePreCondFuncName, 
                 new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
             retCmds.Add(nCmd); //adding a precondition, so should appear before the call
-            retCmds.Add(callCmd);
             return retCmds;
         }
 
@@ -1333,7 +1337,6 @@ namespace SmackInst
             Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
             var nCmd = new CallCmd(Token.NoToken, isTypeFuncName, new List<Expr>() {retExprs[0], callCmd.Ins[0], Expr.Literal(typeId) }, 
                 new List<IdentifierExpr>());
-            retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }
@@ -1353,7 +1356,6 @@ namespace SmackInst
         private IEnumerable<Cmd> InstrumentUpcall(CallCmd callCmd, HashSet<int> pArgs)
         {
             var retCmds = new List<Cmd>();
-            retCmds.Add(callCmd);
             foreach (var pos in pArgs)
             {
                 Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
@@ -1388,7 +1390,6 @@ namespace SmackInst
             Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
             var nCmd = new CallCmd(Token.NoToken, getTypeIdFuncName, new List<Expr>() {callCmd.Ins[0], retExprs[0]},
                 new List<IdentifierExpr>());
-            retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }

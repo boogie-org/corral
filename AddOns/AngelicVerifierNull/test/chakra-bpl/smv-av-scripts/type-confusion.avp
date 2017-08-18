@@ -87,7 +87,18 @@ ProcedureRule
 {
    call {:cexpr "dynType"} boogie_si_record_i32(__dType[p]);
    call {:cexpr "isType"} boogie_si_record_i32(t);
-   assume (__dType[p] == t);
+   //according to D:\temp\ChakraCore\lib\Runtime\Types\EdgeJavascriptTypeId.h
+   //TypeIds_Array = 28,
+   //TypeIds_ArrayFirst = TypeIds_Array,
+    //TypeIds_NativeIntArray = 29,
+  //#if ENABLE_COPYONACCESS_ARRAY
+    //TypeIds_CopyOnAccessNativeIntArray = 30,
+  //#endif
+    //TypeIds_NativeFloatArray = 31,
+
+   assume (t == 28 <==> __dType[p] == 0);
+   assume (t == 29 <==> __dType[p] == 1);
+   assume (t == 31 <==> __dType[p] == 2);
    return;
 }
 
