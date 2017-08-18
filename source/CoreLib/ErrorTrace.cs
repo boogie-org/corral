@@ -1772,9 +1772,9 @@ namespace cba
                     if (file == null) file = QKeyValue.FindStringAttribute(acmd.Attributes, "sourcefile");
                     line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceLine", -1);
                     if (line == -1) line = QKeyValue.FindIntAttribute(acmd.Attributes, "sourceline", -1);
-                    extra = QKeyValue.FindStringAttribute(acmd.Attributes, "print");
-                    am = QKeyValue.FindStringAttribute(acmd.Attributes, "abortM");
                 }
+                extra = QKeyValue.FindStringAttribute(acmd.Attributes, "print");
+                am = QKeyValue.FindStringAttribute(acmd.Attributes, "abortM");
             }
 
             if (file == null || line == -1) return;
