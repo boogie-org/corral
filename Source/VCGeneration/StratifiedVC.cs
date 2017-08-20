@@ -1202,10 +1202,20 @@ namespace VC {
 		public int numCalls = 0;
 		public int threadsSpawned = 0;
 
-		/*
+        bool splitDecision()
+        {
+            return false;
+        }
+
+        int splitCandidate()
+        {
+            return 0;
+        }
+
+        /*
 		 * TODO: This is the PRIMARY method. Needs to be merged with the new code in "verifyImplementationSI()"
 		 */
-		public VerifyResult SolvePartition(SoftPartition softPartition,
+        public VerifyResult SolvePartition(SoftPartition softPartition,
 			VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
 		{
 
@@ -1764,7 +1774,7 @@ namespace VC {
 							//newPartition.activeCandidates.Iter<int>(n => candidatesToExpand.Add(n));
 							//lock (RefinementFuzzing.Settings.lockThis)  [removed on 15th Sept]
 							{
-								DoExpansion(reporter.candidatesToExpand, vState);
+								DoExpansion(reporter.candidatesToExpand, vState); //creates the new VCs but does not assert them
 							}
 							vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion end ;;;;;;;;;;");
 
@@ -1824,10 +1834,29 @@ namespace VC {
 
 							num_cex++;
 
-							SoftPartition newPartition = new SoftPartition(softPartition, newCurrCandidates, nonInlinedCurrCandidates, reporter.candidatesToExpand, candidatesThatReachRecBound, reporter.vcCache);
-							reporter.vcCache = null;
-							candidatesThatReachRecBound.Clear();
-							partitions.Add(newPartition);
+                            if (splitDecision())
+                            {
+                                int splitCand = splitCandidate();
+                                Contract.Assert(reporter.candidatesToExpand.Contains(splitCand));
+
+                                // The Blocked partition
+                                HashSet<int> blockedSet = new HashSet<int>();
+                                blockedSet.Add(splitCand);
+                                SoftPartition newPartition1 = new SoftPartition(softPartition, newCurrCandidates, blockedSet, new HashSet<int>(), reporter.candidatesToExpand, candidatesThatReachRecBound, reporter.vcCache);
+                                partitions.Add(newPartition1);
+
+                                // The MustReach partition
+                                HashSet<int> mustreachSet = new HashSet<int>();
+                                mustreachSet.Add(splitCand);
+                                SoftPartition newPartition2 = new SoftPartition(softPartition, newCurrCandidates, new HashSet<int>(), mustreachSet, reporter.candidatesToExpand, candidatesThatReachRecBound, reporter.vcCache);
+                                partitions.Add(newPartition2);
+
+                                reporter.vcCache = null;
+                                //candidatesThatReachRecBound.Clear();
+
+                                retval = VerifyResult.Partitioned;
+                                break;      // probe into this new partition lower level partition instead of creating new partitions
+                            }
 
 							/*
                              * Note: A list with no activeCandidates means that it has no more function calls within it;
@@ -1838,7 +1867,7 @@ namespace VC {
 							// block all the candidates expanded
 							//reporter.candidatesToExpand.Iter<int>(n => block.Add(n));
 							//reporter.candidatesToExpand.Iter<int>(n => candidatesInCounterexamples.Add(n));
-							candidatesInCounterexamples.Add(new HashSet<int>(reporter.candidatesToExpand));
+							//candidatesInCounterexamples.Add(new HashSet<int>(reporter.candidatesToExpand));
 
 							//newPartitionList.Add(newPartition);
 
@@ -2213,7 +2242,7 @@ namespace VC {
 			{
 				SoftPartition sp = vcStack.Pop();
 
-				proverStackBookkeeper.Push(sp, vState);
+				    proverStackBookkeeper.Push(sp, vState);
 				//prover.Assert(vc1Tuple.Item1, true);
 				//proverStackBookkeeper.Assert(sp, getNameForFormula(vc1Tuple.Item2));
 				// lock (RefinementFuzzing.Settings.lockThis) // it looks like VCExprGen manipulations need locking
@@ -2368,19 +2397,24 @@ namespace VC {
 				if (!RefinementFuzzing.Settings.noInterpolationOnMainProver && !RefinementFuzzing.Settings.lazySummaries)
 				{
 					IEnumerable<int> incrementalBlocked;
+                    IEnumerable<int> incrementalMustreach;
 
-					if (sp.Id != 0)
+                    if (sp.Id != 0)
 					{
 						incrementalBlocked = sp.blockedCandidates.Except(sp.parent.blockedCandidates);
-					}
+                        incrementalMustreach = sp.mustreachCandidates.Except(sp.parent.mustreachCandidates);
+                    }
 					else
 					{
 						incrementalBlocked = sp.blockedCandidates;
-					}
+                        incrementalMustreach = sp.mustreachCandidates;
+                    }
 
 					StringBuilder blkSet = new StringBuilder();
-					//foreach (int id in sp.blockedCandidates)
-					foreach (int id in incrementalBlocked)
+                    StringBuilder mstrhSet = new StringBuilder();
+
+                    //foreach (int id in sp.blockedCandidates)
+                    foreach (int id in incrementalBlocked)
 					{
 						vc2 = vState.checker.prover.VCExprGen.And(vc2, vState.calls.getFalseExpr(id));
 						//RefinementFuzzing.Settings.vc_set.Add(vc);
@@ -2388,9 +2422,18 @@ namespace VC {
 						blkSet.Append("," + id);
 					}
 
-					proverStackBookkeeper.Assert(vc2, getNameForFormula(sp.Id, FormulaType.PartitionBlockedSet), "Partition: " + sp.Id + "; BlockedSet (incremental): " + blkSet.ToString());
+                    foreach (int id in incrementalMustreach)
+                    {
+                        vc2 = vState.checker.prover.VCExprGen.And(vc2, vState.calls.getTrueExpr(id)); // TODO: This is fake placeholder; assert the MustReach constraint here
+                        //RefinementFuzzing.Settings.vc_set.Add(vc);
+
+                        mstrhSet.Append("," + id);
+                    }
+
+                    proverStackBookkeeper.Assert(vc2, getNameForFormula(sp.Id, FormulaType.PartitionBlockedSet), "Partition: " + sp.Id + "; BlockedSet (incremental): " + 
+                        blkSet.ToString() + "; MustreachSet (incremental): " + mstrhSet.ToString());
 				}
-			}
+            }
 
 			/*
             foreach (int id in sp.candidatesReachingRecBound)
@@ -3170,6 +3213,8 @@ namespace VC {
 						if (!isSkipped(id, calls))
 							assumptions.Add(calls.getFalseExpr(id));
 					}
+
+                    // TODO: Handle must-reach
 				}
 
 				//lock (RefinementFuzzing.Settings.lockThis)
@@ -3283,6 +3328,8 @@ namespace VC {
 						assumptions.Add(calls.getFalseExpr(id));
 						//RefinementFuzzing.Settings.vc_set.Add(calls.getFalseExpr(id));
 					}
+
+                    // TODO: handle must-reach
 				}
 
 				if (Settings.counterexampleEnumerationStrategy == Settings.CounterexampleEnumerationStrategy.DisjointModuleSummaries)

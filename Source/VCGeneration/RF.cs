@@ -670,9 +670,9 @@ namespace RefinementFuzzing
 		//public static bool NewFormalCopies = false && !FreshParamCopies; // FreshParamCopies must be off
 
 		// how many softpartitions to create from one parent
-		public static int SoftPartitionBound = 1;
+		public static int SoftPartitionBound = 2;
 
-		public static int totalThreadBudget = 1;
+		public static int totalThreadBudget = 2;
 
 		public static System.Object lockThis = new System.Object();
 		public static StreamWriter primaryLog = new StreamWriter("PrimaryLog.txt");

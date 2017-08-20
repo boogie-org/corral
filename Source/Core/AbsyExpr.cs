@@ -2190,6 +2190,7 @@ namespace Microsoft.Boogie {
     }
   }
 
+
   public class TypeCoercion : IAppliable {
     private IToken/*!*/ tok;
     public Type/*!*/ Type;

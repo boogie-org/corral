@@ -37,7 +37,8 @@ namespace VC
 		//public HashSet<int> inlinedCandidates;
 		public HashSet<int> activeCandidates;
 		public HashSet<int> blockedCandidates;
-		public HashSet<int> candidateUniverse;  // the universe expands as we go deeper
+        public HashSet<int> mustreachCandidates;
+        public HashSet<int> candidateUniverse;  // the universe expands as we go deeper
 
 		public HashSet<int> candidatesReachingRecBound;
 
@@ -51,7 +52,7 @@ namespace VC
 
 		public Common.GraphNode graphNode;
 
-		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
+		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> mustreachCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
 			lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
@@ -65,7 +66,8 @@ namespace VC
 			this.level = partitionLevel;
 			this.activeCandidates = activeCandidates;
 			this.blockedCandidates = blockedCandidates;
-			this.candidateUniverse = candidateUniverse;
+            this.mustreachCandidates = mustreachCandidates;
+            this.candidateUniverse = candidateUniverse;
 			this.candidatesReachingRecBound = candidatesReachingRecBound;
 			this.lastInlined = lastInlined;
 			this.prefixVC = prefixVC;
@@ -90,17 +92,18 @@ namespace VC
 			}
 		}
 
-		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> mustreachCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
-			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
-		public SoftPartition(SoftPartition parentPartition, IEnumerable<int> newActiveCandidates, IEnumerable<int> newBlockedCandidates, IEnumerable<int> candidatesInlined, HashSet<int> candidatesThatReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parentPartition, IEnumerable<int> newActiveCandidates, IEnumerable<int> newBlockedCandidates, IEnumerable<int> newMustreachCandidates, IEnumerable<int> candidatesInlined, HashSet<int> candidatesThatReachingRecBound, VCExpr prefixVC = null)
 		{
 			HashSet<int> activeCandidates = new HashSet<int>();
 			HashSet<int> candidateUniverse = new HashSet<int>();
 			HashSet<int> blockedCandidates = new HashSet<int>();
-			HashSet<int> lastInlined = new HashSet<int>();
+            HashSet<int> mustreachCandidates = new HashSet<int>();
+            HashSet<int> lastInlined = new HashSet<int>();
 			HashSet<int> candidatesReachingRecBound = new HashSet<int>();
 
 			candidatesInlined.Iter<int>(n => lastInlined.Add(n));
@@ -114,9 +117,12 @@ namespace VC
 			parentPartition.blockedCandidates.Iter<int>(n => blockedCandidates.Add(n));
 			newBlockedCandidates.Iter<int>(n => { blockedCandidates.Add(n); });
 
-			candidatesThatReachingRecBound.Iter<int>(n => candidatesReachingRecBound.Add(n));
+            parentPartition.mustreachCandidates.Iter<int>(n => mustreachCandidates.Add(n));
+            newMustreachCandidates.Iter<int>(n => { mustreachCandidates.Add(n); });
 
-			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+            candidatesThatReachingRecBound.Iter<int>(n => candidatesReachingRecBound.Add(n));
+
+			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
 		private string printHashSet(HashSet<int> hs)
@@ -139,7 +145,8 @@ namespace VC
 			sb.Append("(" + id + ")");
 			sb.Append("[active: " + printHashSet(activeCandidates));
 			sb.Append("; blocked: " + printHashSet(blockedCandidates));
-			sb.Append("; universe: " + printHashSet(candidateUniverse));
+            sb.Append("; mustreach: " + printHashSet(mustreachCandidates));
+            sb.Append("; universe: " + printHashSet(candidateUniverse));
 			sb.Append("; lastInlined: " + printHashSet(lastInlined) + "]");
 			return sb.ToString();
 		}
@@ -163,7 +170,10 @@ namespace VC
 			if (!this.blockedCandidates.SetEquals(o2.blockedCandidates))
 				return false;
 
-			if (!this.candidateUniverse.SetEquals(o2.candidateUniverse))
+            if (!this.mustreachCandidates.SetEquals(o2.mustreachCandidates))
+                return false;
+
+            if (!this.candidateUniverse.SetEquals(o2.candidateUniverse))
 				return false;
 
 			if (!this.candidatesReachingRecBound.SetEquals(o2.candidatesReachingRecBound))
@@ -694,11 +704,13 @@ namespace VC
 				//vState.calls.currCandidates.Iter<int>(n => universalCandidates.Add(n));
 
 				HashSet<int> blockedCandidates = new HashSet<int>();
-				HashSet<int> activeCandidates = new HashSet<int>();
+                HashSet<int> mustreachCandidates = new HashSet<int>();
+                HashSet<int> activeCandidates = new HashSet<int>();
 
 				vState.calls.currCandidates.Iter<int>(n => activeCandidates.Add(n));
+                mustreachCandidates.Add(e);
 
-				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, universalCandidates, universalCandidates, new HashSet<int>());
+				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, mustreachCandidates, universalCandidates, universalCandidates, new HashSet<int>());
 
 				entryPartitions.Add(s);
 			}
@@ -1822,8 +1834,8 @@ namespace VC
 				HashSet<int> ac = new HashSet<int>();
 				ac.Add(1);
 				ac.Add(2);
-				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
-				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
+				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
+				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
 				partitions.Add(s1);
 				partitions.Add(s2);
 
