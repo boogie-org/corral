@@ -336,7 +336,7 @@ namespace SmackInst
                 (new InstrumentTypeConfusionChakra(chakraTypeConfusionAnnotsFile, program)).InstrumentCode();
 
             if (hackForSmackSdvTrace)
-                PerformHackForSmackSdvTrace(program);
+                (new HackForSmackSdvTrace(program)).Visit(program);
 
             // if we don't check NULL, stop here
             if (!checkNULL && !checkUAF)
@@ -380,52 +380,6 @@ namespace SmackInst
 
 
             return program;
-        }
-
-        private static void PerformHackForSmackSdvTrace(Program program)
-        {
-            foreach(var impl in program.TopLevelDeclarations.OfType<Implementation>())
-            {
-                foreach (var blk in impl.Blocks)
-                {
-                    var newCmds = new List<Cmd>();
-                    foreach (var cmd in blk.cmds)
-                    {
-                        var ccmd = cmd as CallCmd;
-                        if (ccmd == null) { newCmds.Add(cmd); continue; }
-                        //foo -> devirt or devirt -> bar
-                        var caller = impl.Proc.Name;
-                        var callee = ccmd.callee;
-                        if (ccmd.callee.Contains("devirtbounce") || impl.Proc.Name.Contains("devirtbounce"))
-                        {
-                            AddSourceLocInfo(impl, newCmds, ccmd, caller, callee);
-                        } else
-                        {
-                            newCmds.Add(ccmd);
-                        }
-
-                    }
-                    blk.Cmds = newCmds;
-                }
-            }
-        }
-
-        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee)
-        {
-            //call devirtbounce
-            var aCmd = new AssumeCmd(Token.NoToken, Expr.True);
-            aCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
-                new object[] { "unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
-            var callInfo = "Call \\\" " + caller + " \\\" \\\" " + callee + " \\\" ";
-            aCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { callInfo }, null));
-            //return
-            var rCmd = new AssumeCmd(Token.NoToken, Expr.True);
-            rCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
-                                                new object[] { "unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
-            rCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { "Return" }, null));
-            newCmds.Add(aCmd);
-            newCmds.Add(ccmd);
-            newCmds.Add(rCmd);
         }
 
         // Inline functions with {:inline true} attribute
@@ -524,6 +478,65 @@ namespace SmackInst
             program.AddTopLevelDeclaration(initproc);
             program.AddTopLevelDeclaration(initimpl);
             //program.AddTopLevelDeclaration(allocinit);
+        }
+
+    }
+
+    public class HackForSmackSdvTrace : FixedVisitor
+    {
+        Program prog;
+        HashSet<string> impls; //list of impls
+        public HackForSmackSdvTrace(Program prog)
+        {
+            this.prog = prog;
+            impls = new HashSet<string>(prog.TopLevelDeclarations.OfType<Implementation>().Select(x => x.Proc.Name));
+        }
+
+        public override Implementation VisitImplementation(Implementation impl)
+        {
+            foreach (var blk in impl.Blocks)
+            {
+                var newCmds = new List<Cmd>();
+                foreach (var cmd in blk.cmds)
+                {
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd == null || !impls.Contains(ccmd.callee)) { newCmds.Add(cmd); continue; }
+                    //foo -> devirt or devirt -> bar
+                    var caller = impl.Proc.Name;
+                    var callee = ccmd.callee;
+                    var isCallerDevirt = impl.Proc.Name.Contains("devirtbounce");
+                    if (ccmd.callee.Contains("devirtbounce") || isCallerDevirt)
+                    {
+                        AddSourceLocInfo(impl, newCmds, ccmd, caller, callee, isCallerDevirt);
+                    }
+                    else
+                    {
+                        newCmds.Add(ccmd);
+                    }
+
+                }
+                blk.Cmds = newCmds;
+            }
+            return base.VisitImplementation(impl);
+        }
+        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee, bool isCallerDevirt)
+        {
+            var aCmd = new AssumeCmd(Token.NoToken, Expr.True);
+            aCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+            var callInfo = "Call \\\" " + caller + " \\\" \\\" " + callee + " \\\" ";
+            aCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { callInfo }, null));
+            newCmds.Add(aCmd);
+            newCmds.Add(ccmd);
+            //if the caller is not devirtbounce* then there is a regular return printed by smack 
+            if (isCallerDevirt)
+            {
+                var rCmd = new AssumeCmd(Token.NoToken, Expr.True);
+                rCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                                                    new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+                rCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { "Return" }, null));
+                newCmds.Add(rCmd);
+            }
         }
 
     }
