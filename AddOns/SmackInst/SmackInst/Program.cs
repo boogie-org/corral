@@ -612,7 +612,7 @@ namespace SmackInst
     // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
     public class AnnotateFPDispatchProcVisitor : FixedVisitor
     {
-        string pattern = @"^devirtbounce\d*$";
+        string pattern = @"^devirtbounce*$"; //relaxing it to match devirtbounce.11
         List<Function> aliasQfuncs = new List<Function>();
         Procedure specialPtrFunc = null;
         Procedure specialScalarFunc = null;
