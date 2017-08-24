@@ -505,9 +505,10 @@ namespace SmackInst
                     var caller = impl.Proc.Name;
                     var callee = ccmd.callee;
                     var isCallerDevirt = impl.Proc.Name.Contains("devirtbounce");
-                    if (ccmd.callee.Contains("devirtbounce") || isCallerDevirt)
+                    var isCalleeDevirt = ccmd.callee.Contains("devirtbounce");
+                    if (isCalleeDevirt || isCallerDevirt)
                     {
-                        AddSourceLocInfo(impl, newCmds, ccmd, caller, callee, isCallerDevirt);
+                        AddSourceLocInfo(impl, newCmds, ccmd, caller, callee, isCalleeDevirt);
                     }
                     else
                     {
@@ -519,7 +520,7 @@ namespace SmackInst
             }
             return base.VisitImplementation(impl);
         }
-        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee, bool isCallerDevirt)
+        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee, bool isCalleeDevirt)
         {
             var aCmd = new AssumeCmd(Token.NoToken, Expr.True);
             aCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
@@ -528,8 +529,9 @@ namespace SmackInst
             aCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { callInfo }, null));
             newCmds.Add(aCmd);
             newCmds.Add(ccmd);
-            //if the caller is not devirtbounce* then there is a regular return printed by smack 
-            if (isCallerDevirt)
+            //if the procedure is not devirtbounce* then there is a regular return printed by smack 
+            //so if the callee is not devirtbounce, then there is a return at the end of callee
+            if (isCalleeDevirt)
             {
                 var rCmd = new AssumeCmd(Token.NoToken, Expr.True);
                 rCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
@@ -612,7 +614,7 @@ namespace SmackInst
     // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
     public class AnnotateFPDispatchProcVisitor : FixedVisitor
     {
-        string pattern = @"^devirtbounce*$"; //relaxing it to match devirtbounce.11
+        string pattern = @"^devirtbounce.*$"; //relaxing it to match devirtbounce.11
         List<Function> aliasQfuncs = new List<Function>();
         Procedure specialPtrFunc = null;
         Procedure specialScalarFunc = null;
@@ -713,7 +715,7 @@ namespace SmackInst
                     var callCmd = cmd as CallCmd;
                     var callee = callCmd.callee;
                     // watch out: varg functions have trailing arg types in function name
-                    callee = callee.Split('.')[0];
+                    //callee = callee.Split('.')[0]; //some functions are called _GLOBAL__sub_I_JavascriptArray.cpp
                     var aaCmd = MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int));
                     aaCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
                         new QKeyValue(Token.NoToken, "slic", new List<object>(), aaCmd.Attributes));
