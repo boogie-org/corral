@@ -43,6 +43,7 @@ Upcall: _ZN2Js15JavascriptArray15JoinArrayHelperINS_26JavascriptNativeFloatArray
 Upcall: _ZN2Js15JavascriptArray18DirectDeleteItemAtIPvEEij, 0 // member function, 0 denotes this ptr
 Upcall: _ZN2Js15JavascriptArray18DirectDeleteItemAtIiEEij, 0 // member function, 0 denotes this ptr
 Upcall: _ZN2Js15JavascriptArray18DirectDeleteItemAtIdEEij, 0 // member function, 0 denotes this ptr
+Upcall: _ZN2Js19JavascriptOperators11NewScObjectEPvNS_9ArgumentsEPNS_13ScriptContextEPKNS_8AuxArrayIjEE, -1 // the return value has been havoced
 FromVar: _ZN2Js15JavascriptArray7FromVarEPv, 0
 FromVar: _ZN2Js24JavascriptNativeIntArray7FromVarEPv, 1
 FromVar: _ZN2Js26JavascriptNativeFloatArray7FromVarEPv, 2
