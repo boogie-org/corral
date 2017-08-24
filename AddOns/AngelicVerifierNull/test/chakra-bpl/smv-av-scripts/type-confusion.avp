@@ -75,7 +75,9 @@ ProcedureRule
 {
    call {:cexpr "dynType"} boogie_si_record_i32(__dType[p]);
    call {:cexpr "isType"} boogie_si_record_i32(t);
-   assume((b != 0) <==> (__dType[p] == t));
+   assume(t == 1 ==> ((b != 0) <==> (__dType[p] == t)));
+   assume(t == 2 ==> ((b != 0) <==> (__dType[p] == t)));
+   assume(t == 0 ==> ((b != 0) <==> (__dType[p] == t || __dType[p] == 1 || __dType[p] == 2)));
    return;
 }
 
