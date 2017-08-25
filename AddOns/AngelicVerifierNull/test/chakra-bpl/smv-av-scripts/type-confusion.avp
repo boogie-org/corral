@@ -104,6 +104,15 @@ ProcedureRule
    return;
 }
 
+//If the devirt causes timeouts
+//ProcedureRule
+//{
+//    procedure  {:#NameMatches ".*devirtbounce.*"}  {:#ReplaceImplementation} anyDevirtbounce({:#AnyParameters} p1 : int);
+//}
+//-->
+//{
+//}
+
 //Adding the following just makes AVN hang  with prover error
 ////Inject a dummy  "return" into a stub for defectviewer
 //ProcedureRule

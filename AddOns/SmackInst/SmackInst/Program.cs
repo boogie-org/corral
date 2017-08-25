@@ -1429,15 +1429,17 @@ namespace SmackInst
                 if (pos == -1)
                 {
                     //case when the return value is havoced (e.g. constructors)
-                    var nCmd1 = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Outs[0]},
+                    var nCmd1 = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Outs[0] },
                         new List<IdentifierExpr>());
                     retCmds.Add(nCmd1);
-                    return retCmds;
                 }
-                Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
-                var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() {callCmd.Ins[pos]},
-                    new List<IdentifierExpr>());
-                retCmds.Add(nCmd);
+                else
+                {
+                    Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
+                    var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Ins[pos] },
+                        new List<IdentifierExpr>());
+                    retCmds.Add(nCmd);
+                }
             }
             return retCmds;
         }
