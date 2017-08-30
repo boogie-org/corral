@@ -68,50 +68,12 @@ namespace RefinementFuzzing
 			this.vstate = vstate;
 			this.spartition = spartition;
 
-			// Create the interface maps
-			//vcgen.interfaceMaps = new Common.InterfaceMaps();
-
-			//vstate.summaryDB = new SummaryDB(vcgen, vstate);
-
-			//vcgen.proverStackBookkeeper = vcgen.proverStackBookkeeper;
-
 			vcgen.solver = new ConcurrentSolver(vcgen, vstate);
 
 			vstate.threadBudget = threadBudget;
 
 			this.waitHandles = waitHandles;
 
-			/*
-            foreach (Implementation i in program.Implementations())
-            {
-                Procedure proc = i.Proc;
-                List<VCExprVar> vcexprList = implName2StratifiedInliningInfo[proc.Name].interfaceExprVars;
-                
-            }
-             */
-
-			// Under-approx query is only needed if something was inlined since
-			// the last time an under-approx query was made
-			// TODO: introduce this
-			// bool underApproxNeeded = true;
-
-			// The recursion bound for stratified search
-
-			// 0: Pull a new soft partition from queue
-			// 1: Iterate on creating partitions
-
-			/*
-             proc2Summary = Copy(vstate.summaryDB.proc2Summary);
-             currInlineCount = vstate.calls.currInlineCount;
-             candidateCount = vstate.calls.candidateCount;
-             id2VC = Copy(vstate.calls.id2VC);
-             candidateParent = Copy(vstate.calls.candidateParent);
-             candidateChildren = Copy(vstate.calls.candidateChildren);
-             newVarCnt = vstate.newVarCnt;
-             id2Candidate = Copy(vstate.calls.id2Candidate);
-
-             id2ControlVar = Copy(vstate.calls.id2ControlVar);
-             */
 			softPartitionPrefix = new List<SoftPartition>();
 			while (spartition != null)
 			{
@@ -151,12 +113,6 @@ namespace RefinementFuzzing
 			foreach (T x in obj.Keys)
 			{
 				dict[x] = Copy<V>(obj[x]);
-				/*
-                        List<V> newList = new List<V>();
-                        (obj[x] as List<V>).Iter<V>(n => newList.Add(n));
-                        dict[x] = newList as List<V>;
-                 * */
-
 			}
 			return dict;
 		}
@@ -782,6 +738,7 @@ namespace RefinementFuzzing
 
 		public static void WritePartitioningLog(int proverId, SoftPartition s, int numPartitions, bool partitionDecision, VerificationState vstate = null, SoftPartition s1 = null, SoftPartition s2 = null)
 		{
+            // TODO: write proper logs
 			lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
 			{
@@ -794,33 +751,7 @@ namespace RefinementFuzzing
 					else
 						partitioningLog.WriteLine("\n[{0}] SoftPartition {1} has {2} partitions : partitioned into {3}, {4}", proverId, s.Id, numPartitions, s1.Id, s2.Id);
 
-					List<SoftPartition> lst = new List<SoftPartition>();
-					lst.Add(s1);
-					if (s2 != null) lst.Add(s2);
-
-					foreach (SoftPartition x in lst)
-					{
-						partitioningLog.WriteLine("\t[Partition {0}]: ", x.Id);
-
-						SortedSet<string> fullModifiesList = new SortedSet<string>();
-
-						foreach (int id in x.lastInlined)
-						{
-							partitioningLog.WriteLine("\t\t" + id + ": " + RefinementFuzzing.Settings.candidateNames[id]);
-
-							VCExprNAry exp = vstate.calls.id2Candidate[id];
-							string proc = vstate.calls.getProc(id);
-							Implementation impl = vstate.calls.implName2StratifiedInliningInfo[proc].impl;
-							List<IdentifierExpr> modifiesSet = impl.Proc.Modifies;
-							partitioningLog.Write("\t\t\t" + "Modifies: ");
-							modifiesSet.Iter<IdentifierExpr>(n => { partitioningLog.Write(n.ToString() + ", "); fullModifiesList.Add(n.ToString()); });
-							partitioningLog.WriteLine("");
-						}
-						partitioningLog.Write("\t\tFullSet: ");
-						fullModifiesList.Iter<string>(n => { partitioningLog.Write(n + ", ");});
-						partitioningLog.WriteLine("");
-					}
-
+					
 				}
 				partitioningLog.Flush();
 			}

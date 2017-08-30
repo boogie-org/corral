@@ -165,9 +165,13 @@ namespace cba.Util
                 Debug.Assert(CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed);
                 Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
                 if (options.newStratifiedInlining) {
-				  if(options.newStratifiedInliningAlgo.ToLower() == "parallel1")
+				  if(options.newStratifiedInliningAlgo.ToLower() == "parallel1" || options.newStratifiedInliningAlgo.ToLower() == "seq1")
 					{
-						vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
+                        if (options.newStratifiedInliningAlgo.ToLower() == "parallel1")
+                            VC.StratifiedVCGen.invokeConcurrent = true;
+                        else
+                            VC.StratifiedVCGen.invokeConcurrent = false;
+                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
 					}
 					else
 					{
@@ -320,8 +324,8 @@ namespace cba.Util
                 vcSize = (vcgen as StratifiedVCGen).vcsize;
                 if (options.CallTree != null)
                 {
-                    options.CallTree = VC.StratifiedVCGen.callTree;
-                    VC.StratifiedVCGen.callTree = null;
+                    options.CallTree = (vcgen as StratifiedVCGen).callTree;
+                    (vcgen as StratifiedVCGen).callTree = null;
                 }
             }
             else if (vcgen is CoreLib.StratifiedInlining)

@@ -9,6 +9,7 @@ using Microsoft.Boogie;
 using System.Threading;
 using Microsoft.Basetypes;
 using Microsoft.Boogie.VCExprAST;
+using VC;
 
 namespace CoreLib
 {
@@ -35,13 +36,14 @@ namespace CoreLib
          */
 		//public HashSet<int> currUnopenedCandidates;
 		//public HashSet<int> inlinedCandidates;
-		public HashSet<int> activeCandidates;
-		public HashSet<int> blockedCandidates;
-		public HashSet<int> candidateUniverse;  // the universe expands as we go deeper
+		public HashSet<StratifiedCallSite> activeCandidates;
+		public HashSet<StratifiedCallSite> blockedCandidates;
+        public HashSet<StratifiedCallSite> mustreachCandidates;
+		public HashSet<StratifiedCallSite> candidateUniverse;  // the universe expands as we go deeper
 
-		public HashSet<int> candidatesReachingRecBound;
+		public HashSet<StratifiedCallSite> candidatesReachingRecBound;
 
-		public HashSet<int> lastInlined;
+		public HashSet<StratifiedCallSite> lastInlined;
 
 		public static Dictionary<int, SoftPartition> id2SoftPartition = new Dictionary<int, SoftPartition>();
 
@@ -51,7 +53,7 @@ namespace CoreLib
 
 		public Common.GraphNode graphNode;
 
-		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
+		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<StratifiedCallSite> activeCandidates, HashSet<StratifiedCallSite> blockedCandidates, HashSet<StratifiedCallSite> candidateUniverse, HashSet<StratifiedCallSite> lastInlined, HashSet<StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
 			lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
@@ -83,47 +85,47 @@ namespace CoreLib
 					}
 					else
 					{
-						this.graphNode = new Common.GraphNode(id, new HashSet<int>());
+						this.graphNode = new Common.GraphNode(id, new HashSet<StratifiedCallSite>());
 						RefinementFuzzing.Settings.explorationGraph.SetRoot(this.graphNode);
 					}
 				}
 			}
 		}
 
-		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<int> activeCandidates, HashSet<int> blockedCandidates, HashSet<int> candidateUniverse, HashSet<int> lastInlined, HashSet<int> candidatesReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<VC.StratifiedCallSite> activeCandidates, HashSet<VC.StratifiedCallSite> blockedCandidates, HashSet<VC.StratifiedCallSite> candidateUniverse, HashSet<VC.StratifiedCallSite> lastInlined, HashSet<VC.StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
 			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
-		public SoftPartition(SoftPartition parentPartition, IEnumerable<int> newActiveCandidates, IEnumerable<int> newBlockedCandidates, IEnumerable<int> candidatesInlined, HashSet<int> candidatesThatReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parentPartition, IEnumerable<StratifiedCallSite> newActiveCandidates, IEnumerable<StratifiedCallSite> newBlockedCandidates, IEnumerable<StratifiedCallSite> candidatesInlined, HashSet<StratifiedCallSite> candidatesThatReachingRecBound, VCExpr prefixVC = null)
 		{
-			HashSet<int> activeCandidates = new HashSet<int>();
-			HashSet<int> candidateUniverse = new HashSet<int>();
-			HashSet<int> blockedCandidates = new HashSet<int>();
-			HashSet<int> lastInlined = new HashSet<int>();
-			HashSet<int> candidatesReachingRecBound = new HashSet<int>();
+			HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
+			HashSet<StratifiedCallSite> candidateUniverse = new HashSet<StratifiedCallSite>();
+			HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
+			HashSet<StratifiedCallSite> lastInlined = new HashSet<StratifiedCallSite>();
+			HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>();
 
-			candidatesInlined.Iter<int>(n => lastInlined.Add(n));
+			candidatesInlined.Iter<StratifiedCallSite>(n => lastInlined.Add(n));
 
-			newActiveCandidates.Iter<int>(n => { activeCandidates.Add(n); });
+			newActiveCandidates.Iter<StratifiedCallSite>(n => { activeCandidates.Add(n); });
 			//parentPartition.activeCandidates.Iter<int>(n => activeCandidates.Add(n));
 
-			parentPartition.candidateUniverse.Iter<int>(n => candidateUniverse.Add(n));
-			candidatesInlined.Iter<int>(n => candidateUniverse.Add(n));
+			parentPartition.candidateUniverse.Iter<StratifiedCallSite>(n => candidateUniverse.Add(n));
+			candidatesInlined.Iter<StratifiedCallSite>(n => candidateUniverse.Add(n));
 
-			parentPartition.blockedCandidates.Iter<int>(n => blockedCandidates.Add(n));
-			newBlockedCandidates.Iter<int>(n => { blockedCandidates.Add(n); });
+			parentPartition.blockedCandidates.Iter<StratifiedCallSite>(n => blockedCandidates.Add(n));
+			newBlockedCandidates.Iter<StratifiedCallSite>(n => { blockedCandidates.Add(n); });
 
-			candidatesThatReachingRecBound.Iter<int>(n => candidatesReachingRecBound.Add(n));
+			candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
 
 			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
-		private string printHashSet(HashSet<int> hs)
+		private string printHashSet(HashSet<StratifiedCallSite> hs)
 		{
 			StringBuilder sb = new StringBuilder();
 			sb.Append("{");
-			foreach (int i in hs)
+			foreach (StratifiedCallSite i in hs)
 			{
 				sb.Append(i + ", ");
 			}
@@ -191,11 +193,14 @@ namespace CoreLib
 	public class VerificationState
 	{
 		// The call tree
-		public StratifiedInlining.FCallHandler calls;
-		public StratifiedInlining.ApiChecker checker;
+		//public StratifiedInlining.FCallHandler calls;
+        //public StratifiedInlining.ApiChecker checker;
+        public StratifiedInliningErrorReporter reporter;
+        public ProverStackBookkeeping proverBookeeper;
 		// For statistics
 		public int vcSize;
 		public int expansionCount;
+        public StratifiedInlining.SiState siState;
 		//public SummaryDB summaryDB;
 
 		// For making summary queries on the side
@@ -206,36 +211,43 @@ namespace CoreLib
 		public int threadBudget; // Number of child threads that can be spawned by this thread
 		public int proverId;
 
-		public VerificationState(VCExpr vcMain, StratifiedInlining.FCallHandler calls, ProverInterface prover, ProverInterface.ErrorHandler reporter)
+		public VerificationState(StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverBookeeper)
 		{
-			prover.Assert(vcMain, true);
-			this.calls = calls;
-			this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
+			//prover.Assert(vcMain, true);
+			//this.calls = calls;
+            this.reporter = reporter;
+			//this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
 			vcSize = 0;
 			expansionCount = 0;
 			threadBudget = RefinementFuzzing.Settings.totalThreadBudget;
 			proverId = 0;
+            this.proverBookeeper = proverBookeeper;
 		}
 
-		public VerificationState(VCExpr vcMain, StratifiedInlining.FCallHandler calls, ProverInterface prover, ProverInterface.ErrorHandler reporter,
+        /*
+		public VerificationState(StratifiedInlining.FCallHandler calls, ProverInterface prover, ProverInterface.ErrorHandler reporter,
 			ProverInterface prover2, ProverInterface.ErrorHandler reporter2)
-			: this(vcMain, calls, prover, reporter)
+			: this(calls)
 		{
 			//this.checker2 = new ApiChecker(prover2, reporter2);
 			threadBudget = RefinementFuzzing.Settings.totalThreadBudget;
 			proverId = 0;
 		}
+        */
 
-		public VerificationState(VerificationState vstate, StratifiedInlining.FCallHandler calls, ProverInterface prover, ProverInterface.ErrorHandler reporter, int proverId)
+		public VerificationState(VerificationState vstate, StratifiedInliningErrorReporter reporter, int proverId, ProverStackBookkeeping proverBookeeper)
 		{
-			this.calls = calls;
-			this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
+			//this.calls = calls;
+			//this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
 			vcSize = vstate.vcSize;
 			expansionCount = vstate.expansionCount;
 			//this.newVarCnt = vstate.newVarCnt;
 			this.threadBudget = vstate.threadBudget;
 			this.proverId = proverId;
+            this.reporter = reporter;
+            this.proverBookeeper = proverBookeeper;
 		}
+        
 	}
 
 
@@ -268,17 +280,8 @@ namespace CoreLib
 				else
 					mainProver = ProverInterface.CreateProver(program, "proverLog" + i + ".txt", true, CommandLineOptions.Clo.ProverKillTime);
 
-				if (RefinementFuzzing.Settings.useInterpolatingAsMainProver)
-				{
-					interpolatingProver = mainProver;
-					mainProver = null;
-				}
-				else
-				{
-					RefinementFuzzing.Settings.interpolatingProver = true;
-					interpolatingProver = ProverInterface.CreateProver(program, "iproverLog" + i + ".txt", true, CommandLineOptions.Clo.ProverKillTime);
-					RefinementFuzzing.Settings.interpolatingProver = false;
-				}
+				interpolatingProver = mainProver;
+				mainProver = null;
 
 				proverArray[i] = new ProverStackBookkeeping(mainProver, i); // if main prover is null, interpolating prover is the main prover
 				proverAvailable[i] = true;
@@ -419,8 +422,11 @@ namespace CoreLib
 		//public bool isTraceProver = true; // this prover has the prefix trace and not the whole VCs
 
 		private ProverInterface mainProver;
-		//private ProverInterface interpolatingProver;
-		private Stack<int> proverStackStatus = new Stack<int>();
+        //public StratifiedInlining.ApiChecker checker;
+        //public StratifiedInliningErrorReporter reporter;
+
+        //private ProverInterface interpolatingProver;
+        private Stack<int> proverStackStatus = new Stack<int>();
 
 		public HashSet<int> pinnedPartitions = new HashSet<int>(); // set of all partitions inlined in the prover which cannot be removed as interpolation computation was unsuccessful or interpolant was large
 
@@ -436,14 +442,14 @@ namespace CoreLib
 				this.mainProver = null;
 			else
 				this.mainProver = mainProver;
-			//this.interpolatingProver = interpolatingProver;
+            //this.interpolatingProver = interpolatingProver;
 
-			//metaStack = new SummariesMetadataInProverStack(this);
+            //metaStack = new SummariesMetadataInProverStack(this);
 
-			this.id = id;
+            this.id = id;
 		}
 
-		public void Push(SoftPartition sp, VerificationState vstate)
+		public void Push(SoftPartition sp)
 		{
 			proverStackStatus.Push(sp.Id);
 			if (mainProver != null) mainProver.Push();
@@ -452,7 +458,7 @@ namespace CoreLib
 			//metaStack.Push(sp.activeCandidates, vstate);
 		}
 
-		public void PushPrefixTrace(SoftPartition sp, VerificationState vstate)
+		public void PushPrefixTrace(SoftPartition sp)
 		{
 			proverStackStatus.Push(-sp.Id); // -ve refers to prefix trace
 			if (mainProver != null) mainProver.Push();
@@ -665,7 +671,7 @@ namespace CoreLib
 
 		HierarchicalQueue hierarchicalQueue;
 		Random rand = new Random();
-		StratifiedInlining.FCallHandler calls;
+		//StratifiedInlining.FCallHandler calls;
 		StratifiedInlining vcgen;
 		public VerificationState vState;
 
@@ -675,28 +681,26 @@ namespace CoreLib
 		{
 			this.vcgen = vcgen;
 			this.vState = vState;
-			this.calls = vState.calls;
+			//this.calls = vState.calls;
 		}
 
 		int currQLevel = 0;
 
-		public VerifyResult Solve(List<int> entryPoints) // for a child, the entryPoints are the "open" candidates
+		public VerifyResult Solve(List<StratifiedCallSite> entryPoints) // for a child, the entryPoints are the "open" candidates
 		{
 			List<SoftPartition> entryPartitions = new List<SoftPartition>();
 
-			foreach (int e in entryPoints)
+			foreach (StratifiedCallSite e in entryPoints)
 			{
-				HashSet<int> universalCandidates = new HashSet<int>();
+				HashSet<StratifiedCallSite> universalCandidates = new HashSet<StratifiedCallSite>();
 				universalCandidates.Add(e);
 
 				//vState.calls.currCandidates.Iter<int>(n => universalCandidates.Add(n));
 
-				HashSet<int> blockedCandidates = new HashSet<int>();
-				HashSet<int> activeCandidates = new HashSet<int>();
+				HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
+				HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
 
-				vState.calls.currCandidates.Iter<int>(n => activeCandidates.Add(n));
-
-				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, universalCandidates, universalCandidates, new HashSet<int>());
+				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, universalCandidates, universalCandidates, new HashSet<StratifiedCallSite>());
 
 				entryPartitions.Add(s);
 			}
@@ -717,34 +721,24 @@ namespace CoreLib
 				//bookKeeper = StratifiedInlining.proverManager.BorrowProver(parentPartition.Id);
 				bookKeeper = StratifiedInlining.proverManager.BorrowProver(parentPartition.Id);
 
-				if (RefinementFuzzing.Settings.useInterpolatingAsMainProver)
-					; // TODO childVCgen = new StratifiedInlining(this.vcgen, null, false, new List<Checker>(), bookKeeper.getInterpolatingProver());
-				else
-					; // TODO childVCgen = new StratifiedInlining(this.vcgen, null, false, new List<Checker>(), bookKeeper.getMainProver());
+				childVCgen = new StratifiedInlining(this.vcgen);
 			}
 			else
 				; // TODO childVCgen = new StratifiedInlining(this.vcgen, null, false, new List<Checker>(), null);
-			//StratifiedInlining.VerificationState childVstate = new StratifiedInlining.VerificationState(vState);
 
-			StratifiedInlining.FCallHandler childCalls = new StratifiedInlining.FCallHandler(childVCgen.prover.VCExprGen, childVCgen.implName2StratifiedInliningInfo, calls);
-			//calls.setCurrProcAsMain();
-
-			StratifiedInliningErrorReporter parentReporter = vState.checker.reporter as StratifiedInliningErrorReporter;
+			StratifiedInliningErrorReporter parentReporter = vState.reporter as StratifiedInliningErrorReporter;
 			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter.callback, null, null); // TODO: handle the second and third arguments
-			childErrReporter.SetCandidateHandler(childCalls);
-
-			// Put all of the necessary state into one object
-			var ChildVState = new VerificationState(vState, childCalls, childVCgen.prover, childErrReporter, bookKeeper.id);
+			//childErrReporter.SetCandidateHandler(childCalls);
 
 			if (RefinementFuzzing.Settings.preAllocateProvers)
 				childVCgen.proverStackBookkeeper = bookKeeper;
 			else
 				childVCgen.proverStackBookkeeper = new ProverStackBookkeeping(childVCgen.prover, 0);
 
-			//Console.WriteLine("Spawning Threads. Press a key to continue...");
-			//Console.ReadKey();
+            // Put all of the necessary state into one object
+            var ChildVState = new VerificationState(childErrReporter, childVCgen.proverStackBookkeeper);
 
-			RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, childrenThreadBudget, waitHandle, childVCgen.prover);
+            RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, childrenThreadBudget, waitHandle, childVCgen.prover);
 
 			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
 
@@ -776,12 +770,12 @@ namespace CoreLib
 			// TODO	StratifiedInlining.FCallHandler childCalls = new StratifiedInlining.FCallHandler(childVCgen.prover.VCExprGen, childVCgen.implName2StratifiedInliningInfo, calls);
 			//calls.setCurrProcAsMain();
 
-			StratifiedInliningErrorReporter parentReporter = vState.checker.reporter as StratifiedInliningErrorReporter;
+			StratifiedInliningErrorReporter parentReporter = vState.reporter as StratifiedInliningErrorReporter;
 			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter.callback, null, null); // Handle the last two arguments
 			childErrReporter.SetCandidateHandler(childCalls);
 
 			// Put all of the necessary state into one object
-			var ChildVState = new VerificationState(vState, childCalls, childVCgen.prover, childErrReporter, bookKeeper.id);
+			var ChildVState = new VerificationState(vState, childErrReporter, bookKeeper.id, bookKeeper);
 
 			if (RefinementFuzzing.Settings.preAllocateProvers)
 				childVCgen.proverStackBookkeeper = bookKeeper;
@@ -1017,18 +1011,13 @@ namespace CoreLib
 							// Don't return the original prover as only it can do pops
 							if (workElem.Item2 != originalProver)
 							{
-								StratifiedInlining.proverManager.ReturnProver(workElem.Item2, s.Id);
-
-
-								//Contract.Assert(worklist.Count == 1);
-								//vState.checker.prover = originalProver.getMainProver();
-								//vState.summaryDB.prover5 = originalProver.getInterpolatingProver();
+                                StratifiedInlining.proverManager.ReturnProver(workElem.Item2, s.Id);
 							}
 							else
 								;// Contract.Assert(worklist.Count == 0); // only the original prover remains in the worklist
 
 							vcgen.proverStackBookkeeper = originalProver;
-							vState.checker.prover = originalProver.getMainProver();
+							//vState.checker.prover = originalProver.getMainProver();
 							//vState.summaryDB.prover5 = originalProver.getInterpolatingProver();
 
 							Console.Write("BCD");
@@ -1152,36 +1141,6 @@ namespace CoreLib
 
 		private void CombineSP(List<Tuple<SoftPartition, ProverStackBookkeeping>> worklist)
 		{
-			#if false
-			// If a partition has no traceVC available, it cannot use a traceProver; first assign such partitions to non-trace provers
-			foreach (Tuple<SoftPartition, ProverStackBookkeeping> w1 in worklist)
-			{
-			bool success = false;
-
-			if (w1.Item2 != null) // get an element of S_ type only
-			continue;
-
-			if (w1.Item1.prefixVC == null)
-			{
-			foreach (Tuple<SoftPartition, ProverStackBookkeeping> w2 in worklist)
-			{
-			if (w2.Item1 != null) // get an element of _P type only
-			continue;
-
-			if (!w2.Item2.isTraceProver)
-			{
-			worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(w1.Item1, w2.Item2));
-			success = true;
-			break;
-			}
-			}
-			}
-
-			if (!success)
-			break;
-			}
-			#endif
-
 			while (true)
 			{
 				Tuple<SoftPartition, ProverStackBookkeeping> w1 = getElement(worklist, WorkType.S_);
@@ -1727,8 +1686,8 @@ namespace CoreLib
 					{
 						if (c1 == c2) continue;
 
-						IEnumerable<int> intersetSet = c1.lastInlined.Intersect<int>(c2.lastInlined);
-						IEnumerable<int> symDiff = (c1.lastInlined.Except(intersetSet)).Union<int>(c2.lastInlined.Except(intersetSet));
+						IEnumerable<StratifiedCallSite> intersetSet = c1.lastInlined.Intersect<StratifiedCallSite>(c2.lastInlined);
+						IEnumerable<StratifiedCallSite> symDiff = (c1.lastInlined.Except(intersetSet)).Union<StratifiedCallSite>(c2.lastInlined.Except(intersetSet));
 
 						if (maxDist < symDiff.Count())
 						{
@@ -1818,11 +1777,11 @@ namespace CoreLib
 			else
 			{
 				partitions = new List<SoftPartition>();
-				HashSet<int> ac = new HashSet<int>();
-				ac.Add(1);
-				ac.Add(2);
-				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
-				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
+				HashSet<StratifiedCallSite> ac = new HashSet<StratifiedCallSite>();
+				//ac.Add(1);
+				//ac.Add(2);
+				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
+				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
 				partitions.Add(s1);
 				partitions.Add(s2);
 

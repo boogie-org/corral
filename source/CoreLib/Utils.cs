@@ -89,7 +89,7 @@ namespace Common
 	public class GraphNode
 	{
 		int id;
-		HashSet<int> candidates = new HashSet<int>();
+		HashSet<VC.StratifiedCallSite> candidates = new HashSet<VC.StratifiedCallSite>();
 		public int scheduledOnProverId = -1;
 		public Queue<int> solutionTime = new Queue<int>(); // time to solve this partition each time it is enqueued
 		public bool fromTrace = false;
@@ -104,16 +104,16 @@ namespace Common
 		public bool isSubsumed = false;
 		public double potentialParallelTime = 0;
 
-		public GraphNode(int id, HashSet<int> candidates)
+		public GraphNode(int id, HashSet<VC.StratifiedCallSite> candidates)
 		{
 			this.id = id;
-			candidates.Iter<int>(n => this.candidates.Add(n));
+			candidates.Iter<VC.StratifiedCallSite>(n => this.candidates.Add(n));
 		}
 
 		public override string ToString()
 		{
 			StringBuilder b = new StringBuilder();
-			candidates.Iter<int>(n => b.Append("," + n));
+			candidates.Iter<VC.StratifiedCallSite>(n => b.Append("," + n));
 
 			StringBuilder b1 = new StringBuilder();
 			solutionTime.Iter<int>(n => b1.Append("," + n));
