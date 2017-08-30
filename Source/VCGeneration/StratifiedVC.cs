@@ -1183,10 +1183,11 @@ namespace VC {
       }
     }
 
+    public static bool invokeConcurrent = false;
 	public override Outcome VerifyImplementation(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
 		Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
 
-			if (false) // TODO: Read from command-line argument
+			if (!invokeConcurrent) // TODO: Read from command-line argument
 				return VerifyImplementationSI(impl, callback);
 			else
 				return VerifyImplementationConcurrent(impl, callback);
@@ -1774,7 +1775,7 @@ namespace VC {
 							//newPartition.activeCandidates.Iter<int>(n => candidatesToExpand.Add(n));
 							//lock (RefinementFuzzing.Settings.lockThis)  [removed on 15th Sept]
 							{
-								DoExpansion(reporter.candidatesToExpand, vState); //creates the new VCs but does not assert them
+								DoExpansion(reporter.candidatesToExpand, vState); //creates the new VCs but does not assert them; now they are expanded
 							}
 							vState.checker.prover.LogComment(";;;;;;;;;;;; Expansion end ;;;;;;;;;;");
 
@@ -3180,17 +3181,18 @@ namespace VC {
 
 			IEnumerable<int> currCandidates;
 
-			if (useConcurrentSolver)
+			/*if (useConcurrentSolver)
 			{
 				currCandidates = activeCandidates;
 				candidatesThatReachRecBound = new HashSet<int>();
 				//calls.currCandidates = activeCandidates; // Required as GenerateTraceRec() looks at calls.currCandidate to expand the trace (check "if (calls.currCandidates.Contains(calleeId))"); so important to restore calls.currCandidate
 			}
-			else
+			else*/
 			{
 				currCandidates = calls.currCandidates;
 				candidatesThatReachRecBound = null;
-			}
+                candidatesThatReachRecBound = new HashSet<int>();
+            }
 
 			// NO UNDERAPPROXIMATIONS
 			if (!RefinementFuzzing.Settings.disableUnderapproxMode)
@@ -3584,15 +3586,8 @@ namespace VC {
       //vState.checker.prover.Assert(exprToPush, true);
       //vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
 
-			if (useConcurrentSolver)
-			{
-				// create the VC (cached in id2VC) but do not assert it yet!
-			}
-			else
-			{
-				vState.checker.prover.Assert(exprToPush, true);
-				vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
-			}
+			vState.checker.prover.Assert(exprToPush, true);
+	        vState.vcSize += SizeComputingVisitor.ComputeSize(exprToPush);
     }
 
     private void SaveSubstitution(VerificationState vState, int id,

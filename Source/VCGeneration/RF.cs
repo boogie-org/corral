@@ -748,7 +748,7 @@ namespace RefinementFuzzing
 
 		public static bool suppressZ3Errors = true;
 
-		public static bool disableUnderapproxMode = true;
+		public static bool disableUnderapproxMode = false;
 
 		public static bool reduceInterpolationUsingUnsatCore = true;
 

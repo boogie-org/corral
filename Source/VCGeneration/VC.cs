@@ -2002,7 +2002,7 @@ namespace VC {
       Dictionary<int, Absy>/*!*/ label2absy;
       List<Block/*!*/>/*!*/ blocks;
       protected Dictionary<Incarnation, Absy/*!*/>/*!*/ incarnationOriginMap;
-      protected VerifierCallback/*!*/ callback;
+      public VerifierCallback/*!*/ callback;
       protected ModelViewInfo MvInfo;
       internal string resourceExceededMessage;
       static System.IO.TextWriter modelWriter;
