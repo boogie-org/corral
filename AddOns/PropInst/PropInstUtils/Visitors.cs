@@ -131,14 +131,15 @@ namespace PropInstUtils
 
         public override Cmd VisitAssertCmd(AssertCmd node)
         {
-            //lets not forget the attributes
-            return new AssertCmd(node.tok, VisitExpr(node.Expr), node.Attributes);
-        }
+			if ( node.Attributes == null)
+				return new AssertCmd(node.tok, VisitExpr(node.Expr));
+			else
+				return new AssertCmd(node.tok, VisitExpr(node.Expr), (QKeyValue)node.Attributes.Clone());
+		}
 
         public override Cmd VisitAssumeCmd(AssumeCmd node)
         {
-            //lets not forget the attributes
-            return new AssumeCmd(node.tok, VisitExpr(node.Expr), node.Attributes);
+            return new AssumeCmd(node.tok, VisitExpr(node.Expr));
         }
 
         public override Cmd VisitAssignCmd(AssignCmd node)
@@ -213,7 +214,7 @@ namespace PropInstUtils
 
     public class ProcedureSigMatcher
     {
-        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution)
+        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution, bool matchPtrs)
         {
             toMatchAnyParamsAttributes = null;
             anyParamsPosition = int.MaxValue;
@@ -281,15 +282,21 @@ namespace PropInstUtils
                         return false;
             }
 
-            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams)) return false;
+			Procedure dwfProc = null;
+			if (dwf is Implementation)
+				dwfProc = ((Implementation)dwf).Proc;
+			else if (dwf is Procedure)
+				dwfProc = (Procedure)dwf;
 
-            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams,dwfProc.InParams, matchPtrs)) return false;
+
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams,dwfProc.OutParams, matchPtrs)) return false;
 
             return true;
         }
 
         private static bool MatchParams(ref QKeyValue toMatchAnyParamsAttributes, ref int anyParamsPosition,
-            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams)
+            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, List<Variable> dwfProcInParams, bool matchPtrs)
         {
             // match procedure parameters
             for (var i = 0; i < toMatchInParams.Count; i++)
@@ -318,11 +325,56 @@ namespace PropInstUtils
                 if (!toMatchInParams[i].TypedIdent.Type.Equals(dwfInParams[i].TypedIdent.Type))
                     return false;
 
-                paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
+				// if {:#MatchPtrs} attribute is present, check if pointer references match
+				if (matchPtrs)
+					if (!MatchPtrs(toMatchProcInParams[i], dwfProcInParams[i]))
+						return false;
+
+				paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
             }
             return true;
         }
-    }
+
+		// Checks if the parameter references in 'var1' matches with that of 'var2'
+		private static bool MatchPtrs(Variable var1, Variable var2)
+		{
+			HashSet<string> ptrs1 = GetPtrsInVar(var1);
+			HashSet<string> ptrs2 = GetPtrsInVar(var2);
+
+			if (ptrs1.Count != ptrs2.Count)
+				return false;
+
+			bool disjoint = true;
+			foreach (string str in ptrs1)
+			{
+				if (!ptrs2.Contains(str))
+				{
+					disjoint = false;
+					break;
+				}
+			}
+
+			return disjoint;
+		}
+
+		// Returns the parameter references of 'var'
+		private static HashSet<string> GetPtrsInVar(Variable var)
+		{
+			HashSet<string> refs = new HashSet<string>();
+
+			for (QKeyValue kv = var.Attributes; kv != null; kv = kv.Next)
+			{
+				if (kv.Key.Equals("ptr"))
+				{
+					foreach (string str in kv.Params)
+						refs.Add(str);
+				}
+
+			}
+
+			return refs;
+		}
+	}
 
     public class OccursInVisitor : FixedVisitor
     {

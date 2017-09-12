@@ -361,7 +361,6 @@ namespace AvHarnessInstrumentation
                     unknownGenProcs.Add(proc.OutParams[0].TypedIdent.Type.ToString(), proc);
                 }
 
-
                 foreach (var ty in Options.unknownTypes)
                 {                    
                     // Find the type
@@ -376,6 +375,14 @@ namespace AvHarnessInstrumentation
                             .Where(t => t.Name == ty)
                             .Select(t => new CtorType(Token.NoToken, t, new List<btype>()))
                             .FirstOrDefault();
+
+                        if (type == null)
+                        {
+                            type = prog.TopLevelDeclarations.OfType<TypeSynonymDecl>()
+                                .Where(t => t.Name == ty)
+                                .Select(t => new TypeSynonymAnnotation(Token.NoToken, t, new List<btype>()))
+                                .FirstOrDefault();
+                        }
                     }
                     if (type == null)
                     {

@@ -1,7 +1,7 @@
 //Testing the following ideas
 //  presence of stubs with different arity
 
-procedure Free({:pointer} x : int);
+procedure Free({:pointer} p : int);
 procedure stub1({:pointer} x:int);
 procedure stub3({:pointer} x:int, {:pointer} y:int, z:int);
 
