@@ -35,7 +35,8 @@ namespace SmackInst
 
         public static bool visualizeHeap = false;
         public static string chakraTypeConfusionAnnotsFile = null;
-   
+        public static bool hackForSmackSdvTrace = false;
+
 
         static void Main(string[] args)
         {
@@ -62,6 +63,9 @@ namespace SmackInst
 
             args.Where(a => a.StartsWith("/chakraTypeConfusionFile:"))
                 .Iter(a => chakraTypeConfusionAnnotsFile = a.Substring("/chakraTypeConfusionFile:".Length));
+
+            if (args.Any(a => a == "/hackForSmackSdvTrace"))
+                hackForSmackSdvTrace = true;
 
             if (args.Any(a => a == "/count"))
                 count = true;
@@ -331,6 +335,9 @@ namespace SmackInst
             if (chakraTypeConfusionAnnotsFile != null)
                 (new InstrumentTypeConfusionChakra(chakraTypeConfusionAnnotsFile, program)).InstrumentCode();
 
+            if (hackForSmackSdvTrace)
+                (new HackForSmackSdvTrace(program)).Visit(program);
+
             // if we don't check NULL, stop here
             if (!checkNULL && !checkUAF)
                 return program;
@@ -375,9 +382,9 @@ namespace SmackInst
             return program;
         }
 
-		// Inline functions with {:inline true} attribute
-		// borrow code from Symbooglix transform passes
-		static void InlineFunctions(Program prog)
+        // Inline functions with {:inline true} attribute
+        // borrow code from Symbooglix transform passes
+        static void InlineFunctions(Program prog)
 		{
 			Predicate<Function> Condition = f => QKeyValue.FindBoolAttribute(f.Attributes, "inline");
 			var functionInlingVisitor = new FunctionInlingVisitor(Condition);
@@ -475,6 +482,67 @@ namespace SmackInst
 
     }
 
+    public class HackForSmackSdvTrace : FixedVisitor
+    {
+        Program prog;
+        HashSet<string> impls; //list of impls
+        public HackForSmackSdvTrace(Program prog)
+        {
+            this.prog = prog;
+            impls = new HashSet<string>(prog.TopLevelDeclarations.OfType<Implementation>().Select(x => x.Proc.Name));
+        }
+
+        public override Implementation VisitImplementation(Implementation impl)
+        {
+            foreach (var blk in impl.Blocks)
+            {
+                var newCmds = new List<Cmd>();
+                foreach (var cmd in blk.cmds)
+                {
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd == null || !impls.Contains(ccmd.callee)) { newCmds.Add(cmd); continue; }
+                    //foo -> devirt or devirt -> bar
+                    var caller = impl.Proc.Name;
+                    var callee = ccmd.callee;
+                    var isCallerDevirt = impl.Proc.Name.Contains("devirtbounce");
+                    var isCalleeDevirt = ccmd.callee.Contains("devirtbounce");
+                    if (isCalleeDevirt || isCallerDevirt)
+                    {
+                        AddSourceLocInfo(impl, newCmds, ccmd, caller, callee, isCalleeDevirt);
+                    }
+                    else
+                    {
+                        newCmds.Add(ccmd);
+                    }
+
+                }
+                blk.Cmds = newCmds;
+            }
+            return base.VisitImplementation(impl);
+        }
+        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee, bool isCalleeDevirt)
+        {
+            var aCmd = new AssumeCmd(Token.NoToken, Expr.True);
+            aCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+            var callInfo = "Call \\\" " + caller + " \\\" \\\" " + callee + " \\\" ";
+            aCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { callInfo }, null));
+            newCmds.Add(aCmd);
+            newCmds.Add(ccmd);
+            //if the procedure is not devirtbounce* then there is a regular return printed by smack 
+            //so if the callee is not devirtbounce, then there is a return at the end of callee
+            if (isCalleeDevirt)
+            {
+                var rCmd = new AssumeCmd(Token.NoToken, Expr.True);
+                rCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                                                    new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+                rCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { "Return" }, null));
+                newCmds.Add(rCmd);
+            }
+        }
+
+    }
+
     public class SimpleDeadcodeDectectionVisitor : FixedVisitor
     {
         Function f;
@@ -546,7 +614,7 @@ namespace SmackInst
     // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
     public class AnnotateFPDispatchProcVisitor : FixedVisitor
     {
-        string pattern = @"^devirtbounce\d*$";
+        string pattern = @"^devirtbounce.*$"; //relaxing it to match devirtbounce.11
         List<Function> aliasQfuncs = new List<Function>();
         Procedure specialPtrFunc = null;
         Procedure specialScalarFunc = null;
@@ -647,7 +715,7 @@ namespace SmackInst
                     var callCmd = cmd as CallCmd;
                     var callee = callCmd.callee;
                     // watch out: varg functions have trailing arg types in function name
-                    callee = callee.Split('.')[0];
+                    //callee = callee.Split('.')[0]; //some functions are called _GLOBAL__sub_I_JavascriptArray.cpp
                     var aaCmd = MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int));
                     aaCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
                         new QKeyValue(Token.NoToken, "slic", new List<object>(), aaCmd.Attributes));
@@ -1287,15 +1355,20 @@ namespace SmackInst
                         HashSet<int> pArgs;
                         int argPos;
                         int typeId;
+                        //multiple facts may match
+                        //these commands go before the call
+                        if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
+                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
+
+                        newCmds.Add(callCmd);
+
+                        //these commands go after the call
                         if (IsUpCall(callCmd.callee, out pArgs))
                             newCmds.AddRange(InstrumentUpcall(callCmd, pArgs));
-                        else if (IsIsType(callCmd.callee, out typeId))
+                        if (IsIsType(callCmd.callee, out typeId))
                             newCmds.AddRange(InstrumentIsTypeCall(callCmd, typeId));
-                        else if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
-                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
-                        else if (IsGetTypeId(callCmd.callee))
+                        if (IsGetTypeId(callCmd.callee))
                             newCmds.AddRange(InstrumentGetTypeCall(callCmd));
-                        else newCmds.Add(callCmd);                    
                     }
                     bl.Cmds = newCmds;
                 }
@@ -1309,7 +1382,6 @@ namespace SmackInst
             var nCmd = new CallCmd(Token.NoToken, typePreCondFuncName, 
                 new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
             retCmds.Add(nCmd); //adding a precondition, so should appear before the call
-            retCmds.Add(callCmd);
             return retCmds;
         }
 
@@ -1333,7 +1405,6 @@ namespace SmackInst
             Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
             var nCmd = new CallCmd(Token.NoToken, isTypeFuncName, new List<Expr>() {retExprs[0], callCmd.Ins[0], Expr.Literal(typeId) }, 
                 new List<IdentifierExpr>());
-            retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }
@@ -1353,16 +1424,24 @@ namespace SmackInst
         private IEnumerable<Cmd> InstrumentUpcall(CallCmd callCmd, HashSet<int> pArgs)
         {
             var retCmds = new List<Cmd>();
-            retCmds.Add(callCmd);
             foreach (var pos in pArgs)
             {
-                Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
-                var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() {callCmd.Ins[pos]},
-                    new List<IdentifierExpr>());
-                retCmds.Add(nCmd);
+                if (pos == -1)
+                {
+                    //case when the return value is havoced (e.g. constructors)
+                    var nCmd1 = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Outs[0] },
+                        new List<IdentifierExpr>());
+                    retCmds.Add(nCmd1);
+                }
+                else
+                {
+                    Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
+                    var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Ins[pos] },
+                        new List<IdentifierExpr>());
+                    retCmds.Add(nCmd);
+                }
             }
             return retCmds;
-            throw new NotImplementedException();
         }
 
         private bool IsUpCall(string pName, out HashSet<int> pArgs)
@@ -1388,7 +1467,6 @@ namespace SmackInst
             Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
             var nCmd = new CallCmd(Token.NoToken, getTypeIdFuncName, new List<Expr>() {callCmd.Ins[0], retExprs[0]},
                 new List<IdentifierExpr>());
-            retCmds.Add(callCmd);
             retCmds.Add(nCmd);
             return retCmds;
         }
