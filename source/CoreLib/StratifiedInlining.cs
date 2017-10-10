@@ -1744,7 +1744,7 @@ namespace CoreLib
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true); 
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -1758,12 +1758,12 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true);
+                    prover.Assert(vc.MustReach(callblock), true); 
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true); 
             return ret;
         }
 
