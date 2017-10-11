@@ -891,9 +891,9 @@ namespace CoreLib
                         Console.Write("{0}\t", sum.ToString("F2"));
                     }
                     Console.WriteLine();
-
+                    solTime = 0;
                     if (outcome == Outcome.Correct && reachedBound) // return Outcome.ReachedBound;
-                        VerifyResult.Verified;
+                        return VerifyResult.Verified;
                     // return outcome;
                 } // END of top-k
 
