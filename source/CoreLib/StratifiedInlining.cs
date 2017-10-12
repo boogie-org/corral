@@ -700,14 +700,12 @@ namespace CoreLib
             var reachedBound = false;
 
             var tt = TimeSpan.Zero;
-            int StackSize;
             int count;
             var minVcStack = new Stack<StratifiedVC>();
             var vcScoreIdealList = new List<StratifiedVC>();
             SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
-            int Countcs1 = 0;
-            int Countcs2 = 0;
+            var Stackscs = new Stack<StratifiedCallSite>();
             while (true)
             {
                 // Lets split when the tree has become big enough
@@ -1133,6 +1131,73 @@ namespace CoreLib
                         tt += (DateTime.Now - st);
                     }
                 }
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ideal")
+                {
+                    int minVcScore = 0;
+                    if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                    {
+                        Console.WriteLine("Running Ideal heuristic");
+                        var st = DateTime.Now;
+
+                        // find a node to split on
+                        var toRemove = new HashSet<StratifiedVC>();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
+                        int checkCount = Stackscs.Count; // Countcs1; 
+                        foreach (var vc in attachedVCInv)
+                        {
+                            if (!di.VcExists(vc.Key))
+                            {
+                                toRemove.Add(vc.Key);
+                                continue;
+                            }
+                            // now check the Value
+                            if (Stackscs.Contains(vc.Value))
+                            {
+                                vcScoreIdealList.Add(vc.Key);
+                            }
+                            /*if (checkCount > 0)
+                            {
+                                checkCount = checkCount - 1;
+                            }
+                            else
+                            {
+                                vcScoreIdealList.Add(vc);
+                            }
+                           // Console.WriteLine("Print to be extended call site {0} ", vc);*/
+                        }
+                        // clear the stack that contains unique call sites that are to be expanded
+                        Stackscs.Clear();
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+                        //Debug.Assert(attachedVCInv.Count == vcScoreIdealList.Count);
+                        if (vcScoreIdealList.Count > 0)
+                        {
+                            int countIdealList = vcScoreIdealList.Count;
+                            // check for all elements in the list
+                            foreach (StratifiedVC kvp in vcScoreIdealList)
+                            {
+                                var mvc = kvp;
+                                var scs = attachedVCInv[mvc];
+                                Debug.Assert(!openCallSites.Contains(scs));
+                                var desc = sizes[mvc];
+                                var cnt = 0;
+                                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                                // Push & Block
+                                MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[mvc].Count, disj[mvc], size, stats.numInlined);
+                                var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, minVcScore);
+                                timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                                Push();
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                                applyDecisionToDI(DecisionType.BLOCK, mvc);
+                                prover.Assert(scs.callSiteExpr, false);
+                            }
+                        }
+                        // TODO Do we need the case where there is only one element in the list
+                        vcScoreIdealList.Clear();
+                    }
+                }
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreachtopk")
                 {
                     Console.WriteLine("Running Must Reach topk heuristic");
@@ -1248,8 +1313,10 @@ namespace CoreLib
 
                 if (outcome == Outcome.Errors)
                 {
+                    if (Stackscs.Count != 0) Stackscs.Clear();
                     foreach (var scs in vState.reporter.callSitesToExpand)
                     {
+                        Stackscs.Push(scs);
                         openCallSites.Remove(scs);
                         var svc = Expand(scs, null, true, true);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
