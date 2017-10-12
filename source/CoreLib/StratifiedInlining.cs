@@ -631,6 +631,21 @@ namespace CoreLib
             }
         }
 
+        public class DuplicateKeyComparer<TKey> :
+         IComparer<TKey> where TKey : IComparable
+        {
+            #region IComparer<TKey> Members
+            public int Compare(TKey x, TKey y)
+            {
+                int result = x.CompareTo(y);
+
+                if (result == 0)
+                    return 1;   // Handle equality as beeing greater
+                else
+                    return result;
+            }
+            #endregion
+        }
         // Comment TODO
         // MustReachSplitStyle
         //public Outcome SolvePartition(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
@@ -688,26 +703,32 @@ namespace CoreLib
             int StackSize;
             int count;
             var minVcStack = new Stack<StratifiedVC>();
+            var vcScoreIdealList = new List<StratifiedVC>();
+            SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            int Countcs1 = 0;
+            int Countcs2 = 0;
             while (true)
             {
                 // Lets split when the tree has become big enough
                 var size = di.ComputeSize();
-                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "topk")
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "blocktopk")
                 {
-                    //Console.WriteLine("Running topk heuristic");
-                    minVcStack = new Stack<StratifiedVC>();
+                    Console.WriteLine("Running block topk heuristic");
+                    //minVcStack = new Stack<StratifiedVC>();
+
                     // Top K call-sites
                     if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                     {
                         var st = DateTime.Now;
                         // find a node to split on
-                        StratifiedVC minVc = null;
+                        //StratifiedVC minVc = null;
                         int minVcScore = 0;
                         //Console.WriteLine("print inside topk");
                         var toRemove = new HashSet<StratifiedVC>();
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
-
+                        //Console.WriteLine("The total number of calls in counterexample are {0}",  attachedVCInv.Keys.Count);
                         foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
@@ -716,27 +737,47 @@ namespace CoreLib
                                 continue;
                             }
                             var score = Math.Max(sizes[vc].Count, disj[vc]);
-                            if (score >= minVcScore)
-                            {
-                                minVc = vc;
-                                minVcStack.Push(minVc);
-                                minVcScore = score;
-                            }
+                            vcScoreList.Add(score, vc);
+                            //saveScore.Push(Tuple.Create(score, vc));
+                            //Console.WriteLine("print the scores {0},{1}", score, minVcScore);
                         }
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
-                        StackSize = minVcStack.Count;
-                        //Console.WriteLine("print number of call sites {0}", StackSize);
-                        if (StackSize >= 2)
-                            count = StackSize;
-                        else
-                            count = 1;
-                        int iterator = count;
-                        while (iterator > 0)
+                        //StackSize = minVcStack.Count;
+                        int listCount = vcScoreList.Count;
+                        //Console.WriteLine("print number of call sites in list {0}", listCount);
+                        count = 1;
+                        if (listCount > 4)
                         {
-                            var mvc = minVcStack.Pop();
-                            //foreach (var mvc in minVcStack.Peek())
-                            // print the top k-callsites 
-                            //Console.WriteLine("print stratified call site {0}", mvc);
+                            foreach (KeyValuePair<int, StratifiedVC> kvp in vcScoreList)
+                            {
+                                var mvc = kvp.Value;
+                                var scs = attachedVCInv[mvc];
+                                Debug.Assert(!openCallSites.Contains(scs));
+                                var desc = sizes[mvc];
+                                var cnt = 0;
+                                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                                // Push & Block
+                                MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[mvc].Count, disj[mvc], size, stats.numInlined);
+                                //stats.totalSplit++;
+                                var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, minVcScore);
+                                timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                                Push();
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                                applyDecisionToDI(DecisionType.BLOCK, mvc);
+                                prover.Assert(scs.callSiteExpr, false);
+                                count = count + 1;
+                                if (count > 4) break;
+                            }
+                        }
+                        else
+                        {
+                            // pick the last element from the SortedList
+                            var mvc = vcScoreList.Values.Last();
+                            // pick the last element from the SortedList
+                            //var mvc = vcScoreList.Values[0];
                             var scs = attachedVCInv[mvc];
                             Debug.Assert(!openCallSites.Contains(scs));
                             var desc = sizes[mvc];
@@ -754,63 +795,91 @@ namespace CoreLib
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             applyDecisionToDI(DecisionType.BLOCK, mvc);
                             prover.Assert(scs.callSiteExpr, false);
-                            iterator = iterator - 1;
                         }
                         treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
-
+                    vcScoreList.Clear();
+                    /*
                     MacroSI.PRINT_DEBUG("  - overapprox");
 
                     // Find cex
                     foreach (StratifiedCallSite cs in openCallSites)
                     {
-                        // Stop if we've reached the recursion bound or
-                        // the stack-depth bound (if there is one)
-                        if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
-                        {
-                            prover.Assert(cs.callSiteExpr, false);
-                            reachedBound = true;
-                        }
+                       // Stop if we've reached the recursion bound or
+                       // the stack-depth bound (if there is one)
+                       if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                       (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                       StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                       {
+                          prover.Assert(cs.callSiteExpr, false);
+                          reachedBound = true;
+                       }
                     }
                     MacroSI.PRINT_DEBUG("    - check");
-                    vState.reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                    outcome = CheckVC(vState.reporter);
+                    reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    outcome = CheckVC(reporter);
 
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                     if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                     {
-                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                        break; // done (T/O)
+                       timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                       break; // done (T/O)
                     }
 
-                    if (outcome == Outcome.Errors && vState.reporter.callSitesToExpand.Count == 0)
+                    if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
                     {
-                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                        break; // done (error found)
+                       timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                       break; // done (error found)
                     }
 
                     if (outcome == Outcome.Errors)
                     {
-                        foreach (var scs in vState.reporter.callSitesToExpand)
-                        {
-                            openCallSites.Remove(scs);
-                            var svc = Expand(scs, null, true, true);
-                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
-                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                        }
+                       foreach (var scs in reporter.callSitesToExpand)
+                       {
+                         openCallSites.Remove(scs);
+                         var svc = Expand(scs, null, true, true);
+                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                           Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                       }
                     }
                     else
                     {
-                        // outcome == Outcome.Correct
-                        Decision topDecision = null;
-                        SiState topState = SiState.SaveState(this, openCallSites);
-                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                        var doneBT = false;
-                        var npops = 0;
+                       // outcome == Outcome.Correct
+                       Decision topDecision = null;
+                       SiState topState = SiState.SaveState(this, openCallSites);
+                       timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                       var doneBT = false;
+                       var npops = 0;
+                       do
+                       {
+                           if (decisions.Count == 0)
+                           {
+                              doneBT = true;
+                              break;
+                           }
+                           topDecision = decisions.Peek();
+                           topState = backtrackingPoints.Peek();
+                         
+
+                           // Pop
+                           Pop();
+                           decisions.Pop();
+                           backtrackingPoints.Pop();
+                           prevMustAsserted.Pop();
+                           npops++;
+                           MacroSI.PRINT("{0}>>> Pop", indent(decisions.Count));
+                           //it = it - 1;
+                       } while (topDecision.num==1);
+
+                       if (doneBT)
+                         break;
+                       
+                        
+                        // flip the decision
+
+                        Push();
                         StackSize = minVcStack.Count;
                         if (StackSize >= 2)
                             count = StackSize;
@@ -818,25 +887,20 @@ namespace CoreLib
                             count = 1;
                         int it = count;
                         var disjExpr = VCExpressionGenerator.False;
-                        do
+                       
+                        var listBlocks = new List<Tuple<StratifiedVC, Block>>();
+                        var retVal = Tuple.Create(disjExpr, listBlocks);
+                        Decision decVar = topDecision;
+                        while (it >= 1)
                         {
-                            if (decisions.Count == 0 || it == 0)
+                            if (decisions.Count == 0)
                             {
                                 doneBT = true;
                                 break;
                             }
-                            topDecision = decisions.Peek();
-                            topState = backtrackingPoints.Peek();
-                            topState.ApplyState(this, ref openCallSites);
-                            timeGraph.Pop(npops - 1);
-                            topState.ApplyState(this, ref openCallSites);
-                            timeGraph.Pop(npops - 1);
-                            // flip the decision
-
-                            Push();
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
-                            var listBlocks = new List<Tuple<StratifiedVC, Block>>();
-                            var retVal = Tuple.Create(disjExpr, listBlocks);
+                            //int decSize = decisions.Count;
+                            // assert that the decision num is 0 (means not yet processed both sides)
+                            Debug.Assert(topDecision.num == 0);
                             if (topDecision.decisionType == DecisionType.MUST_REACH)
                             {
                                 // Block
@@ -859,24 +923,30 @@ namespace CoreLib
                                 //AssertMustReachK(attachedVC[topDecision.cs], PrevAsserted()));
                                 treesize = di.ComputeSize();
                             }
-                            disjExpr = prover.VCExprGen.Or(retVal.Item1, disjExpr);
-
+                            topDecision = decisions.Peek();
+                            topState = backtrackingPoints.Peek();
                             // Pop
                             Pop();
                             decisions.Pop();
                             backtrackingPoints.Pop();
                             prevMustAsserted.Pop();
                             npops++;
-                            MacroSI.PRINT("{0}>>> Pop", indent(decisions.Count));
-                            it = it - 1;
-                        } while (it > 0);
 
+                            // create the disjunction of all MustReach queries
+                            disjExpr = prover.VCExprGen.Or(retVal.Item1, disjExpr);
+                            it = it - 1;
+                        }
                         if (doneBT)
                             break;
 
-                        prover.Assert(disjExpr, true);
+                        topState.ApplyState(this, ref openCallSites);
+                        timeGraph.Pop(npops - 1);
+                        // update the backtracking point here
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                        prover.Assert(disjExpr,true);
+                        
                     }
-                    vState.reporter.reportTraceIfNothingToExpand = false;
+                    reporter.reportTraceIfNothingToExpand = false;
 
                     Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
 
@@ -891,12 +961,10 @@ namespace CoreLib
                         Console.Write("{0}\t", sum.ToString("F2"));
                     }
                     Console.WriteLine();
-                    solTime = 0;
-                    if (outcome == Outcome.Correct && reachedBound) // return Outcome.ReachedBound;
-                        return VerifyResult.Verified;
-                    // return outcome;
+                    
+                    if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
+                    return outcome;*/
                 } // END of top-k
-
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "minmax")
                 {
                     Console.WriteLine("Running minmax heuristic");
@@ -951,21 +1019,21 @@ namespace CoreLib
 
                         prover.Assert(scs.callSiteExpr, false);
                         treesize = di.ComputeSize();
-
                         tt += (DateTime.Now - st);
                     }
                 }
-                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "maxmin")
+
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "onlymax")
                 {
-                    Console.WriteLine("Running maxmin heuristic");
+                    Console.WriteLine("Running onlymax heuristic");
                     // Computing a minimum score
                     if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                     {
                         var st = DateTime.Now;
 
                         // find a node to split on
-                        StratifiedVC minVc = null;
-                        int minVcScore = 0;
+                        StratifiedVC maxVc = null;
+                        int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
                         var sizes = di.ComputeSubtrees();
@@ -980,7 +1048,62 @@ namespace CoreLib
                             }
 
                             var score = Math.Max(sizes[vc].Count, disj[vc]);
-                            if (score >= minVcScore)
+                            if (score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
+                        }
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+
+                        var scs = attachedVCInv[maxVc];
+                        Debug.Assert(!openCallSites.Contains(scs));
+
+                        var desc = sizes[maxVc];
+                        var cnt = 0;
+                        openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+
+                        // Push & Block
+                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                        Push();
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                        decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                        applyDecisionToDI(DecisionType.BLOCK, maxVc);
+                        prover.Assert(scs.callSiteExpr, false);
+                        treesize = di.ComputeSize();
+                        tt += (DateTime.Now - st);
+                    }
+                }
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "maxmin")
+                {
+                    Console.WriteLine("Running maxmin heuristic");
+                    // Computing a minimum score
+                    if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                    {
+                        var st = DateTime.Now;
+
+                        // find a node to split on
+                        StratifiedVC minVc = null;
+                        int minVcScore = 9999999;
+
+                        var toRemove = new HashSet<StratifiedVC>();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
+
+                        foreach (var vc in attachedVCInv.Keys)
+                        {
+                            if (!di.VcExists(vc))
+                            {
+                                toRemove.Add(vc);
+                                continue;
+                            }
+
+                            var score = Math.Max(sizes[vc].Count, disj[vc]);
+                            if (score <= minVcScore)
                             {
                                 minVc = vc;
                                 minVcScore = score;
@@ -1005,15 +1128,91 @@ namespace CoreLib
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, minVc);
-
-
                         prover.Assert(scs.callSiteExpr, false);
                         treesize = di.ComputeSize();
-
                         tt += (DateTime.Now - st);
                     }
                 }
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreachtopk")
+                {
+                    Console.WriteLine("Running Must Reach topk heuristic");
 
+                    // Must reach top K call-sites
+                    if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                    {
+                        var st = DateTime.Now;
+                        // find a node to split on
+                        int minVcScore = 0;
+                        var toRemove = new HashSet<StratifiedVC>();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
+                        foreach (var vc in attachedVCInv.Keys)
+                        {
+                            if (!di.VcExists(vc))
+                            {
+                                toRemove.Add(vc);
+                                continue;
+                            }
+                            var score = Math.Max(sizes[vc].Count, disj[vc]);
+                            vcScoreMRList.Add(score, vc);
+                        }
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+                        int listCount = vcScoreMRList.Count;
+                        count = 1;
+                        if (listCount > 4)
+                        {
+                            foreach (KeyValuePair<int, StratifiedVC> kvp in vcScoreMRList)
+                            {
+                                var mvc = kvp.Value;
+                                var scs = attachedVCInv[mvc];
+                                Debug.Assert(!openCallSites.Contains(scs));
+                                var desc = sizes[mvc];
+                                var cnt = 0;
+                                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                                // Push & MustReach
+                                MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
+                                var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, minVcScore);
+                                timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                                Push();
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+
+                                decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
+                                applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                                prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
+                                count = count + 1;
+                                if (count > 4) break;
+                            }
+                        }
+                        else
+                        {
+                            // pick the last element from the SortedList
+                            var mvc = vcScoreMRList.Values.Last();
+                            // pick the last element from the SortedList
+                            //var mvc = vcScoreMRList.Values[0];
+                            var scs = attachedVCInv[mvc];
+                            Debug.Assert(!openCallSites.Contains(scs));
+                            var desc = sizes[mvc];
+                            var cnt = 0;
+                            openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                            // Push & MustReach 
+                            MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
+                            var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, minVcScore);
+                            timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                            Push();
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+
+                            decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
+                            applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                            prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
+                        }
+                        treesize = di.ComputeSize();
+                        tt += (DateTime.Now - st);
+                    }
+                    // clear the SortedList
+                    vcScoreMRList.Clear();
+                }
                 MacroSI.PRINT_DEBUG("  - overapprox");
 
                 // Find cex
@@ -2695,8 +2894,11 @@ namespace CoreLib
             // else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "split" && !di.disabled)
             else if ((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "minmax"
                || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "maxmin"
-               || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "top-k")
-               && !di.disabled)
+               || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ideal"
+               || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "blocktopk"
+               || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "onlymax"
+               || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreachtopk")
+              && !di.disabled)
             {
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 outcome = MustReachSplitStyle(openCallSites, reporter);
