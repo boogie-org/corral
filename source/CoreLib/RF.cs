@@ -634,7 +634,7 @@ namespace RefinementFuzzing
 		public static StreamWriter primaryLog = new StreamWriter("PrimaryLog.txt");
 		public static StreamWriter partitioningLog = new StreamWriter("PartitioningLog.txt");
 
-		public static bool useInterpolatingAsMainProver = false;
+		public static bool useInterpolatingAsMainProver = true;
 
 		public static bool preAllocateProvers = true;
 

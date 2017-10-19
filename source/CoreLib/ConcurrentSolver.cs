@@ -53,7 +53,7 @@ namespace CoreLib
 
 		public Common.GraphNode graphNode;
 
-		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<StratifiedCallSite> activeCandidates, HashSet<StratifiedCallSite> blockedCandidates, HashSet<StratifiedCallSite> candidateUniverse, HashSet<StratifiedCallSite> lastInlined, HashSet<StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
+		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<StratifiedCallSite> activeCandidates, HashSet<StratifiedCallSite> blockedCandidates, HashSet<StratifiedCallSite> mustreachCandidates, HashSet<StratifiedCallSite> candidateUniverse, HashSet<StratifiedCallSite> lastInlined, HashSet<StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
 			lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
@@ -67,7 +67,8 @@ namespace CoreLib
 			this.level = partitionLevel;
 			this.activeCandidates = activeCandidates;
 			this.blockedCandidates = blockedCandidates;
-			this.candidateUniverse = candidateUniverse;
+            this.mustreachCandidates = mustreachCandidates;
+            this.candidateUniverse = candidateUniverse;
 			this.candidatesReachingRecBound = candidatesReachingRecBound;
 			this.lastInlined = lastInlined;
 			this.prefixVC = prefixVC;
@@ -92,17 +93,18 @@ namespace CoreLib
 			}
 		}
 
-		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<VC.StratifiedCallSite> activeCandidates, HashSet<VC.StratifiedCallSite> blockedCandidates, HashSet<VC.StratifiedCallSite> candidateUniverse, HashSet<VC.StratifiedCallSite> lastInlined, HashSet<VC.StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<VC.StratifiedCallSite> activeCandidates, HashSet<VC.StratifiedCallSite> blockedCandidates, HashSet<VC.StratifiedCallSite> mustreachCandidates, HashSet<VC.StratifiedCallSite> candidateUniverse, HashSet<VC.StratifiedCallSite> lastInlined, HashSet<VC.StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
-			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
-		public SoftPartition(SoftPartition parentPartition, IEnumerable<StratifiedCallSite> newActiveCandidates, IEnumerable<StratifiedCallSite> newBlockedCandidates, IEnumerable<StratifiedCallSite> candidatesInlined, HashSet<StratifiedCallSite> candidatesThatReachingRecBound, VCExpr prefixVC = null)
+		public SoftPartition(SoftPartition parentPartition, IEnumerable<StratifiedCallSite> newActiveCandidates, IEnumerable<StratifiedCallSite> newBlockedCandidates, HashSet<VC.StratifiedCallSite> newMustreachCandidates, IEnumerable<StratifiedCallSite> candidatesInlined, HashSet<StratifiedCallSite> candidatesThatReachingRecBound, VCExpr prefixVC = null)
 		{
 			HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
 			HashSet<StratifiedCallSite> candidateUniverse = new HashSet<StratifiedCallSite>();
 			HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
-			HashSet<StratifiedCallSite> lastInlined = new HashSet<StratifiedCallSite>();
+            HashSet<StratifiedCallSite> mustreachCandidates = new HashSet<StratifiedCallSite>();
+            HashSet<StratifiedCallSite> lastInlined = new HashSet<StratifiedCallSite>();
 			HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>();
 
 			candidatesInlined.Iter<StratifiedCallSite>(n => lastInlined.Add(n));
@@ -116,9 +118,12 @@ namespace CoreLib
 			parentPartition.blockedCandidates.Iter<StratifiedCallSite>(n => blockedCandidates.Add(n));
 			newBlockedCandidates.Iter<StratifiedCallSite>(n => { blockedCandidates.Add(n); });
 
-			candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
+            parentPartition.mustreachCandidates.Iter<StratifiedCallSite>(n => mustreachCandidates.Add(n));
+            newMustreachCandidates.Iter<StratifiedCallSite>(n => { mustreachCandidates.Add(n); });
 
-			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+            candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
+
+			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
 		private string printHashSet(HashSet<StratifiedCallSite> hs)
@@ -141,7 +146,8 @@ namespace CoreLib
 			sb.Append("(" + id + ")");
 			sb.Append("[active: " + printHashSet(activeCandidates));
 			sb.Append("; blocked: " + printHashSet(blockedCandidates));
-			sb.Append("; universe: " + printHashSet(candidateUniverse));
+            sb.Append("; mustreach: " + printHashSet(mustreachCandidates));
+            sb.Append("; universe: " + printHashSet(candidateUniverse));
 			sb.Append("; lastInlined: " + printHashSet(lastInlined) + "]");
 			return sb.ToString();
 		}
@@ -165,7 +171,10 @@ namespace CoreLib
 			if (!this.blockedCandidates.SetEquals(o2.blockedCandidates))
 				return false;
 
-			if (!this.candidateUniverse.SetEquals(o2.candidateUniverse))
+            if (!this.mustreachCandidates.SetEquals(o2.mustreachCandidates))
+                return false;
+
+            if (!this.candidateUniverse.SetEquals(o2.candidateUniverse))
 				return false;
 
 			if (!this.candidatesReachingRecBound.SetEquals(o2.candidatesReachingRecBound))
@@ -280,8 +289,8 @@ namespace CoreLib
 				else
 					mainProver = ProverInterface.CreateProver(program, "proverLog" + i + ".txt", true, CommandLineOptions.Clo.ProverKillTime);
 
-				interpolatingProver = mainProver;
-				mainProver = null;
+				//interpolatingProver = mainProver;
+				//mainProver = null;
 
 				proverArray[i] = new ProverStackBookkeeping(mainProver, i); // if main prover is null, interpolating prover is the main prover
 				proverAvailable[i] = true;
@@ -438,10 +447,14 @@ namespace CoreLib
 
 		public ProverStackBookkeeping(ProverInterface mainProver, int id)
 		{
+            /*
 			if (RefinementFuzzing.Settings.useInterpolatingAsMainProver)
 				this.mainProver = null;
 			else
 				this.mainProver = mainProver;
+                */
+
+            this.mainProver = mainProver;
             //this.interpolatingProver = interpolatingProver;
 
             //metaStack = new SummariesMetadataInProverStack(this);
@@ -698,9 +711,10 @@ namespace CoreLib
 				//vState.calls.currCandidates.Iter<int>(n => universalCandidates.Add(n));
 
 				HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
-				HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
+                HashSet<StratifiedCallSite> mustreachCandidates = new HashSet<StratifiedCallSite>();
+                HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
 
-				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, universalCandidates, universalCandidates, new HashSet<StratifiedCallSite>());
+				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, mustreachCandidates, universalCandidates, universalCandidates, new HashSet<StratifiedCallSite>());
 
 				entryPartitions.Add(s);
 			}
@@ -1132,8 +1146,6 @@ namespace CoreLib
 					else
 						Contract.Assert(false);
 				}
-
-
 			}
 
 			return VerifyResult.Verified;
@@ -1262,70 +1274,6 @@ namespace CoreLib
 						System.Environment.Exit(-1);
 					}
 
-					if (RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.RandomizedDepthFirst && partitions.Count > 1)
-					{
-						int min = RefinementFuzzing.Settings.SoftPartitionBound < vState.threadBudget ? RefinementFuzzing.Settings.SoftPartitionBound : vState.threadBudget;
-						bool flag = false;
-						bool tossDecision = false;
-
-						if (min > 1)
-						{
-							flag = true;
-							lock (RefinementFuzzing.Settings.lockThis)
-								//using (RefinementFuzzing.Settings.timedLock.Lock())
-							{
-								double q = RefinementFuzzing.Settings.getProbForPartitioning(RefinementFuzzing.Settings.softpartition2partitionCounts[s.Id]);
-								RefinementFuzzing.Settings.softpartition2partitionCounts[s.Id]++;
-
-								if (rand.Next(100) < (q * 100))
-								{
-									tossDecision = true;
-									; // allow partitioning
-								}
-								else
-								{
-									tossDecision = false;
-									min = 1; // don't partition
-								}
-							}
-						}
-
-						int numPartitions = partitions.Count;
-						List<SoftPartition> selectedSet = new List<SoftPartition>();
-
-						for (int i = 0; i < min; i++)
-						{
-							int sel = rand.Next(partitions.Count);
-							SoftPartition selectedPartition = partitions[sel];
-
-							partitions.RemoveAt(sel);
-							selectedSet.Add(selectedPartition);
-						}
-
-						partitions = selectedSet;
-
-						if (flag && tossDecision && min > 1)
-							RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, numPartitions, tossDecision, vState, selectedSet[0], selectedSet[1]);
-						else if (flag)
-							RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, numPartitions, tossDecision);
-
-					}
-
-					if (RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.CostBasedSelection && partitions.Count > 1)
-					{
-						int min = RefinementFuzzing.Settings.SoftPartitionBound < vState.threadBudget ? RefinementFuzzing.Settings.SoftPartitionBound : vState.threadBudget;
-
-						int numPartitions = partitions.Count;
-
-						partitions = SelectedSet(partitions, min);
-
-						if (partitions.Count > 1)
-							RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, numPartitions, (partitions.Count > 1), vState, partitions[0], partitions[1]);
-						else if (partitions.Count == 1)
-							RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, numPartitions, (partitions.Count > 1));
-
-					}
-
 					hierarchicalQueue.TaskPended(s);
 
 					if (!RefinementFuzzing.Settings.isConcurrent)
@@ -1433,20 +1381,8 @@ namespace CoreLib
 
 									if (RefinementFuzzing.Settings.threadJoinStrategy == RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns)
 									{
-										//StratifiedInlining.proverManager.RequestProver(vcgen.proverStackBookkeeper, s.Id);
-										//vcgen.proverStackBookkeeper = StratifiedInlining.proverManager.BorrowProver(s.Id);
-
-										if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
-										{
-											//s.stale = true; // so as to push the new summaries
-											context.vcgen.proverStackBookkeeper.stalePartitions.Add(s);
-											//context.vcgen.proverStackBookkeeper.Pop(); // so as to push the new summaries
-											//context.vcgen.proverStackBookkeeper.Pop(); // so as to push the new summaries
-										}
-
 										List<SoftPartition> newPartitions = new List<SoftPartition>();
-										// .VerifyResult outcome2 = Verify(s, out newPartitions);
-
+									
 										HashSet<SoftPartition> partitionsInProgress = new HashSet<SoftPartition>();
 										foreach (int idx in currRunningThreadsDict.Keys)
 										{
@@ -1780,8 +1716,8 @@ namespace CoreLib
 				HashSet<StratifiedCallSite> ac = new HashSet<StratifiedCallSite>();
 				//ac.Add(1);
 				//ac.Add(2);
-				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
-				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
+				SoftPartition s1 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
+				SoftPartition s2 = new SoftPartition(s, ac, new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>(), new HashSet<StratifiedCallSite>());
 				partitions.Add(s1);
 				partitions.Add(s2);
 

@@ -646,10 +646,197 @@ namespace CoreLib
             }
             #endregion
         }
+
+        public VerifyResult SolvePartition(SoftPartition softPartition,
+           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+        {
+            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel2")
+            {
+                return SolvePartition_parallel(softPartition, vState, out partitions, out solTime, bookKeeper, siblingRunningPartitions, maxPartitions);
+            }
+            else
+            {
+                return SolvePartition_backtrack(softPartition, vState, out partitions, out solTime, bookKeeper, siblingRunningPartitions, maxPartitions);
+            }
+        }
+
+        public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
+           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+        {
+            partitions = new List<SoftPartition>();
+            Outcome outcome = Outcome.Inconclusive;
+            vState.reporter.reportTraceIfNothingToExpand = true;
+
+            solTime = 0;
+            int treesize = 0;
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<Decision>();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+
+            HashSet<StratifiedCallSite> openCallSites = softPartition.activeCandidates;
+
+            // Assert the VC in the new prover according to the parent callers, the blockedset and the mustreach set
+            // TODO: This method needs to be fixed for blocked and mustreachsets
+            OptimizedAssertVC(softPartition, vState, prover, proverStackBookkeeper);
+
+            var timeGraph = new TimeGraph();
+
+            var indent = new Func<int, string>(i =>
+            {
+                var ret = "";
+                while (i > 0) { i--; ret += " "; }
+                return ret;
+            });
+
+            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
+
+            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
+            {
+                if (d == DecisionType.BLOCK)
+                {
+                    di.DeleteNode(n);
+                }
+                if (d == DecisionType.MUST_REACH)
+                {
+                    var disj = di.DisjointNodes(n);
+
+                    disj.Iter(m => di.DeleteNode(m));
+                }
+            });
+
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
+
+            var rand = new Random();
+            var reachedBound = false;
+
+            var tt = TimeSpan.Zero;
+            int count;
+            var minVcStack = new Stack<StratifiedVC>();
+            var vcScoreIdealList = new List<StratifiedVC>();
+            SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            var Stackscs = new Stack<StratifiedCallSite>();
+
+            HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>(softPartition.candidatesReachingRecBound);
+
+            while (true)
+            {
+                var size = di.ComputeSize();
+
+                StratifiedCallSite splitCand = null; // TODO: choose a split as per heuristic 
+
+                // check if we want to split here -- then simply create two softpartitions and return VerifyResult.Partitioned
+                if (splitCand != null)
+                {
+                    Console.WriteLine("Running minmax heuristic");
+
+                    // The Blocked partition
+                    HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
+                    HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
+
+                    blockedSet1.Add(splitCand);
+                    SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                    partitions.Add(newPartition1);
+
+                    // The MustReach partition
+
+                    HashSet<StratifiedCallSite> blockedSet2 = new HashSet<StratifiedCallSite>();
+                    HashSet<StratifiedCallSite> mustreachSet2 = new HashSet<StratifiedCallSite>();
+
+                    mustreachSet2.Add(splitCand);
+                    SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                    partitions.Add(newPartition2);
+
+                    return VerifyResult.Partitioned;
+                }
+
+                MacroSI.PRINT_DEBUG("  - overapprox");
+
+                // Find cex
+                foreach (StratifiedCallSite cs in openCallSites)
+                {
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        prover.Assert(cs.callSiteExpr, false);
+                        reachedBound = true;
+                        candidatesReachingRecBound.Add(cs);
+                    }
+                }
+                MacroSI.PRINT_DEBUG("    - check");
+                vState.reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                outcome = CheckVC(vState.reporter);
+
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+
+                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    return VerifyResult.Errors; // done (T/O)
+                }
+
+                if (outcome == Outcome.Errors && vState.reporter.callSitesToExpand.Count == 0)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    return VerifyResult.BugFound; // done (error found)
+                }
+
+                if (outcome == Outcome.Errors)
+                {
+                    if (Stackscs.Count != 0) Stackscs.Clear();
+                    foreach (var scs in vState.reporter.callSitesToExpand)
+                    {
+                        Stackscs.Push(scs);
+                        openCallSites.Remove(scs);
+                        var svc = Expand(scs, null, true, true);
+                        if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                    }
+                }
+                else
+                {
+                    // outcome == Outcome.Correct
+                    Decision topDecision = null;
+                    SiState topState = SiState.SaveState(this, openCallSites);
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                    topState.ApplyState(this, ref openCallSites);
+                }
+            }
+
+            //vState.reporter.reportTraceIfNothingToExpand = false;
+
+            //Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
+
+            //timeGraph.ToDot();
+            //Console.Write("SplitSearch: ");
+            /*for (int i = 1; i <= 16; i++)
+            {
+                var sum = 0.0;
+                for (int j = 0; j< 5; j++) sum += timeGraph.ComputeTimes(i);
+                sum = sum / 5;
+
+                Console.Write("{0}\t", sum.ToString("F2"));
+            }
+            Console.WriteLine();*/
+
+            // TODO: return the relevant answer
+            return VerifyResult.Verified;
+        }
+
         // Comment TODO
         // MustReachSplitStyle
         //public Outcome SolvePartition(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
-        public VerifyResult SolvePartition(SoftPartition softPartition,
+        public VerifyResult SolvePartition_backtrack(SoftPartition softPartition,
             VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
         {
             partitions = new List<SoftPartition>();
@@ -710,6 +897,7 @@ namespace CoreLib
             {
                 // Lets split when the tree has become big enough
                 var size = di.ComputeSize();
+
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "blocktopk")
                 {
                         Console.WriteLine("Running block topk heuristic");
@@ -1414,7 +1602,7 @@ namespace CoreLib
             Console.WriteLine();
 
             solTime = 0;
-
+            
             // TODO: return the relevant answer
             return VerifyResult.Verified;
             //if (outcome == Outcome.Correct && reachedBound) return VerifyResult.Verified;
@@ -5430,7 +5618,7 @@ namespace CoreLib
 
 		public bool underapproximationMode;
 
-		public List<int> candidatesToExpand;
+		public List<StratifiedCallSite> candidatesToExpand;
         public List<StratifiedCallSite> callSitesToExpand;
         List<Tuple<int, int>> orderedStateIds;
 
