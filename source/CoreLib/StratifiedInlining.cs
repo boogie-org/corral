@@ -2836,7 +2836,8 @@ namespace CoreLib
 
 		private void assertVCForPartition(SoftPartition sp, VerificationState vState)
 		{
-            foreach(var scs in sp.blockedCandidates)
+            ProverInterface prover = vState.proverBookeeper.getMainProver();
+            foreach (var scs in sp.blockedCandidates)
             {
                 prover.Assert(scs.callSiteExpr, false);
             }
