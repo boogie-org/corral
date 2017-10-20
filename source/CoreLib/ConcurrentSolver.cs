@@ -210,6 +210,7 @@ namespace CoreLib
 		public int vcSize;
 		public int expansionCount;
         public StratifiedInlining.SiState siState;
+        public int treesize;
 		//public SummaryDB summaryDB;
 
 		// For making summary queries on the side
@@ -256,7 +257,7 @@ namespace CoreLib
             this.reporter = reporter;
             this.proverBookeeper = proverBookeeper;
 		}
-        
+       
 	}
 
 

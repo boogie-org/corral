@@ -660,25 +660,15 @@ namespace CoreLib
             }
         }
 
-        public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
-           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+        public Stack<StratifiedCallSite> Split(HashSet<StratifiedCallSite> openCallSites, VerificationState vstate) 
         {
-            partitions = new List<SoftPartition>();
-            Outcome outcome = Outcome.Inconclusive;
-            vState.reporter.reportTraceIfNothingToExpand = true;
-
-            solTime = 0;
-            int treesize = 0;
+            //StratifiedInliningErrorReporter reporter;
+            vstate.reporter.reportTraceIfNothingToExpand = true;
+            //int treesize = 0;
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<Decision>();
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
-
-            HashSet<StratifiedCallSite> openCallSites = softPartition.activeCandidates;
-
-            // Assert the VC in the new prover according to the parent callers, the blockedset and the mustreach set
-            // TODO: This method needs to be fixed for blocked and mustreachsets
-            OptimizedAssertVC(softPartition, vState, prover, proverStackBookkeeper);
-
+            var splitCandidates = new Stack<StratifiedCallSite>();
             var timeGraph = new TimeGraph();
 
             var indent = new Func<int, string>(i =>
@@ -716,44 +706,175 @@ namespace CoreLib
             var reachedBound = false;
 
             var tt = TimeSpan.Zero;
+            //int StackSize;
+            int count;
+            //var minVcStack = new Stack<StratifiedVC>();
+            //var vcScoreList = new List<Tuple<int, StratifiedVC>>();
+            //var saveScore = new Stack<Tuple<int, StratifiedVC>>();
+            var vcScoreIdealList = new List<StratifiedVC>();
+
+            SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            var Stackscs = new Stack<StratifiedCallSite>();
+            // reporter.getCexCallSites = new Stack<StratifiedCallSite>();
+            var CexCallSites = new Stack<StratifiedCallSite>();
+            //var Cexblocktopk = new Stack<StratifiedCallSite>();
+            SortedList<int, StratifiedVC> Cexblocktopk = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            var randomStack = new Stack<StratifiedCallSite>();
+            // Lets split when the tree has become big enough
+            var size = di.ComputeSize();
+            if ((vstate.treesize == 0 && size > 2) || (vstate.treesize != 0 && size > vstate.treesize * 2))
+            {
+                var st = DateTime.Now;
+
+                // find a node to split on
+                StratifiedVC maxVc = null;
+                int maxVcScore = 0;
+
+                var toRemove = new HashSet<StratifiedVC>();
+                var sizes = di.ComputeSubtrees();
+                var disj = di.ComputeNumDisjoint();
+
+                foreach (var vc in attachedVCInv.Keys)
+                {
+                    if (!di.VcExists(vc))
+                    {
+                        toRemove.Add(vc);
+                        continue;
+                    }
+
+                    var score = Math.Min(sizes[vc].Count, disj[vc]);
+                    if (score >= maxVcScore)
+                    {
+                        maxVc = vc;
+                        maxVcScore = score;
+                    }
+                }
+                toRemove.Iter(vc => attachedVCInv.Remove(vc));
+
+                var scs = attachedVCInv[maxVc];
+                Debug.Assert(!openCallSites.Contains(scs));
+
+                var desc = sizes[maxVc];
+                var cnt = 0;
+                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+
+                // Push & Block
+                MacroSI.PRINT("{0}>>> Pushing Block minmax({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                // stats.totalSplit++;
+                //var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                /*Push();
+                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));*/
+                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                splitCandidates.Push(scs);
+                applyDecisionToDI(DecisionType.BLOCK, maxVc);
+                vstate.treesize = di.ComputeSize(); // Make treesize global
+                tt += (DateTime.Now - st);
+            }
+            return splitCandidates;
+        }
+
+
+        public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
+           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+        {
+            partitions = new List<SoftPartition>();
+            Outcome outcome = Outcome.Inconclusive;
+            vState.reporter.reportTraceIfNothingToExpand = true;
+
+            solTime = 0;
+            //int treesize = 0;
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<Decision>();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+
+            HashSet<StratifiedCallSite> openCallSites = softPartition.activeCandidates;
+
+            // Assert the VC in the new prover according to the parent callers, the blockedset and the mustreach set
+            // TODO: This method needs to be fixed for blocked and mustreachsets
+            OptimizedAssertVC(softPartition, vState, prover, proverStackBookkeeper);
+
+            var timeGraph = new TimeGraph();
+
+            var indent = new Func<int, string>(i =>
+            {
+                var ret = "";
+                while (i > 0) { i--; ret += " "; }
+                return ret;
+            });
+
+            /*var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });*/
+
+            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
+            {
+                if (d == DecisionType.BLOCK)
+                {
+                    di.DeleteNode(n);
+                }
+                if (d == DecisionType.MUST_REACH)
+                {
+                    var disj = di.DisjointNodes(n);
+
+                    disj.Iter(m => di.DeleteNode(m));
+                }
+            });
+
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
+
+            var rand = new Random();
+            var reachedBound = false;
+
+            var tt = TimeSpan.Zero;
             int count;
             var minVcStack = new Stack<StratifiedVC>();
             var vcScoreIdealList = new List<StratifiedVC>();
             SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             var Stackscs = new Stack<StratifiedCallSite>();
-
+            var splitCandidates = new Stack<StratifiedCallSite>();
             HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>(softPartition.candidatesReachingRecBound);
 
             while (true)
             {
-                var size = di.ComputeSize();
+                // var size = di.ComputeSize();
 
-                StratifiedCallSite splitCand = null; // TODO: choose a split as per heuristic 
-
-                // check if we want to split here -- then simply create two softpartitions and return VerifyResult.Partitioned
-                if (splitCand != null)
+                // StratifiedCallSite splitCand = null; // TODO: choose a split as per heuristic 
+                splitCandidates = Split(openCallSites, vState);
+                while (splitCandidates.Count != 0)
                 {
-                    Console.WriteLine("Running minmax heuristic");
+                    // check if we want to split here -- then simply create two softpartitions and return VerifyResult.Partitioned
+                    var splitCand = splitCandidates.Pop();
+                    if (splitCand != null)
+                    {
+                        Console.WriteLine("Running minmax heuristic");
 
-                    // The Blocked partition
-                    HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
-                    HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
+                        // The Blocked partition
+                        HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
+                        HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
 
-                    blockedSet1.Add(splitCand);
-                    SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
-                    partitions.Add(newPartition1);
+                        blockedSet1.Add(splitCand);
+                        SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                        partitions.Add(newPartition1);
 
-                    // The MustReach partition
+                        // The MustReach partition
 
-                    HashSet<StratifiedCallSite> blockedSet2 = new HashSet<StratifiedCallSite>();
-                    HashSet<StratifiedCallSite> mustreachSet2 = new HashSet<StratifiedCallSite>();
+                        HashSet<StratifiedCallSite> blockedSet2 = new HashSet<StratifiedCallSite>();
+                        HashSet<StratifiedCallSite> mustreachSet2 = new HashSet<StratifiedCallSite>();
 
-                    mustreachSet2.Add(splitCand);
-                    SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
-                    partitions.Add(newPartition2);
+                        mustreachSet2.Add(splitCand);
+                        SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                        partitions.Add(newPartition2);
 
-                    return VerifyResult.Partitioned;
+                        return VerifyResult.Partitioned;
+                    }
                 }
 
                 MacroSI.PRINT_DEBUG("  - overapprox");
@@ -2715,8 +2836,16 @@ namespace CoreLib
 
 		private void assertVCForPartition(SoftPartition sp, VerificationState vState)
 		{
-			// TODO: Assert VC using the Mustreach/Block decisions
-		}
+            foreach(var scs in sp.blockedCandidates)
+            {
+                prover.Assert(scs.callSiteExpr, false);
+            }
+            foreach (var scs in sp.mustreachCandidates)
+            {
+                prover.Assert(scs.callSiteExpr, true);
+            }
+            //TODO: Assert VC using the Mustreach/Block decisions
+        }
 
         void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null)
         {
