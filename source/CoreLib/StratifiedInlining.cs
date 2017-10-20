@@ -2846,6 +2846,8 @@ namespace CoreLib
                 prover.Assert(scs.callSiteExpr, true);
             }
             //TODO: Assert VC using the Mustreach/Block decisions
+            sp.mustreachCandidates.Clear();
+            sp.blockedCandidates.Clear();
         }
 
         void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null)
