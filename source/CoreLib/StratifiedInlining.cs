@@ -2440,6 +2440,7 @@ namespace CoreLib
             prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true); 
             return ret;
         }
+
         public Tuple<VCExpr, List<Tuple<StratifiedVC, Block>>> AssertMustReachK(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
             var ret = new List<Tuple<StratifiedVC, Block>>();
@@ -2468,6 +2469,7 @@ namespace CoreLib
             var result = Tuple.Create(toassert, ret);
             return result;
         }
+
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
         {
@@ -2784,20 +2786,32 @@ namespace CoreLib
 		{
             // ProverStackBookkeeping p = null;
             //TODO: Assert VC using the Mustreach/Block decisions
-            // ProverInterface prover = p.getMainProver();
+            ProverInterface prover = proverStackBookkeeper.getMainProver();
             //ProverStackBookkeeping.getMainProver();
             Console.WriteLine("Finding a prover instance");
-            foreach (var scs in sp.blockedCandidates)
-            {
-                prover.Assert(scs.callSiteExpr, false);
-            }
-            foreach (var scs in sp.mustreachCandidates)
-            {
-                prover.Assert(scs.callSiteExpr, true);
-            }
 
-            sp.mustreachCandidates.Clear();
-            sp.blockedCandidates.Clear();
+            if (sp.Id == 0)
+                ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
+
+            foreach (var scs in sp.candidateUniverse)
+            {
+                if (!attachedVC.ContainsKey(scs))
+                    continue;
+
+                var svc = attachedVC[scs];
+                ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp);
+
+                if (sp.blockedCandidates.Contains(scs))
+                {
+                    prover.Assert(scs.callSiteExpr, false);
+                }
+
+                HashSet<Tuple<StratifiedVC, Block>> prevAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
+                if (sp.mustreachCandidates.Contains(scs))
+                {
+                    AssertMustReach(svc, prevAsserted); // TODO: prevAsserted needs to be fixed
+                }
+            }
         }
 
         void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null)
@@ -2833,6 +2847,9 @@ namespace CoreLib
             Debug.Assert(this.program == program);
 
             useConcurrentSolver = true;
+
+            // assert true to flush all one-time axioms, decls, etc
+            prover.Assert(VCExpressionGenerator.True, true);
 
             // Flush any axioms that came with the program before we start SI on this implementation
             prover.AssertAxioms();
@@ -3082,7 +3099,7 @@ namespace CoreLib
             */
 
 
-            program.Emit(new TokenTextWriter("dump.bpl"));
+            //program.Emit(new TokenTextWriter("dump.bpl"));
 
             if (res == VerifyResult.Verified)
                 return Outcome.Correct;

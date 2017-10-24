@@ -40,8 +40,10 @@ namespace CoreLib
 		public HashSet<StratifiedCallSite> blockedCandidates;
         public HashSet<StratifiedCallSite> mustreachCandidates;
 		public HashSet<StratifiedCallSite> candidateUniverse;  // the universe expands as we go deeper
+        public HashSet<HashSet<Tuple<StratifiedVC, Block>>> prevMustReachAssertedCandidates;
 
-		public HashSet<StratifiedCallSite> candidatesReachingRecBound;
+
+        public HashSet<StratifiedCallSite> candidatesReachingRecBound;
 
 		public HashSet<StratifiedCallSite> lastInlined;
 
@@ -123,7 +125,10 @@ namespace CoreLib
 
             candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
 
-			setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+            prevMustReachAssertedCandidates = new HashSet<HashSet<Tuple<StratifiedVC, Block>>>();
+
+
+            setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
 		private string printHashSet(HashSet<StratifiedCallSite> hs)
@@ -1778,7 +1783,7 @@ namespace CoreLib
 		public HierarchicalQueue(List<SoftPartition> entrySoftPartitions, QType qType, VerificationState vState) // candidates are all funct
 		{
 
-			Contract.Assert(entrySoftPartitions.Count == 1); // the other case has not been implemented
+			Contract.Assert(entrySoftPartitions.Count <= 1); // the other case has not been implemented
 
 			this.qType = qType;
 
