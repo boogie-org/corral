@@ -718,7 +718,7 @@ namespace CoreLib
             SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             var Stackscs = new Stack<StratifiedCallSite>();
-            //reporter.getCexCallSites = new Stack<StratifiedCallSite>();
+            //vState.reporter.getCexCallSites = new Stack<StratifiedCallSite>();
             var CexCallSites = new Stack<StratifiedCallSite>();
             SortedList<int, StratifiedVC> Cexblocktopk = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             var randomStack = new Stack<StratifiedCallSite>();
@@ -790,7 +790,7 @@ namespace CoreLib
             //int treesize = 0;
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<Decision>();
-            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+            //var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
 
             HashSet<StratifiedCallSite> openCallSites = softPartition.activeCandidates;
 
@@ -856,8 +856,6 @@ namespace CoreLib
                     var splitCand = splitCandidates.Pop();
                     if (splitCand != null)
                     {
-                        Console.WriteLine("Running minmax heuristic");
-
                         // The Blocked partition
                         HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
                         HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
@@ -2789,7 +2787,13 @@ namespace CoreLib
             ProverInterface prover = proverStackBookkeeper.getMainProver();
             //ProverStackBookkeeping.getMainProver();
             Console.WriteLine("Finding a prover instance");
-
+            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                sp.prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
             if (sp.Id == 0)
                 ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
 
@@ -2803,13 +2807,17 @@ namespace CoreLib
 
                 if (sp.blockedCandidates.Contains(scs))
                 {
+                    MacroSI.PRINT("Pushing Block blocktopk({0})", scs.callSite.calleeName);
+                  
                     prover.Assert(scs.callSiteExpr, false);
+                    sp.prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                 }
 
-                HashSet<Tuple<StratifiedVC, Block>> prevAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
+                // HashSet<Tuple<StratifiedVC, Block>> prevAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
                 if (sp.mustreachCandidates.Contains(scs))
                 {
-                    AssertMustReach(svc, prevAsserted); // TODO: prevAsserted needs to be fixed
+                    MacroSI.PRINT("Pushing MustReach({0})", scs.callSite.calleeName);
+                    sp.prevMustAsserted.Push(AssertMustReach(svc, PrevAsserted())); // TODO: prevAsserted needs to be fixed
                 }
             }
         }
@@ -5921,6 +5929,9 @@ namespace CoreLib
                             calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                             new CalleeCounterexampleInfo(calleeCounterexample, new List<object>());
                         }
+                        if (getCexCallSites == null)
+                            getCexCallSites = new Stack<StratifiedCallSite>();
+                        getCexCallSites.Push(scs);
                     }
                 }
                 if (svc.recordProcCallSites.ContainsKey(b) && (model != null || CommandLineOptions.Clo.UseProverEvaluate))

@@ -41,7 +41,7 @@ namespace CoreLib
         public HashSet<StratifiedCallSite> mustreachCandidates;
 		public HashSet<StratifiedCallSite> candidateUniverse;  // the universe expands as we go deeper
         public HashSet<HashSet<Tuple<StratifiedVC, Block>>> prevMustReachAssertedCandidates;
-
+        public Stack<List<Tuple<StratifiedVC, Block>>> prevMustAsserted;
 
         public HashSet<StratifiedCallSite> candidatesReachingRecBound;
 
