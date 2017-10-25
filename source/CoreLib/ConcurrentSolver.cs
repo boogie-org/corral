@@ -125,7 +125,7 @@ namespace CoreLib
 
             candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
 
-            prevMustReachAssertedCandidates = new HashSet<HashSet<Tuple<StratifiedVC, Block>>>();
+            prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
 
 
             setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
