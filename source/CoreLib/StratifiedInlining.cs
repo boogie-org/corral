@@ -926,11 +926,12 @@ namespace CoreLib
                 else
                 {
                     // outcome == Outcome.Correct
-                    Decision topDecision = null;
-                    SiState topState = SiState.SaveState(this, openCallSites);
+                    //Decision topDecision = null;
+                    //SiState topState = SiState.SaveState(this, openCallSites);
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
-                    topState.ApplyState(this, ref openCallSites);
+                    //topState.ApplyState(this, ref openCallSites);
+                    break;
                 }
             }
 
