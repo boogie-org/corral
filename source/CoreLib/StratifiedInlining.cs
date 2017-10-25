@@ -1164,6 +1164,61 @@ namespace CoreLib
                         tt += (DateTime.Now - st);
                     }
                 }
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "reverse")
+                {
+                    //Console.WriteLine("Running reverse heuristic");
+                    if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                    {
+                        var st = DateTime.Now;
+
+                        // find a node to split on
+                        StratifiedVC maxVc = null;
+                        int maxVcScore = 0;
+
+                        var toRemove = new HashSet<StratifiedVC>();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
+
+                        foreach (var vc in attachedVCInv.Keys)
+                        {
+                            if (!di.VcExists(vc))
+                            {
+                                toRemove.Add(vc);
+                                continue;
+                            }
+
+                            var score = Math.Min(sizes[vc].Count, disj[vc]);
+                            if (score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
+                        }
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+
+                        var scs = attachedVCInv[maxVc];
+                        Debug.Assert(!openCallSites.Contains(scs));
+
+                        var desc = sizes[maxVc];
+                        var cnt = 0;
+                        openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+
+                        // Push & Block
+                        MacroSI.PRINT("{0}>>> Pushing Must Reach Reverse({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                        stats.totalSplit++;
+                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                        Push();
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                        prevMustAsserted.Push(
+                          AssertMustReach(attachedVC[scs], PrevAsserted()));
+                        decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
+                        applyDecisionToDI(DecisionType.MUST_REACH, maxVc);
+                        treesize = di.ComputeSize();
+                        tt += (DateTime.Now - st);
+                    }
+                }
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "minmax-cex")
                 {
                     //Console.WriteLine("Running minmax counterexample heuristic");
@@ -2808,16 +2863,16 @@ namespace CoreLib
 
                 if (sp.blockedCandidates.Contains(scs))
                 {
-                    MacroSI.PRINT("Pushing Block blocktopk({0})", scs.callSite.calleeName);
+                    MacroSI.PRINT("Pushing Block ({0})", scs.callSite.calleeName);
                   
                     prover.Assert(scs.callSiteExpr, false);
-                    sp.prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                    //sp.prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                 }
 
                 // HashSet<Tuple<StratifiedVC, Block>> prevAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
                 if (sp.mustreachCandidates.Contains(scs))
                 {
-                    MacroSI.PRINT("Pushing MustReach({0})", scs.callSite.calleeName);
+                    MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
                     sp.prevMustAsserted.Push(AssertMustReach(svc, PrevAsserted())); // TODO: prevAsserted needs to be fixed
                 }
             }

@@ -645,7 +645,7 @@ namespace RefinementFuzzing
 
 		public static string error_msg;
 
-		public static bool constructExplorationGraph = true;
+		public static bool constructExplorationGraph = false;
 		public static Common.GraphUtil explorationGraph = new GraphUtil("abc.dot");
 		public static bool refreshExplorationGraph = true;
 		public static Dictionary<int, string> candidateNames = new Dictionary<int, string>();
