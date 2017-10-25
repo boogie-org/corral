@@ -861,7 +861,7 @@ namespace CoreLib
                         HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
 
                         blockedSet1.Add(splitCand);
-                        SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                        SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
                         partitions.Add(newPartition1);
 
                         // The MustReach partition
@@ -870,7 +870,7 @@ namespace CoreLib
                         HashSet<StratifiedCallSite> mustreachSet2 = new HashSet<StratifiedCallSite>();
 
                         mustreachSet2.Add(splitCand);
-                        SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.candidatesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
+                        SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
                         partitions.Add(newPartition2);
 
                         return VerifyResult.Partitioned;
