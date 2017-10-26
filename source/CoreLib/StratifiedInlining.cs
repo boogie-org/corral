@@ -2795,8 +2795,8 @@ namespace CoreLib
                     ls.Iter(tup => ret.Add(tup)));
                 return ret;
             });
-            if (sp.Id == 0)
-                ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
+            
+            ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
 
             foreach (var scs in sp.candidateUniverse)
             {
@@ -2928,7 +2928,7 @@ namespace CoreLib
             
             #region Eager inlining
             // Eager inlining 
-            for (int i = 1; i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++)
+            for (int i = 1; false && i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++)  // ask Akash
             {
                 var nextOpenCallSites = new HashSet<StratifiedCallSite>();
                 foreach (StratifiedCallSite scs in openCallSites)
@@ -5569,7 +5569,7 @@ namespace CoreLib
 
         void RemoveUnreachableNodes()
         {
-            Debug.Assert(Root != null);
+            Debug.Assert(Root != null);  // Ask Akash
 
             var reached = Decendants(Root);
 

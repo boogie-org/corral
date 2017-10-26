@@ -60,7 +60,7 @@ namespace RefinementFuzzing
 			return id;
 		}
 
-		public ConcurrentContext(StratifiedInlining vcgen, VerificationState vstate, SoftPartition spartition, int threadBudget, WaitHandle waitHandles, ProverInterface prover)
+		public ConcurrentContext(StratifiedInlining vcgen, VerificationState vstate, SoftPartition spartition, WaitHandle waitHandles, ProverInterface prover)
 		{
 			id = getNewThreadId();
 
@@ -69,8 +69,6 @@ namespace RefinementFuzzing
 			this.spartition = spartition;
 
 			vcgen.solver = new ConcurrentSolver(vcgen, vstate);
-
-			vstate.threadBudget = threadBudget;
 
 			this.waitHandles = waitHandles;
 
@@ -603,7 +601,7 @@ namespace RefinementFuzzing
 		public static bool useOptimizedProverStack = true;
 
 		public static bool isDistributed = false;
-		public static bool isConcurrent = true;
+		public static bool isConcurrent = false;
 
 		//public static bool vcWithLabels = true;
 
@@ -645,7 +643,7 @@ namespace RefinementFuzzing
 
 		public static string error_msg;
 
-		public static bool constructExplorationGraph = true;
+		public static bool constructExplorationGraph = false;
 		public static Common.GraphUtil explorationGraph = new GraphUtil("abc.dot");
 		public static bool refreshExplorationGraph = true;
 		public static Dictionary<int, string> candidateNames = new Dictionary<int, string>();
@@ -660,7 +658,7 @@ namespace RefinementFuzzing
 		public enum ThreadJoinStrategy { ContinueAfterFirstChildReturns, WaitForAllChildren };
 		public static ThreadJoinStrategy threadJoinStrategy = ThreadJoinStrategy.ContinueAfterFirstChildReturns;
 
-		public static bool estimateParallelism = true && !isConcurrent && !isDistributed;
+		public static bool estimateParallelism = false && !isConcurrent && !isDistributed;
 
 		public static bool instantlyPropagateSummaries = true;
 

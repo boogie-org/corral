@@ -13,7 +13,7 @@ using VC;
 
 namespace CoreLib
 {
-	public enum VerifyResult { Verified, Partitioned, BugFound, Errors, NoMoreConstraintPartition, Interrupted };
+	public enum VerifyResult { Verified, Partitioned, BugFound, Errors, Interrupted };
 
 	[Serializable()]
 	public class SoftPartition
@@ -49,8 +49,6 @@ namespace CoreLib
 
 		public static Dictionary<int, SoftPartition> id2SoftPartition = new Dictionary<int, SoftPartition>();
 
-		public int pendCount = 0;
-
 		public int Id { get { return id; } }
 
 		public Common.GraphNode graphNode;
@@ -83,7 +81,6 @@ namespace CoreLib
 					if (id != 0)
 					{
 						this.graphNode = new Common.GraphNode(id, this.lastInlined);
-						graphNode.backtrackCount = parent.pendCount;
 						RefinementFuzzing.Settings.explorationGraph.AddEdge(parent.graphNode, this.graphNode);
 					}
 					else
@@ -688,7 +685,7 @@ namespace CoreLib
 	{
 		//Dictionary<int, List<SoftPartition>> hierarchicalQueue = new Dictionary<int,List<SoftPartition>>();
 
-		HierarchicalQueue hierarchicalQueue;
+		WorkQueue workQueue;
 		Random rand = new Random();
 		//StratifiedInlining.FCallHandler calls;
 		StratifiedInlining vcgen;
@@ -702,8 +699,6 @@ namespace CoreLib
 			this.vState = vState;
 			//this.calls = vState.calls;
 		}
-
-		int currQLevel = 0;
 
 		public VerifyResult Solve(List<StratifiedCallSite> entryPoints) // for a child, the entryPoints are the "open" candidates
 		{
@@ -730,7 +725,7 @@ namespace CoreLib
 			return ret;
 		}
 
-		Tuple<Thread, RefinementFuzzing.ConcurrentContext> createThread(SoftPartition spawnForPartition, int childrenThreadBudget, WaitHandle waitHandle, SoftPartition parentPartition, int proverIndex)
+		Tuple<Thread, RefinementFuzzing.ConcurrentContext> createThread(SoftPartition spawnForPartition, WaitHandle waitHandle, SoftPartition parentPartition, int proverIndex)
 		{
 			StratifiedInlining childVCgen = null;
 			ProverStackBookkeeping bookKeeper = null;
@@ -758,7 +753,7 @@ namespace CoreLib
             // Put all of the necessary state into one object
             var ChildVState = new VerificationState(childErrReporter, childVCgen.proverStackBookkeeper);
 
-            RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, childrenThreadBudget, waitHandle, childVCgen.prover);
+            RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
 
 			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
 
@@ -805,7 +800,7 @@ namespace CoreLib
 			//Console.WriteLine("Spawning Threads. Press a key to continue...");
 			//Console.ReadKey();
 
-			RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, childrenThreadBudget, waitHandle, childVCgen.prover);
+			RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
 			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
 
 			return new Tuple<Thread, RefinementFuzzing.ConcurrentContext>(t, context);
@@ -851,45 +846,34 @@ namespace CoreLib
 			Contract.Assert(RefinementFuzzing.Settings.useConcurrentSummaryDB);
 			Contract.Assert(RefinementFuzzing.Settings.threadJoinStrategy == RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns);
 
-			hierarchicalQueue = new HierarchicalQueue(entryPartitions, HierarchicalQueue.QType.BFS, vState);
+            workQueue = new WorkQueue(entryPartitions, WorkQueue.QType.BFS, vState);
 
 			//ProverStackBookkeeping primaryProver = vcgen.proverStackBookkeeper;
 
 			SoftPartition s;
-			while ((s = hierarchicalQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
 			{
 				List<SoftPartition> partitions;
 
-				/*
+                /*
                 if (RefinementFuzzing.Settings.abortAllThreads)
                     return VerifyResult.Interrupted;
                 */
 
-				if (RefinementFuzzing.Settings.constructExplorationGraph)
-				{
-					lock (RefinementFuzzing.Settings.lockThis)
-						//using (RefinementFuzzing.Settings.timedLock.Lock()) 
-					{
-						s.graphNode.scheduledOnProverId = vcgen.proverStackBookkeeper.id;
-						s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
+                if (RefinementFuzzing.Settings.constructExplorationGraph)
+                {
+                    lock (RefinementFuzzing.Settings.lockThis)
+                    //using (RefinementFuzzing.Settings.timedLock.Lock()) 
+                    {
+                        s.graphNode.scheduledOnProverId = vcgen.proverStackBookkeeper.id;
+                        s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
 
-						if (RefinementFuzzing.Settings.refreshExplorationGraph)
-						{
-							RefinementFuzzing.Settings.explorationGraph.WriteDot();
-						}
-					}
-				}
-
-				if (s.level != currQLevel)
-				{
-					Console.Out.WriteLine("QLevel: " + s.level);
-					hierarchicalQueue.printQStatistics();
-					currQLevel = s.level;
-				}
-				else
-				{
-					Console.Write(".");
-				}
+                        if (RefinementFuzzing.Settings.refreshExplorationGraph)
+                        {
+                            RefinementFuzzing.Settings.explorationGraph.WriteDot();
+                        }
+                    }
+                }
 
 				Console.WriteLine(s.printSoftPartition());
 
@@ -1023,10 +1007,10 @@ namespace CoreLib
 							Contract.Assert(CexList.Count == 0);
 
 							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Not Returning prover (verified): " + workElem.Item2.id);
-							//StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+                            //StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
 
-							// Partition Verified
-							hierarchicalQueue.TaskCompleted(s);
+                            // Partition Verified
+                            workQueue.TaskCompleted(s);
 
 							// Don't return the original prover as only it can do pops
 							if (workElem.Item2 != originalProver)
@@ -1042,23 +1026,6 @@ namespace CoreLib
 
 							Console.Write("BCD");
 						}
-						else if (outcome == VerifyResult.NoMoreConstraintPartition)
-						{
-							Contract.Assert(CexList.Count != 0);
-
-							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Returning prover (no more partitions found): " + workElem.Item2.id);
-
-							// Don't return the original prover as only it can do pops
-							if (workElem.Item2 != originalProver)
-								StratifiedInlining.proverManager.ReturnProver(workElem.Item2, s.Id);
-							//else
-							//    worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, originalProver));
-
-							//StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
-
-							// Partition Verified
-							// hierarchicalQueue.TaskCompleted(s);
-						}
 						else if (outcome == VerifyResult.BugFound)
 						{
 							// Got an error with underapprox --- bug!
@@ -1073,18 +1040,6 @@ namespace CoreLib
 							Contract.Assert(partitions != null);
 
 							//StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, s.Id);
-
-							if (s.pendCount > RefinementFuzzing.Settings.pendingThreshold)
-							{
-								Helpers.ExtraTraceInformation("Pending threshold exceeded! Aborting.");
-
-								if (RefinementFuzzing.Settings.consoleRun)
-									Console.ReadKey();
-
-								System.Environment.Exit(-1);
-							}
-
-							hierarchicalQueue.TaskPended(s);
 
 							partitions.Iter<SoftPartition>(p => CexList.Add(p));
 
@@ -1103,7 +1058,6 @@ namespace CoreLib
 							}
 							else
 							{
-								partitions.Iter<SoftPartition>(p => hierarchicalQueue.TaskAdded(p)); // do sequentially
 								continue;
 							}
 
@@ -1123,11 +1077,7 @@ namespace CoreLib
 							// Exception -- Give up!
 							Contract.Assert(false);
 						}
-
-						// cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, 0, threadList, s);
-
-						hierarchicalQueue.SetLowestLevelAsReady(vcgen.proverStackBookkeeper);
-
+                        
 						// the parent should now get the prover back
 						//StratifiedInlining.proverManager.RequestProver(vcgen.proverStackBookkeeper, s.Id);
 					}
@@ -1185,27 +1135,14 @@ namespace CoreLib
 
 		public VerifyResult Solve2(List<SoftPartition> entryPartitions) // for a child, the entryPoints are the "open" candidates
 		{
-			//List<int> entryPoints = new List<int>();
-			//entryPoints.Add(0); // only '0' for the moment
+            int threadBudget = 1;
 
-			hierarchicalQueue = new HierarchicalQueue(entryPartitions, HierarchicalQueue.QType.BFS, vState);
+            workQueue = new WorkQueue(entryPartitions, WorkQueue.QType.BFS, vState);
 
 			SoftPartition s;
-			while ((s = hierarchicalQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
 			{
 				List<SoftPartition> partitions;
-
-				if (RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.RandomizedDepthFirst)
-				{
-					lock (RefinementFuzzing.Settings.lockThis)
-						//using (RefinementFuzzing.Settings.timedLock.Lock()) 
-					{
-						if (s.Id > 0)
-							RefinementFuzzing.Settings.softpartition2partitionCounts[s.Id] = RefinementFuzzing.Settings.softpartition2partitionCounts[s.parent.Id];
-						else
-							RefinementFuzzing.Settings.softpartition2partitionCounts[s.Id] = 0;
-					}
-				}
 
 				if (RefinementFuzzing.Settings.constructExplorationGraph)
 				{
@@ -1222,17 +1159,6 @@ namespace CoreLib
 					}
 				}
 
-				if (s.level != currQLevel)
-				{
-					Console.Out.WriteLine("QLevel: " + s.level);
-					hierarchicalQueue.printQStatistics();
-					currQLevel = s.level;
-				}
-				else
-				{
-					Console.Write(".");
-				}
-
 				Console.WriteLine(s.printSoftPartition());
 
 				if (RefinementFuzzing.Settings.PausedExecution)
@@ -1243,8 +1169,8 @@ namespace CoreLib
 
 				if (outcome == VerifyResult.Verified)
 				{
-					// Partition Verified
-					hierarchicalQueue.TaskCompleted(s);
+                    // Partition Verified
+                    workQueue.TaskCompleted(s);
 
 					if (RefinementFuzzing.Settings.estimateParallelism)
 					{
@@ -1270,50 +1196,22 @@ namespace CoreLib
 				{
 					Contract.Assert(partitions != null);
 
-					if (s.pendCount > RefinementFuzzing.Settings.pendingThreshold)
-					{
-						Helpers.ExtraTraceInformation("Pending threshold exceeded! Aborting.");
-
-						if (RefinementFuzzing.Settings.consoleRun)
-							Console.ReadKey();
-
-						System.Environment.Exit(-1);
-					}
-
-					hierarchicalQueue.TaskPended(s);
-
 					if (!RefinementFuzzing.Settings.isConcurrent)
-						partitions.Iter<SoftPartition>(p => hierarchicalQueue.TaskAdded(p));
-
-					/*
-					if (RefinementFuzzing.Settings.isDistributed)
-					{
-						if (RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.SaveFile)
-						{
-							foreach (SoftPartition sp in partitions)
-							{
-								DistributedContext context = new DistributedContext(vState, sp);
-								int retCode = RefinementFuzzing.Settings.RunAsChild("xyz" + (ctr++) + ".dat", context);
-							}
-						}
-					}
-					*/
-
+						partitions.Iter<SoftPartition>(p => workQueue.TaskAdded(p));
+                    
 					if (RefinementFuzzing.Settings.isConcurrent)
 					{
-						if (partitions.Count > 1 && vState.threadBudget > 1)
+						if (partitions.Count > 1)
 						{
 							int numThreadsSpawned;
 
-							numThreadsSpawned = (partitions.Count > vState.threadBudget) ? vState.threadBudget : partitions.Count;
-							int childrenThreadBudget = vState.threadBudget / numThreadsSpawned;
+							numThreadsSpawned = (partitions.Count -1 > threadBudget) ? threadBudget : partitions.Count - 1;
 
 							// Release prover -- we are spawning a thread and the parent will wait till it returns
 							ProverStackBookkeeping originalProver = vcgen.proverStackBookkeeper;
 							StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, s.Id);
 
 							WaitHandle[] handles = new WaitHandle[numThreadsSpawned];
-							//List<Thread> pendingThreads = new List<Thread>();
 
 							Dictionary<Thread, RefinementFuzzing.ConcurrentContext> threadList = new Dictionary<Thread, RefinementFuzzing.ConcurrentContext>();
 							Dictionary<int, Thread> currRunningThreadsDict = new Dictionary<int, Thread>();
@@ -1349,12 +1247,7 @@ namespace CoreLib
 
 									// Get the result fom the child
 									VerifyResult res = context.res;
-
-									//context.vcgen.proverStackBookkeeper.Pop();
-									//if (!(res != VerifyResult.Verified || context.vcgen.proverStackBookkeeper.Top() == s.Id))
-									//    Contract.Assert(res != VerifyResult.Verified || context.vcgen.proverStackBookkeeper.Top() == s.Id);
-
-
+                                    
 									if (context.vcgen.timeTaken > maxTime)
 										maxTime = context.vcgen.timeTaken;
 
@@ -1375,14 +1268,6 @@ namespace CoreLib
 											// Release prover (release it with the parent's as the thread did the job for the parent as the prover stack is so set up)
 											StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
 										}
-
-										/*
-										if (!RefinementFuzzing.Settings.useConcurrentSummaryDB)
-										{
-											// Merge the parent's summaries with that returned by the child
-											vState.summaryDB.Union(context.vstate.summaryDB, s.activeCandidates);
-										}
-										*/
 									}
 
 									if (RefinementFuzzing.Settings.threadJoinStrategy == RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns)
@@ -1404,41 +1289,12 @@ namespace CoreLib
 										// .VerifyResult outcome2 = context.vcgen.SolvePartition(s, context.vstate, out newPartitions); 
 										VerifyResult outcome2 = vcgen.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
 
-										if (RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.RandomizedDepthFirst && newPartitions.Count > 1)
-										{
-											int min = RefinementFuzzing.Settings.SoftPartitionBound;
-
-											if (min > 1)
-											{
-												int numPartitions = newPartitions.Count;
-												List<SoftPartition> selectedSet = new List<SoftPartition>();
-
-												for (int i = 0; i < min; i++)
-												{
-													int sel = rand.Next(newPartitions.Count);
-													SoftPartition selectedPartition = newPartitions[sel];
-
-													newPartitions.RemoveAt(sel);
-													selectedSet.Add(selectedPartition);
-												}
-
-												newPartitions = selectedSet;
-											}
-										}
-
 										if (RefinementFuzzing.Settings.estimateParallelism)
 										{
 											s.graphNode.potentialParallelTime += solTime2;
 										}
 
-										if (outcome2 == VerifyResult.NoMoreConstraintPartition)
-										{
-											// no work to do --- release thread and prover
-											StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
-
-											continue;
-										}
-										else if (outcome2 == VerifyResult.BugFound)
+										if (outcome2 == VerifyResult.BugFound)
 										{
 											cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
 
@@ -1446,10 +1302,6 @@ namespace CoreLib
 										}
 										else if (outcome2 == VerifyResult.Verified)
 										{
-											//cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun);
-
-											//return VerifyResult.Verified;
-
 											StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
 
 											break;
@@ -1517,7 +1369,7 @@ namespace CoreLib
 									RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
 
 									int tokenid = vcgen.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
-									Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, childrenThreadBudget, handles[indexInRunningThreads], s, nextThreadToRun);
+									Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s, nextThreadToRun);
 									vcgen.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
 									threadList[tuple.Item1] = tuple.Item2;
 
@@ -1533,60 +1385,13 @@ namespace CoreLib
 										break;
 								}
 							}
-
-
-							/*
-                            threadList.Keys.Iter<Thread>(n => pendingThreads.Add(n));
-
-                            foreach (Thread t in threadList.Keys)
-                            {
-                                RefinementFuzzing.ConcurrentContext context = threadList[t];
-                                t.Join();
-                                pendingThreads.Remove(t);
-                                context.vcgen.Close();
-                                Console.WriteLine("Join done");
-                                vState.summaryDB.Union(context.vstate.summaryDB, s.activeCandidates);
-
-                                VerifyResult res = context.res;
-
-                                if (res == VerifyResult.BugFound)
-                                {
-                                    pendingThreads.Iter<Thread>(n => n.Abort());
-
-                                    if (context.vcgen.timeTaken > maxTime)
-                                        maxTime = context.vcgen.timeTaken;
-
-                                    totalNumCalls += context.vcgen.numCalls;
-
-                                    vcgen.timeTaken += maxTime;
-                                    vcgen.numCalls += totalNumCalls;
-                                    vcgen.threadsSpawned += partitions.Count;
-
-                                    return VerifyResult.BugFound;
-                                }
-                                else
-                                {
-                                    Contract.Assert(res == VerifyResult.Verified);
-
-                                    if (context.vcgen.timeTaken > maxTime)
-                                        maxTime = context.vcgen.timeTaken;
-
-                                    totalNumCalls += context.vcgen.numCalls;
-                                }
-                            }
-                             */
-
+                            
 							cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
-
-							hierarchicalQueue.SetLowestLevelAsReady(vcgen.proverStackBookkeeper);
-							//hierarchicalQueue.TaskCompleted(spawnForPartition);
 
 							// the parent should now get the prover back
 							StratifiedInlining.proverManager.RequestProver(vcgen.proverStackBookkeeper, s.Id);
 
 						}
-						else
-							partitions.Iter<SoftPartition>(p => hierarchicalQueue.TaskAdded(p));
 					}
 				}
 				else if (outcome == VerifyResult.Errors)
@@ -1603,49 +1408,6 @@ namespace CoreLib
 			}
 
 			return VerifyResult.Verified;
-		}
-
-		private List<SoftPartition> SelectedSet(List<SoftPartition> partitions, int count)
-		{
-			Contract.Assert(RefinementFuzzing.Settings.SoftPartitionBound == 2);
-			List<SoftPartition> selectedSet = new List<SoftPartition>();
-
-			if (count == 1)
-			{
-				selectedSet.Add(partitions[0]);
-				return selectedSet;
-			}
-
-			if (RefinementFuzzing.Settings.costFunction == RefinementFuzzing.Settings.CostFunction.CexSimilarity)
-			{
-				int maxDist = 0;
-				Tuple<SoftPartition, SoftPartition> minCostPair = null;
-
-				// find min-cost for all pairs
-
-				foreach (SoftPartition c1 in partitions)
-					foreach (SoftPartition c2 in partitions)
-					{
-						if (c1 == c2) continue;
-
-						IEnumerable<StratifiedCallSite> intersetSet = c1.lastInlined.Intersect<StratifiedCallSite>(c2.lastInlined);
-						IEnumerable<StratifiedCallSite> symDiff = (c1.lastInlined.Except(intersetSet)).Union<StratifiedCallSite>(c2.lastInlined.Except(intersetSet));
-
-						if (maxDist < symDiff.Count())
-						{
-							maxDist = symDiff.Count();
-							minCostPair = new Tuple<SoftPartition, SoftPartition>(c1, c2);
-						}
-					}
-
-
-				selectedSet.Add(minCostPair.Item1);
-				selectedSet.Add(minCostPair.Item2);
-
-				return selectedSet;
-			}
-
-			return null;
 		}
 
 		private void cleanup(Dictionary<int, Thread> currRunningThreadsDict, WaitHandle[] handles, double maxTime, int totalNumCalls, int numThreadsSpawned, Dictionary<Thread, RefinementFuzzing.ConcurrentContext> threadList, SoftPartition s)
@@ -1741,17 +1503,17 @@ namespace CoreLib
 		}
 	}
 
-	class HierarchicalQueue
+	class WorkQueue
 	{
-		private Dictionary<int, List<SoftPartition>> readyQ = new Dictionary<int, List<SoftPartition>>();
-		private Dictionary<int, List<SoftPartition>> pendingQ = new Dictionary<int, List<SoftPartition>>();
+        private List<SoftPartition> readyQ = new List<SoftPartition>();
+		//private Dictionary<int, List<SoftPartition>> pendingQ = new Dictionary<int, List<SoftPartition>>();
 
 		public enum QType { BFS, DFS };
 
 		private QType qType;
 
-		int currentLevel = 0;
-		int baseLevel = 0;  // this is the level from which the queue starts (for spawned threads, it will not be zero)
+		//int currentLevel = 0;
+		//int baseLevel = 0;  // this is the level from which the queue starts (for spawned threads, it will not be zero)
 
 		/*
         public HierarchicalQueue(List<int> entryPoints, QType qType, StratifiedInlining.VerificationState vState) // candidates are all funct
@@ -1780,166 +1542,40 @@ namespace CoreLib
         }
          * */
 
-		public HierarchicalQueue(List<SoftPartition> entrySoftPartitions, QType qType, VerificationState vState) // candidates are all funct
+		public WorkQueue(List<SoftPartition> entrySoftPartitions, QType qType, VerificationState vState) // candidates are all funct
 		{
 
-			Contract.Assert(entrySoftPartitions.Count <= 1); // the other case has not been implemented
+			Contract.Assert(entrySoftPartitions.Count >= 1); // the other case has not been implemented
 
 			this.qType = qType;
 
-			int minLevel = 0xffffff;
-			entrySoftPartitions.Iter<SoftPartition>(n => { minLevel = (minLevel > n.level) ? n.level : minLevel; });
-			baseLevel = minLevel;
-			currentLevel = minLevel;
-
-			readyQ[baseLevel] = new List<SoftPartition>();
-			pendingQ[baseLevel] = new List<SoftPartition>();
-
-			entrySoftPartitions.Iter<SoftPartition>(n => { readyQ[baseLevel].Add(n); });
+			entrySoftPartitions.Iter<SoftPartition>(n => { readyQ.Add(n); });
 		}
 
 		public void printQStatistics()
 		{
 			Console.WriteLine();
 			Console.WriteLine("level: (ReadyQ, PendingQ)");
-			for (int i = baseLevel; i <= currentLevel; i++)
-			{
-				Console.Write(i + "(" + readyQ[i].Count + ", " + pendingQ[i].Count + ")");
-				Console.Write(" [PendCounts: ");
-				foreach (SoftPartition p in pendingQ[i])
-					Console.Write(p.pendCount + ", ");
-				Console.WriteLine("]");
-			}
+			Console.Write("(" + readyQ.Count + ")");
+		    Console.WriteLine("]");
 			Console.WriteLine();
 		}
 
 		public SoftPartition getNextPartition(ProverStackBookkeeping bookKeeper)
 		{
-			if (qType == QType.BFS)
-				return getNextPartitionBFS(bookKeeper);
-			else if (qType == QType.DFS)
-				return getNextPartitionDFS();
-			else
-			{
-				Contract.Assert(false); // unreachable code
-				return null;
-			}
-		}
-
-		private SoftPartition getNextPartitionBFS(ProverStackBookkeeping bookKeeper)
-		{
-			if (readyQ[currentLevel] == null)
-			{
-				Contract.Assert(false); // unreachable code
-			}
-
-			if (readyQ[currentLevel].Count() == 0)
-			{
-				if (pendingQ[currentLevel].Count() > 0) // everything at this level is pended
-				{
-					Contract.Assert(readyQ[currentLevel + 1].Count() > 0);
-
-					currentLevel++;
-
-					SoftPartition sf = readyQ[currentLevel][0];
-					readyQ[currentLevel].Remove(sf);
-					return sf;
-				}
-				else if (pendingQ[currentLevel].Count() == 0) // no ready and no pending --- finished this level
-				{
-					if (currentLevel == baseLevel)
-					{
-						// reached topmost level --- done!
-						return null;
-					}
-
-					currentLevel--;
-
-					// Move all pended tasks in upper level to ready queue
-					foreach (SoftPartition s in pendingQ[currentLevel])
-					{
-						readyQ[currentLevel].Add(s);
-
-						if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
-							bookKeeper.stalePartitions.Add(s); // the lower level would have generated new summaries
-					}
-
-					pendingQ[currentLevel].Clear();
-
-					SoftPartition sf = readyQ[currentLevel][0];
-					readyQ[currentLevel].Remove(sf);
-					return sf;
-				}
-				else
-					Contract.Assert(false); // unreachable code
-			}
-			else
-			{
-				// return the next partition at this level
-				List<SoftPartition> rq = readyQ[currentLevel];
-
-				SoftPartition sf = rq[0];
-				rq.Remove(sf);
-				return sf;
-			}
-
-			Contract.Assert(false); // unreachable code
-			return null;
-		}
-
-		private SoftPartition getNextPartitionDFS()
-		{
-			Contract.Assert(false); // unimplemented
-			return null;
-		}
-
-		public void SetLowestLevelAsReady(ProverStackBookkeeping bookKeeper)
-		{
-			// Move all pended tasks in upper level to ready queue
-			foreach (SoftPartition s in pendingQ[currentLevel])
-			{
-				readyQ[currentLevel].Add(s);
-				//s.stale = true;
-
-				if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
-					bookKeeper.stalePartitions.Add(s);
-
-			}
-			pendingQ[currentLevel].Clear();
-		}
+            SoftPartition s = readyQ.First();
+            readyQ.Remove(s);
+            return s;
+        }
 
 		public void TaskCompleted(SoftPartition s)
 		{
-			Contract.Assert(currentLevel == s.level);
-
-			readyQ[currentLevel].Remove(s);
-		}
-
-		public void TaskPended(SoftPartition s)
-		{
-			Contract.Assert(currentLevel == s.level);
-
-			readyQ[currentLevel].Remove(s);
-			pendingQ[currentLevel].Add(s);
-
-			s.pendCount++;
+			readyQ.Remove(s);
 		}
 
 		public void TaskAdded(SoftPartition s)
 		{
-			Contract.Assert((currentLevel + 1) == s.level);
-
-			List<SoftPartition> rq;
-			bool present = readyQ.TryGetValue(currentLevel + 1, out rq);
-
-			// "open up" the queues for the next level (if req)
-			if (!present)
-			{
-				rq = readyQ[currentLevel + 1] = new List<SoftPartition>();
-				pendingQ[currentLevel + 1] = new List<SoftPartition>();
-			}
-
-			rq.Add(s);
+			readyQ.Add(s);
 		}
 	}
 }
