@@ -67,12 +67,12 @@ CmdRule
 //Exclude methods such as RtlFreeUnicodeString that free fields
 ProcedureRule
 {
-    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
+    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p : int);
 }
 -->
 {
-    validFree[p1] := if (p1 == 0) then validFree[p1] else false;
-    call aliases(p1);
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
 }
 
 
