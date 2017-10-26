@@ -2652,7 +2652,8 @@ namespace CoreLib
 		public override Outcome VerifyImplementation(Implementation/*!*/ impl, VerifierCallback/*!*/ callback) {
 			Debug.Assert(QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint"));
 
-			if(BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel2")
+            // cba.Util.BoogieVerify.options.StratifiedInlining == 100 implies that it is running the counterexample trace
+            if (BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel2" && cba.Util.BoogieVerify.options.StratifiedInlining != 100)
 				return VerifyImplementationConcurrent(impl, callback);
 			else
 				return VerifyImplementationSI(impl, callback);
@@ -2923,25 +2924,7 @@ namespace CoreLib
                 //aTimer.Elapsed += OnTimedEvent;
                 aTimer.Enabled = true;
             }
-
-
             
-            #region Eager inlining
-            // Eager inlining 
-            for (int i = 1; false && i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++)  // ask Akash
-            {
-                var nextOpenCallSites = new HashSet<StratifiedCallSite>();
-                foreach (StratifiedCallSite scs in openCallSites)
-                {
-                    if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound)) continue;
-
-                    var ss = Expand(scs);
-                    if (ss != null) nextOpenCallSites.UnionWith(ss.CallSites);
-                }
-                openCallSites = nextOpenCallSites;
-            }
-            #endregion
-
             #region Repopulate Call Tree
             if (cba.Util.BoogieVerify.options.CallTree != null && di.disabled)
             {
@@ -3361,7 +3344,7 @@ namespace CoreLib
             StratifiedVC ret = null;
             ProverInterface currProver;
 
-            if (useConcurrentSolver)
+            if (useConcurrentSolver && cba.Util.BoogieVerify.options.StratifiedInlining != 100)
                 currProver = proverStackBookkeeper.getMainProver();
             else
                 currProver = prover;
