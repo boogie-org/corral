@@ -41,7 +41,7 @@ namespace CoreLib
         public HashSet<StratifiedCallSite> mustreachCandidates;
 		public HashSet<StratifiedCallSite> candidateUniverse;  // the universe expands as we go deeper
         public HashSet<HashSet<Tuple<StratifiedVC, Block>>> prevMustReachAssertedCandidates;
-        public Stack<List<Tuple<StratifiedVC, Block>>> prevMustAsserted;
+        public HashSet<Tuple<StratifiedVC, Block>> prevMustAsserted;
 
         public HashSet<StratifiedCallSite> candidatesReachingRecBound;
 
@@ -122,9 +122,8 @@ namespace CoreLib
 
             candidatesThatReachingRecBound.Iter<StratifiedCallSite>(n => candidatesReachingRecBound.Add(n));
 
-            prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
-
-
+            prevMustAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
+            
             setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 

@@ -2847,8 +2847,7 @@ namespace CoreLib
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
-                sp.prevMustAsserted.ToList().Iter(ls =>
-                    ls.Iter(tup => ret.Add(tup)));
+                sp.prevMustAsserted.Iter(ls => ret.Add(ls));
                 return ret;
             });
             
@@ -2874,7 +2873,7 @@ namespace CoreLib
                 if (sp.mustreachCandidates.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
-                    sp.prevMustAsserted.Push(AssertMustReach(svc, PrevAsserted())); // TODO: prevAsserted needs to be fixed
+                    AssertMustReach(svc, PrevAsserted()).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
                 }
             }
         }
@@ -5607,7 +5606,7 @@ namespace CoreLib
 
         void RemoveUnreachableNodes()
         {
-            Debug.Assert(Root != null);  // Ask Akash
+            Debug.Assert(Root != null);
 
             var reached = Decendants(Root);
 
