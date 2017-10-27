@@ -661,16 +661,15 @@ namespace CoreLib
             }
         }
 
-        public Stack<StratifiedCallSite> Split(HashSet<StratifiedCallSite> openCallSites, VerificationState vstate) 
+        public HashSet<StratifiedCallSite> Split(HashSet<StratifiedCallSite> openCallSites, VerificationState vstate) 
         {
-            Console.WriteLine("Splitting decision");
             //StratifiedInliningErrorReporter reporter;
             vstate.reporter.reportTraceIfNothingToExpand = true;
             //int treesize = 0;
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<Decision>();
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
-            var splitCandidates = new Stack<StratifiedCallSite>();
+            var splitCandidates = new HashSet<StratifiedCallSite>();
             var timeGraph = new TimeGraph();
 
             var indent = new Func<int, string>(i =>
@@ -770,7 +769,7 @@ namespace CoreLib
                 /*Push();
                 backtrackingPoints.Push(SiState.SaveState(this, openCallSites));*/
                 prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                splitCandidates.Push(scs);
+                splitCandidates.Add(scs);
                 applyDecisionToDI(DecisionType.BLOCK, maxVc);
                 vstate.treesize = di.ComputeSize(); // Make treesize global
                 tt += (DateTime.Now - st);
@@ -841,7 +840,7 @@ namespace CoreLib
             SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
             var Stackscs = new Stack<StratifiedCallSite>();
-            var splitCandidates = new Stack<StratifiedCallSite>();
+            var splitCandidates = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>(softPartition.candidatesReachingRecBound);
 
             while (true)
@@ -850,12 +849,16 @@ namespace CoreLib
 
                 // StratifiedCallSite splitCand = null; // TODO: choose a split as per heuristic 
                 splitCandidates = Split(openCallSites, vState);
-                while (splitCandidates.Count != 0)
-                {
+                if (splitCandidates.Count != 0)
+                { 
+                    Debug.Assert(splitCandidates.Count == 1); // top-k heuristic not handled yet
+                    
                     // check if we want to split here -- then simply create two softpartitions and return VerifyResult.Partitioned
-                    var splitCand = splitCandidates.Pop();
+                    var splitCand = splitCandidates.Last();
                     if (splitCand != null)
                     {
+                        MacroSI.PRINT_DEBUG("Splitting decision on " + splitCand);
+
                         // The Blocked partition
                         HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
                         HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
@@ -872,6 +875,8 @@ namespace CoreLib
                         mustreachSet2.Add(splitCand);
                         SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
                         partitions.Add(newPartition2);
+                        
+                        MacroSI.PRINT_DEBUG("parent sp: " + softPartition.Id + "; children: " + newPartition1.Id + ", " + newPartition2.Id);
 
                         return VerifyResult.Partitioned;
                     }
@@ -931,6 +936,7 @@ namespace CoreLib
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                     //topState.ApplyState(this, ref openCallSites);
+                    MacroSI.PRINT_DEBUG("    Returning SolvePartition_parallel with VERIFIED  ");
                     break;
                 }
             }
