@@ -65,9 +65,63 @@ CmdRule
 
 //Any stub *[fF]ree* is considered a free
 //Exclude methods such as RtlFreeUnicodeString that free fields
+//ProcedureRule
+//{
+//    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p : int);
+//}
+//-->
+//{
+//    validFree[p] := if (p == 0) then validFree[p] else false;
+//    call aliases(p);
+//}
+
+//Narrowing free routines to only those that are known (10/30/17)
+//free, _freea, _free_dbg, 
+//ExFreePool, ExFreePoolWithTag, 
+//Seen in true bugs: IoFreeMdl, 
+//Not seen in true bugs: 
+//IoFreeIrp
+//LocalFree/GlobalFree: frees if the return is NULL (but used in many places without return)
+//HeapFree(h, o, p): if the return is non-zero, then frees the 3rd arg
+//VirtualFree:3 params/VirtualFreeEx:4 params. return non-zero for succes
+//Not exposed in MSDN: SmfFreeMemory
+//
+
 ProcedureRule
 {
-    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p : int);
+    //free is a Boogie keyword
+    procedure  {:#NameMatches "^[fF]ree$"} builtin_free({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    return;
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} ExFreePool({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} ExFreePoolWithTag({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} IoFreeMdl({:pointer} p : int);
 }
 -->
 {
@@ -76,4 +130,36 @@ ProcedureRule
 }
 
 
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} IoFreeIrp({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+
+ProcedureRule
+{
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366730(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} LocalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+}
+
+ProcedureRule
+{
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} GlobalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+}
 
