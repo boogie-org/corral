@@ -404,6 +404,7 @@ namespace AvHarnessInstrumentation
                     .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
                     .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
                     .Iter(d => d.AddAttribute("entrypoint"));
+                Options.useProvidedEntryPoints = true;
             }
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
