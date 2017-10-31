@@ -192,7 +192,7 @@ namespace FastAVN
                     }
                     if (entryPointExcludes != null)
                     {
-                        entryPointExcludes.Iter(s => avHarnessInstrArgs += string.Format("/entryPointExcludes:{0}", s));
+                        entryPointExcludes.Iter(s => avHarnessInstrArgs += string.Format("/entryPointExcludes:{0} ", s));
                     }
 
                     // Run harness instrumentation    
