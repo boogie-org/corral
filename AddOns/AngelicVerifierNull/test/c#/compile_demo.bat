@@ -23,7 +23,7 @@ copy ..\poirot_stubs.bpl . > NUL
 REM set BCTEXE=..\..\..\..\..\..\bct\Binaries\BytecodeTranslator.exe
 set BCTCLEANUPEXE=..\..\..\..\..\bin\Debug\BctCleanup.exe
 set AVNEXE=..\..\..\AngelicVerifierNull\bin\Debug\AngelicVerifierNull.exe
-set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:noFilters /EE:onlyDisplayAliasingInPre- /sdv
+set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:noFilters /EE:onlyDisplayAliasingInPre-
 set AVHARNESS=..\..\..\AvHarnessInstrumentation\bin\Debug\AvHarnessInstrumentation.exe
 if "%2"=="/dll" goto dllfile
 if "%3"=="/dll" goto dllfile
@@ -98,12 +98,6 @@ findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
 
-rm defect.tt
-cp Trace0.tt defect.tt
-echo \\shuvendoZ440\sdvdefect\sdvdefect defect.tt 
-\\shuvendoZ440\sdvdefect\sdvdefect defect.tt 
-
-
 :end
 if not exist TestProgram.bpl goto finish
 
@@ -113,7 +107,6 @@ echo Running AVN on TestProgram.bpl ...
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
-
 
 :finish
 cd ..
