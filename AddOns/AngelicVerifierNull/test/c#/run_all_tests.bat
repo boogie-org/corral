@@ -1,4 +1,3 @@
-
 @echo off
 if not defined BCTEXE goto undefined
 goto begin
@@ -9,8 +8,7 @@ goto finish
 
 :begin 
 if exist Output del Output
-:for %%d in (As As2 As3 Args ex1 ex2 listsum listsum2 foreach foreach2 doublequestion ComplexExpr Set String) do (
-for %%d in (As As2 As3 Args ex1  listsum2 foreach foreach2 doublequestion ComplexExpr Set String) do (
+for %%d in (As As2 As3 Args ex1 ex2 listsum listsum2 foreach foreach2 doublequestion ComplexExpr Set String) do (
 	echo ****************** %%d ****************** 
 	call compile_and_run.bat %%d %1 %2
 )

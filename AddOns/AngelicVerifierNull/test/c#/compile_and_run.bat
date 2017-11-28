@@ -55,8 +55,7 @@ if exist test.bpl del test.bpl
 if exist testClean.bpl del testClean.bpl
 
 echo Running BCT ...
-:call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT% Stubs.dll > ErrorLog
-call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT%  > ErrorLog
+call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT% Stubs.dll > ErrorLog
 if not exist test.bpl goto bcterror
 copy test.bpl testClean.bpl > NUL
 if "%2"=="/nocleanup" goto harness
