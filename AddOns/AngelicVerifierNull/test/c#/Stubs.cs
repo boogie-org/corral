@@ -32,6 +32,7 @@ namespace System {
 
   namespace Threading {
     public class WaitHandle : MarshalByRefObject, IDisposable {
+      /*
       public virtual bool WaitOne() {// This method *is* a stub for System.Threading.WaitHandle.WaitOne
         var t = this.GetType();
         if (t == typeof(ManualResetEvent))
@@ -44,7 +45,7 @@ namespace System {
           Contract.Assume(false);
         return true;
       }
-
+      */
       public void Dispose() {}
     }
 
