@@ -86,11 +86,13 @@ CmdRule
 //VirtualFree:3 params/VirtualFreeEx:4 params. return non-zero for succes
 //Not exposed in MSDN: SmfFreeMemory
 //
+//Add rules so that SDV can pick them up (sdv_ExFreePool) 
 
 ProcedureRule
 {
     //free is a Boogie keyword
     procedure  {:#NameMatches "^[fF]ree$"} builtin_free({:pointer} p : int);
+    procedure  {:#NameMatches "^sdv_[fF]ree$"} builtin_free({:pointer} p : int);
 }
 -->
 {
@@ -111,7 +113,27 @@ ProcedureRule
 
 ProcedureRule
 {
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_ExFreePool({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+ProcedureRule
+{
     procedure {:#ReplaceImplementation}  {:#NoImplementation} ExFreePoolWithTag({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_ExFreePoolWithTag({:pointer} p : int);
 }
 -->
 {
@@ -129,10 +151,30 @@ ProcedureRule
     call aliases(p);
 }
 
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_IoFreeMdl({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
 
 ProcedureRule
 {
     procedure {:#ReplaceImplementation}  {:#NoImplementation} IoFreeIrp({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_IoFreeIrp({:pointer} p : int);
 }
 -->
 {
@@ -154,8 +196,30 @@ ProcedureRule
 
 ProcedureRule
 {
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366730(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_LocalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+}
+
+ProcedureRule
+{
     //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
     procedure {:#ReplaceImplementation}  {:#NoImplementation} GlobalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+}
+
+ProcedureRule
+{
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_GlobalFree({:pointer} p : int) returns (r:int);
 }
 -->
 {
