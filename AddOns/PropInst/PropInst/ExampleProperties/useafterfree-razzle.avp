@@ -113,7 +113,8 @@ ProcedureRule
 
 ProcedureRule
 {
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_ExFreePool({:pointer} p : int);
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_ExFreePool({:pointer} p : int);
 }
 -->
 {
@@ -133,7 +134,8 @@ ProcedureRule
 
 ProcedureRule
 {
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_ExFreePoolWithTag({:pointer} p : int);
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}   sdv_ExFreePoolWithTag({:pointer} p : int);
 }
 -->
 {
@@ -153,7 +155,8 @@ ProcedureRule
 
 ProcedureRule
 {
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_IoFreeMdl({:pointer} p : int);
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_IoFreeMdl({:pointer} p : int);
 }
 -->
 {
@@ -174,7 +177,8 @@ ProcedureRule
 
 ProcedureRule
 {
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_IoFreeIrp({:pointer} p : int);
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_IoFreeIrp({:pointer} p : int);
 }
 -->
 {
@@ -196,8 +200,9 @@ ProcedureRule
 
 ProcedureRule
 {
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
     //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366730(v=vs.85).aspx
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_LocalFree({:pointer} p : int) returns (r:int);
+    procedure {:#ReplaceImplementation}   sdv_LocalFree({:pointer} p : int) returns (r:int);
 }
 -->
 {
@@ -218,8 +223,9 @@ ProcedureRule
 
 ProcedureRule
 {
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
     //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
-    procedure {:#ReplaceImplementation}  {:#NoImplementation} sdv_GlobalFree({:pointer} p : int) returns (r:int);
+    procedure {:#ReplaceImplementation}   sdv_GlobalFree({:pointer} p : int) returns (r:int);
 }
 -->
 {
