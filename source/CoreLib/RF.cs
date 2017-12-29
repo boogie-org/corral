@@ -169,17 +169,12 @@ namespace RefinementFuzzing
 			List<SoftPartition> entryPartitions = new List<SoftPartition>();
 			entryPartitions.Add(spartition);
 
-            double solTime2 = 0;
-            List<SoftPartition> newPartitions = new List<SoftPartition>();
+			//lock (RefinementFuzzing.Settings.lockThis)
+			{
+				res = vcgen.solver.Solve(entryPartitions);
+			}
 
-            //lock (RefinementFuzzing.Settings.lockThis)
-            {
-				//res = vcgen.solver.Solve(entryPartitions, this.vstate);
-                res = vcgen.SolvePartition(spartition, vstate, out newPartitions, out solTime2, vcgen.proverStackBookkeeper, null, 1);
-            }
-
-            
-			/*if (res == VerifyResult.Errors)
+			if (res == VerifyResult.Errors)
 			{
 				Console.WriteLine("Prover Error: " + RefinementFuzzing.Settings.error_msg);
 				Contract.Assert(false);
@@ -187,7 +182,7 @@ namespace RefinementFuzzing
 			else
 			{
 				RefinementFuzzing.Settings.error_msg = "";
-			}*/
+			}
 
 			RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, spartition.Id, "ProcessContext", "Returning thread: " + id);
 
@@ -210,7 +205,7 @@ namespace RefinementFuzzing
 				RefinementFuzzing.Settings.globalThreadList.Add(oThread, context);
 			}
 
-			//RefinementFuzzing.Settings.WritePrimaryLog(context.vcgen.proverStackBookkeeper.id, context.spartition.Id, "SpawnThread", "Starting thread: " + context.id);
+			RefinementFuzzing.Settings.WritePrimaryLog(context.vcgen.proverStackBookkeeper.id, context.spartition.Id, "SpawnThread", "Starting thread: " + context.id);
 
 			// Start the thread
 			oThread.Start();
@@ -871,6 +866,5 @@ namespace RefinementFuzzing
 		// If some other thread updates the summary while this current thread was computing the summary,
 		// do not update the new summary as the summary from the other thread may be enough
 		public static bool handleSummaryUpdateConflicts = true;
-        internal static int debugCounter;
-    }
+	}
 }

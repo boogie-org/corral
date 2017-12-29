@@ -177,8 +177,8 @@ namespace CoreLib
         public Stats stats;
 
         /* call-site to VC map -- used for trace construction */
-        //public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
-        //public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
+        public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
+        public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
 
         /* VC of main */
         private StratifiedVC mainVC;
@@ -289,28 +289,22 @@ namespace CoreLib
 
         public StratifiedInlining(StratifiedInlining si): base(si.program, si.logFilePath, si.appendLogFile, new List<Checker>(), null)
         {
+            attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
 
             forceInlineProcs = new HashSet<string>();
 
             controlBoolean = new Dictionary<StratifiedVC, VCExpr>();
-            di = new DI(si, true);
+            di = new DI(this, true);
 
+            attachedVC.Union(si.attachedVC);
+            attachedVCInv.Union(si.attachedVCInv);
             parent.Union(si.parent);
             implementations.Union(si.implementations);
             forceInlineProcs.Union(si.forceInlineProcs);
             controlBoolean.Union(si.controlBoolean);
-            this.mainVC = si.mainVC;
-            stats = new Stats();
-
-            this.extraRecBound = new Dictionary<string, int>();
-            program.TopLevelDeclarations.OfType<Implementation>()
-                .Iter(impl =>
-                {
-                    var b = QKeyValue.FindIntAttribute(impl.Attributes, BoogieVerify.ExtraRecBoundAttr, -1);
-                    if (b != -1) extraRecBound.Add(impl.Name, b);
-                });
         }
 
 
@@ -332,6 +326,8 @@ namespace CoreLib
                 RunInitialAnalyses(program);
             }
 
+            attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
 
@@ -437,22 +433,21 @@ namespace CoreLib
             public HashSet<StratifiedCallSite> openCallSites;
             public DI di;
 
-            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, 
-                    Dictionary<StratifiedCallSite, StratifiedVC> attachedVC, Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv)
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
                 var ret = new SiState();
-                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
-                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
+                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(SI.attachedVC);
+                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(SI.attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
                 ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 ret.di = SI.di.Copy();
                 return ret;
             }
 
-            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites)
             {
-                reporter.attachedVC = attachedVC;
-                reporter.attachedVCInv = attachedVCInv;
+                SI.attachedVC = attachedVC;
+                SI.attachedVCInv = attachedVCInv;
                 SI.parent = parent;
                 SI.di = di;
                 openCallSites = this.openCallSites;
@@ -668,9 +663,6 @@ namespace CoreLib
 
         public HashSet<StratifiedCallSite> Split(HashSet<StratifiedCallSite> openCallSites, VerificationState vstate) 
         {
-            //disabled
-            return new HashSet<StratifiedCallSite>();
-
             //StratifiedInliningErrorReporter reporter;
             vstate.reporter.reportTraceIfNothingToExpand = true;
             //int treesize = 0;
@@ -709,7 +701,7 @@ namespace CoreLib
                 }
             });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -744,7 +736,7 @@ namespace CoreLib
                 var sizes = di.ComputeSubtrees();
                 var disj = di.ComputeNumDisjoint();
 
-                foreach (var vc in vstate.reporter.attachedVCInv.Keys)
+                foreach (var vc in attachedVCInv.Keys)
                 {
                     if (!di.VcExists(vc))
                     {
@@ -759,9 +751,9 @@ namespace CoreLib
                         maxVcScore = score;
                     }
                 }
-                toRemove.Iter(vc => vstate.reporter.attachedVCInv.Remove(vc));
+                toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                var scs = vstate.reporter.attachedVCInv[maxVc];
+                var scs = attachedVCInv[maxVc];
                 Debug.Assert(!openCallSites.Contains(scs));
 
                 var desc = sizes[maxVc];
@@ -789,13 +781,9 @@ namespace CoreLib
         public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
            VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
         {
-            if (RefinementFuzzing.Settings.debugCounter++ == 5)
-                ; 
             partitions = new List<SoftPartition>();
             Outcome outcome = Outcome.Inconclusive;
             vState.reporter.reportTraceIfNothingToExpand = true;
-
-            ProverInterface prover = vState.proverBookeeper.getMainProver();
 
             solTime = 0;
             //int treesize = 0;
@@ -840,7 +828,7 @@ namespace CoreLib
                 }
             });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -877,7 +865,8 @@ namespace CoreLib
 
                         blockedSet1.Add(splitCand);
                         SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
-                        
+                        partitions.Add(newPartition1);
+
                         // The MustReach partition
 
                         HashSet<StratifiedCallSite> blockedSet2 = new HashSet<StratifiedCallSite>();
@@ -885,10 +874,8 @@ namespace CoreLib
 
                         mustreachSet2.Add(splitCand);
                         SoftPartition newPartition2 = new SoftPartition(softPartition, openCallSites, blockedSet2, mustreachSet2, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
-
                         partitions.Add(newPartition2);
-                        partitions.Add(newPartition1);
-
+                        
                         MacroSI.PRINT_DEBUG("parent sp: " + softPartition.Id + "; children: " + newPartition1.Id + ", " + newPartition2.Id);
 
                         return VerifyResult.Partitioned;
@@ -913,11 +900,11 @@ namespace CoreLib
                 }
                 MacroSI.PRINT_DEBUG("    - check");
                 vState.reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = CheckVC(vState.reporter, vState.proverBookeeper.getMainProver());
+                outcome = CheckVC(vState.reporter);
 
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
-                if (outcome != Outcome.Correct && outcome != Outcome.Errors/* && outcome != Outcome.Inconclusive*/)
+                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     return VerifyResult.Errors; // done (T/O)
@@ -929,14 +916,14 @@ namespace CoreLib
                     return VerifyResult.BugFound; // done (error found)
                 }
 
-                if (outcome == Outcome.Errors/* || outcome == Outcome.Inconclusive*/)
+                if (outcome == Outcome.Errors)
                 {
                     if (Stackscs.Count != 0) Stackscs.Clear();
                     foreach (var scs in vState.reporter.callSitesToExpand)
                     {
                         Stackscs.Push(scs);
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs, null, true, true, vState.reporter);
+                        var svc = Expand(scs, null, true, true);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                     }
@@ -1022,7 +1009,7 @@ namespace CoreLib
                 }
             });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -1059,7 +1046,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
                         //Console.WriteLine("The total number of calls in counterexample are {0}",  attachedVCInv.Keys.Count);
-                        foreach (var vc in vState.reporter.attachedVCInv)
+                        foreach (var vc in attachedVCInv)
                         {
                             if (!di.VcExists(vc.Key))
                             {
@@ -1069,7 +1056,7 @@ namespace CoreLib
                             var score = Math.Min(sizes[vc.Key].Count, disj[vc.Key]);
                             vcScoreList.Add(score, vc.Key);
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         int listCount = vcScoreList.Count;
                         count = 1;
                         if (listCount > 4)
@@ -1077,7 +1064,7 @@ namespace CoreLib
                             foreach (KeyValuePair<int, StratifiedVC> kvp in vcScoreList)
                             {
                                 var mvc = kvp.Value;
-                                var scs = vState.reporter.attachedVCInv[mvc];
+                                var scs = attachedVCInv[mvc];
                                 Debug.Assert(!openCallSites.Contains(scs));
                                 var desc = sizes[mvc];
                                 var cnt = 0;
@@ -1089,7 +1076,7 @@ namespace CoreLib
                                 timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                                 Push();
-                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                                 prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                 decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                                 applyDecisionToDI(DecisionType.BLOCK, mvc);
@@ -1102,7 +1089,7 @@ namespace CoreLib
                         {
                             // pick the last element from the SortedList
                             var mvc = vcScoreList.Values.Last();
-                            var scs = vState.reporter.attachedVCInv[mvc];
+                            var scs = attachedVCInv[mvc];
                             Debug.Assert(!openCallSites.Contains(scs));
                             var desc = sizes[mvc];
                             var cnt = 0;
@@ -1114,7 +1101,7 @@ namespace CoreLib
                             timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                             Push();
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             applyDecisionToDI(DecisionType.BLOCK, mvc);
@@ -1141,7 +1128,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
 
-                        foreach (var vc in vState.reporter.attachedVCInv.Keys)
+                        foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
                             {
@@ -1156,9 +1143,9 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                        var scs = vState.reporter.attachedVCInv[maxVc];
+                        var scs = attachedVCInv[maxVc];
                         Debug.Assert(!openCallSites.Contains(scs));
 
                         var desc = sizes[maxVc];
@@ -1172,7 +1159,7 @@ namespace CoreLib
                         timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, maxVc);
@@ -1198,7 +1185,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
 
-                        foreach (var vc in vState.reporter.attachedVCInv.Keys)
+                        foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
                             {
@@ -1213,9 +1200,9 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                        var scs = vState.reporter.attachedVCInv[maxVc];
+                        var scs = attachedVCInv[maxVc];
                         Debug.Assert(!openCallSites.Contains(scs));
 
                         var desc = sizes[maxVc];
@@ -1229,9 +1216,9 @@ namespace CoreLib
                         timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                         prevMustAsserted.Push(
-                          AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                          AssertMustReach(attachedVC[scs], PrevAsserted()));
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
                         applyDecisionToDI(DecisionType.MUST_REACH, maxVc);
                         treesize = di.ComputeSize();
@@ -1258,25 +1245,25 @@ namespace CoreLib
                             foreach (var vc in CexCallSites)
                             {
                                 //Console.WriteLine("The callsite in cex is {0}", vc);
-                                if (!di.VcExists(vState.reporter.attachedVC[vc]))
+                                if (!di.VcExists(attachedVC[vc]))
                                 {
-                                    toRemove.Add(vState.reporter.attachedVC[vc]);
+                                    toRemove.Add(attachedVC[vc]);
                                     //Console.WriteLine("Removing VC of the callsite {0}", vc);
                                     continue;
                                 }
 
-                                var score = Math.Min(sizes[vState.reporter.attachedVC[vc]].Count, disj[vState.reporter.attachedVC[vc]]);
+                                var score = Math.Min(sizes[attachedVC[vc]].Count, disj[attachedVC[vc]]);
                                 if (score >= maxVcScore)
                                 {
-                                    maxVc = vState.reporter.attachedVC[vc];
+                                    maxVc = attachedVC[vc];
                                     maxVcScore = score;
                                     //Console.WriteLine("The score is {0}", score);
                                 }
                             }
 
-                            toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                            toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                            var scs = vState.reporter.attachedVCInv[maxVc];
+                            var scs = attachedVCInv[maxVc];
                             Debug.Assert(!openCallSites.Contains(scs));
                             var desc = sizes[maxVc];
                             var cnt = 0;
@@ -1289,7 +1276,7 @@ namespace CoreLib
                             timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                             Push();
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             applyDecisionToDI(DecisionType.BLOCK, maxVc);
@@ -1318,7 +1305,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
 
-                        foreach (var vc in vState.reporter.attachedVCInv.Keys)
+                        foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
                             {
@@ -1333,9 +1320,9 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                        var scs = vState.reporter.attachedVCInv[maxVc];
+                        var scs = attachedVCInv[maxVc];
                         Debug.Assert(!openCallSites.Contains(scs));
 
                         var desc = sizes[maxVc];
@@ -1349,7 +1336,7 @@ namespace CoreLib
                         timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, maxVc);
@@ -1374,23 +1361,23 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
                         randomStack.Clear();
-                        foreach (var vc in vState.reporter.attachedVCInv.Keys)
+                        foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            randomStack.Push(vState.reporter.attachedVCInv[vc]);
+                            randomStack.Push(attachedVCInv[vc]);
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         Random rnd = new Random();
                         var randindex = rnd.Next(1, randomStack.Count);
                         Debug.Assert(randindex <= randomStack.Count);
                         var scs = randomStack.ElementAt(randindex);
 
                         Debug.Assert(!openCallSites.Contains(scs));
-                        vcr = vState.reporter.attachedVC[scs];
+                        vcr = attachedVC[scs];
                         var desc = sizes[vcr];
                         var cnt = 0;
                         openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
@@ -1402,7 +1389,7 @@ namespace CoreLib
                         timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, vcr);
@@ -1427,7 +1414,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
 
-                        foreach (var vc in vState.reporter.attachedVCInv.Keys)
+                        foreach (var vc in attachedVCInv.Keys)
                         {
                             if (!di.VcExists(vc))
                             {
@@ -1442,9 +1429,9 @@ namespace CoreLib
                                 minVcScore = score;
                             }
                         }
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                        var scs = vState.reporter.attachedVCInv[minVc];
+                        var scs = attachedVCInv[minVc];
                         Debug.Assert(!openCallSites.Contains(scs));
 
                         var desc = sizes[minVc];
@@ -1458,7 +1445,7 @@ namespace CoreLib
                         timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, minVc);
@@ -1480,7 +1467,7 @@ namespace CoreLib
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
                         int checkCount = Stackscs.Count;
-                        foreach (var vc in vState.reporter.attachedVCInv)
+                        foreach (var vc in attachedVCInv)
                         {
                             if (!di.VcExists(vc.Key))
                             {
@@ -1495,7 +1482,7 @@ namespace CoreLib
                         }
                         // clear the stack that contains unique call sites that are to be expanded
                         Stackscs.Clear();
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         if (vcScoreIdealList.Count > 0)
                         {
                             int countIdealList = vcScoreIdealList.Count;
@@ -1503,7 +1490,7 @@ namespace CoreLib
                             foreach (StratifiedVC kvp in vcScoreIdealList)
                             {
                                 var mvc = kvp;
-                                var scs = vState.reporter.attachedVCInv[mvc];
+                                var scs = attachedVCInv[mvc];
                                 Debug.Assert(!openCallSites.Contains(scs));
                                 var desc = sizes[mvc];
                                 var cnt = 0;
@@ -1514,7 +1501,7 @@ namespace CoreLib
                                 var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, minVcScore);
                                 timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                                 Push();
-                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                                 prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                 decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                                 applyDecisionToDI(DecisionType.BLOCK, mvc);
@@ -1537,7 +1524,7 @@ namespace CoreLib
                         var toRemove = new HashSet<StratifiedVC>();
                         var sizes = di.ComputeSubtrees();
                         var disj = di.ComputeNumDisjoint();
-                        foreach (var vc in vState.reporter.attachedVCInv)
+                        foreach (var vc in attachedVCInv)
                         {
                             if (!di.VcExists(vc.Key))
                             {
@@ -1552,7 +1539,7 @@ namespace CoreLib
                         }
                         // clear the stack that stores the unique call sites in the current counterexample
                         Stackscs.Clear();
-                        toRemove.Iter(vc => vState.reporter.attachedVCInv.Remove(vc));
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         int listCount = vcScoreMRList.Count;
                         count = 1;
                         if (listCount > 4)
@@ -1560,7 +1547,7 @@ namespace CoreLib
                             foreach (KeyValuePair<int, StratifiedVC> kvp in vcScoreMRList)
                             {
                                 var mvc = kvp.Value;
-                                var scs = vState.reporter.attachedVCInv[mvc];
+                                var scs = attachedVCInv[mvc];
                                 Debug.Assert(!openCallSites.Contains(scs));
                                 var desc = sizes[mvc];
                                 var cnt = 0;
@@ -1572,11 +1559,11 @@ namespace CoreLib
                                 timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                                 Push();
-                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
                                 decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
-                                applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[scs]);
-                                prevMustAsserted.Push(AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                                applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                                prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
                                 count = count + 1;
                                 if (count > 4) break;
                             }
@@ -1587,7 +1574,7 @@ namespace CoreLib
                             var mvc = vcScoreMRList.Values.Last();
                             // pick the last element from the SortedList
                             //var mvc = vcScoreMRList.Values[0];
-                            var scs = vState.reporter.attachedVCInv[mvc];
+                            var scs = attachedVCInv[mvc];
                             Debug.Assert(!openCallSites.Contains(scs));
                             var desc = sizes[mvc];
                             var cnt = 0;
@@ -1599,11 +1586,11 @@ namespace CoreLib
                             timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                             Push();
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
-                            applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[scs]);
-                            prevMustAsserted.Push(AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                            applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                            prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
                         }
                         treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
@@ -1651,7 +1638,7 @@ namespace CoreLib
                     {
                         Stackscs.Push(scs);
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs, null, true, true, vState.reporter);
+                        var svc = Expand(scs, null, true, true);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                     }
@@ -1667,7 +1654,7 @@ namespace CoreLib
                 {
                     // outcome == Outcome.Correct
                     Decision topDecision = null;
-                    SiState topState = SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv);
+                    SiState topState = SiState.SaveState(this, openCallSites);
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     var doneBT = false;
                     var npops = 0;
@@ -1694,13 +1681,13 @@ namespace CoreLib
                     if (doneBT)
                         break;
 
-                    topState.ApplyState(this, ref openCallSites, vState.reporter);
+                    topState.ApplyState(this, ref openCallSites);
                     timeGraph.Pop(npops - 1);
 
                     // flip the decision
 
                     Push();
-                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
                     if (topDecision.decisionType == DecisionType.MUST_REACH)
                     {
@@ -1708,7 +1695,7 @@ namespace CoreLib
                         prover.Assert(topDecision.cs.callSiteExpr, false);
                         MacroSI.PRINT("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
                         decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.BLOCK, vState.reporter.attachedVC[topDecision.cs]);
+                        applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         treesize = di.ComputeSize();
                     }
@@ -1717,9 +1704,9 @@ namespace CoreLib
                         // Must Reach
                         MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[topDecision.cs]);
+                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(
-                           AssertMustReach(vState.reporter.attachedVC[topDecision.cs], PrevAsserted(), vState.reporter));
+                           AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                         treesize = di.ComputeSize();
                     }
                 }
@@ -1792,7 +1779,7 @@ namespace CoreLib
                     }
                 });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -1816,7 +1803,7 @@ namespace CoreLib
                     var sizes = di.ComputeSubtrees();
                     var disj = di.ComputeNumDisjoint();
 
-                    foreach (var vc in reporter.attachedVCInv.Keys)
+                    foreach (var vc in attachedVCInv.Keys)
                     {
                         if (!di.VcExists(vc))
                         {
@@ -1831,9 +1818,9 @@ namespace CoreLib
                             maxVcScore = score;
                         }
                     }
-                    toRemove.Iter(vc => reporter.attachedVCInv.Remove(vc));
+                    toRemove.Iter(vc => attachedVCInv.Remove(vc));
 
-                    var scs = reporter.attachedVCInv[maxVc];
+                    var scs = attachedVCInv[maxVc];
                     Debug.Assert(!openCallSites.Contains(scs));
 
                     var desc = sizes[maxVc];
@@ -1847,7 +1834,7 @@ namespace CoreLib
                     timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                     Push();
-                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv));
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                     decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                     applyDecisionToDI(DecisionType.BLOCK, maxVc);
@@ -1897,7 +1884,7 @@ namespace CoreLib
                     foreach (var scs in reporter.callSitesToExpand)
                     {
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs, null, true, true, reporter);
+                        var svc = Expand(scs, null, true, true);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                     }
@@ -1906,7 +1893,7 @@ namespace CoreLib
                 {
                     // outcome == Outcome.Correct
                     Decision topDecision = null;
-                    SiState topState = SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv);
+                    SiState topState = SiState.SaveState(this, openCallSites);
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     var doneBT = false;
                     var npops = 0;
@@ -1933,13 +1920,13 @@ namespace CoreLib
                     if (doneBT)
                         break;
 
-                    topState.ApplyState(this, ref openCallSites, reporter);
+                    topState.ApplyState(this, ref openCallSites);
                     timeGraph.Pop(npops - 1);
 
                     // flip the decision
 
                     Push();
-                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv));
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
                     if (topDecision.decisionType == DecisionType.MUST_REACH)
                     {
@@ -1947,7 +1934,7 @@ namespace CoreLib
                         prover.Assert(topDecision.cs.callSiteExpr, false);
                         MacroSI.PRINT("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
                         decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.BLOCK, reporter.attachedVC[topDecision.cs]);
+                        applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         treesize = di.ComputeSize();
                     }
@@ -1956,9 +1943,9 @@ namespace CoreLib
                         // Must Reach
                         MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.MUST_REACH, reporter.attachedVC[topDecision.cs]);
+                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(
-                           AssertMustReach(reporter.attachedVC[topDecision.cs], PrevAsserted(), reporter));
+                           AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                         treesize = di.ComputeSize();
                     }
 
@@ -2067,22 +2054,22 @@ namespace CoreLib
                         {
                             Console.WriteLine("{0}>>> Inlining({1})", indent(decisions.Count), scs.callSite.calleeName);
                             // Inline
-                            var svc = Expand(scs, reporter);
+                            var svc = Expand(scs);
                             if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         }
                         else
                         {
                             Console.WriteLine("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
                             Push();
 
                             // Inline
-                            var svc = Expand(scs, reporter);
+                            var svc = Expand(scs);
                             if (svc != null) openCallSites.UnionWith(svc.CallSites);
                             // Assert MustReach
                             prevMustAsserted.Push(
-                                AssertMustReach(svc, PrevAsserted(), reporter));
+                                AssertMustReach(svc, PrevAsserted()));
                         }
                     }
                 }
@@ -2090,7 +2077,7 @@ namespace CoreLib
                 {
                     // outcome == Outcome.Correct
                     Decision topDecision = null;
-                    SiState topState = SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv);
+                    SiState topState = SiState.SaveState(this, openCallSites);
                     var doneBT = false;
                     do
                     {
@@ -2114,12 +2101,12 @@ namespace CoreLib
                     if (doneBT)
                         break;
 
-                    topState.ApplyState(this, ref openCallSites, reporter);
+                    topState.ApplyState(this, ref openCallSites);
 
                     // flip the decision
                     
                     Push();
-                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, reporter.attachedVC, reporter.attachedVCInv));
+                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
                     if (topDecision.decisionType == DecisionType.MUST_REACH)
                     {
@@ -2134,10 +2121,10 @@ namespace CoreLib
                         // Must Reach
                         Console.WriteLine("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
-                        var svc = Expand(topDecision.cs, reporter);
+                        var svc = Expand(topDecision.cs);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         prevMustAsserted.Push(
-                           AssertMustReach(svc, PrevAsserted(), reporter));
+                           AssertMustReach(svc, PrevAsserted()));
                     }
 
 
@@ -2197,7 +2184,7 @@ namespace CoreLib
                 {
                     Debug.Assert(!boundAsserted.Contains(scs));
                     openCallSites.Remove(scs);
-                    var svc = Expand(scs, reporter);
+                    var svc = Expand(scs);
                     if(svc != null) openCallSites.UnionWith(svc.CallSites);
                     Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                 }
@@ -2230,7 +2217,7 @@ namespace CoreLib
             var mainName = GetNewName("background");
             prover.AssertNamed(mainVC.vcexpr, true, mainName);
 
-            var reporter = new StratifiedInliningErrorReporter(callback, this, mainVC, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, mainVC);
             reporter.reportTraceIfNothingToExpand = true;
 
             while (true)
@@ -2339,7 +2326,7 @@ namespace CoreLib
                 {
                     openCallSites.Remove(scs);
                     var name = GetNewName(scs.callSite.calleeName);
-                    var svc = Expand(scs, name, false, true, reporter);
+                    var svc = Expand(scs, name, false, true);
 
                     name2vc.Add(name, svc);
                     vc2name.Add(svc, name);
@@ -2359,7 +2346,7 @@ namespace CoreLib
         {
             Outcome outcome = Outcome.Inconclusive;
 
-            ForceInline(openCallSites, recBound, reporter);
+            ForceInline(openCallSites, recBound);
 
             var boundHit = false;
             while (true)
@@ -2446,7 +2433,7 @@ namespace CoreLib
                 foreach (var scs in toExpand)
                 {
                     openCallSites.Remove(scs);
-                    var svc = Expand(scs, reporter);
+                    var svc = Expand(scs);
                     if (svc != null)
                     {
                         openCallSites.UnionWith(svc.CallSites);
@@ -2454,12 +2441,12 @@ namespace CoreLib
                     }
                 }
 
-                ForceInline(openCallSites, recBound, reporter);
+                ForceInline(openCallSites, recBound);
             }
             return outcome;
         }
 
-        void ForceInline(HashSet<StratifiedCallSite> openCallSites, int recBound, StratifiedInliningErrorReporter reporter)
+        void ForceInline(HashSet<StratifiedCallSite> openCallSites, int recBound)
         {
             do
             {
@@ -2474,7 +2461,7 @@ namespace CoreLib
                 foreach (var scs in toExpand)
                 {
                     openCallSites.Remove(scs);
-                    var svc = Expand(scs, reporter);
+                    var svc = Expand(scs);
                     if (svc != null)
                     {
                         openCallSites.UnionWith(svc.CallSites);
@@ -2486,20 +2473,20 @@ namespace CoreLib
         }
 
         // Assert that we must reach this VC; returns the list of call sites asserted
-        public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
+        public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
             // This is most likely redundant
             prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true); 
 
-            if (!reporter.attachedVCInv.ContainsKey(svc))
+            if (!attachedVCInv.ContainsKey(svc))
                 return ret;
 
-            var iter = reporter.attachedVCInv[svc]; 
+            var iter = attachedVCInv[svc]; 
             while (parent.ContainsKey(iter))
             {
-                var vc = reporter.attachedVC[parent[iter]];
+                var vc = attachedVC[parent[iter]];
                 var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
                 
                 var key = Tuple.Create(vc, callblock);
@@ -2514,20 +2501,20 @@ namespace CoreLib
             return ret;
         }
 
-        public Tuple<VCExpr, List<Tuple<StratifiedVC, Block>>> AssertMustReachK(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
+        public Tuple<VCExpr, List<Tuple<StratifiedVC, Block>>> AssertMustReachK(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
             var ret = new List<Tuple<StratifiedVC, Block>>();
             // This is most likely redundant
             //prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
             var toassert = prover.VCExprGen.And(svc.MustReach(svc.info.impl.Blocks[0]), VCExpressionGenerator.True);
             var res = Tuple.Create(toassert, ret);
-            if (!reporter.attachedVCInv.ContainsKey(svc))
+            if (!attachedVCInv.ContainsKey(svc))
                 return res;
 
-            var iter = reporter.attachedVCInv[svc];
+            var iter = attachedVCInv[svc];
             while (parent.ContainsKey(iter))
             {
-                var vc = reporter.attachedVC[parent[iter]];
+                var vc = attachedVC[parent[iter]];
                 var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
 
                 var key = Tuple.Create(vc, callblock);
@@ -2569,7 +2556,7 @@ namespace CoreLib
 
                 var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name], implementations);
                 backboneRecDepth[caller.Name]++;
-                var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC, reporter); // TODO: to be handled
+                var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC);
                 var callerOpenCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 callerOpenCallSites.UnionWith(callerVC.CallSites);
                 //Console.WriteLine("Adding call-sites: {0}", callerVC.CallSites.Select(s => s.callSiteExpr.ToString()).Concat(" "));
@@ -2583,7 +2570,7 @@ namespace CoreLib
                     prover.Assert(callerVC.vcexpr, true);
                     MustFail(callerVC);
 
-                    reporter.attachedVC[cs] = svc;
+                    attachedVC[cs] = svc;
                     foreach (var s in svc.CallSites)
                         parent[s] = cs;
 
@@ -2599,7 +2586,7 @@ namespace CoreLib
                     foreach (var s in svc.CallSites)
                         parent.Remove(s);
 
-                    callerOpenCallSites.Iter(ocs => reporter.attachedVC.Remove(ocs));
+                    callerOpenCallSites.Iter(ocs => attachedVC.Remove(ocs));
 
                     Pop();
 
@@ -2644,13 +2631,14 @@ namespace CoreLib
 
                 Push();
 
+                attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
                 parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
 
                 StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[assertMethod.Name], implementations); ;
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
-                var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+                var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
                 MustFail(svc);
 
                 outcome = Bck(svc, openCallSites, reporter, backbonedepth);
@@ -2869,26 +2857,14 @@ namespace CoreLib
                 return ret;
             });
             
-            if (sp.candidateUniverse.Count == 1)  // This is the root softpartition: note that sp.Id may not always be zero as it could be subsequent invocations from variable abstraction loop
-                ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
-
-            HashSet<StratifiedCallSite> ancestralCandidateUniverse = new HashSet<StratifiedCallSite>();
-            SoftPartition p = sp.parent;
-            while (p != null)
-            {
-                ancestralCandidateUniverse.UnionWith(p.candidateUniverse);
-                p = p.parent;
-            }
+            ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
 
             foreach (var scs in sp.candidateUniverse)
             {
-                if (!vState.reporter.attachedVC.ContainsKey(scs))
+                if (!attachedVC.ContainsKey(scs))
                     continue;
 
-                if (ancestralCandidateUniverse.Contains(scs))
-                    continue;
-
-                var svc = vState.reporter.attachedVC[scs];
+                var svc = attachedVC[scs];
                 ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp);
 
                 if (sp.blockedCandidates.Contains(scs))
@@ -2903,7 +2879,7 @@ namespace CoreLib
                 if (sp.mustreachCandidates.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
-                    AssertMustReach(svc, PrevAsserted(), vState.reporter).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
+                    AssertMustReach(svc, PrevAsserted()).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
                 }
             }
         }
@@ -2911,7 +2887,7 @@ namespace CoreLib
         void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null)
         {
             if (useConcurrentSolver)
-                proverStackBookkeeper.Assert(vc, getNameForFormula(sp.Id, FormulaType.VC), getNameForFormula(sp.Id, FormulaType.VC));
+                proverStackBookkeeper.Assert(vc, getNameForFormula(sp.Id, FormulaType.VC), null);
             else
                 prover.Assert(vc, b);
         }
@@ -2984,7 +2960,7 @@ namespace CoreLib
             prover.Assert(svc.vcexpr, true);
 
             Outcome outcome;
-            var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
             if (RefinementFuzzing.Settings.preAllocateProvers)
             {
@@ -3020,7 +2996,7 @@ namespace CoreLib
                     {
                         if (!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
                         toRemove.Add(scs);
-                        var ss = Expand(scs, reporter);
+                        var ss = Expand(scs);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
                         MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
                     }
@@ -3063,12 +3039,12 @@ namespace CoreLib
                         {
                             // Merge
                             var vc2 = vcNodeMap[n2];
-                            Merge(cs, vc2, reporter);
+                            Merge(cs, vc2);
                         }
                         else
                         {
                             // Expand
-                            var vc2 = Expand(cs, null, true, true, reporter);
+                            var vc2 = Expand(cs, null, true, true);
                             openCallSites.UnionWith(vc2.CallSites);
                             vcNodeMap.Add(vc2, n2);
                             expanded.Add(n2);
@@ -3090,11 +3066,11 @@ namespace CoreLib
             info.GenerateVC();
             VCExpr vc = info.vcexpr;
 
-            var vState = new VerificationState(reporter, proverStackBookkeeper);
+            var vState = new VerificationState(reporter, null);
             vState.vcSize += SizeComputingVisitor.ComputeSize(vc);
 
             solver = new ConcurrentSolver(this, vState);
-            VerifyResult res = solver.Solve(entryPoints, vState);
+            VerifyResult res = solver.Solve(entryPoints);
 
             /*
             // Stratified Search
@@ -3231,7 +3207,7 @@ namespace CoreLib
             prover.Assert(svc.vcexpr, true);
             
             Outcome outcome;
-            var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
             
             #region Eager inlining
@@ -3243,7 +3219,7 @@ namespace CoreLib
                 {
                     if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound)) continue;
 
-                    var ss = Expand(scs, reporter);
+                    var ss = Expand(scs);
                     if(ss != null) nextOpenCallSites.UnionWith(ss.CallSites);
                 }
                 openCallSites = nextOpenCallSites;
@@ -3261,7 +3237,7 @@ namespace CoreLib
                     {
                         if(!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
                         toRemove.Add(scs);
-                        var ss = Expand(scs, reporter);
+                        var ss = Expand(scs);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
                         MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
                     }
@@ -3304,12 +3280,12 @@ namespace CoreLib
                         {
                             // Merge
                             var vc2 = vcNodeMap[n2];
-                            Merge(cs, vc2, reporter);
+                            Merge(cs, vc2);
                         }
                         else
                         {
                             // Expand
-                            var vc2 = Expand(cs, null, true, true, reporter);
+                            var vc2 = Expand(cs, null, true, true);
                             openCallSites.UnionWith(vc2.CallSites);
                             vcNodeMap.Add(vc2, n2);
                             expanded.Add(n2);
@@ -3415,16 +3391,16 @@ namespace CoreLib
         static int dumpCnt = 0;
 
         // Inline
-        private StratifiedVC Expand(StratifiedCallSite scs, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
+        private StratifiedVC Expand(StratifiedCallSite scs, ProverStackBookkeeping proverStackBookeeper = null)
         {
-            return Expand(scs, null, true, false, reporter, proverStackBookkeeper);
+            return Expand(scs, null, true, false, proverStackBookkeeper);
         }
 
-        private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
+        private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, ProverStackBookkeeping proverStackBookeeper = null)
         {
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
-            var candidate = dontMerge ? null : di.FindMergeCandidate(scs, reporter);
+            var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
             StratifiedVC ret = null;
             ProverInterface currProver;
 
@@ -3460,7 +3436,7 @@ namespace CoreLib
                     toassert = currProver.VCExprGen.And(currProver.VCExprGen.Implies(cb, svc.vcexpr), toassert);
                 }
 
-                currProver.LogComment("Expand: Inlining " + scs.callSite.calleeName + " from " + (parent.ContainsKey(scs) ? reporter.attachedVC[parent[scs]].info.impl.Name : "main"));
+                currProver.LogComment("Inlining " + scs.callSite.calleeName + " from " + (parent.ContainsKey(scs) ? attachedVC[parent[scs]].info.impl.Name : "main"));
 
                 di.Expanded(scs, svc);
                 stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
@@ -3471,20 +3447,20 @@ namespace CoreLib
                 else
                     currProver.Assert(toassert, true);
 
-                reporter.attachedVC[scs] = svc;
-                reporter.attachedVCInv[svc] = scs;
+                attachedVC[scs] = svc;
+                attachedVCInv[svc] = scs;
                 //TestMustReach(svc);
                 ret = svc;
             }
             else
             {
-                Merge(scs, candidate, reporter);
+                Merge(scs, candidate);
                 ret = null;
             }
             return ret;
         }
 
-        private void Merge(StratifiedCallSite scs, StratifiedVC vc, StratifiedInliningErrorReporter reporter)
+        private void Merge(StratifiedCallSite scs, StratifiedVC vc)
         {
             MacroSI.PRINT_DEBUG("    ~ attaching to existing callsite ");
             prover.LogComment("Attaching for " + scs.callSite.calleeName);
@@ -3496,7 +3472,7 @@ namespace CoreLib
             stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
 
             prover.Assert(toassert, true);
-            reporter.attachedVC[scs] = vc;
+            attachedVC[scs] = vc;
         }
 
         // Return the control Boolean for the VC
@@ -3527,12 +3503,12 @@ namespace CoreLib
         }
 
         // Get persistent ID of a VC
-        private string GetPersistentID(StratifiedVC vc, StratifiedInliningErrorReporter reporter)
+        private string GetPersistentID(StratifiedVC vc)
         {
             var ret = "";
-            if (reporter.attachedVCInv.ContainsKey(vc))
+            if (attachedVCInv.ContainsKey(vc))
             {
-                var scs = reporter.attachedVCInv[vc];
+                var scs = attachedVCInv[vc];
                 ret = GetPersistentID(scs);
             }
             return string.Format("{0}_262_{1}", ret, vc.info.impl.Name);
@@ -3562,21 +3538,13 @@ namespace CoreLib
             return conjunction;
         }
 
-        private Outcome CheckVC(ProverInterface.ErrorHandler reporter, ProverInterface proverAlt=null)
+        private Outcome CheckVC(ProverInterface.ErrorHandler reporter)
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            ProverInterface.Outcome outcome;
-            if (proverAlt == null) {
-                prover.Check();
-                outcome = prover.CheckOutcomeCore(reporter);
-            }
-            else {
-                proverAlt.Check();
-                outcome = proverAlt.CheckOutcomeCore(reporter);
-            }
+            prover.Check();
             stats.time += stopwatch.ElapsedTicks;
-
+            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
@@ -4115,20 +4083,20 @@ namespace CoreLib
             return id2;
         }
 
-        public StratifiedVC FindMergeCandidate(StratifiedCallSite cs, StratifiedInliningErrorReporter reporter)
+        public StratifiedVC FindMergeCandidate(StratifiedCallSite cs)
         {
             var st = DateTime.Now;
-            var ret = FindMergeCandidateInternal(cs, reporter);
+            var ret = FindMergeCandidateInternal(cs);
             timeTaken += (DateTime.Now - st);
             return ret;
         }
 
-        StratifiedVC FindMergeCandidateInternal(StratifiedCallSite cs, StratifiedInliningErrorReporter reporter)
+        StratifiedVC FindMergeCandidateInternal(StratifiedCallSite cs)
         {
             if (disabled) return null;
             if (strategy == MERGING_STRATEGY.NONE) return null;
 
-            Debug.Assert(!reporter.attachedVC.ContainsKey(cs));
+            Debug.Assert(!SI.attachedVC.ContainsKey(cs));
 
             var e = QKeyValue.FindIntAttribute(cs.callSite.Attributes, "si_unique_call", -1);
             int[] rv = null;
@@ -5791,9 +5759,9 @@ namespace CoreLib
 
     public class StratifiedInliningErrorReporter : ProverInterface.ErrorHandler
     {
-        public StratifiedInlining si;
+        StratifiedInlining si;
         public VerifierCallback callback;
-        public StratifiedVC mainVC;
+        StratifiedVC mainVC;
         public static TimeSpan ttime = TimeSpan.Zero;
         IList<string> GlobalLabels;
 
@@ -5814,10 +5782,7 @@ namespace CoreLib
 		StratifiedInlining.FCallHandler calls; // remove this field
 		public StratifiedInliningInfo mainInfo; // remove this field
 
-        public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
-        public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
-
-        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, StratifiedInliningErrorReporter parentRepoter)
+        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC)
         {
             this.callback = callback;
             this.si = si;
@@ -5825,20 +5790,10 @@ namespace CoreLib
             this.reportTrace = false;
             this.reportTraceIfNothingToExpand = false;
             this.GlobalLabels = null;
-            this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
-            this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
-
-            if (parentRepoter != null)
-            {
-                this.attachedVC.Union(parentRepoter.attachedVC);
-                this.attachedVCInv.Union(parentRepoter.attachedVCInv);
-            }
-
         }
 
-        // TODO: remove this constructor
-        /*
-        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, StratifiedInliningInfo mainInfo)
+		// TODO: remove this constructor
+		public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, StratifiedInliningInfo mainInfo)
 		{
 			this.callback = callback;
 			this.si = si;
@@ -5848,7 +5803,6 @@ namespace CoreLib
 			this.GlobalLabels = null;
 			this.mainInfo = mainInfo;
 		} 
-        */
 
         public override int StartingProcId()
         {
@@ -6005,7 +5959,7 @@ namespace CoreLib
                 {
                     foreach (StratifiedCallSite scs in svc.callSites[b])
                     {
-                        if (!attachedVC.ContainsKey(scs))
+                        if (!si.attachedVC.ContainsKey(scs))
                         {
                             if (callSitesToExpand == null)
                                 callSitesToExpand = new List<StratifiedCallSite>();
@@ -6014,8 +5968,8 @@ namespace CoreLib
                         }
                         else
                         {
-                            List<Absy> calleeAbsyList = GetAbsyTrace(attachedVC[scs], null);
-                            var calleeCounterexample = NewTrace(attachedVC[scs], calleeAbsyList, model);
+                            List<Absy> calleeAbsyList = GetAbsyTrace(si.attachedVC[scs], null);
+                            var calleeCounterexample = NewTrace(si.attachedVC[scs], calleeAbsyList, model);
                             calleeCounterexamples[new TraceLocation(trace.Count - 1, scs.callSite.numInstr)] =
                             new CalleeCounterexampleInfo(calleeCounterexample, new List<object>());
                         }
