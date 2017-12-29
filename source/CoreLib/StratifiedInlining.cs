@@ -668,7 +668,7 @@ namespace CoreLib
             //int treesize = 0;
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<Decision>();
-            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+            //var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
             var splitCandidates = new HashSet<StratifiedCallSite>();
             var timeGraph = new TimeGraph();
 
@@ -679,13 +679,13 @@ namespace CoreLib
                 return ret;
             });
 
-            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            /*var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
                 prevMustAsserted.ToList().Iter(ls =>
                     ls.Iter(tup => ret.Add(tup)));
                 return ret;
-            });
+            });*/
 
             var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
             {
@@ -724,7 +724,7 @@ namespace CoreLib
             // Lets split when the tree has become big enough
             var size = di.ComputeSize();
             Console.WriteLine("The tree size is {0}", size);
-            if ((vstate.treesize == 0 && size > 2) || (vstate.treesize != 0 && size > vstate.treesize * 2))
+            if ((vstate.treesize == 0 && size > 2) || (vstate.treesize != 0 && size > vstate.treesize + 2))
             {
                 var st = DateTime.Now;
 
@@ -768,7 +768,7 @@ namespace CoreLib
 
                 /*Push();
                 backtrackingPoints.Push(SiState.SaveState(this, openCallSites));*/
-                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                 splitCandidates.Add(scs);
                 applyDecisionToDI(DecisionType.BLOCK, maxVc);
                 vstate.treesize = di.ComputeSize(); // Make treesize global
