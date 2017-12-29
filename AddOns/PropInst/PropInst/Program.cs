@@ -76,7 +76,7 @@ namespace PropInst
             Debug.Assert(augProcs.All(x => (x.InParams.Count() + x.OutParams.Count() == 0)),
                 "Procedures with " + ExprMatchVisitor.BoogieKeyWords.CorralExtraInitExtn + "attribute cannot have any input/output params");
 
-            var corralExtraInit = boogieProgram.Implementations.FirstOrDefault(x => x.Name == "CorralExtraInit");
+            var corralExtraInit = boogieProgram.Implementations.FirstOrDefault(x => x.Name == "corralExtraInit");
             if (corralExtraInit == null) return;
 
             augProcs.Iter
