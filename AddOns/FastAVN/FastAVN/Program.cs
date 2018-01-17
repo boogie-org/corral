@@ -371,6 +371,12 @@ namespace FastAVN
             if(epNames.Count == 0)
             {
                 Console.WriteLine("No entrypoints. All verified.");
+                //SDV needs to see Merge ... to trust Fastavn did not crash
+                // collate bugs
+                printingOutput = true;
+                printBugs(ref mergedBugs, 0);
+                mergeBugs(new HashSet<string>());
+
                 return;
             }
 
@@ -439,7 +445,12 @@ namespace FastAVN
 
             if(entrypoints.Count == 0)
             {
-                Console.WriteLine("No entrypoints. All verified.");
+                Console.WriteLine("No entrypoints... All verified.");
+                //SDV needs to see Merge ... to trust Fastavn did not crash
+                // collate bugs
+                printingOutput = true;
+                printBugs(ref mergedBugs, 0);
+                mergeBugs(new HashSet<string>());
                 return;
             }
 

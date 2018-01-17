@@ -30,6 +30,8 @@ procedure {:corralExtraInitExtension} cEIE() {
     assume (forall x:int :: validFree[x]); 
 }
 
+procedure boogie_si_record_bool(x:bool);
+
 }
 
 
@@ -48,6 +50,7 @@ CmdRule
 -->
 {
   #this;
+  call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
   assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); 
 }
 
@@ -58,6 +61,7 @@ CmdRule
 }
 -->
 {
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
     assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); //the inlined function is not expanded
     #this;
 }
@@ -98,6 +102,8 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
     return;
 }
 
@@ -109,6 +115,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+    return;
 }
 
 ProcedureRule
@@ -120,6 +129,10 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+
+    return;
 }
 
 ProcedureRule
@@ -130,6 +143,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+    return;
 }
 
 ProcedureRule
@@ -140,7 +156,10 @@ ProcedureRule
 -->
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
-    call aliases(p);
+  call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -151,6 +170,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -162,6 +184,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 
@@ -173,6 +198,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -184,6 +212,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else false;
     call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 
@@ -196,6 +227,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
     call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -208,6 +242,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
     call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -219,6 +256,9 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
     call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 ProcedureRule
@@ -231,5 +271,8 @@ ProcedureRule
 {
     validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
     call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
