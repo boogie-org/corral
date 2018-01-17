@@ -63,6 +63,9 @@ namespace PropInst
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
+            if (args.Any(x => x == "/staleValueCheck"))
+                (new PropInst.StateValueInstrument(boogieProgram)).Instrument();
+
             Stats.printStats();
         }
 
