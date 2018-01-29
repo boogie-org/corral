@@ -1562,6 +1562,9 @@ namespace CoreLib
 
 		public SoftPartition getNextPartition(ProverStackBookkeeping bookKeeper)
 		{
+            if (readyQ.Count == 0)
+                return null;
+
             SoftPartition s = readyQ.First();
             readyQ.Remove(s);
             return s;
