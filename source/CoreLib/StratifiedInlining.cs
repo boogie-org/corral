@@ -672,6 +672,7 @@ namespace CoreLib
             return new HashSet<StratifiedCallSite>();
 
             //StratifiedInliningErrorReporter reporter;
+            var di = vstate.siState.di;
             vstate.reporter.reportTraceIfNothingToExpand = true;
             //int treesize = 0;
             var backtrackingPoints = new Stack<SiState>();
@@ -3436,7 +3437,7 @@ namespace CoreLib
             if (candidate == null)
             {
                 stats.numInlined++;
-                var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
+                var svc = new StratifiedVC(reporter.si.implName2StratifiedInliningInfo[scs.callSite.calleeName], reporter.si.implementations);
 
                 foreach (var newCallSite in svc.CallSites)
                 {

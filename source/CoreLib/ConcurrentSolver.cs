@@ -1140,7 +1140,7 @@ namespace CoreLib
 
         public VerifyResult SolveSplit(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
         {
-            int threadBudget = 1;
+            int threadBudget = 4;
 
             Debug.Assert(entryPartitions.Count == 1);
 
@@ -1226,9 +1226,10 @@ namespace CoreLib
                         maxTime = context.vcgen.timeTaken;
 
                     //totalNumCalls += context.vcgen.numCalls;
+                    s = context.spartition;
 
                     if (res == VerifyResult.BugFound || res == VerifyResult.Errors)
-                    {
+                    {   
                         cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
                         return VerifyResult.BugFound;
                     }
@@ -1750,6 +1751,9 @@ namespace CoreLib
 
 		public SoftPartition getNextPartition(ProverStackBookkeeping bookKeeper)
 		{
+            if (readyQ.Count == 0)
+                return null;
+
             SoftPartition s = readyQ.First();
             readyQ.Remove(s);
             return s;
