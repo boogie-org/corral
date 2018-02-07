@@ -1,8 +1,9 @@
 @echo off
 
-REM Use as compile_and_run.bat DIRECTORY [/dll] [/nocleanup]
+REM Use as compile_and_run.bat DIRECTORY [/dll] [/nocleanup] 
 REM /dll 		Compiles files to DLLs and not EXEs
 REM /nocleanup 	Does not run BCT Cleanup
+
 
 if not exist %1 mkdir %1
 cd %1
@@ -103,6 +104,7 @@ echo %AVNEXE% testInst.bpl %AVNOPTS%
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+cp Angelic0.tt defect.tt
 %SDVEXE%
 
 :end
@@ -114,6 +116,7 @@ echo Running AVN on TestProgram.bpl ...
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+cp Angelic0.tt defect.tt
 %SDVEXE%
 
 :finish
