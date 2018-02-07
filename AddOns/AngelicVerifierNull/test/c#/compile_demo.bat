@@ -8,11 +8,17 @@ if not exist %1 mkdir %1
 cd %1
 
 if not defined BCTEXE goto undefined
+if not defined SDVEXE goto undefined2
 goto begin
 
 :undefined
 echo Define BCTEXE (Absolute path for executable for BytecodeTranslator.exe)
 goto finish
+
+:undefined2
+echo Define SDVEXE (Absolute path for executable for sdvdefect.exe)
+goto finish
+
 
 :begin 
 copy ..\Poirot.dll . > NUL
@@ -23,7 +29,7 @@ copy ..\poirot_stubs.bpl . > NUL
 REM set BCTEXE=..\..\..\..\..\..\bct\Binaries\BytecodeTranslator.exe
 set BCTCLEANUPEXE=..\..\..\..\..\bin\Debug\BctCleanup.exe
 set AVNEXE=..\..\..\AngelicVerifierNull\bin\Debug\AngelicVerifierNull.exe
-set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:noFilters /EE:onlyDisplayAliasingInPre-
+set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /sdv /copt:k:1 /copt:tryCTrace /EE:noFilters /EE:onlyDisplayAliasingInPre- 
 set AVHARNESS=..\..\..\AvHarnessInstrumentation\bin\Debug\AvHarnessInstrumentation.exe
 if "%2"=="/dll" goto dllfile
 if "%3"=="/dll" goto dllfile
@@ -97,6 +103,7 @@ echo %AVNEXE% testInst.bpl %AVNOPTS%
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+%SDVEXE%
 
 :end
 if not exist TestProgram.bpl goto finish
@@ -107,6 +114,7 @@ echo Running AVN on TestProgram.bpl ...
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+%SDVEXE%
 
 :finish
 cd ..
