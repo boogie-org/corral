@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<RunParConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Root>c:\Users\akashl\Documents\work\corral\bin\debug\corral.exe</Root>
+  <Utils>
+    <Util value="util1.exe" arguments="none"/>
+    <Util value="util2.exe" />
+  </Utils>
+  <RemoteRoots>
+    <RemoteFolder value="\\rse-server-11\f$\root"/>
+    <RemoteFolder value="\\rse-server-13\f$\root"/>
+  </RemoteRoots>
+  <Properties>
+    <SLIC value="LowerDriverReturn"/>
+    <SLIC value="CancelSpinLock"/>
+  </Properties>
+  <BoogieFiles>
+    <Files value="fdc_fail_*.bpl"/>
+    <Files value="flpydisk_fail_*.bpl"/>
+  </BoogieFiles>
+
+</RunParConfig>
+

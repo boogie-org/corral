@@ -1,10 +1,10 @@
 //Testing the following ideas
 //  NameNotMatches 
 
-procedure Free({:pointer} x : int);
+procedure Free({:pointer} p : int);
 procedure RtlFreeDontMatch({:pointer} x : int);
 procedure BogusFree({:pointer} x : int);
-procedure FreeWithTwoArgs(x: int, {:pointer} y:int);
+procedure FreeWithTwoArgs(p: int, {:pointer} y:int);
 
 
 var M : [int]int;

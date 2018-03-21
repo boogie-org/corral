@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SMVConfig
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="Config.xsd"
+>
+  
+  <Variables>
+    <SetVar key="projectFile" value="sources" />
+    <SetVar key="smvOutputDir" value="[$workingDir]\smv" />
+  </Variables> 
+
+    <Analysis>
+
+    <!--
+    <Action name="CreateBPL" nextAction="InstrumentChecks">
+      <Path value="[$smvOutputDir]" />
+      <Env key="PATH" value="%nullcheckap%\bin\engine\engineq\;%nullcheckap%\bin\engine\engineq\corral;%PATH%" />
+      <Command value="slam" arguments="-no_slamcl -Qlimit 3000 2500 -smvThreads 8 -driver -arrays -no_pa 3 -leave_files -smv -no_verif -liFile slam >makeBPL.txt 2>makeBPL.err" />
+    </Action>
+    -->
+
+
+    <Action name="SmackInst" nextAction="InstrumentChecks">
+      <Path value="[$smvOutputDir]" /> 
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+     <!-- <Command value="smackinst" arguments="build\test.bpl build\test_inst.bpl /replaceRoot /oldRoot:../../ /newRoot:d:\temp\ChakraCore\ > smackinst.txt 2>smackinst.err" /> -->
+     <!-- <Command value="smackinst" arguments="build\test.bpl build\test_smack_inst.bpl /replaceRoot /oldRoot:/home/wky/code/ChakraCore/ /newRoot:d:\temp\ChakraCore\   /chakraTypeConfusionFile:%nullcheckap%\bin\engine\exampleproperties\chakra-type-confusion-annots.txt > smackinst.txt 2>smackinst.err" /> -->
+     <Command value="smackinst" arguments="build\test.bpl build\test_smack_inst.bpl /replaceRoot /oldRoot:/home/vagrant/ChakraCore/ /newRoot:d:\symbolicChakraCore\   /chakraTypeConfusionFile:%nullcheckap%\bin\engine\exampleproperties\chakra-type-confusion-annots.txt /hackForSmackSdvTrace > smackinst.txt 2>smackinst.err" /> 
+    </Action>
+
+    <Action name="InstrumentChecks" nextAction="CreateEntryPoints">
+      <Path value="[$smvOutputDir]" /> 
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+      <Command value="propinst" arguments="%nullcheckap%\bin\engine\exampleproperties\type-confusion.avp build\test_smack_inst.bpl build\test_prop_inst.bpl > inst.txt 2>inst.err" />
+    </Action>
+ 
+
+    <Action name="CreateEntryPoints" nextAction="CheckEntryPoints">
+      <Path value="[$smvOutputDir]" /> 
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+      <!-- <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly /useEntryPoints  >createep.txt 2>createep.err" /> -->
+      <!-- Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly  /entryPointProc:_ZN2Js15JavascriptArray23EntryPopJavascriptArrayEPNS_13ScriptContextEPS0_ >createep.txt 2>createep.err" /> -->  
+     <!-- <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly   /entryPointProc:_ZN2Js15JavascriptArray3PopEPNS_13ScriptContextEPv >createep.txt 2>createep.err" /> --> 
+     <!-- <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly   /entryPointProc:_ZN2Js15JavascriptArray27TemplatedForEachItemInRangeILb1ENS_26JavascriptNativeFloatArrayEjZNS0_12EntryForEachEPNS_16RecyclableObjectENS_8CallInfoEzE3$_7EEvPT0_T1_S9_PNS_13ScriptContextET2_ >createep.txt 2>createep.err" /> -->
+     <!-- <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly   /entryPointProc:_ZN2Js15JavascriptArray9EntryFromEPNS_16RecyclableObjectENS_8CallInfoEz >createep.txt 2>createep.err" />  -->
+     <Command value="fastavn" arguments="build\test_prop_inst.bpl /splitFirst /createEntrypointBplsOnly /entryPointExcludes:devirtbounce* /entryPointExcludes:_cxx* /entryPointExcludes:__VERIFIER_error >createep.txt 2>createep.err" />
+    </Action>
+    
+  <Action name="CheckEntryPoints" nextAction="MergeResults" executeOn="cloud"> 
+  <!-- <Action name="CheckEntryPoints" nextAction="MergeResults"> -->
+      <Path value="[$epDir]" />
+      <Env key="nullcheckap" value="%smv%\analysisplugins\av" />
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+      <!-- <Command value="avharnessinstrumentation" arguments="pruneSlice.bpl hinst.bpl /useEntryPoints  /entryPointProc:[$epDirName] /unknownProc:malloc /unknownProc:$alloc /killAfter:1000  > avh.txt 2> avh.err" /> -->
+      <!-- File name truncation changes the name of the directory, do not use  /entryPointProc:$epDirName --> 
+      <Command value="avharnessinstrumentation" arguments="pruneSlice.bpl hinst.bpl  /useEntryPoints /unknownProc:malloc /unknownProc:$alloc /killAfter:1000  > avh.txt 2> avh.err" /> 
+      <Command value="angelicverifiernull" arguments="hinst.bpl /sdv /blockOnFreeVars /timeoutEE:1000 /timeout:1000 /killAfter:3600  /traceSlicing /noEbasic /EE:ignoreAllAssumes+ /dontGeneralize /dumpResults:results.txt /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- /EE:onlyDisplayAliasingInPre- /copt:recursionBound:3 >check.txt 2>check.err" />
+      <!-- <Command value="del" arguments="/f /q *.bpl" />     -->
+    </Action>
+    
+    <Action name="MergeResults">
+      <Path value="[$smvOutputDir]" />
+      <Env key="PATH" value="%nullcheckap%\bin\engine\;%PATH%" />
+      <Command value="fastavn" arguments="build\test_inst.bpl /mergeEntrypointBugsOnly > merge.txt 2>merge.err" />
+    </Action>
+  
+</Analysis>
+</SMVConfig>

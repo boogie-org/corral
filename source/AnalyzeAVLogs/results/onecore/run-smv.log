@@ -1,0 +1,2422 @@
+Executing SMV for module 1 in f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc]
+[DEBUG] [outputDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\drivers\storage\fdc\mode3fdc\desk2fdc]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 2 in f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc]
+[DEBUG] [outputDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\vm\tools\vm2dmp\dll\inc]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 3 in f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\smbcrypto]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\rdr\smb1\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\smbcrypto]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 4 in f:\work\os\src\onecore\base\devices\association\service 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\devices\association\service]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\devices\association\service\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\devices\association\service]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\devices\association\libs\midlutil]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\devices\association\service]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\devices\association\service\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\devices\association\libs\midlutil]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 5 in f:\work\os\src\onecore\base\cbs\mobile\SimGPIO 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\cbs\mobile\SimGPIO\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\cbs\mobile\simgpio]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 288 seconds
+Executing SMV for module 6 in f:\work\os\src\onecore\drivers\serial\usbser_wdf 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\usbser_wdf]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\usbser_wdf\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\serial\usbser_wdf]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\usbser_wdf]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\usbser_wdf]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\usbser_wdf\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\usbser_wdf]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 7 in f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\kernelinterface\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\kernelinterface]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 247 seconds
+Executing SMV for module 8 in f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srvadmin\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srvadmin]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 1527 seconds
+Executing SMV for module 9 in f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0]
+[DEBUG] [outputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Inc\archived\public\km\1.0]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 10 in f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\gpio\tools\GpioValidator\simdevicevalidator\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\gpio\tools\gpiovalidator\simdevicevalidator]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 275 seconds
+Executing SMV for module 11 in f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\bluetooth\drivers\bthcsti\lib]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 239 seconds
+Executing SMV for module 12 in f:\work\os\src\onecore\hv\hvx\hal\common 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 13 in f:\work\os\src\onecore\hv\hvx\val\vmx 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 14 in f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\rdbss\keirql\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\rdbss\keirql]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 231 seconds
+Executing SMV for module 15 in f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\usbfn\lib\CsNotify\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\usbfn\lib\csnotify]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 272 seconds
+Executing SMV for module 16 in f:\work\os\src\onecore\hv\hvx\bm 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 17 in f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\scm\rs1\lib\kernelruntime\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\scm\rs1\lib\kernelruntime]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 220 seconds
+Executing SMV for module 18 in f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\services\sysmain\prefetch\pflib]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\services\sysmain\prefetch\pflib\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\services\sysmain\prefetch\pflib]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 19 in f:\work\os\src\onecore\base\screg\sc\npsvctrig 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\screg\sc\npsvctrig\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\screg\sc\npsvctrig]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 325 seconds
+Executing SMV for module 20 in f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\input\hid\miniports\hidinterrupt\src\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\input\hid\miniports\hidinterrupt\src]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 560 seconds
+Executing SMV for module 21 in f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc]
+[DEBUG] [outputDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\ds\security\cryptoapi\ncrypt\inc]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 22 in f:\work\os\src\onecore\vm\dv\net\nvsp\driver\pt 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 23 in f:\work\os\src\onecore\vm\dv\net\nvsp\driver\pm 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 24 in f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\SmFx\Engine\v.next\Src\Km\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\smfx\engine\v.next\src\km]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 500 seconds
+Executing SMV for module 25 in f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\sdktools\debuggers\exts\extsdll\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\sdktools\debuggers\exts\extsdll]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 2609 seconds
+Executing SMV for module 26 in f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\serial\sercx\sercx\sys\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\serial\sercx\sercx\sys]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 459 seconds
+Executing SMV for module 27 in f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\remotefs\smb\srv\srv.v2\smb2]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: InterceptedBuild, failed.
+Executing SMV for module 28 in f:\work\os\src\onecore\drivers\hwn\hwnclient\fakevibra 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 29 in f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\wdm\usb\ucm\Cx\Driver\Um\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\wdm\usb\ucm\cx\driver\wnf\um]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 587 seconds
+Executing SMV for module 30 in f:\work\os\src\onecore\drivers\storage\port\usb\storbot 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 31 in f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\VirtualDisk\FsDepends\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\minkernel\apiset\libs\debug\1-0-dl]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 755 seconds
+Executing SMV for module 32 in f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbncm\wdf\host]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 33 in f:\work\os\src\onecore\base\fs\minifilters\filecrypt 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\fs\minifilters\filecrypt\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\fs\minifilters\filecrypt]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 354 seconds
+Executing SMV for module 34 in f:\work\os\src\onecore\drivers\gpio\client\armh\pl061 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 35 in f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\storage\port\usb\dumpusbstor\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\storage\port\usb\dumpusbstor]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 261 seconds
+Executing SMV for module 36 in f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\diagnostics\nettrace\ndiscap\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\net\diagnostics\nettrace\ndiscap]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 432 seconds
+Executing SMV for module 37 in f:\work\os\src\onecore\hv\hvx\Iommu 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 38 in f:\work\os\src\onecore\vm\dv\net\nvsp\driver\ob 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 39 in f:\work\os\src\onecore\net\dcn\lldp\inc 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\dcn\lldp\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\dcn\lldp\inc\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\net\dcn\lldp\inc]
+[DEBUG] [outputDir, f:\work\os\src\onecore\net\dcn\lldp\inc]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\net\dcn\lldp\inc]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\net\dcn\lldp\inc\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\net\dcn\lldp\inc]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 40 in f:\work\os\src\onecore\drivers\storage\scm\vnvdimm 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 41 in f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\base\tools\wdtf\Actions\SimulatedBattery\func_onecore\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\base\tools\wdtf\actions\simulatedbattery\func_onecore]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 320 seconds
+Executing SMV for module 42 in f:\work\os\src\onecore\vm\dv\net\nvsp\driver\dio 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 43 in f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbeem\usbeem]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbeem\usbeem_msi\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbeem\usbeem]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 44 in f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function_cat\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\drivers\net\netcard\microsoft\usbncm\wdf\function]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.
+Executing SMV for module 45 in f:\work\os\src\onecore\vm\dv\gencounter\driver 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] [name, CreateBPL]
+[DEBUG] [actionPath, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] Queuing action: InstrumentChecks on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InstrumentChecks
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] [name, InstrumentChecks]
+[DEBUG] [actionPath, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\vm\dv\gencounter\driver]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\vm\dv\gencounter\driver\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\vm\dv\gencounter\driver]
+[DEBUG] Queuing action: Check on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: Check
+[DEBUG] cumulative exit code is 0
+[INFO] Total time taken 293 seconds
+Executing SMV for module 46 in f:\work\os\src\onecore\drivers\gpio\client\RPi2 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 47 in f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\enduser\windowsupdate\muse\orchestrator\cpprestsdk-2.8.0]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\enduser\WindowsUpdate\muse\orchestrator\cpprestsdk-2.8.0\smv]
+[DEBUG] [outputDir, f:\work\os\src.obj.x86fre\Temp\onecore\enduser\windowsupdate\muse\orchestrator\cpprestsdk-2.8.0]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: InterceptedBuild, failed.
+Executing SMV for module 48 in f:\work\os\src\onecore\drivers\storage\port\sd 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 1
+[FATAL ERROR] Action: NormalBuild, failed.
+Executing SMV for module 49 in f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum 
+[DEBUG] Transformation successful
+[INFO] Validating XML against schema: f:\work\os\src\tools\analysis\x86\sdv\smv\bin\Config.xsd
+[DEBUG] The validity is True
+[INFO] Running local scheduler with 8 threads
+[DEBUG] Queuing action: NormalBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: NormalBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] entry.action
+[DEBUG] [workingDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum\smv]
+[DEBUG] [name, NormalBuild]
+[DEBUG] [actionPath, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum]
+[DEBUG] [outputDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum]
+[DEBUG] smvvars
+[DEBUG] [workingDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum]
+[DEBUG] [logFilePath, ]
+[DEBUG] [assemblyDir, f:\work\os\src\tools\analysis\x86\sdv\smv\bin]
+[DEBUG] [configFilePath, f:\work\os\src\tools\analysis\x86\sdv\smv\analysisplugins\av\configurations\razzle-irqlcheck-bcp.xml]
+[DEBUG] [smvLogFileNamePrefix, smvbuild]
+[DEBUG] [projectFile, sources]
+[DEBUG] [smvOutputDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum\smv]
+[DEBUG] [outputDir, f:\work\os\src\onecore\multimedia\wpd\drivers\class\mtp\bluetooth\bthmtpenum]
+[DEBUG] Queuing action: InterceptedBuild on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: InterceptedBuild
+[DEBUG] cumulative exit code is 0
+[DEBUG] Queuing action: CreateBPL on local
+[DEBUG] scheduler found for local
+[DEBUG] Executing: CreateBPL
+[DEBUG] cumulative exit code is 2
+[FATAL ERROR] Action: CreateBPL, failed.

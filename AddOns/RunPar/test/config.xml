@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<RunParConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Root>C:\Users\akashl\Documents\work\rse\cba\RunPar\test\root</Root>
+  <Utils>
+    <Util name="PrintCmd" dir="utils" exe="PrintCmd.exe" arguments="a b c"/>
+  </Utils>
+  <RemoteRoots>
+    <RemoteFolder value="\\rse-server-11\f$\tmp\root"/>
+  </RemoteRoots>
+  <Properties>
+    <SLIC value="LowerDriverReturn"/>
+    <SLIC value="CancelSpinLock"/>
+  </Properties>
+  <BoogieFiles>
+    <Files value="data\drivers\fdc_fail_*.bpl"/>
+    <Files value="data\drivers\flpydisk_fail_*.bpl"/>
+  </BoogieFiles>
+
+</RunParConfig>
+

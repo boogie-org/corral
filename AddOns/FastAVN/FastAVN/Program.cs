@@ -192,7 +192,7 @@ namespace FastAVN
                     }
                     if (entryPointExcludes != null)
                     {
-                        entryPointExcludes.Iter(s => avHarnessInstrArgs += string.Format("/entryPointExcludes:{0}", s));
+                        entryPointExcludes.Iter(s => avHarnessInstrArgs += string.Format("/entryPointExcludes:{0} ", s));
                     }
 
                     // Run harness instrumentation    
@@ -371,6 +371,12 @@ namespace FastAVN
             if(epNames.Count == 0)
             {
                 Console.WriteLine("No entrypoints. All verified.");
+                //SDV needs to see Merge ... to trust Fastavn did not crash
+                // collate bugs
+                printingOutput = true;
+                printBugs(ref mergedBugs, 0);
+                mergeBugs(new HashSet<string>());
+
                 return;
             }
 
@@ -385,6 +391,19 @@ namespace FastAVN
                 // for populating pred/succ cache
                 CallGraph.Successors(CallGraph.Nodes.First());
 
+                // function call graph
+                var funcCallGraph = new Microsoft.Boogie.GraphUtil.Graph<string>();
+                prog.TopLevelDeclarations.OfType<Function>()
+                    .Iter(f => funcCallGraph.Nodes.Add(f.Name));
+
+                foreach(var func in prog.TopLevelDeclarations.OfType<Function>())
+                {
+                    if (func.Body == null) continue;
+                    var vu = new VarsUsed();
+                    vu.VisitExpr(func.Body);
+                    vu.functionsUsed.Iter(used => funcCallGraph.AddEdge(func.Name, used));
+                }
+
                 DeclToFunctionsUsed = new Dictionary<Declaration, HashSet<string>>();
                 DeclToGlobalsUsed = new Dictionary<Declaration, HashSet<string>>();
 
@@ -394,7 +413,7 @@ namespace FastAVN
                     vu.VisitDeclaration(decl);
 
                     DeclToGlobalsUsed.Add(decl, vu.globalsUsed);
-                    DeclToFunctionsUsed.Add(decl, vu.functionsUsed);
+                    DeclToFunctionsUsed.Add(decl, BoogieUtil.GetReachableNodes<string>(vu.functionsUsed, funcCallGraph));
                 }
             }
 
@@ -426,7 +445,12 @@ namespace FastAVN
 
             if(entrypoints.Count == 0)
             {
-                Console.WriteLine("No entrypoints. All verified.");
+                Console.WriteLine("No entrypoints... All verified.");
+                //SDV needs to see Merge ... to trust Fastavn did not crash
+                // collate bugs
+                printingOutput = true;
+                printBugs(ref mergedBugs, 0);
+                mergeBugs(new HashSet<string>());
                 return;
             }
 
@@ -667,7 +691,7 @@ namespace FastAVN
                     }
 
                     var topLevelProcs = new HashSet<string> { impl.Name };
-                    if(initProc != null) topLevelProcs.Add(initProc.Name);                
+                    if(initProc != null) topLevelProcs.Add(initProc.Name);    
 
                     BoogieUtil.pruneProcs(newprogram, topLevelProcs);
 
@@ -700,6 +724,14 @@ namespace FastAVN
                         continue;
                     }
 
+                    // make a copy of impl.Proc
+                    var dup = new FixedDuplicator(true);
+                    var implProcCopy = dup.VisitProcedure(impl.Proc);
+                    // Mark entrypoint
+                    implProcCopy.AddAttribute("entrypoint");
+
+                    newprogram.RemoveTopLevelDeclaration(impl.Proc);
+                    newprogram.AddTopLevelDeclaration(implProcCopy);
 
                     BoogieUtil.PrintProgram(newprogram, pruneFile); // dump sliced program
 

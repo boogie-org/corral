@@ -396,12 +396,15 @@ namespace AvHarnessInstrumentation
             {
                 return Options.entryPointExcludes.Any(t => new System.Text.RegularExpressions.Regex(t).IsMatch(s));
             });
-            init.TopLevelDeclarations.OfType<NamedDeclaration>()
-                .Where(d => d is Procedure || d is Implementation)
-                .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
-                .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
-                .Iter(d => d.AddAttribute("entrypoint"));
-
+            //when both entryPointProcs == null and entryPointExcludes == null, it should not add any entrypointProcs
+            if (Options.entryPointProcs != null || Options.entryPointExcludes != null)
+            {
+                init.TopLevelDeclarations.OfType<NamedDeclaration>()
+                    .Where(d => d is Procedure || d is Implementation)
+                    .Where(d => Options.entryPointProcs == null || Options.entryPointProcs.Contains(d.Name))
+                    .Where(d => (Options.entryPointExcludes == null || !matchesEntryPointExclude(d.Name)))
+                    .Iter(d => d.AddAttribute("entrypoint"));
+            }
             // Add {:entrypoint} to procs with {:harness}
             if (Options.useHarnessTag)
             {
@@ -411,11 +414,12 @@ namespace AvHarnessInstrumentation
             }
 
             // inlining introduces havoc statements; lets just delete them (TODO: make inlining not introduce redundant havoc statements)
-            foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
-            {
-                impl.Blocks.Iter(blk =>
-                    blk.Cmds.RemoveAll(cmd => cmd is HavocCmd));
-            }
+            //foreach (var impl in init.TopLevelDeclarations.OfType<Implementation>())
+            //{
+            //    impl.Blocks.Iter(blk =>
+            //        blk.Cmds.RemoveAll(cmd => cmd is HavocCmd));
+            //}
+            ReplaceHavocsWithNonDet(init);
 
             //Instrument to create the harness
             harnessInstrumentation = new Instrumentations.HarnessInstrumentation(init, AvnAnnotations.CORRAL_MAIN_PROC, Options.useProvidedEntryPoints);
@@ -696,6 +700,53 @@ namespace AvHarnessInstrumentation
                 }
             }
         }
+
+        // replace havoc statements by calls to nondets
+        public static void ReplaceHavocsWithNonDet(Program program)
+        {
+            var nonDetProcs = new HashSet<Procedure>();
+
+            var mkOrLookupNonDetProc = new Func<Variable, Procedure>(d =>
+            {
+                var dt = ((Variable)d).TypedIdent.Type;
+                var op = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "o", dt), false);
+                var procName = "havocNonDetAvh." + dt.ToString();
+                var found = nonDetProcs.Where(x => x.Name == procName).FirstOrDefault();
+                if (found != null) return found;
+                var proc = new Procedure(Token.NoToken, procName,
+                    new List<TypeVariable>(), new List<Variable>(), new List<Variable>() { op },
+                    new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
+                nonDetProcs.Add(proc);
+                return proc;
+            });
+
+            foreach (Implementation impl in program.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach (Block blk in impl.Blocks)
+                {
+                    var newCmds = new List<Cmd>();
+
+                    foreach (Cmd cmd in blk.Cmds)
+                    {
+                        if (!(cmd is HavocCmd)) newCmds.Add(cmd);
+                        else
+                        {
+                            var hVars = ((HavocCmd)cmd).Vars;
+                            hVars.Iter(hv => 
+                            {
+                                var cCmd = new CallCmd(Token.NoToken, mkOrLookupNonDetProc(hv.Decl).ToString(),
+                                    new List<Expr>(), new List<IdentifierExpr>() { hv });
+                                newCmds.Add(cCmd);
+                            });
+                        }
+                    }
+                    blk.Cmds = newCmds;
+                }
+            }
+            nonDetProcs.Iter(x => program.AddTopLevelDeclaration(x));
+
+        }
+
 
         // Run Alias Analysis on a sequential Boogie program
         // and returned the pruned program

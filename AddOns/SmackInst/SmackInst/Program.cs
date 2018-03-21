@@ -34,6 +34,9 @@ namespace SmackInst
         public static bool checkMemSafety = false;
 
         public static bool visualizeHeap = false;
+        public static string chakraTypeConfusionAnnotsFile = null;
+        public static bool hackForSmackSdvTrace = false;
+
 
         static void Main(string[] args)
         {
@@ -57,6 +60,12 @@ namespace SmackInst
 
             args.Where(a => a.StartsWith("/newRoot:"))
                 .Iter(a => newRoot = a.Substring("/newRoot:".Length));
+
+            args.Where(a => a.StartsWith("/chakraTypeConfusionFile:"))
+                .Iter(a => chakraTypeConfusionAnnotsFile = a.Substring("/chakraTypeConfusionFile:".Length));
+
+            if (args.Any(a => a == "/hackForSmackSdvTrace"))
+                hackForSmackSdvTrace = true;
 
             if (args.Any(a => a == "/count"))
                 count = true;
@@ -322,6 +331,13 @@ namespace SmackInst
                 var ddc = new SimpleDeadcodeDectectionVisitor();
                 ddc.Run(program);
             }
+
+            if (chakraTypeConfusionAnnotsFile != null)
+                (new InstrumentTypeConfusionChakra(chakraTypeConfusionAnnotsFile, program)).InstrumentCode();
+
+            if (hackForSmackSdvTrace)
+                (new HackForSmackSdvTrace(program)).Visit(program);
+
             // if we don't check NULL, stop here
             if (!checkNULL && !checkUAF)
                 return program;
@@ -362,12 +378,13 @@ namespace SmackInst
             if (initMem)
                 InitMemory(program);
 
+
             return program;
         }
 
-		// Inline functions with {:inline true} attribute
-		// borrow code from Symbooglix transform passes
-		static void InlineFunctions(Program prog)
+        // Inline functions with {:inline true} attribute
+        // borrow code from Symbooglix transform passes
+        static void InlineFunctions(Program prog)
 		{
 			Predicate<Function> Condition = f => QKeyValue.FindBoolAttribute(f.Attributes, "inline");
 			var functionInlingVisitor = new FunctionInlingVisitor(Condition);
@@ -465,6 +482,67 @@ namespace SmackInst
 
     }
 
+    public class HackForSmackSdvTrace : FixedVisitor
+    {
+        Program prog;
+        HashSet<string> impls; //list of impls
+        public HackForSmackSdvTrace(Program prog)
+        {
+            this.prog = prog;
+            impls = new HashSet<string>(prog.TopLevelDeclarations.OfType<Implementation>().Select(x => x.Proc.Name));
+        }
+
+        public override Implementation VisitImplementation(Implementation impl)
+        {
+            foreach (var blk in impl.Blocks)
+            {
+                var newCmds = new List<Cmd>();
+                foreach (var cmd in blk.cmds)
+                {
+                    var ccmd = cmd as CallCmd;
+                    if (ccmd == null || !impls.Contains(ccmd.callee)) { newCmds.Add(cmd); continue; }
+                    //foo -> devirt or devirt -> bar
+                    var caller = impl.Proc.Name;
+                    var callee = ccmd.callee;
+                    var isCallerDevirt = impl.Proc.Name.Contains("devirtbounce");
+                    var isCalleeDevirt = ccmd.callee.Contains("devirtbounce");
+                    if (isCalleeDevirt || isCallerDevirt)
+                    {
+                        AddSourceLocInfo(impl, newCmds, ccmd, caller, callee, isCalleeDevirt);
+                    }
+                    else
+                    {
+                        newCmds.Add(ccmd);
+                    }
+
+                }
+                blk.Cmds = newCmds;
+            }
+            return base.VisitImplementation(impl);
+        }
+        private static void AddSourceLocInfo(Implementation impl, List<Cmd> newCmds, CallCmd ccmd, string caller, string callee, bool isCalleeDevirt)
+        {
+            var aCmd = new AssumeCmd(Token.NoToken, Expr.True);
+            aCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+            var callInfo = "Call \\\" " + caller + " \\\" \\\" " + callee + " \\\" ";
+            aCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { callInfo }, null));
+            newCmds.Add(aCmd);
+            newCmds.Add(ccmd);
+            //if the procedure is not devirtbounce* then there is a regular return printed by smack 
+            //so if the callee is not devirtbounce, then there is a return at the end of callee
+            if (isCalleeDevirt)
+            {
+                var rCmd = new AssumeCmd(Token.NoToken, Expr.True);
+                rCmd.Attributes = new QKeyValue(Token.NoToken, "sourceloc",
+                                                    new object[] { "devirtbounce-unknown-file", Expr.Literal(0), Expr.Literal(0) }, null);
+                rCmd.Attributes.AddLast(new QKeyValue(Token.NoToken, "print", new object[] { "Return" }, null));
+                newCmds.Add(rCmd);
+            }
+        }
+
+    }
+
     public class SimpleDeadcodeDectectionVisitor : FixedVisitor
     {
         Function f;
@@ -536,7 +614,7 @@ namespace SmackInst
     // Add attribute {:fpcondition} to assume cmds in charge of branching in function pointer dispatch procs
     public class AnnotateFPDispatchProcVisitor : FixedVisitor
     {
-        string pattern = @"^devirtbounce\d*$";
+        string pattern = @"^devirtbounce.*$"; //relaxing it to match devirtbounce.11
         List<Function> aliasQfuncs = new List<Function>();
         Procedure specialPtrFunc = null;
         Procedure specialScalarFunc = null;
@@ -637,7 +715,7 @@ namespace SmackInst
                     var callCmd = cmd as CallCmd;
                     var callee = callCmd.callee;
                     // watch out: varg functions have trailing arg types in function name
-                    callee = callee.Split('.')[0];
+                    //callee = callee.Split('.')[0]; //some functions are called _GLOBAL__sub_I_JavascriptArray.cpp
                     var aaCmd = MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int));
                     aaCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
                         new QKeyValue(Token.NoToken, "slic", new List<object>(), aaCmd.Attributes));
@@ -1165,6 +1243,234 @@ namespace SmackInst
             }
             return node;
         }
+    }
+
+
+    /// <summary>
+    /// Adds special functions by parsing a text file generated by CLANG
+    /// TODO: will be replaced by performing this directly at the CLANG level
+    /// </summary>
+    public class InstrumentTypeConfusionChakra
+    {
+        string typeFile;
+        Program prog;
+        HashSet<Tuple<string, HashSet<int>>> upcallFuncs;
+        HashSet<Tuple<string, int>> isTypeFuncs;
+        HashSet<Tuple<string, int, int>> typePreCondFuncs;
+        HashSet<string> getTypeIdFuncs; 
+
+        const string upcallFuncName = "ThisIsAnUpcallArg";
+        const string isTypeFuncName = "IsJSArrayType";
+        const string typePreCondFuncName = "TemplateSpecializedProc";
+        const string getTypeIdFuncName = "ThisIsGetTypeIdProc";
+
+        public InstrumentTypeConfusionChakra(string fname, Program pr)
+        {
+            typeFile = fname;
+            prog = pr;
+            ParseFuncAnnotations();
+        }
+
+        private void ParseFuncAnnotations()
+        {
+            upcallFuncs = new HashSet<Tuple<string, HashSet<int>>>();
+            isTypeFuncs = new HashSet<Tuple<string, int>>();
+            typePreCondFuncs = new HashSet<Tuple<string, int, int>>();
+            getTypeIdFuncs = new HashSet<string>();
+
+            using (var iStream = new StreamReader(typeFile))
+            {
+                string line;
+                while((line = iStream.ReadLine())!= null)
+                {
+                    ParseLine(line);
+                }
+            }
+        }
+
+        private void ParseLine(string line)
+        {
+            //remove the string after "//"
+            var lineWoComments = line.Contains("//")? line.Substring(0, line.IndexOf("//")) : line;
+            var strArr = lineWoComments.Split(new char[] { ':', ',', ' ' }).Where(x => x != "").ToArray();
+            if (strArr.Count() < 2) return;
+            if (strArr[0] == "Upcall")
+            {
+                var pArgs = new HashSet<int>();
+                for(int i = 2; i < strArr.Length; ++i)
+                {
+                    pArgs.Add(Int32.Parse(strArr[i])); //ignoring exception
+                }
+                upcallFuncs.Add(new Tuple<string, HashSet<int>>(strArr[1], pArgs));                
+            }
+            else if (strArr[0] == "FromVar" || strArr[0] == "IS")
+            {
+                isTypeFuncs.Add(new Tuple<string, int>(strArr[1], Int32.Parse(strArr[2]))); //ignoring exception
+            }
+            else if (strArr[0] == "SpecTemp")
+            {
+                typePreCondFuncs.Add(new Tuple<string, int, int>(strArr[1], Int32.Parse(strArr[2]), Int32.Parse(strArr[3])));
+            }
+            else if (strArr[0] == "GetTypeID")
+            {
+                getTypeIdFuncs.Add(strArr[1]);
+            }
+        }
+
+        public void InstrumentCode()
+        {
+            ParseFuncAnnotations();
+
+            //declare the funcs
+            var iVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", btype.Int), true);
+            var tVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "t", btype.Int), true);
+            var rVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", btype.Int), true);
+
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, typePreCondFuncName, 
+                new List<TypeVariable>(), new List<Variable>() { iVar, tVar }, new List<Variable>(), 
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, isTypeFuncName,
+                new List<TypeVariable>(), new List<Variable>() { iVar, tVar, rVar }, new List<Variable>(),
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, upcallFuncName,
+                new List<TypeVariable>(), new List<Variable>() { iVar }, new List<Variable>(),
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+            prog.AddTopLevelDeclaration(new Procedure(Token.NoToken, getTypeIdFuncName,
+                new List<TypeVariable>(), new List<Variable>() { iVar,tVar }, new List<Variable>(),
+                new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>()));
+
+            foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                foreach(var bl in impl.Blocks)
+                {
+                    var newCmds = new List<Cmd>();
+                    foreach(var cmd in bl.cmds)
+                    {
+                        var callCmd = cmd as CallCmd;
+                        if (callCmd == null)
+                        {
+                            newCmds.Add(cmd);
+                            continue;
+                        }
+                        HashSet<int> pArgs;
+                        int argPos;
+                        int typeId;
+                        //multiple facts may match
+                        //these commands go before the call
+                        if (IsTypePrecondFuncs(callCmd.callee, out argPos, out typeId))
+                            newCmds.AddRange(InstrumentIsTypePrecondCall(callCmd, argPos, typeId));
+
+                        newCmds.Add(callCmd);
+
+                        //these commands go after the call
+                        if (IsUpCall(callCmd.callee, out pArgs))
+                            newCmds.AddRange(InstrumentUpcall(callCmd, pArgs));
+                        if (IsIsType(callCmd.callee, out typeId))
+                            newCmds.AddRange(InstrumentIsTypeCall(callCmd, typeId));
+                        if (IsGetTypeId(callCmd.callee))
+                            newCmds.AddRange(InstrumentGetTypeCall(callCmd));
+                    }
+                    bl.Cmds = newCmds;
+                }
+            }
+        }
+
+        private IEnumerable<Cmd> InstrumentIsTypePrecondCall(CallCmd callCmd, int pos, int typeId)
+        {
+            var retCmds = new List<Cmd>();
+            Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsTypePrecond function " + callCmd.Proc.Name);
+            var nCmd = new CallCmd(Token.NoToken, typePreCondFuncName, 
+                new List<Expr>() {callCmd.Ins[pos],Expr.Literal(typeId) },  new List<IdentifierExpr>());
+            retCmds.Add(nCmd); //adding a precondition, so should appear before the call
+            return retCmds;
+        }
+
+        private bool IsTypePrecondFuncs(string pName, out int pos, out int typeId)
+        {
+            pos = -1; typeId = -1;
+            var found = typePreCondFuncs.Where(x => x.Item1 == pName);
+            if (found.Count() > 0)
+            {
+                pos = found.First().Item2;
+                typeId = found.First().Item3;
+                return true;
+            }
+            return false;
+        }
+
+        private IEnumerable<Cmd> InstrumentIsTypeCall(CallCmd callCmd, int typeId)
+        {
+            var retCmds = new List<Cmd>();
+            var retExprs = callCmd.Outs;
+            Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
+            var nCmd = new CallCmd(Token.NoToken, isTypeFuncName, new List<Expr>() {retExprs[0], callCmd.Ins[0], Expr.Literal(typeId) }, 
+                new List<IdentifierExpr>());
+            retCmds.Add(nCmd);
+            return retCmds;
+        }
+
+        private bool IsIsType(string pName, out int typeId)
+        {
+            typeId = -1;
+            var found = isTypeFuncs.Where(x => x.Item1 == pName);
+            if (found.Count() > 0)
+            {
+                typeId = found.First().Item2;
+                return true;
+            }
+            return false;
+        }
+
+        private IEnumerable<Cmd> InstrumentUpcall(CallCmd callCmd, HashSet<int> pArgs)
+        {
+            var retCmds = new List<Cmd>();
+            foreach (var pos in pArgs)
+            {
+                if (pos == -1)
+                {
+                    //case when the return value is havoced (e.g. constructors)
+                    var nCmd1 = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Outs[0] },
+                        new List<IdentifierExpr>());
+                    retCmds.Add(nCmd1);
+                }
+                else
+                {
+                    Debug.Assert(callCmd.Ins.Count > pos, "Illegal argument count for IsUpcall function " + callCmd.Proc.Name);
+                    var nCmd = new CallCmd(Token.NoToken, upcallFuncName, new List<Expr>() { callCmd.Ins[pos] },
+                        new List<IdentifierExpr>());
+                    retCmds.Add(nCmd);
+                }
+            }
+            return retCmds;
+        }
+
+        private bool IsUpCall(string pName, out HashSet<int> pArgs)
+        {
+            pArgs = new HashSet<int>();
+            var found = upcallFuncs.Where(x => x.Item1 == pName);
+            if (found.Count() > 0)
+            {
+                pArgs = new HashSet<int>(found.First().Item2);
+                return true;
+            }
+            return false;
+        }
+
+        private bool IsGetTypeId(string pName)
+        {
+            return getTypeIdFuncs.Where(x => x == pName).Count() > 0;
+        }
+        private IEnumerable<Cmd> InstrumentGetTypeCall(CallCmd callCmd)
+        {
+            var retCmds = new List<Cmd>();
+            var retExprs = callCmd.Outs;
+            Debug.Assert(retExprs.Count == 1, "Expecting exactly one return variable for isType function " + callCmd.Proc.Name);
+            var nCmd = new CallCmd(Token.NoToken, getTypeIdFuncName, new List<Expr>() {callCmd.Ins[0], retExprs[0]},
+                new List<IdentifierExpr>());
+            retCmds.Add(nCmd);
+            return retCmds;
+        }
+
     }
 
 }

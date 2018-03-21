@@ -1,0 +1,11 @@
+
+ProcedureRule
+{
+	procedure {:#ReplaceImplementation} foo({:pointer} x0: int) returns ({:scalar} r: int);
+}
+-->
+{
+	assert {:name "foo"};
+	assert irql_current == 0;
+	return;
+}

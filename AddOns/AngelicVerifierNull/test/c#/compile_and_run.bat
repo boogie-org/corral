@@ -17,12 +17,13 @@ goto finish
 :begin 
 copy ..\Poirot.dll . > NUL
 copy ..\Stubs.dll . > NUL
+copy ..\CollectionStubs.dll . > NUL
 copy ..\poirot_stubs.bpl . > NUL
 
 REM set BCTEXE=..\..\..\..\..\..\bct\Binaries\BytecodeTranslator.exe
 set BCTCLEANUPEXE=..\..\..\..\..\bin\Debug\BctCleanup.exe
 set AVNEXE=..\..\..\AngelicVerifierNull\bin\Debug\AngelicVerifierNull.exe
-set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:noFilters
+set AVNOPTS=/nodup /traceSlicing /copt:recursionBound:5 /copt:k:1 /copt:tryCTrace /EE:noFilters /EE:onlyDisplayAliasingInPre- /sdv
 set AVHARNESS=..\..\..\AvHarnessInstrumentation\bin\Debug\AvHarnessInstrumentation.exe
 if "%2"=="/dll" goto dllfile
 if "%3"=="/dll" goto dllfile
@@ -34,7 +35,8 @@ goto csc
 
 :dllfile
 set CSCOUT=test.dll
-set CSCOPTS=/r:Poirot.dll /debug /D:DEBUG /t:library /out:test.dll
+REM set CSCOPTS=/r:Poirot.dll /debug /D:DEBUG /t:library /out:test.dll
+set CSCOPTS=/r:CollectionStubs.dll /debug /D:DEBUG /t:library /out:test.dll
 set AVHARNESSOPTS= /noAA /unknownType:Ref /unknownType:int
 
 :csc
@@ -55,7 +57,9 @@ if exist test.bpl del test.bpl
 if exist testClean.bpl del testClean.bpl
 
 echo Running BCT ...
-call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT% Stubs.dll > ErrorLog
+:call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT% Stubs.dll > ErrorLog
+:call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT%  > ErrorLog
+call %BCTEXE% /e:1 /whole /heap:splitFields /typeinfo:1 %CSCOUT% CollectionStubs.dll > ErrorLog
 if not exist test.bpl goto bcterror
 copy test.bpl testClean.bpl > NUL
 if "%2"=="/nocleanup" goto harness
@@ -68,6 +72,7 @@ if exist testClean.bpl goto harness
 
 :harness
 echo Running Harness Instrumentations ...
+echo %AVHARNESS% testClean.bpl testInst.bpl %AVHARNESSOPTS%
 call %AVHARNESS% testClean.bpl testInst.bpl %AVHARNESSOPTS%
 if not exist testInst.bpl goto harnesserror
 if exist testInst.bpl goto avn
@@ -87,10 +92,17 @@ goto end
 
 :avn
 echo Running AVN ...
+echo %AVNEXE% testInst.bpl %AVNOPTS% 
 %AVNEXE% testInst.bpl %AVNOPTS% > AvnOut
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+
+rm defect.tt
+cp Trace0.tt defect.tt
+echo \\shuvendoZ440\sdvdefect\sdvdefect defect.tt 
+\\shuvendoZ440\sdvdefect\sdvdefect defect.tt 
+
 
 :end
 if not exist TestProgram.bpl goto finish
@@ -101,6 +113,7 @@ echo Running AVN on TestProgram.bpl ...
 findstr AV_OUTPUT AvnOut
 echo %1 >> ..\Output
 findstr AV_OUTPUT AvnOut >> ..\Output
+
 
 :finish
 cd ..

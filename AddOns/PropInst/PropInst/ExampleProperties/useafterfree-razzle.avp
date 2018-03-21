@@ -30,6 +30,8 @@ procedure {:corralExtraInitExtension} cEIE() {
     assume (forall x:int :: validFree[x]); 
 }
 
+procedure boogie_si_record_bool(x:bool);
+
 }
 
 
@@ -48,6 +50,7 @@ CmdRule
 -->
 {
   #this;
+  call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
   assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); 
 }
 
@@ -58,6 +61,7 @@ CmdRule
 }
 -->
 {
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
     assert (!aliasesWithFreed(p, freedp) || validFree[p] || p == 0); //the inlined function is not expanded
     #this;
 }
@@ -65,15 +69,210 @@ CmdRule
 
 //Any stub *[fF]ree* is considered a free
 //Exclude methods such as RtlFreeUnicodeString that free fields
+//ProcedureRule
+//{
+//    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p : int);
+//}
+//-->
+//{
+//    validFree[p] := if (p == 0) then validFree[p] else false;
+//    call aliases(p);
+//}
+
+//Narrowing free routines to only those that are known (10/30/17)
+//free, _freea, _free_dbg, 
+//ExFreePool, ExFreePoolWithTag, 
+//Seen in true bugs: IoFreeMdl, 
+//Not seen in true bugs: 
+//IoFreeIrp
+//LocalFree/GlobalFree: frees if the return is NULL (but used in many places without return)
+//HeapFree(h, o, p): if the return is non-zero, then frees the 3rd arg
+//VirtualFree:3 params/VirtualFreeEx:4 params. return non-zero for succes
+//Not exposed in MSDN: SmfFreeMemory
+//
+//Add rules so that SDV can pick them up (sdv_ExFreePool) 
+
 ProcedureRule
 {
-    procedure {:#NameMatches "[fF]ree"} {:#NameNotMatches "^Rtl"} {:#NameNotMatches "Bogus"} {:#NoImplementation} builtin_free({:pointer} p1 : int);
+    //free is a Boogie keyword
+    procedure  {:#NameMatches "^[fF]ree$"} builtin_free({:pointer} p : int);
+    procedure  {:#NameMatches "^sdv_[fF]ree$"} builtin_free({:pointer} p : int);
 }
 -->
 {
-    validFree[p1] := if (p1 == 0) then validFree[p1] else false;
-    call aliases(p1);
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+    return;
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} ExFreePool({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_ExFreePool({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+
+    return;
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} ExFreePoolWithTag({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+    call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}   sdv_ExFreePoolWithTag({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+  call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} IoFreeMdl({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_IoFreeMdl({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
 }
 
 
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} IoFreeIrp({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    procedure {:#ReplaceImplementation}  sdv_IoFreeIrp({:pointer} p : int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else false;
+    call aliases(p);
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+
+ProcedureRule
+{
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366730(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} LocalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366730(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}   sdv_LocalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}  {:#NoImplementation} GlobalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
+
+ProcedureRule
+{
+    //sdv-harness.c has a dummy definition for these guys, so we need to remove the implementation
+    //https://msdn.microsoft.com/en-us/library/windows/desktop/aa366579(v=vs.85).aspx
+    procedure {:#ReplaceImplementation}   sdv_GlobalFree({:pointer} p : int) returns (r:int);
+}
+-->
+{
+    validFree[p] := if (p == 0) then validFree[p] else (validFree[p] && r != 0);
+    call aliases(p); //ok to alias with freed pointer since r happens non-deterministically
+    assert {:sourcefile "?"} {:sourceline 0} {:print "Return"} true;
+      call {:cexpr "freed-pointer"} boogie_si_record_bool(!validFree[p]);  
+    return;
+}
 

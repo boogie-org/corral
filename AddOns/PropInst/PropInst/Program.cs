@@ -63,6 +63,9 @@ namespace PropInst
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
+            if (args.Any(x => x == "/staleValueCheck"))
+                (new PropInst.StateValueInstrument(boogieProgram)).Instrument();
+
             Stats.printStats();
         }
 
@@ -76,7 +79,7 @@ namespace PropInst
             Debug.Assert(augProcs.All(x => (x.InParams.Count() + x.OutParams.Count() == 0)),
                 "Procedures with " + ExprMatchVisitor.BoogieKeyWords.CorralExtraInitExtn + "attribute cannot have any input/output params");
 
-            var corralExtraInit = boogieProgram.Implementations.FirstOrDefault(x => x.Name == "CorralExtraInit");
+            var corralExtraInit = boogieProgram.Implementations.FirstOrDefault(x => x.Name == "corralExtraInit");
             if (corralExtraInit == null) return;
 
             augProcs.Iter
@@ -145,12 +148,15 @@ namespace PropInst
             {
                 foreach (var procSig in rule.ProcedureToMatchToInsertion.Keys)
                 {
-                    int anyParamsPosition;
+					// match references attribute
+					bool matchPtrs = QKeyValue.FindBoolAttribute(procSig.Attributes, ExprMatchVisitor.BoogieKeyWords.MatchPtrs);
+
+					int anyParamsPosition;
                     QKeyValue anyParamsAttributes;
                     int anyParamsPositionOut;
                     QKeyValue anyParamsAttributesOut;
                     Dictionary<Declaration, Expr> paramSubstitution;
-                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out anyParamsAttributesOut, out anyParamsPositionOut, out paramSubstitution))
+                    if (ProcedureSigMatcher.MatchSig(procSig, dwf, _program, out anyParamsAttributes, out anyParamsPosition, out anyParamsAttributesOut, out anyParamsPositionOut, out paramSubstitution, matchPtrs))
                     {
                         Implementation impl = null;
                         if (dwf is Implementation)
