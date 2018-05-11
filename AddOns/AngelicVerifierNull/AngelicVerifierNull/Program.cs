@@ -1685,7 +1685,7 @@ namespace AngelicVerifierNull
             //once a field has been generalized, we should not see blocks over it
             supportVars.Iter(x =>
                 {
-                    if (x.TypedIdent.Type.IsMap && x.TypedIdent.Type.MapArity == 1)
+                    if (x.TypedIdent.Type.IsMap && x.TypedIdent.Type.AsMap.MapArity == 1)
                     {
                         var xstr = x.ToString();
                         if (fieldInBlockCount.ContainsKey(xstr))
