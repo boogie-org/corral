@@ -707,7 +707,7 @@ namespace cba
             }
             else if (flag.StartsWith("/bopt:"))
             {
-                boogieOpts += " \"/" + flag.Substring("/bopt:".Length) + "\" ";
+                boogieOpts += " \"-" + flag.Substring("/bopt:".Length) + "\" ";
             }
             else if (flag == "/printBoogieExt")
             {
