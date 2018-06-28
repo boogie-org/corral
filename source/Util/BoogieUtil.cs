@@ -42,7 +42,8 @@ namespace cba.Util
                     args.Add(quotes[i]);
             }
 
-            CommandLineOptions.Clo.Parse(args.ToArray());
+            if (!CommandLineOptions.Clo.Parse(args.ToArray()))
+                return true;
 
             // No Max: avoids theorem prover restarts
             CommandLineOptions.Clo.MaxProverMemory = 0;
