@@ -1294,7 +1294,7 @@ namespace cba.Util
                 var nodeFunc = ((FunctionCall)node.Fun).Func;
                 for (var i = 0; i < tcFunc.InParams.Count; i++)
                 {
-                    if (!Equals(tcFunc.InParams[i].TypedIdent.Type, nodeFunc.InParams[i].TypedIdent.Type))
+                    if (!Equals(tcFunc.InParams[i].TypedIdent.Type.ToString(), nodeFunc.InParams[i].TypedIdent.Type.ToString()))
                     {
                         Matches = false;
                         return base.VisitNAryExpr(node);
@@ -1355,7 +1355,7 @@ namespace cba.Util
 
             if (idexToConsume.Decl != null)
             {
-                if (Equals(node.Decl.TypedIdent.Type, idexToConsume.Decl.TypedIdent.Type)
+                if (Equals(node.Decl.TypedIdent.Type.ToString(), idexToConsume.Decl.TypedIdent.Type.ToString())
                     && AreAttributesASubset(idexToConsume.Decl.Attributes, node.Decl.Attributes))
                 {
                     Substitution.Add(idexToConsume.Decl, node);
