@@ -1181,6 +1181,7 @@ namespace CoreLib
             return outcome;
         }
 
+        enum VerifyMode { Vanilla, OR_UW, UW };
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
             Outcome outcome = Outcome.Inconclusive;
@@ -1188,8 +1189,32 @@ namespace CoreLib
             ForceInline(openCallSites, recBound);
 
             var boundHit = false;
+            VerifyMode mode = VerifyMode.Vanilla;
+            int itrCount = CommandLineOptions.Clo.UW;
+
+            /**
+             * Command-line options:
+             * uw: 0 : Run Corral in the Vanilla mode(underapprox for bug and overapprox for expanding)
+             * uw: 1 : Run Corral in UnderApproximation widening mode(only underapprox)
+             * uw: k : Run 1 under - approximation for every(k - 1) overapproximations(both do expanding)
+            **/
             while (true)
             {
+                if (CommandLineOptions.Clo.UW == 0)
+                    mode = VerifyMode.Vanilla;
+                else if (CommandLineOptions.Clo.UW == 1)
+                    mode = VerifyMode.UW;
+                else if (itrCount > 0)
+                {
+                    mode = VerifyMode.OR_UW;
+                    itrCount--;
+                }
+                else
+                {                    
+                    mode = VerifyMode.UW;
+                    itrCount = CommandLineOptions.Clo.UW - 1; // for UW = k, do UW 1/k fraction of the times
+                }
+
                 // Check timeout
                 if (CommandLineOptions.Clo.ProverKillTime != -1)
                 {
@@ -1206,25 +1231,78 @@ namespace CoreLib
                     return Outcome.ReachedBound;
                 }
 
+                if (mode == VerifyMode.OR_UW)
+                    goto OVERAPPROX;
+
                 MacroSI.PRINT_DEBUG("  - underapprox");
                 boundHit = false;
 
                 // underapproximate query
                 Push();
 
-
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
-                    prover.Assert(cs.callSiteExpr, false);
+                    if (mode == VerifyMode.UW)
+                    {
+                        if (HasExceededRecursionDepth(cs, recBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                            procsHitRecBound.Add(cs.callSite.calleeName);
+                            //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
+                            boundHit = true;
+                        }
+
+
+                        // Non-uniform unfolding
+                        if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                            Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+
+                        continue;
+                    }
+                    else
+                        prover.Assert(cs.callSiteExpr, false);
                 }
 
                 MacroSI.PRINT_DEBUG("    - check");
                 reporter.reportTrace = main;
                 outcome = CheckVC(reporter);
+                List<string> ucore = null;
+                if (mode == VerifyMode.UW && outcome == Outcome.Correct)
+                {
+                    ucore = prover.UnsatCore();
+                }
                 Pop();
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                 if (outcome != Outcome.Correct) break;
 
+                if (mode == VerifyMode.UW && outcome == Outcome.Correct)
+                {
+                    if (ucore == null)
+                        return Outcome.Correct;
+
+                    var toExpand1 = openCallSites.Where(s => ucore.Contains("label_" + s.callSiteExpr.ToString())).ToList();
+                    foreach (var scs in toExpand1)
+                    {
+                        openCallSites.Remove(scs);
+                        var svc = Expand(scs);
+                        if (svc != null)
+                        {
+                            openCallSites.UnionWith(svc.CallSites);
+                            if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
+                        }
+                    }
+
+                    ForceInline(openCallSites, recBound);
+                }
+
+                if (mode == VerifyMode.UW)
+                    continue;
+
+                OVERAPPROX:
                 MacroSI.PRINT_DEBUG("  - overapprox");
                 // overapproximate query
                 Push();
@@ -1260,7 +1338,7 @@ namespace CoreLib
 
                     break; // done
                 }
-                if (reporter.callSitesToExpand.Count == 0)
+                if (reporter.callSitesToExpand.Count == 0 && mode == VerifyMode.Vanilla) // It can happen in OR mode as underapprox was skipped (actually it immediately implies a bug as the whole path is then concrete; we, however, wait for the underapprox stage to be safe)
                     return Outcome.Inconclusive;
 
                 var toExpand = reporter.callSitesToExpand;
@@ -1677,6 +1755,9 @@ namespace CoreLib
                     procsHitRecBound = new HashSet<string>();
 
                     outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
+
+                   BoogieVerify.total_procedure_inlinings += stats.numInlined;
+                   BoogieVerify.total_Z3_calls += stats.calls;
 
                     // timeout?
                     if (outcome == Outcome.Inconclusive || outcome == Outcome.OutOfMemory || outcome == Outcome.TimedOut)

@@ -40,6 +40,9 @@ namespace cba.Util
         // TODO: move this elsewhere
         public static HashSet<string> ignoreAssertMethods;
 
+        public static int total_procedure_inlinings = 0;
+        public static int total_Z3_calls = 0;
+
         public static void setTimeOut(int TO)
         {
             CommandLineOptions.Clo.ProverKillTime = -1;

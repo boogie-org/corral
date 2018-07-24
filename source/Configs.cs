@@ -158,6 +158,8 @@ namespace cba
 
         public string explainQuantifiers { get; private set; }
 
+        public int UW { get; private set; }
+
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -349,6 +351,8 @@ namespace cba
             irreducibleLoopUnroll = -1;
 
             explainQuantifiers = null;
+
+            UW = 0;
         }
 
 
@@ -766,6 +770,11 @@ namespace cba
             {
                 useDuality = true;
                 newStratifiedInlining = false;
+            }
+            else if (flag.StartsWith("/uw:"))
+            {
+                var split = flag.Split(sep);
+                UW = Int32.Parse(split[1]);
             }
             else
             {

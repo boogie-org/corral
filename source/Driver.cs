@@ -177,6 +177,11 @@ namespace cba
                 CommandLineOptions.Clo.StratifiedInliningWithoutModels = true;
 
             GlobalConfig.corralStartTime = DateTime.Now;
+
+            if (config.UW > 0)
+            {
+                CommandLineOptions.Clo.UW = config.UW;
+            }
         }
 
         public static int run(string[] args) 
@@ -434,12 +439,17 @@ namespace cba
 
             var endTime = DateTime.Now;
 
+            Log.WriteLine("Verification-Mode (UW) setting: {0} ", CommandLineOptions.Clo.UW);
+            Log.WriteLine(string.Format("Cumulative Procedure Inlinings : {0}", Stats.total_procedure_inlinings));
+            Log.WriteLine(string.Format("Cumulative Z3 Calls : {0}", Stats.total_Z3_calls));
+
             Log.WriteLine(string.Format("Total Time: {0} s", (endTime - startTime).TotalSeconds));
 
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
             TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
             Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
 
 
@@ -678,7 +688,7 @@ namespace cba
                 }
 
             }
-
+            
             #endregion
 
             // force inline
@@ -1197,7 +1207,13 @@ namespace cba
             Console.WriteLine("VC Size: {0}", vcSize);
             Console.WriteLine("Final tracked vars: {0}", varsToKeep.Variables.Print());
             Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
-            
+
+            Console.WriteLine("Verification-Mode (UW) setting: {0} ", CommandLineOptions.Clo.UW);
+            Console.WriteLine(string.Format("Cumulative Procedure Inlinings : {0}", BoogieVerify.total_procedure_inlinings));
+            Console.WriteLine(string.Format("Cumulative Z3 Calls : {0}", BoogieVerify.total_Z3_calls));
+
+            Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
+
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;

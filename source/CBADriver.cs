@@ -243,6 +243,9 @@ namespace cba
         public static int ProgCallTreeSize = 0;
         private static List<DateTime> beginTimes = new List<DateTime>();
 
+        public static int total_procedure_inlinings = 0;
+        public static int total_Z3_calls = 0;
+
         public static void beginTime()
         {
             beginTimes.Add(DateTime.Now);
@@ -424,6 +427,8 @@ namespace cba
             BoogieVerify.setTimeOut(0);
             Stats.ProgCallTreeSize = BoogieVerify.CallTreeSize;
             Stats.programVerificationTime += (DateTime.Now - startTime);
+            Stats.total_procedure_inlinings = BoogieVerify.total_procedure_inlinings;
+            Stats.total_Z3_calls = BoogieVerify.total_Z3_calls;
         }
 
         public static void beginRefinement()
