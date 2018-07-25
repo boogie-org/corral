@@ -104,3 +104,7 @@
 [TAG: AV_OUTPUT] ----- Analyzing eeSlice2_hinst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr b == 1
+
+-------------------- type_alias.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing type_alias_hinst.bpl ------
+[TAG: AV_OUTPUT] AngelicVerifier failed with: Object reference not set to an instance of an object.
