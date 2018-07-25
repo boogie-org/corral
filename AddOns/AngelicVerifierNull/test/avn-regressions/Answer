@@ -107,4 +107,4 @@
 
 -------------------- type_alias.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing type_alias_hinst.bpl ------
-[TAG: AV_OUTPUT] AngelicVerifier failed with: Object reference not set to an instance of an object.
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> m[x_1] != r1)
