@@ -1181,7 +1181,7 @@ namespace CoreLib
             return outcome;
         }
 
-        enum VerifyMode { Vanilla, OR_UW, UW };
+        enum VerifyMode { Vanilla, OR_UW, UW, Union };
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
             Outcome outcome = Outcome.Inconclusive;
@@ -1190,13 +1190,14 @@ namespace CoreLib
 
             var boundHit = false;
             VerifyMode mode = VerifyMode.Vanilla;
-            int itrCount = CommandLineOptions.Clo.UW;
+            int itrCount = CommandLineOptions.Clo.UW - 1;
 
             /**
              * Command-line options:
              * uw: 0 : Run Corral in the Vanilla mode(underapprox for bug and overapprox for expanding)
              * uw: 1 : Run Corral in UnderApproximation widening mode(only underapprox)
-             * uw: k : Run 1 under - approximation for every(k - 1) overapproximations(both do expanding)
+             * uw: k : Run 1 over - approximation for every(k - 1) underapproximation(both do expanding)
+             * uw: 1000 : Run stratified inlining using overapprox but by interesecting with unsat core
             **/
             while (true)
             {
@@ -1204,16 +1205,20 @@ namespace CoreLib
                     mode = VerifyMode.Vanilla;
                 else if (CommandLineOptions.Clo.UW == 1)
                     mode = VerifyMode.UW;
+                else if (CommandLineOptions.Clo.UW == 1000)
+                    mode = VerifyMode.Union;
                 else if (itrCount > 0)
                 {
-                    mode = VerifyMode.OR_UW;
+                    mode = VerifyMode.UW;
                     itrCount--;
                 }
                 else
                 {                    
-                    mode = VerifyMode.UW;
+                    mode = VerifyMode.OR_UW;
                     itrCount = CommandLineOptions.Clo.UW - 1; // for UW = k, do UW 1/k fraction of the times
                 }
+
+                List<string> ucore = null;
 
                 // Check timeout
                 if (CommandLineOptions.Clo.ProverKillTime != -1)
@@ -1242,7 +1247,7 @@ namespace CoreLib
 
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
-                    if (mode == VerifyMode.UW)
+                    if (mode == VerifyMode.UW || mode == VerifyMode.Union)
                     {
                         if (HasExceededRecursionDepth(cs, recBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
@@ -1270,8 +1275,7 @@ namespace CoreLib
                 MacroSI.PRINT_DEBUG("    - check");
                 reporter.reportTrace = main;
                 outcome = CheckVC(reporter);
-                List<string> ucore = null;
-                if (mode == VerifyMode.UW && outcome == Outcome.Correct)
+                if ((mode == VerifyMode.UW || mode == VerifyMode.Union) && outcome == Outcome.Correct)
                 {
                     ucore = prover.UnsatCore();
                 }
@@ -1342,6 +1346,12 @@ namespace CoreLib
                     return Outcome.Inconclusive;
 
                 var toExpand = reporter.callSitesToExpand;
+                if (mode == VerifyMode.Union && ucore != null)
+                {
+                    List<StratifiedCallSite> unsatcore = toExpand.Where(s => ucore.Contains("label_" + s.callSiteExpr.ToString())).ToList();
+                    List<StratifiedCallSite> toExpand1 = new List<StratifiedCallSite>(toExpand);
+                    toExpand = toExpand1.Union(unsatcore).ToList();
+                }
                 if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
                 {
                     var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
