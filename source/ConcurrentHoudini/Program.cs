@@ -390,10 +390,10 @@ namespace ConcurrentHoudini
             var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
 
             if (oc != PipelineOutcome.ResolvedAndTypeChecked)
-                throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.errorCount, annotatedFileName));
+                throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.checkingContext.ErrorCount, annotatedFileName));
 
-            Concurrency.Transform(linearTypechecker, moverTypeChecker);
-            var eraser = new LinearEraser();
+            CivlVCGeneration.Transform(linearTypechecker, moverTypeChecker);
+            var eraser = new LinearTypeEraser();
             eraser.VisitProgram(program);
 
             //var stats = new PipelineStatistics();

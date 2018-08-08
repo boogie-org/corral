@@ -48,3 +48,8 @@
 [TAG: AV_OUTPUT] ----- Analyzing null0_pinst_hinst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr !(ax == NULL)
+
+-------------------- rodrigo_refnull.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing rodrigo_refnull_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr r != null
