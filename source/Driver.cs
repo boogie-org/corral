@@ -577,8 +577,13 @@ namespace cba
                 BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
+
+                // loading SI state from file
+                BoogieVerify.options.prevSIState = config.prevSIState;
+
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
-                if (config.useDuality) BoogieVerify.options.newStratifiedInlining = false;
+                if (config.useDuality) BoogieVerify.options.newStratifiedInlining = false; 
+
                 var rstatus = BoogieVerify.Verify(init, out err, true);
                 Console.WriteLine("Return status: {0}", rstatus);
                 if (err == null || err.Count == 0)

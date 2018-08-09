@@ -158,6 +158,8 @@ namespace cba
 
         public string explainQuantifiers { get; private set; }
 
+        public string prevSIState { get; private set; }
+
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -349,6 +351,8 @@ namespace cba
             irreducibleLoopUnroll = -1;
 
             explainQuantifiers = null;
+
+            prevSIState = null;
         }
 
 
@@ -766,6 +770,11 @@ namespace cba
             {
                 useDuality = true;
                 newStratifiedInlining = false;
+            }
+            else if (flag.StartsWith("/prevSIState:"))
+            {
+                var split = flag.Split(sep);
+                prevSIState = split[1];
             }
             else
             {

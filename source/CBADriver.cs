@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using cba;
 using cba.Util;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -445,7 +446,7 @@ namespace cba
     public class CorralState
     {
         public HashSet<string> CallTree;
-        public HashSet<string> TrackedVariables;
+        public HashSet<string> TrackedVariables; 
 
         public CorralState()
         {
@@ -464,7 +465,7 @@ namespace cba
             stream.Close();
 
             return cs;
-        }
+        } 
 
         public static void AbsorbPrevState(Configs config, BoogieVerifyOptions progVerifyOptions)
         {
@@ -474,7 +475,7 @@ namespace cba
                 progVerifyOptions.CallTree = cs.CallTree;
                 config.trackedVars.UnionWith(cs.TrackedVariables);
             }
-        }
+        } 
 
         public static void DumpCorralState(Configs config, HashSet<string> CallTree, HashSet<string> Vars)
         {
@@ -493,6 +494,6 @@ namespace cba
                 serializer.Serialize(stream, cs);
                 stream.Close();
             }
-        }
+        } 
     }
 }

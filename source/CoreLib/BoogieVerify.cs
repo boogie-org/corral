@@ -813,6 +813,7 @@ namespace cba.Util
         public bool NonUniformUnfolding;
 
         public HashSet<string> CallTree;
+        public string prevSIState; // path to prev SI state
 
         public bool StratifiedInliningWithoutModels;
         public bool UseProverEvaluate;
@@ -820,7 +821,7 @@ namespace cba.Util
 
         public bool useFwdBck;
         public bool useDI;
-
+        
         // Bound on maximum procs that can be inlined (0 = no bound)
         public int maxInlinedBound;
 
@@ -840,6 +841,7 @@ namespace cba.Util
             newStratifiedInliningAlgo = null;
             NonUniformUnfolding = false;
             CallTree = null;
+            prevSIState = null;
             StratifiedInliningWithoutModels = false;
             UseProverEvaluate = true;
             ModelViewFile = null;
@@ -860,6 +862,7 @@ namespace cba.Util
             ret.newStratifiedInliningAlgo = newStratifiedInliningAlgo;
             ret.NonUniformUnfolding = NonUniformUnfolding;
             ret.CallTree = CallTree;
+            ret.prevSIState = prevSIState;
             if (CallTree != null)
             {
                 ret.CallTree = new HashSet<string>(CallTree);
@@ -873,8 +876,7 @@ namespace cba.Util
             ret.useDI = useDI;
             ret.maxInlinedBound = maxInlinedBound;
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
-            ret.extraFlags.UnionWith(extraFlags);
-
+            ret.extraFlags.UnionWith(extraFlags);            
             return ret;
         }
 
