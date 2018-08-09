@@ -9,6 +9,7 @@ set OPTS= /traceSlicing
 set c=0
 set bpl=
 set opts=
+set inst_opts=
 
 
 call:add t1.bpl "/traceSlicing"
@@ -23,14 +24,15 @@ call:add t9.bpl "/traceSlicing"
 call:add pruned.bpl "/traceSlicing"
 call:add empty_forall.bpl "/traceSlicing"
 call:add null.bpl "/traceSlicing"
-call:add generalize.bpl "/traceSlicing"
+call:add generalize.bpl "/traceSlicing" ""
 call:add rec.bpl "/traceSlicing"
 call:add eeSlice3.bpl "/traceSlicing"
 call:add eeSlice4.bpl "/traceSlicing"
 call:add eeSlice5.bpl "/traceSlicing"
 call:add eeSlice6.bpl "/traceSlicing"
 call:add eeSlice61.bpl "/traceSlicing"
-call:add eeSlice2.bpl "/traceSlicing /repeatEEWithControlFlow"
+call:add eeSlice2.bpl "/traceSlicing /repeatEEWithControlFlow" ""
+call:add delayed_initialization.bpl "/traceSlicing /delayeInitialization" "/unknownType:Ref"
 
 
 set i=0
@@ -39,10 +41,11 @@ if %i% equ %c% goto :eof
   echo.
   set bpl=!bpls[%i%]!
   set opt=!opts[%i%]!
+  set inst_opt=!opts[%i%]!
   echo -------------------- %bpl% --------------------
   for %%f in (%bpl%) do (
     del /Q %%~nf_hinst.bpl 2> delout
-    %HEXE% %%f  %%~nf_hinst.bpl %OPTS% %* | findstr AV_OUTPUT
+    %HEXE% %%f  %%~nf_hinst.bpl %OPTS% %inst_opt% %* | findstr AV_OUTPUT
     if exist %%~nf_hinst.bpl %BGEXE% %%~nf_hinst.bpl %opt% %*| findstr AV_OUTPUT
   )
 
@@ -52,4 +55,5 @@ goto loop
 :add
 set bpls[%c%]=%~1
 set opts[%c%]=%~2
+set inst_opts[%c%]=%~3
 set /a c=%c%+1
