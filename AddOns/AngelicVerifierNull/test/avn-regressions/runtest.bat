@@ -32,7 +32,7 @@ call:add eeSlice5.bpl "/traceSlicing" ""
 call:add eeSlice6.bpl "/traceSlicing" ""
 call:add eeSlice61.bpl "/traceSlicing" ""
 call:add eeSlice2.bpl "/traceSlicing /repeatEEWithControlFlow" ""
-call:add delayed_initialization.bpl "/traceSlicing /delayeInitialization" "/unknownType:Ref"
+call:add delayed_initialization.bpl "/traceSlicing" "/unknownType:Ref /delayInitialization"
 
 
 set i=0
@@ -41,7 +41,7 @@ if %i% equ %c% goto :eof
   echo.
   set bpl=!bpls[%i%]!
   set opt=!opts[%i%]!
-  set inst_opt=!opts[%i%]!
+  set inst_opt=!inst_opts[%i%]!
   echo -------------------- %bpl% --------------------
   for %%f in (%bpl%) do (
     del /Q %%~nf_hinst.bpl 2> delout
