@@ -130,6 +130,8 @@ namespace cba
             ProgTransformation.TransformationPass.writeAllFiles = false;
             Log.noDebuggingOutput = true;
             Log.verbose_level = config.verboseMode;
+            LogWithAddress.noDebuggingOutput = false; 
+            LogWithAddress.verbose_level = config.verboseMode;
 
             config.specialVars.Iter(s => LanguageSemantics.specialVars.Add(s));
             #endregion

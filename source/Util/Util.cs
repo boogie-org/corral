@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.Boogie;
+using System.Runtime.CompilerServices;
 
 namespace cba.Util
 {
@@ -94,6 +95,153 @@ namespace cba.Util
         {
             if (!counts.ContainsKey(name)) counts[name] = 0;
             counts[name]++;
+        }
+    }
+
+    public static class LogWithAddress
+    {
+        public const int Warning = 4;
+        public const int Error = 3;
+        public const int Normal = 1;
+        public const int Debug = 2;
+        public const int Verbose = 5;
+
+        public static bool noDebuggingOutput = true;
+        public static bool printMemUsage = false;
+        public static int verbose_level = 0;
+
+        public static TokenTextWriter debugOut = null;
+
+        private static void init()
+        {
+            if (noDebuggingOutput)
+                return;
+
+            if (debugOut == null)
+            {
+                debugOut = new TokenTextWriter("corraldebugwithaddress.out");
+            }
+        }
+
+        public static void Close()
+        {
+            if (debugOut != null)
+            {
+                debugOut.Close();
+            }
+        }
+
+        public static TokenTextWriter getWriter(int level)
+        {
+            if (level == Debug)
+            {
+                if (noDebuggingOutput)
+                    return null;
+
+                init();
+                return debugOut;
+            }
+            return new TokenTextWriter(Console.Out);
+        }
+
+        public static bool Write(int level, string msg)
+        {
+            if (level == Log.Normal)
+            {
+                Write(Log.Debug, msg);
+            }
+
+            switch (level)
+            {
+                case Debug:
+                    if (!noDebuggingOutput)
+                    {
+                        init();
+                        debugOut.Write(msg);
+                    }
+                    break;
+                case Warning:
+                    Console.Write("Warning: " + msg);
+                    break;
+                case Error:
+                    Console.Write("Error: " + msg);
+                    break;
+                case Normal:
+                    Console.Write(msg);
+                    break;
+                case Verbose:
+                    if (verbose_level > 0)
+                    {
+                        Console.Write(msg);
+                    }
+                    debugOut.Write(msg);
+                    break;
+            }
+
+            return false;
+        }
+
+        public static bool Write(string msg)
+        {
+            if (noDebuggingOutput)
+                return true;
+            return Write(Normal, msg);
+        }
+
+
+        public static bool WriteLine(int level, string msg,
+                        [CallerFilePath] string file = "",
+                        [CallerMemberName] string member = "",
+                        [CallerLineNumber] int line = 0)
+        {
+            if (noDebuggingOutput)
+                return true;
+            return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+        }
+
+        public static bool WriteLine(string msg,
+                        [CallerFilePath] string file = "",
+                        [CallerMemberName] string member = "",
+                        [CallerLineNumber] int line = 0)
+        {
+            if (noDebuggingOutput)
+                return true;
+            return Write(Normal, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+        }
+
+        public static bool WriteLine()
+        {
+            if (noDebuggingOutput)
+                return true;
+            return Write(Normal, Environment.NewLine);
+        }
+
+        public static bool WriteMemUsage()
+        {
+            return false;
+            // This takes a lot of time
+            /*
+            double mem = GC.GetTotalMemory(true) / (1024.0 * 1024.0);
+            if (printMemUsage)
+            {
+                WriteLine(string.Format("Memory: {0}MB", mem.ToString("F")));
+            }
+            return WriteLine(Log.Debug, string.Format("Memory: {0}MB", mem.ToString("F")));
+             */
+        }
+
+        public static void PrintMemUsage()
+        {
+            PrintMemUsage("Memory");
+        }
+
+        public static void PrintMemUsage(string msg)
+        {
+            var p = System.Diagnostics.Process.GetCurrentProcess();
+            GC.Collect();
+            double mem1 = GC.GetTotalMemory(true) / (1024.0 * 1024.0);
+            double mem2 = p.VirtualMemorySize64 / (1024.0 * 1024.0);
+            Console.WriteLine("{0}: {1}MB and {2}MB", msg, mem1.ToString("F"), mem2.ToString("F"));
         }
     }
 
