@@ -786,7 +786,7 @@ namespace CoreLib
                         callsites.Iter(cs =>
                         {
                             string tmp = GetPersistentID(cs);
-                            LogWithAddress.WriteLine(tmp);
+                            //LogWithAddress.WriteLine(tmp);
                             CallTree.Add(tmp);
                         });
 
@@ -832,7 +832,7 @@ namespace CoreLib
                         callsites.Iter(cs =>
                         {
                             string tmp = GetPersistentID(cs);
-                            LogWithAddress.WriteLine(tmp);
+                            //LogWithAddress.WriteLine(tmp);
                             CallTree.Add(tmp);
                         });
 
