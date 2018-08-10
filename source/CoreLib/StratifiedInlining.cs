@@ -166,12 +166,12 @@ namespace CoreLib
     {
         public HashSet<string> CallTree; 
         //  MUST_REACH = 0, BLOCK = 1
-        public Tuple<string, int> SplitingNode = null;
+        public List<Tuple<string, int>> SplitingNodes = null;
 
         public SplitState()
         {
             CallTree = new HashSet<string>();
-            SplitingNode = new Tuple<string, int>("", -1);
+            SplitingNodes = new List<Tuple<string, int>>();
         }
 
         public SplitState(string file)
@@ -179,20 +179,37 @@ namespace CoreLib
             var tmp = GetSplitState(file);
             if (tmp != null)
             {
-                CallTree = tmp.CallTree;
-                SplitingNode = tmp.SplitingNode;
+                CallTree = new HashSet<string>(tmp.CallTree);
+                SplitingNodes = new List<Tuple<string, int>>(tmp.SplitingNodes);
             }
             else
             {
                 CallTree = new HashSet<string>();
-                SplitingNode = new Tuple<string, int>("", -1);
+                SplitingNodes = new List<Tuple<string, int>>();
             }
         }
 
         public SplitState(HashSet<string> callTree, Tuple<string, int> splitingNode)
         {
             CallTree = new HashSet<string>(callTree);
-            SplitingNode = new Tuple<string, int>(splitingNode.Item1, splitingNode.Item2);
+            SplitingNodes = new List<Tuple<string, int>>();
+            SplitingNodes.Add(new Tuple<string, int>(splitingNode.Item1, splitingNode.Item2));
+        }
+
+        public SplitState(HashSet<string> callTree, List<Tuple<string, int>> splitingNodes)
+        {
+            CallTree = new HashSet<string>(callTree);
+            SplitingNodes = new List<Tuple<string, int>>(splitingNodes); 
+        }
+
+        public void UpdateCallTree(HashSet<string> callTree)
+        {
+            CallTree = new HashSet<string>(callTree);
+        }
+
+        public void RecordNewSplit(Tuple<string, int> split)
+        {
+            SplitingNodes.Add(split);
         }
 
         public SplitState GetSplitState(string file)
@@ -640,20 +657,30 @@ namespace CoreLib
             }
         }
 
+        List<StratifiedCallSite> getParents(StratifiedCallSite scs)
+        {
+            List<StratifiedCallSite> parents = new List<StratifiedCallSite>();
+            StratifiedCallSite currCS = scs;
+            while (parent.ContainsKey(currCS))
+            {
+                currCS = parent[currCS];
+                parents.Insert(0, currCS);
+            }
+            return parents;
+        }
+
         // Comment TODO
         public Outcome MustReachSplitParallelStyle(
+            SplitState prevSplitState,
             HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter)
         {
             Outcome outcome = Outcome.Inconclusive;
             reporter.reportTraceIfNothingToExpand = true;
 
-            int treesize = 0;
-            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
-            var decisions = new Stack<Decision>();
-
-            var timeGraph = new TimeGraph();
-
+            int treesize = di.ComputeSize();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>(); 
+             
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -686,7 +713,7 @@ namespace CoreLib
             var rand = new Random();
             var decideToBlockOrReach = new Func<bool>(() =>
             {
-                if (decisions.Count == 0)
+                if (prevSplitState.SplitingNodes.Count == 0)
                     return true; // rand.Next(100) != 0;
                 else
                     return false;
@@ -741,32 +768,8 @@ namespace CoreLib
                     // make a decision 
                     if (decideToBlockOrReach())
                     {
-                        // export the current corral state + block scs
-
-                        // Push must reach 
-                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
-                        decisions.Push(new Decision(DecisionType.MUST_REACH, 1, scs));
-                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
-                        prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
-                        treesize = di.ComputeSize();
-
-                        tt += (DateTime.Now - st);
-                    }
-                    else
-                    {
-                        // export the current corral state + must reach scs
-                        #region export SI state
-
-                        // get all parents
-                        List<StratifiedCallSite> parents = new List<StratifiedCallSite>();
-                        StratifiedCallSite currCS = scs;
-                        while (parent.ContainsKey(currCS))
-                        {
-                            currCS = parent[currCS];
-                            parents.Insert(0, currCS);
-                        }
-
-                        CallTree = new HashSet<string>();
+                        #region export spliting state + block scs
+                        List<StratifiedCallSite> parents = getParents(scs);
                         var callsites = new HashSet<StratifiedCallSite>();
                         callsites.UnionWith(parent.Keys);
                         callsites.UnionWith(parent.Values);
@@ -779,28 +782,78 @@ namespace CoreLib
                             callsites.ExceptWith(disjSet);
                         }
 
+                        CallTree = new HashSet<string>();
                         callsites.Iter(cs =>
                         {
                             string tmp = GetPersistentID(cs);
                             LogWithAddress.WriteLine(tmp);
                             CallTree.Add(tmp);
                         });
+
                         string scsPersistentID = GetPersistentID(scs);
-                        SplitState mustReachSIState = new SplitState(CallTree, new Tuple<string, int>(scsPersistentID, 0));
-                        mustReachSIState.DumpSplitingState(decisions.Count.ToString() + exportSuffix);
+
+                        // create a SplitState with new calltree + add a new split state: scsID and 1 - means blocking scs
+                        List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>> (prevSplitState.SplitingNodes);
+                        newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 1));
+                        SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
+
+                        // write to file
+                        forOtherMachine.DumpSplitingState(newSplitNodes.Count.ToString() + exportSuffix);
+                        #endregion
+
+                        // Push must reach 
+                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(prevSplitState.SplitingNodes.Count), scs.callSite.calleeName); 
+                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                        prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
+                        prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 0));
+                        treesize = di.ComputeSize();
+
+                        tt += (DateTime.Now - st);
+                    }
+                    else
+                    {
+                        // must reach scs
+                        #region export spliting state + must reach scs
+                        List<StratifiedCallSite> parents = getParents(scs);
+                                                
+                        var callsites = new HashSet<StratifiedCallSite>();
+                        callsites.UnionWith(parent.Keys);
+                        callsites.UnionWith(parent.Values);
+                        callsites.ExceptWith(openCallSites);
+                        foreach (var cs in parents)
+                        {
+                            var tmp = di.DisjointNodes(attachedVC[cs]);
+                            HashSet<StratifiedCallSite> disjSet = new HashSet<StratifiedCallSite>();
+                            tmp.Iter(vc => disjSet.Add(attachedVCInv[vc]));
+                            callsites.ExceptWith(disjSet);
+                        }
+
+                        CallTree = new HashSet<string>();
+                        callsites.Iter(cs =>
+                        {
+                            string tmp = GetPersistentID(cs);
+                            LogWithAddress.WriteLine(tmp);
+                            CallTree.Add(tmp);
+                        });
+
+                        string scsPersistentID = GetPersistentID(scs);
+
+                        // create a SplitState with new calltree + add a new split state: scsID and 1 - means must-reach scs
+                        List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>>(prevSplitState.SplitingNodes);
+                        newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 0));
+                        SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
+
+                        // write to file
+                        forOtherMachine.DumpSplitingState(newSplitNodes.Count.ToString() + exportSuffix);
                         #endregion
 
                         // Push & Block
-                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
-
-                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
-                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(prevSplitState.SplitingNodes.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
 
                         Push();
-                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                        decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>()); 
                         applyDecisionToDI(DecisionType.BLOCK, maxVc);
-
+                        prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 1));
                         prover.Assert(scs.callSiteExpr, false);
                         treesize = di.ComputeSize();
 
@@ -834,14 +887,12 @@ namespace CoreLib
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
-                {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                { 
                     break; // done (T/O)
                 }
 
                 if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
-                {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                { 
                     break; // done (error found)
                 }
 
@@ -864,19 +915,7 @@ namespace CoreLib
             }
             reporter.reportTraceIfNothingToExpand = false;
 
-            Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
-
-            timeGraph.ToDot();
-            Console.Write("SplitSearch: ");
-            for (int i = 1; i <= 16; i++)
-            {
-                var sum = 0.0;
-                for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
-                sum = sum / 5;
-
-                Console.Write("{0}\t", sum.ToString("F2"));
-            }
-            Console.WriteLine();
+            Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2")); 
 
             if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
             return outcome;
@@ -1868,6 +1907,7 @@ namespace CoreLib
             prover.Assert(svc.vcexpr, true);
 
             Outcome outcome;
+            SplitState splitState = new SplitState();
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
             // must reach main
@@ -1900,7 +1940,6 @@ namespace CoreLib
                 if (d == DecisionType.MUST_REACH)
                 {
                     var disj = di.DisjointNodes(n);
-
                     disj.Iter(m => di.DeleteNode(m));
                 }
             });
@@ -1909,37 +1948,47 @@ namespace CoreLib
             if (cba.Util.BoogieVerify.options.prevSIState != null)
             {
                 string prevSIStateFile = cba.Util.BoogieVerify.options.prevSIState;
-                SplitState splitState = new SplitState(prevSIStateFile);
+                splitState = new SplitState(prevSIStateFile);
                 while (true)
                 {
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (StratifiedCallSite scs in openCallSites)
-                    {
+                    {                        
+                        string nodePersistenID = GetPersistentID(scs);
                         // if node is not in calltree
-                        string nodePersistenID = GetPersistentID(scs);                        
-
                         if (!splitState.CallTree.Contains(nodePersistenID))
                             continue;
                         toRemove.Add(scs);
-                        var ss = Expand(scs);
+                        var ss = Expand(scs, null, true, true);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
 
-                        if (nodePersistenID.Equals(splitState.SplitingNode.Item1))
+                        // check if it was one of the spliting node
+                        bool found = false;
+                        int splitingType = -1;
+                        foreach (var node in splitState.SplitingNodes)
+                            if (node.Item1.Equals(nodePersistenID))
+                            {
+                                found = true;
+                                splitingType = node.Item2;
+                                break;
+                            }
+
+                        if (found)                        
                         {
-                            // get the splitingNode
-                            switch (splitState.SplitingNode.Item2)
+                            switch (splitingType)
                             {
                                 case 0:
                                     MacroSI.PRINT(">>> Pushing Must-Reach({0})", scs.callSite.calleeName);
                                     applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                                    // add must-reach constraint
                                     AssertMustReach(attachedVC[scs], new HashSet<Tuple<StratifiedVC, Block>>());
                                     break;
                                 case 1:
-                                    prover.Assert(scs.callSiteExpr, false);
                                     MacroSI.PRINT(">>> Pushing Block({0})", scs.callSite.calleeName);
                                     applyDecisionToDI(DecisionType.BLOCK, attachedVC[scs]);
-                                    //splitingNode = new Tuple<StratifiedCallSite, DecisionType>(scs, DecisionType.BLOCK);
+                                    // add must-reach constraint
+                                    prover.Assert(scs.callSiteExpr, false);                                                
                                     break;
                                 default:
                                     break;
@@ -2047,7 +2096,7 @@ namespace CoreLib
                 var startTimer = DateTime.Now;
                 LogWithAddress.WriteLine(Log.Debug, "Entering MustReachSplitParallelControler zone");
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
-                outcome = MustReachSplitParallelStyle(openCallSites, reporter);
+                outcome = MustReachSplitParallelStyle(splitState, openCallSites, reporter);
                 var endTimer = DateTime.Now;
                 TimeSpan diff = endTimer - startTimer;
 
