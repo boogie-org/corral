@@ -501,6 +501,32 @@ namespace CoreLib
             }
         }
 
+        class DecisionWithTaskID : Tuple<DecisionType, int, StratifiedCallSite, int>
+        {
+            public DecisionWithTaskID(DecisionType dt, int num, StratifiedCallSite cs, int taskID)
+                : base(dt, num, cs, taskID) { }
+
+            public DecisionType decisionType
+            {
+                get { return Item1; }
+            }
+
+            public int num
+            {
+                get { return Item2; }
+            }
+
+            public StratifiedCallSite cs
+            {
+                get { return Item3; }
+            }
+
+            public int taskID
+            {
+                get { return Item4; }
+            }
+        }
+
         class TimeGraph
         {
             Dictionary<int, string> Nodes;
@@ -679,8 +705,11 @@ namespace CoreLib
             reporter.reportTraceIfNothingToExpand = true;
 
             int treesize = di.ComputeSize();
-            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>(); 
-             
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<DecisionWithTaskID>();
+            var timeGraph = new TimeGraph();
+            string exportSuffix = "split.txt";
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -719,10 +748,23 @@ namespace CoreLib
                     return false;
             });
 
+            var taskFile = new Func<int, string>((taskID) =>
+            {
+                return taskID + exportSuffix;
+            });
+
+            var taskExists = new Func<int, bool>((taskID) =>
+            {
+                if (File.Exists(taskFile(taskID)))
+                    return true; // rand.Next(100) != 0;
+                else
+                    return false;
+            });
+
             var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
             var reachedBound = false;
-            var tt = TimeSpan.Zero;
-            string exportSuffix = "split.txt";
+            var tt = TimeSpan.Zero;            
+            bool continueWorkingIfNoOneHelped = true;
             while (true)
             {
                 // Lets split when the tree has become big enough
@@ -798,11 +840,17 @@ namespace CoreLib
                         SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
 
                         // write to file
-                        forOtherMachine.DumpSplitingState(newSplitNodes.Count.ToString() + exportSuffix);
+                        forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
                         #endregion
 
                         // Push must reach 
-                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(prevSplitState.SplitingNodes.Count), scs.callSite.calleeName); 
+                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
+                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                        Push();
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                        decisions.Push(new DecisionWithTaskID(DecisionType.MUST_REACH, 0, scs, newSplitNodes.Count));
                         applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
                         prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
                         prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 0));
@@ -844,14 +892,18 @@ namespace CoreLib
                         SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
 
                         // write to file
-                        forOtherMachine.DumpSplitingState(newSplitNodes.Count.ToString() + exportSuffix);
+                        forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
                         #endregion
 
                         // Push & Block
-                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(prevSplitState.SplitingNodes.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                         Push();
-                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>()); 
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                        decisions.Push(new DecisionWithTaskID(DecisionType.BLOCK, 0, scs, newSplitNodes.Count));
                         applyDecisionToDI(DecisionType.BLOCK, maxVc);
                         prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 1));
                         prover.Assert(scs.callSiteExpr, false);
@@ -887,12 +939,14 @@ namespace CoreLib
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
-                { 
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (T/O)
                 }
 
                 if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
-                { 
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (error found)
                 }
 
@@ -907,9 +961,76 @@ namespace CoreLib
                     }
                 }
                 else
-                {
+                {                    
                     // outcome == Outcome.Correct
-                    break;
+                    if (continueWorkingIfNoOneHelped)
+                    {
+                        DecisionWithTaskID topDecision = null;
+                        SiState topState = SiState.SaveState(this, openCallSites);
+                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        var doneBT = false;
+                        var npops = 0;
+                        do
+                        { 
+                            if (decisions.Count == 0)
+                            {
+                                doneBT = true;
+                                break;
+                            }
+
+                            topDecision = decisions.Peek();
+                            topState = backtrackingPoints.Peek();
+
+                            // Pop
+                            Pop();
+                            decisions.Pop();
+                            backtrackingPoints.Pop();
+                            prevMustAsserted.Pop();
+                            npops++;
+                            MacroSI.PRINT("{0}>>> Pop", indent(decisions.Count));
+                            if (topDecision.num == 0 && !taskExists(topDecision.taskID) && topDecision.taskID > 0)
+                                MacroSI.PRINT("{0}>>> (task {1} was picked up)", indent(decisions.Count), topDecision.taskID);
+                        } while (topDecision.num == 1 || !taskExists(topDecision.taskID));
+
+                        if (doneBT)
+                            break;
+
+                        // TODO: need to handle concurrency
+                        // remove the task 
+                        File.Delete(taskFile(topDecision.taskID));
+                        MacroSI.PRINT("{0}>>> (doing task {1})", indent(decisions.Count), topDecision.taskID);
+                        topState.ApplyState(this, ref openCallSites);
+                        timeGraph.Pop(npops - 1);
+
+                        // flip the decision
+
+                        Push();
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+
+                        if (topDecision.decisionType == DecisionType.MUST_REACH)
+                        {
+                            // Block
+                            prover.Assert(topDecision.cs.callSiteExpr, false);
+                            MacroSI.PRINT("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                            decisions.Push(new DecisionWithTaskID(DecisionType.BLOCK, 1, topDecision.cs, 0));
+                            applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
+                            prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                            treesize = di.ComputeSize();
+                        }
+                        else
+                        {
+                            // Must Reach
+                            MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
+                            decisions.Push(new DecisionWithTaskID(DecisionType.MUST_REACH, 1, topDecision.cs, 0));
+                            applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
+                            prevMustAsserted.Push(
+                               AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            treesize = di.ComputeSize();
+                        }
+                    }
+                    
+                    else
+                        break;
                 }
 
             }

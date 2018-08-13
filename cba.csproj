@@ -81,6 +81,61 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="BoogieAbsInt, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieAbsInt.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieBasetypes, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieBasetypes.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieCodeContractsExtender, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieCodeContractsExtender.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieConcurrency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieConcurrency.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieCore, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieCore.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieDoomed, Version=0.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieDoomed.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieExecutionEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieExecutionEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieGraph, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieGraph.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieHoudini, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieHoudini.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieModel, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieModel.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieParserHelper, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieParserHelper.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogiePredication">
+      <HintPath>boogie\Binaries\BoogiePredication.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCExpr, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieVCExpr.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCGeneration, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>boogie\Binaries\BoogieVCGeneration.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -124,6 +179,10 @@
       <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
       <Name>Core</Name>
     </ProjectReference>
+    <ProjectReference Include="boogie\Source\Doomed\Doomed.csproj">
+      <Project>{884386a3-58e9-40bb-a273-b24976775553}</Project>
+      <Name>Doomed</Name>
+    </ProjectReference>
     <ProjectReference Include="boogie\Source\ExecutionEngine\ExecutionEngine.csproj">
       <Project>{eaa5eb79-d475-4601-a59b-825c191cd25f}</Project>
       <Name>ExecutionEngine</Name>
@@ -144,6 +203,10 @@
       <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
       <Name>ParserHelper</Name>
     </ProjectReference>
+    <ProjectReference Include="boogie\Source\Predication\Predication.csproj">
+      <Project>{afaa5ce1-c41b-44f0-88f8-fd8a43826d44}</Project>
+      <Name>Predication</Name>
+    </ProjectReference>
     <ProjectReference Include="boogie\Source\Provers\SMTLib\SMTLib.csproj">
       <Project>{9b163aa3-36bc-4afb-88ab-79bc9e97e401}</Project>
       <Name>SMTLib</Name>
@@ -156,13 +219,29 @@
       <Project>{e1f10180-c7b9-4147-b51f-fa1b701966dc}</Project>
       <Name>VCGeneration</Name>
     </ProjectReference>
+    <ProjectReference Include="source\BctCleanup\BctCleanup.csproj">
+      <Project>{cb49f405-32de-4b41-b49d-5f8e54e43100}</Project>
+      <Name>BctCleanup</Name>
+    </ProjectReference>
+    <ProjectReference Include="source\ConcurrentHoudini\ConcurrentHoudini.csproj">
+      <Project>{529ac312-bb91-4154-8ba3-7ca8743e0434}</Project>
+      <Name>ConcurrentHoudini</Name>
+    </ProjectReference>
     <ProjectReference Include="source\CoreLib\CoreLib.csproj">
-      <Project>{437B3C57-A7E7-4D99-A027-4BB4E5105E7A}</Project>
+      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
       <Name>CoreLib</Name>
     </ProjectReference>
     <ProjectReference Include="source\ExplainError\ExplainError.csproj">
       <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
       <Name>ExplainError</Name>
+    </ProjectReference>
+    <ProjectReference Include="source\HavocCleanup\HavocCleanup.csproj">
+      <Project>{21e83b2a-aecc-445c-8fd6-12afb87716e5}</Project>
+      <Name>HavocCleanup</Name>
+    </ProjectReference>
+    <ProjectReference Include="source\HoudiniLite\HoudiniLite.csproj">
+      <Project>{b5007b19-6d3a-4746-b5ff-b60f679c8a01}</Project>
+      <Name>HoudiniLite</Name>
     </ProjectReference>
     <ProjectReference Include="source\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532B8A9-8CC2-4D7F-9D5E-7669841B6871}</Project>

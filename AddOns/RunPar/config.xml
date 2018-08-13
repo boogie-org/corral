@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <RunParConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <Root>c:\Users\akashl\Documents\work\corral\bin\debug\corral.exe</Root>
+  <Root>F:\t-dibuip\sdvbench</Root>
   <Utils>
-    <Util value="util1.exe" arguments="none"/>
-    <Util value="util2.exe" />
+	  <!--<Util name="Corral-SI" dir="Binaries" exe="RunCorral.exe" arguments="/timeout:100"/> -->
+	  <Util name="Corral-MRSS" dir="Binaries" exe="RunCorral.exe" arguments="/timeout:1000 /newStratifiedInlining:split"/> 
   </Utils>
   <RemoteRoots>
-    <RemoteFolder value="\\rse-server-11\f$\root"/>
-    <RemoteFolder value="\\rse-server-13\f$\root"/>
+    <RemoteFolder value="\\rse-server-13\f$\tmp\t-dibuip\sdvbench"/> 
+    <RemoteFolder value="\\rse-server-14\f$\tmp\t-dibuip\sdvbench"/> 
+    <RemoteFolder value="\\rse-server-15\f$\tmp\t-dibuip\sdvbench"/>
   </RemoteRoots>
   <Properties>
-    <SLIC value="LowerDriverReturn"/>
-    <SLIC value="CancelSpinLock"/>
   </Properties>
   <BoogieFiles>
-    <Files value="fdc_fail_*.bpl"/>
-    <Files value="flpydisk_fail_*.bpl"/>
+	  <Files value="data\si_files_houdini\*.bpl"/> 
   </BoogieFiles>
 
 </RunParConfig>
