@@ -581,6 +581,9 @@ namespace cba
                 // loading SI state from file
                 BoogieVerify.options.prevSIState = config.prevSIState;
 
+                // assign connection
+                BoogieVerify.options.connectionPort = config.connectionPort;
+
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
                 if (config.useDuality) BoogieVerify.options.newStratifiedInlining = false; 
 

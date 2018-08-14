@@ -814,6 +814,7 @@ namespace cba.Util
 
         public HashSet<string> CallTree;
         public string prevSIState; // path to prev SI state
+        public string connectionPort; // socket port to connect clientController
 
         public bool StratifiedInliningWithoutModels;
         public bool UseProverEvaluate;
@@ -842,6 +843,7 @@ namespace cba.Util
             NonUniformUnfolding = false;
             CallTree = null;
             prevSIState = null;
+            connectionPort = null;
             StratifiedInliningWithoutModels = false;
             UseProverEvaluate = true;
             ModelViewFile = null;
@@ -863,6 +865,7 @@ namespace cba.Util
             ret.NonUniformUnfolding = NonUniformUnfolding;
             ret.CallTree = CallTree;
             ret.prevSIState = prevSIState;
+            ret.connectionPort = connectionPort;
             if (CallTree != null)
             {
                 ret.CallTree = new HashSet<string>(CallTree);

@@ -160,6 +160,8 @@ namespace cba
 
         public string prevSIState { get; private set; }
 
+        public string connectionPort { get; private set; }
+
         public static Configs parseCommandLine(string[] args)
         {
             var inputFlags = FlagReader.read(args);
@@ -353,6 +355,7 @@ namespace cba
             explainQuantifiers = null;
 
             prevSIState = null;
+            connectionPort = null;
         }
 
 
@@ -775,6 +778,11 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 prevSIState = split[1];
+            }
+            else if (flag.StartsWith("/connectionPort:"))
+            {
+                var split = flag.Split(sep);
+                connectionPort = split[1];
             }
             else
             {

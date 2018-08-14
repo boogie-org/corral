@@ -14,6 +14,8 @@ using Outcome = VC.VCGen.Outcome;
 
 using Microsoft.Boogie.GraphUtil;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 namespace CoreLib
 {
@@ -709,7 +711,85 @@ namespace CoreLib
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<DecisionWithTaskID>();
             var timeGraph = new TimeGraph();
+            Socket server = null;
             string exportSuffix = "split.txt";
+            string readyMsg = "Client is ready";
+            string completionMsg = "Complete";
+
+            var EncodeStr = new Func<string, byte[]>((s) =>
+            {
+                return Encoding.ASCII.GetBytes(s);
+            });
+
+            #region Set up connection
+            if (cba.Util.BoogieVerify.options.connectionPort != null)
+            {
+                var localIP = new Func<string>(() =>
+                {
+                    var host = Dns.GetHostEntry(Dns.GetHostName());
+                    foreach (var ip in host.AddressList)
+                    {
+                        if (ip.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            return ip.ToString();
+                        }
+                    }
+                    return null;
+                });
+
+                if (System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+                {
+                    try
+                    {
+
+                        IPHostEntry ipHostInfo = Dns.Resolve(localIP());
+                        IPAddress ipAddress = ipHostInfo.AddressList[0];
+                        IPEndPoint remoteEP = new IPEndPoint(ipAddress, 11000);
+
+
+                        server = new Socket(AddressFamily.InterNetwork,
+                            SocketType.Stream, ProtocolType.Tcp); 
+
+                        try
+                        {
+                            server.Connect(remoteEP);
+
+                            Console.WriteLine("Socket connected <strong class=\"highlight\">to</strong> {0}",
+                                server.RemoteEndPoint.ToString());
+
+                            byte[] data = new byte[1024];
+                            int receivedDataLength = server.Receive(data); //Wait for the data
+                            string stringData = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
+                            Console.WriteLine(stringData); //Write the data on the screen
+
+                            // reply the server
+                            server.Send(EncodeStr("Hi " + server.RemoteEndPoint.ToString())); 
+                        }
+                        catch (ArgumentNullException ane)
+                        {
+                            Console.WriteLine("ArgumentNullException : {0}", ane.ToString());
+                            Console.Read();
+                        }
+                        catch (SocketException se)
+                        {
+                            Console.WriteLine("SocketException : {0}", se.ToString());
+                            Console.Read();
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("Unexpected exception : {0}", e.ToString());
+                            Console.Read();
+                        }
+
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Cannot connect the server.");
+                    }
+                }
+            }
+            #endregion
+
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -841,6 +921,13 @@ namespace CoreLib
 
                         // write to file
                         forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
+
+                        // inform server 
+                        if (server != null)
+                        {
+                            // decisions.Count fileName
+                            server.Send(EncodeStr(decisions.Count.ToString() + ":" + taskFile(newSplitNodes.Count)));
+                        }
                         #endregion
 
                         // Push must reach 
@@ -893,6 +980,13 @@ namespace CoreLib
 
                         // write to file
                         forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
+                        
+                        // inform server 
+                        if (server != null)
+                        {
+                            // decisions.Count fileName
+                            server.Send(EncodeStr(decisions.Count.ToString() + ":" + taskFile(newSplitNodes.Count)));
+                        }
                         #endregion
 
                         // Push & Block
@@ -1036,6 +1130,14 @@ namespace CoreLib
             }
             reporter.reportTraceIfNothingToExpand = false;
 
+            #region Close the connection
+            if (server != null)
+            {
+                server.Send(EncodeStr(completionMsg));
+                server.Shutdown(SocketShutdown.Both);
+                server.Close();
+            }
+            #endregion
             Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2")); 
 
             if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
