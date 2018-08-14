@@ -472,6 +472,34 @@ namespace FastAVN
                 Console.WriteLine("Ignoring small deadline of {0} seconds", deadline);
             }
 
+
+
+            /*author: Snigdha
+             This is where the program is assigned to threads
+             Hope is that this is a good place to assign labels to assertions*/
+            //Console.WriteLine("[Snigdha] Printing all the assertions :");
+             foreach(var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                string methodName = impl.Proc + "";
+                
+                // Console.WriteLine("[Snigdha] method " + impl.Proc);
+                foreach (var block in impl.Blocks)
+                {
+                    foreach(var cmd  in block.cmds.OfType<AssertCmd>())
+                    {
+                        int lineNum = cmd.Line;
+                        //Console.WriteLine("[Snigdha] before adding attributes : " + cmd);
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] { methodName+"_"+lineNum}), cmd.Attributes);
+                        //Console.WriteLine("[Snigdha] after adding attributes : " + cmd);
+
+                    }
+
+                }
+            }
+            
+            
+
+
             var threads = new List<Thread>();
             for (int i = 0; i < numThreads; i++)
             {
@@ -547,6 +575,7 @@ namespace FastAVN
 
             public void RunSplitAndAv()
             {
+                Console.WriteLine("[Snigdha] In RunSplitAndAv" );
                 Implementation impl;
 
                 while (true)
@@ -607,6 +636,7 @@ namespace FastAVN
                     if (deadlineReached) return;
 
                     // spawn the job -- local
+                    Console.WriteLine("[Snigdha] value of avnPath :" + avnPath);
                     var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", pruneFile, avnArgs));
 
                     PostProcess(impl.Name, wd, output);
@@ -616,7 +646,7 @@ namespace FastAVN
             public void RunSplitAndAvhAndAv()
             {
                 Implementation impl;
-
+                Console.WriteLine("[Snigdha] In RunSplitAndAvhandAV");
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
