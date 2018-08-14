@@ -193,8 +193,6 @@ namespace AngelicVerifierNull
             Utils.Print("AngelicVerifier failed with: Timeout", Utils.PRINT_TAG.AV_OUTPUT);
             Stats.printStats();
             Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
-            /*Snigdha : insert code here to write to a file that this particular assertion (with unique name)
-             terminated with a timeout - have a separate file*/
             // Kill self
             Process.GetCurrentProcess().Kill();
         }
