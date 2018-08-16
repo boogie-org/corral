@@ -41,20 +41,27 @@ namespace CommonLib
         public static void RemoteInstall(string root, string remote, IEnumerable<string> utils, bool force, List<Files> files)
         {
             // Copy corral
-            CopyFolder(root, remote, Utils.CorralDir, force); 
+            string remoteCorralDir = System.IO.Path.Combine(remote, Utils.CorralDir, Utils.CorralExe);
+            if (!System.IO.File.Exists(remoteCorralDir))
+                CopyFolder(root, remote, Utils.CorralDir, force);
 
-            // copy utils
-            foreach (var u in utils)
-                CopyFolder(root, remote, u, force);
+            // copy splitpar client
+            foreach (var util in utils)
+            {
+                string remoteSplitParClient = System.IO.Path.Combine(remote, Utils.SplitParClientDir, Utils.SplitParClientExe);
+                if (!System.IO.File.Exists(remoteSplitParClient))
+                    CopyFolder(root, remote, util, force);
+            }
 
             // copy pstools
-            CopyFolder(root, remote, Utils.PsToolsDir, force);
+            string remotePSToolDir = System.IO.Path.Combine(remote, Utils.PsToolsDir, Utils.PsToolsExe);
+            if (!System.IO.File.Exists(remotePSToolDir))
+                CopyFolder(root, remote, Utils.PsToolsDir, force);
 
             // copy files
             foreach (var src in files)
-            {
-                var dest = src.value.Replace(root, remote);
-                CopyFile(src.value, dest);
+            {          
+                CopyFile(System.IO.Path.Combine(root, src.value), System.IO.Path.Combine(remote, Utils.DataDir, System.IO.Path.GetFileName(src.value)));
             }
         }
 
@@ -83,7 +90,7 @@ namespace CommonLib
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest));
             Console.WriteLine("copy {0} {1}", src, dest);
             System.IO.File.Copy(src, dest, true);
-        }
+        } 
 
 
         static void CheckFileExists(string folder, string file)

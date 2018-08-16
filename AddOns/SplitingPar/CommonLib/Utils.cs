@@ -29,6 +29,7 @@ namespace CommonLib
         public static int CorralPort = 12000;
 
         // paths
+        public static string DataDir = "data";
         public static string RunDir = "run";
         public static string CorralDir = "..\\..\\bin\\Debug";
         public static string CorralExe = "corral.exe";
@@ -39,6 +40,11 @@ namespace CommonLib
         public static string PsToolsExe = "psexec.exe";
         public static string ClientConfig = "config-client.xml";
 
+        // other
+        public static string ServerLog = "ServerLog.out";
+        public static string ClientLog = "ClientLog.out";
+
+        public enum CurrentState { AVAIL, BUSY };
 
         public static HashSet<Process> SpawnedProcesses = new HashSet<Process>();
         static bool debugOutput = true;
@@ -51,6 +57,14 @@ namespace CommonLib
         public static byte[] EncodeStr(string msg)
         {
             return Encoding.ASCII.GetBytes(msg);
+        }
+
+        public static string Indent(int n)
+        {
+            var ret = "";
+            int i = n;
+            while (i > 0) { i--; ret += " "; }
+            return ret;
         }
 
         public static string LocalIP ()

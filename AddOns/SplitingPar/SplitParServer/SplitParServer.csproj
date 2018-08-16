@@ -42,10 +42,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BplTask.cs" />
     <Compile Include="LogWithAddress.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ServerListener.cs" />
     <Compile Include="SplitParServer.cs" />
+    <Compile Include="Worker.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

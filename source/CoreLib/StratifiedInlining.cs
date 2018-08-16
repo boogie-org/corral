@@ -704,9 +704,7 @@ namespace CoreLib
             StratifiedInliningErrorReporter reporter)
         {
             Outcome outcome = Outcome.Inconclusive;
-            reporter.reportTraceIfNothingToExpand = true;
-
-            int treesize = di.ComputeSize();
+            reporter.reportTraceIfNothingToExpand = true;            
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
             var backtrackingPoints = new Stack<SiState>();
             var decisions = new Stack<DecisionWithTaskID>();
@@ -715,6 +713,10 @@ namespace CoreLib
             string exportSuffix = "split.txt";
             string readyMsg = "Client is ready";
             string completionMsg = "Complete";
+            string doingMsg = "Doing";
+            int portNumber = 12000; // let skip the user-define port at the moment
+            int msgSize = 1024;
+            int treesize = di.ComputeSize();
 
             var EncodeStr = new Func<string, byte[]>((s) =>
             {
@@ -739,52 +741,94 @@ namespace CoreLib
 
                 if (System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
                 {
-                    try
+                    if (false)
                     {
+                        #region do not use it
+                        try
+                        {                           
+                            IPHostEntry ipHostInfo = Dns.Resolve(localIP());
+                            IPAddress ipAddress = ipHostInfo.AddressList[0];
+                            IPEndPoint remoteEP = new IPEndPoint(ipAddress, portNumber);
 
-                        IPHostEntry ipHostInfo = Dns.Resolve(localIP());
+
+                            server = new Socket(AddressFamily.InterNetwork,
+                                SocketType.Stream, ProtocolType.Tcp);
+
+                            try
+                            {
+                                server.Connect(remoteEP);
+
+                                LogWithAddress.WriteLine(string.Format("Socket connected {0}", server.RemoteEndPoint.ToString()));
+
+                                byte[] data = new byte[msgSize];
+                                int receivedDataLength = server.Receive(data); //Wait for the data
+                                string stringData = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
+                                LogWithAddress.WriteLine(string.Format("{0}", stringData)); //Write the data on the screen
+
+                                // reply the server
+                                server.Send(EncodeStr(string.Format("{0}: {1}", localIP(), readyMsg)));
+                            }
+                            catch (ArgumentNullException ane)
+                            {
+                                LogWithAddress.WriteLine(string.Format("ArgumentNullException : {0}", ane.ToString()));
+                            }
+                            catch (SocketException se)
+                            {
+                                LogWithAddress.WriteLine(string.Format("SocketException : {0}", se.ToString()));
+                            }
+                            catch (Exception e)
+                            {
+                                LogWithAddress.WriteLine(string.Format("Unexpected exception : {0}", e.ToString()));
+                            }
+
+                        }
+                        catch
+                        {
+                            LogWithAddress.WriteLine(string.Format("Cannot connect the server."));
+                        }
+                        #endregion
+                    }
+                    else
+                    {
+                        IPHostEntry ipHostInfo = Dns.Resolve(Dns.GetHostName());
                         IPAddress ipAddress = ipHostInfo.AddressList[0];
-                        IPEndPoint remoteEP = new IPEndPoint(ipAddress, 11000);
+                        IPEndPoint localEndPoint = new IPEndPoint(ipAddress, portNumber);
 
 
-                        server = new Socket(AddressFamily.InterNetwork,
-                            SocketType.Stream, ProtocolType.Tcp); 
+                        server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
                         try
                         {
-                            server.Connect(remoteEP);
+                            server.Bind(localEndPoint);
+                            server.Listen(10);
+                            lock (LogWithAddress.debugOut)
+                            {
+                                LogWithAddress.WriteLine(string.Format("Waiting for a connection..."));
+                            }
+                            server = server.Accept();
+                            lock (LogWithAddress.debugOut)
+                            {
+                                LogWithAddress.WriteLine(string.Format("Connected"));
+                            }
+                            server.Send(EncodeStr("Hello " + server.RemoteEndPoint.ToString()));
 
-                            Console.WriteLine("Socket connected <strong class=\"highlight\">to</strong> {0}",
-                                server.RemoteEndPoint.ToString());
-
-                            byte[] data = new byte[1024];
+                            // wait for the reply message
+                            byte[] data = new byte[msgSize];
                             int receivedDataLength = server.Receive(data); //Wait for the data
                             string stringData = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
-                            Console.WriteLine(stringData); //Write the data on the screen
 
-                            // reply the server
-                            server.Send(EncodeStr("Hi " + server.RemoteEndPoint.ToString())); 
+                            lock (LogWithAddress.debugOut)
+                            {
+                                LogWithAddress.WriteLine(string.Format("{0}", stringData)); //Write the data on the screen
+                            }
                         }
-                        catch (ArgumentNullException ane)
+                        catch
                         {
-                            Console.WriteLine("ArgumentNullException : {0}", ane.ToString());
-                            Console.Read();
+                            lock (LogWithAddress.debugOut)
+                            {
+                                LogWithAddress.WriteLine(string.Format("Error"));
+                            }
                         }
-                        catch (SocketException se)
-                        {
-                            Console.WriteLine("SocketException : {0}", se.ToString());
-                            Console.Read();
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine("Unexpected exception : {0}", e.ToString());
-                            Console.Read();
-                        }
-
-                    }
-                    catch
-                    {
-                        Console.WriteLine("Cannot connect the server.");
                     }
                 }
             }
@@ -1090,9 +1134,17 @@ namespace CoreLib
                             break;
 
                         // TODO: need to handle concurrency
+                        // inform server 
+                        if (server != null)
+                        {
+                            // decisions.Count fileName
+                            server.Send(EncodeStr(doingMsg + ":" + taskFile(topDecision.taskID)));
+                        }
+
                         // remove the task 
                         File.Delete(taskFile(topDecision.taskID));
                         MacroSI.PRINT("{0}>>> (doing task {1})", indent(decisions.Count), topDecision.taskID);
+                        
                         topState.ApplyState(this, ref openCallSites);
                         timeGraph.Pop(npops - 1);
 
@@ -1133,9 +1185,7 @@ namespace CoreLib
             #region Close the connection
             if (server != null)
             {
-                server.Send(EncodeStr(completionMsg));
-                server.Shutdown(SocketShutdown.Both);
-                server.Close();
+                server.Send(EncodeStr(completionMsg)); 
             }
             #endregion
             Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2")); 

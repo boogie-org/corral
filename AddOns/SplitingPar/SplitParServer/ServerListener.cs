@@ -12,24 +12,13 @@ namespace SplitParServer
     public class ServerListener
     {
         Socket connection = null;
-        string rootDir;
-        bool remote;
-        string[] args;
+        string clientIP;
 
-        //public Worker(Socket sk, string root, bool remote, params string[] args)
-        //{
-        //    connection = sk;
-        //    rootDir = root;
-        //    this.remote = remote;
-        //    this.args = args;
-        //}
-
-        public ServerListener(string root, bool remote, params string[] args)
+        public ServerListener(Socket sk, string clientIP)
         {
-            rootDir = root;
-            this.remote = remote;
-            this.args = args;
-        }
+            connection = sk;
+            this.clientIP = clientIP;
+        } 
 
         public void Listen()
         {
@@ -46,12 +35,33 @@ namespace SplitParServer
                     msg = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
                     if (msg.Equals(Utils.CompletionMsg))
                     {
+                        lock (SplitParServer.ClientStates)
+                        {
+                            SplitParServer.ClientStates[clientIP] = Utils.CurrentState.AVAIL;
+                        }
+                        // client completed his job
                         connection.Send(Utils.EncodeStr(Utils.CompletionMsg));
                         Finish();
                         break;
                     }
-                    var split = msg.Split(sep);
-                    LogWithAddress.WriteLine(string.Format("{0}", msg));
+                    else
+                    {
+                        // new task is available
+                        var split = msg.Split(sep);
+                        lock (LogWithAddress.debugOut)
+                        { 
+                            if (split.Length > 1)
+                            {
+                                BplTask newTask = new BplTask(clientIP, split[1], int.Parse(split[0]));
+                                LogWithAddress.WriteLine(string.Format(newTask.ToString())); //Write the data on the screen
+                                // add a new task
+                                lock (SplitParServer.BplTasks)
+                                {
+                                    SplitParServer.BplTasks.Add(newTask);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }        
@@ -63,16 +73,6 @@ namespace SplitParServer
                 connection.Send(Utils.EncodeStr(Utils.CompletionMsg));
                 connection.Close();
             }
-        }
-
-        public void Run()
-        { 
-            if (remote)
-                Utils.SpawnClientRemote(rootDir, args);
-            else
-            {
-                Utils.SpawnClient(rootDir, args);
-            }
-        }  
+        } 
     }
 }

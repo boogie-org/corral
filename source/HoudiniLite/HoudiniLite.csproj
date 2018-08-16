@@ -103,17 +103,9 @@
       <Project>{e1f10180-c7b9-4147-b51f-fa1b701966dc}</Project>
       <Name>VCGeneration</Name>
     </ProjectReference>
-    <ProjectReference Include="..\CoreLib\CoreLib.csproj">
-      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
-      <Name>CoreLib</Name>
-    </ProjectReference>
     <ProjectReference Include="..\ProgTransformation\ProgTransformation.csproj">
       <Project>{6532b8a9-8cc2-4d7f-9d5e-7669841b6871}</Project>
       <Name>ProgTransformation</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Util\CorralUtil.csproj">
-      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
-      <Name>CorralUtil</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

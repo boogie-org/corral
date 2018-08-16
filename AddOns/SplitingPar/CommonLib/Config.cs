@@ -58,7 +58,7 @@ namespace CommonLib
                     "negative" : "positive");
         }
 
-        public void DumpClientConfig(string root, string configfile, params string[] files)
+        public void DumpClientConfig(string root, string configfile, List<Files> files)
         {
             var outf = new StreamWriter(configfile);
 
@@ -73,8 +73,8 @@ namespace CommonLib
             outf.WriteLine(@"  <RemoteRoots>");
             outf.WriteLine(@"  </RemoteRoots>");
             outf.WriteLine(@"  <BoogieFiles>");
-            for (int i = 0; i < files.Length; ++i)
-                outf.WriteLine(@"    <Files value=""{0}""/>", files[i]);
+            foreach(var file in files)
+                outf.WriteLine(@"    <Files value=""{0}""/>", file.value);
             outf.WriteLine(@"  </BoogieFiles>");
             outf.WriteLine(@"</SplitParConfig>");
 

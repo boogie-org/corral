@@ -11,14 +11,14 @@ using System.Threading.Tasks;
 
 namespace SplitParServer
 {
-    class SplitParServer
+    public class SplitParServer
     {
+        public static Dictionary<string, Utils.CurrentState> ClientStates = new Dictionary<string, Utils.CurrentState>();
+        public static List<BplTask> BplTasks = new List<BplTask>();
         static SplitParConfig config;
-        static List<Socket> clients = new List<Socket>();
-        static int maxClients = 1;
-
-        static string remoteSystem = "RSE-SERVER-14"; 
-        static string procSearch = "Notepad";
+        static List<Socket> clients = new List<Socket>(); 
+        
+        static int maxClients = 1;  
 
         public enum Outcome
         {
@@ -30,8 +30,7 @@ namespace SplitParServer
             Inconclusive,
             ReachedBound
         } 
-
-        enum CurrentState { AVAIL, BUSY };
+        
         static void TransferFiles(string folderDir, string folder, string remoteFolder)
         {
             LogWithAddress.WriteLine(string.Format("Copying folder {0} to {1}", folder, remoteFolder));
@@ -96,7 +95,6 @@ namespace SplitParServer
         static void InstallingClients()
         { 
             var force = true;
-
             LogWithAddress.WriteLine(string.Format("Checking self installation"));
             try
             {
@@ -108,13 +106,16 @@ namespace SplitParServer
                 return;
             }
             LogWithAddress.WriteLine(string.Format("Done"));
+            ClientStates[config.root] = Utils.CurrentState.AVAIL;
 
             // Do remote installation
             LogWithAddress.WriteLine(string.Format("Doing remote installation")); 
-            foreach (var remote in config.RemoteRoots)
+            for (int i = 0; i < config.RemoteRoots.Count; ++i)
             {
-                LogWithAddress.WriteLine(string.Format("Installing {0}", remote.value));
-                Installer.RemoteInstall(config.root, remote.value, config.Utils.Select(u => u.dir).Distinct(), force, config.BoogieFiles); 
+                // local machine
+                ClientStates[config.RemoteRoots[i].value] = Utils.CurrentState.AVAIL;
+                LogWithAddress.WriteLine(string.Format("Installing {0}", config.RemoteRoots[i].value));
+                Installer.RemoteInstall(config.root, config.RemoteRoots[i].value, config.Utils.Select(u => u.dir).Distinct(), force, config.BoogieFiles); 
             }
             LogWithAddress.WriteLine(string.Format("Done"));
         }
@@ -122,22 +123,26 @@ namespace SplitParServer
         static void RunClients()
         {
             var threads = new List<Thread>();
-            var workers = new List<CommonLib.Worker>();
+            var workers = new List<Worker>();
 
             var starttime = DateTime.Now;
             Console.WriteLine("Spawning clients");
 
-            // spawn client on own machine
-            config.DumpClientConfig(config.root, System.IO.Path.Combine(config.root, Utils.RunDir, Utils.ClientConfig));
-            var w0 = new Worker(config.root, false, Utils.ClientConfig);
+            // spawn client on own machine 
+            config.DumpClientConfig(config.root, System.IO.Path.Combine(config.root, Utils.ClientConfig), config.BoogieFiles);
+            var configDir = System.IO.Path.Combine(config.root, Utils.ClientConfig);
+            var w0 = new Worker(config.root, false, configDir);
             workers.Add(w0);
             threads.Add(new Thread(new ThreadStart(w0.Run)));
+            
 
             // spawn client on remote machines
-            foreach (var client in config.RemoteRoots)
-            {
-                config.DumpClientConfig(client.value, System.IO.Path.Combine(client.value, Utils.RunDir, Utils.ClientConfig));
-                var w1 = new CommonLib.Worker(client.value, true, Utils.ClientConfig);
+            for (int i = 0; i < config.RemoteRoots.Count; ++i)
+            { 
+                string clientRoot = config.RemoteRoots[i].value;
+                configDir = System.IO.Path.Combine(clientRoot, Utils.ClientConfig);
+                config.DumpClientConfig(clientRoot, configDir, config.BoogieFiles);                
+                var w1 = new Worker(clientRoot, true, configDir);
                 threads.Add(new Thread(new ThreadStart(w1.Run)));
                 workers.Add(w1);
             }
@@ -151,8 +156,7 @@ namespace SplitParServer
             {
                 IPHostEntry ipHostInfo = Dns.Resolve(hostName);
                 IPAddress ipAddress = ipHostInfo.AddressList[0];
-                IPEndPoint remoteEP = new IPEndPoint(ipAddress, Utils.ServerPort);
-
+                IPEndPoint remoteEP = new IPEndPoint(ipAddress, Utils.ServerPort); 
 
                 Socket listener = new Socket(AddressFamily.InterNetwork,
                     SocketType.Stream, ProtocolType.Tcp);
@@ -243,36 +247,88 @@ namespace SplitParServer
             }
         }
 
+        static void TaskDelivery()
+        {
+            while (true)
+            {
+                int taskCount = 0;
+                lock (BplTasks)
+                {
+                    taskCount = BplTasks.Count;
+                } 
+                if (taskCount > 0)
+                {
+                    Dictionary<string, Utils.CurrentState> localClientStates;
+                    lock (ClientStates)
+                    {                        
+                        localClientStates = new Dictionary<string, Utils.CurrentState>(ClientStates);
+                    }
+                    foreach(var client in localClientStates)
+                        if (client.Value == Utils.CurrentState.AVAIL)
+                        {
+                            BplTask topTask = BplTasks[0];
+                            // let him do the first task
+                            lock (LogWithAddress.debugOut)
+                            {
+                                LogWithAddress.WriteLine(string.Format("Transfer {0} to {1}", topTask.ToString(), client.Key));
+                            }
+
+                            // pick the task from a client
+                            // if localClient is the one
+                            if (client.Key.Equals(config.root))
+                            {
+                                System.IO.File.Move(topTask.callTreeDir, System.IO.Path.Combine(config.root, Utils.RunDir));
+                            }
+                            else
+                            {
+                                // find remote client
+                                System.IO.File.Move(topTask.callTreeDir, System.IO.Path.Combine(client.Key, Utils.RunDir));
+                            }
+
+                            // mark him busy
+                            lock (ClientStates)
+                            {
+                                //ClientStates[client.Key] = Utils.CurrentState.BUSY;
+                            }
+
+                            // remove the task
+                            lock (BplTasks)
+                            {
+                                BplTasks.RemoveAt(0);
+                            }
+
+                            // send the task to client
+                        }
+                }
+                lock (ClientStates)
+                {
+                    if (!ClientStates.Any(client => client.Value == Utils.CurrentState.BUSY))
+                        break;
+                }
+            }
+        }
+
         static void MonitoringClients()
         {
             var threads = new List<Thread>();
             var workers = new List<ServerListener>();
 
             var starttime = DateTime.Now;
-            LogWithAddress.WriteLine(string.Format("Spawning clients"));
-            //Worker localWorker = new Worker(config.root, false);
-            //localWorker.Run(); 
+            lock (LogWithAddress.debugOut)
+            {
+                LogWithAddress.WriteLine(string.Format("Monitoring clients"));
+            }
 
-            // spawn client on own machine
-            //config.DumpClientConfig(config.root, machineToFiles[0].Select(f => Util.GetFileName(f, config.root)), System.IO.Path.Combine(config.root, "config-client.xml"));
-            //var w0 = new Worker(false, config.root, resume ? "/resume" : "", test ? "/test" : "");
-            //workers.Add(w0);
-            //threads.Add(new Thread(new ThreadStart(w0.Run)));
+            for (int i = 0; i < clients.Count; ++i)
+            {
+                var listener = new ServerListener(clients[i], config.RemoteRoots[i].value);
+                threads.Add(new Thread(new ThreadStart(listener.Listen)));
+                workers.Add(listener); 
+            }
 
-
-            //// spawn clients on remote machines 
-            //foreach (var r in config.RemoteRoots)
-            //{ 
-            //    if (machineToFiles[rm].Count == 0)
-            //        continue;
-            //    config.DumpClientConfig(Util.GetRemoteFolder(r.value), machineToFiles[rm].Select(f => Util.GetFileName(f, config.root)), System.IO.Path.Combine(r.value, "config-client.xml"));
-            //    var w1 = new Worker(true, r.value, resume ? "/resume" : "", test ? "/test" : "");
-            //    threads.Add(new Thread(new ThreadStart(w1.Run)));
-            //    workers.Add(w1);
-            //}
-
-            // start threads
-            threads.ForEach(t => t.Start());
+            threads.Add(new Thread(new ThreadStart(TaskDelivery)));
+            // start threads & join
+            threads.ForEach(t => t.Start());  
             threads.ForEach(t => t.Join());
 
             Console.WriteLine("Time taken = {0} seconds", (DateTime.Now - starttime).TotalSeconds.ToString("F2"));
@@ -281,13 +337,7 @@ namespace SplitParServer
         static void MonitoringCorral()
         {
             var sep = new char[1];
-            sep[0] = ':';
-            var indent = new Func<int, string>(i =>
-            {
-                var ret = "";
-                while (i > 0) { i--; ret += " "; }
-                return ret;
-            }); 
+            sep[0] = ':'; 
 
             string msg = "";
             while (!msg.Equals(Utils.CompletionMsg))
@@ -300,7 +350,7 @@ namespace SplitParServer
                 var split = msg.Split(sep);
                 if (split.Length > 1)
                 {
-                    LogWithAddress.WriteLine(string.Format(indent(int.Parse(split[0])) + ">>> " + split[1])); //Write the data on the screen
+                    LogWithAddress.WriteLine(string.Format(Utils.Indent(int.Parse(split[0])) + ">>> " + split[1])); //Write the data on the screen
                 }
             }
             LogWithAddress.WriteLine(string.Format("{0}", msg));
@@ -310,6 +360,7 @@ namespace SplitParServer
         {            
             InstallingClients();
             RunClients();
+            Thread.Sleep(2000);
             if (true)
             {
                 string localIP = Utils.LocalIP();
@@ -319,8 +370,11 @@ namespace SplitParServer
                     foreach (var client in config.RemoteRoots)
                     {
                         string tmp = Utils.GetRemoteMachineName(client.value);
-                        LogWithAddress.WriteLine(string.Format("Machine name: {0}", tmp));
                         //ConnectClient(tmp);
+                        lock (LogWithAddress.debugOut)
+                        {
+                            LogWithAddress.WriteLine(string.Format("Machine name: {0}", tmp));
+                        }
                     }
                 }
                 else
@@ -330,8 +384,16 @@ namespace SplitParServer
             {
                 CreateConnection();
             }
-            //MonitoringClients();
-            CloseConnection();
+
+            // local client is working
+            lock (ClientStates)
+            {
+                ClientStates[config.root] = Utils.CurrentState.BUSY;
+            }
+            MonitoringClients();
+
+            // connections are closed in ServerListener
+            //CloseConnection();
         }
 
         static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
@@ -350,11 +412,12 @@ namespace SplitParServer
         static void Main(string[] args)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
+            
             Debug.Assert(args.Length > 0);
             config = Utils.LoadConfig(args[0]);
+            LogWithAddress.init(System.IO.Path.Combine(config.root, Utils.RunDir));
             ServerController();
-            LogWithAddress.Close();
-            Console.ReadKey();
+            LogWithAddress.Close(); 
         }
     }
 }

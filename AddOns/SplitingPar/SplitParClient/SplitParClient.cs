@@ -156,13 +156,7 @@ namespace SplitParClient
         static void MonitoringCorral()
         {
             var sep = new char[1];
-            sep[0] = ':';
-            var indent = new Func<int, string>(i =>
-            {
-                var ret = "";
-                while (i > 0) { i--; ret += " "; }
-                return ret;
-            }); 
+            sep[0] = ':'; 
 
             string msg = "";
             while (!msg.Equals(Utils.CompletionMsg))
@@ -186,7 +180,10 @@ namespace SplitParClient
                     }
                     else
                     {
-                        LogWithAddress.WriteLine(string.Format(indent(int.Parse(split[0])) + ">>> " + split[1])); //Write the data on the screen
+                        // inform server when new tasks are available
+                        serverConnection.Send(Utils.EncodeStr(msg));
+                        // log data
+                        LogWithAddress.WriteLine(string.Format(Utils.Indent(int.Parse(split[0])) + ">>> " + split[1])); 
                         jobList.Add(split[1]);
                     }
                 } 
@@ -301,7 +298,12 @@ namespace SplitParClient
             // spawn client on own machine            
             foreach (var util in config.Utils)
             {
-                var w0 = new WorkItem("local", config.root, util.arguments);
+                // TODO
+                // pick the first file in config to handle
+                Debug.Assert(config.BoogieFiles.Count > 0);
+                var file = System.IO.Path.Combine(config.root, config.BoogieFiles.ElementAt(0).value);
+                var args = file + " " + util.arguments;
+                var w0 = new WorkItem("local", config.root, args);
                 workers.Add(w0);
                 threads.Add(new Thread(new ThreadStart(w0.Run)));
             }            
@@ -320,7 +322,7 @@ namespace SplitParClient
             }
             else
             {
-                //ConnectServer();
+                ConnectServer();
             }
             StartCorral();
             Thread.Sleep(2000);
@@ -334,13 +336,13 @@ namespace SplitParClient
             while (msg != Utils.CompletionMsg) {
                 // wait for the message
                 byte[] data = new byte[Utils.MsgSize];
-                int receivedDataLength = serverConnection.Receive(data); //Wait for the data
-                msg = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
-                LogWithAddress.WriteLine(string.Format("{0}", msg)); //Write the data on the screen
+                int receivedDataLength = serverConnection.Receive(data); // wait for the data
+                msg = Encoding.ASCII.GetString(data, 0, receivedDataLength); // decode the data received
+                LogWithAddress.WriteLine(string.Format("{0}", msg)); // log data 
+
                 if (msg.Equals(Utils.CompletionMsg))
                 {
                     // receive shutdown signal   
-                    serverConnection.Shutdown(SocketShutdown.Both);
                     serverConnection.Close();
                 }
                 else
@@ -373,10 +375,10 @@ namespace SplitParClient
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
             Debug.Assert(args.Length > 0);
-            config = Utils.LoadConfig(args[0]);            
+            config = Utils.LoadConfig(args[0]);
+            LogWithAddress.init(System.IO.Path.Combine(config.root, Utils.RunDir));
             ClientController();            
-            LogWithAddress.Close();
-            Console.ReadKey();
+            LogWithAddress.Close(); 
         }
     }
 }

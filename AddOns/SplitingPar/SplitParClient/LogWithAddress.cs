@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommonLib;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,16 +21,16 @@ namespace SplitParClient
         public static bool printMemUsage = false;
         public static int verbose_level = 0;
 
-        public static StreamWriter debugOut = new StreamWriter("ClientLog.out");
+        public static StreamWriter debugOut;
 
-        private static void init()
+        public static void init(string dir)
         {
             if (noDebuggingOutput)
                 return;
 
             if (debugOut == null)
             {
-                debugOut = new StreamWriter("ClientLog.out");
+                debugOut = new StreamWriter(System.IO.Path.Combine(dir, Utils.ClientLog));
             }
         }
 
@@ -43,17 +44,16 @@ namespace SplitParClient
 
         public static bool Write(int level, string msg)
         {
-            //if (level == LogWithAddress.Normal)
-            //{
-            //    Write(LogWithAddress.Debug, msg);
-            //}
+            if (level == LogWithAddress.Normal)
+            {
+                level = Debug;
+            }
 
             switch (level)
             {
                 case Debug:
                     if (!noDebuggingOutput)
-                    {
-                        init();
+                    { 
                         debugOut.Write(msg);
                     }
                     break;

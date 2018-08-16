@@ -132,10 +132,6 @@
       <Project>{e1f10180-c7b9-4147-b51f-fa1b701966dc}</Project>
       <Name>VCGeneration</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Util\CorralUtil.csproj">
-      <Project>{186DE4BD-014D-47C7-A914-831EA98116A9}</Project>
-      <Name>CorralUtil</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
