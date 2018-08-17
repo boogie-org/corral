@@ -57,6 +57,8 @@ namespace AvHarnessInstrumentation
         public static HashSet<string> entryPointExcludes = null; 
         // delay AA
         public static bool delayAA = false;
+        // delay initialization
+        public static bool DelayInitialization = false;
     }
 
     public class Driver
@@ -473,6 +475,9 @@ namespace AvHarnessInstrumentation
 
             if (args.Any(s => s == "/delayAA"))
                 Options.delayAA = true;
+
+            if (args.Any(s => s == "/delayInitialization"))
+                Options.DelayInitialization = true;
 
             if (args.Any(s => s == "/houdini"))
                 Options.HoudiniPass = true;

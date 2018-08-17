@@ -104,3 +104,6 @@
 [TAG: AV_OUTPUT] ----- Analyzing eeSlice2_hinst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr b == 1
+
+-------------------- delayed_initialization.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing delayed_initialization_hinst.bpl ------

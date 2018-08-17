@@ -157,7 +157,7 @@ namespace AvHarnessInstrumentation
                 var globalCmds = new List<Cmd>() { initCmd };
                 //add call to corralExtraInit
                 var init = Instrumentations.GetEnvironmentAssumptionsProc(prog);
-                if (init != null)
+                if (init != null && !Options.DelayInitialization)
                     globalCmds.Add(BoogieAstFactory.MkCall(init, new List<Expr>(), new List<Variable>()));
 
                 // Dont initialize Boogie instrumentation variables
@@ -172,6 +172,9 @@ namespace AvHarnessInstrumentation
                     .Iter(g => g.Attributes = BoogieUtil.removeAttrs(new HashSet<string> { "scalar", "pointer" }, g.Attributes));
 
                 globalCmds.AddRange(AllocatePointersAsUnknowns(prog.GlobalVariables.Select(x => (Variable)x).ToList()));
+
+                if (init != null && Options.DelayInitialization)
+                    globalCmds.Add(BoogieAstFactory.MkCall(init, new List<Expr>(), new List<Variable>()));
 
                 // globals for parameters
                 prog.AddTopLevelDeclarations(globalParams);
