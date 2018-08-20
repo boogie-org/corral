@@ -53,3 +53,10 @@
 [TAG: AV_OUTPUT] ----- Analyzing rodrigo_refnull_pinst_hinst.bpl ------
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Foo with expr r != null
+
+-------------------- probe0.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing probe0_pinst_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_4(x_1) ==> !validProbe[x_1])
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_4(x_1) ==> validProbe[Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO[pSid__KS_CAMERA_STREAMING_CONSENT_INFO(x_1)]])
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_1(x_1) ==> !validProbe[x_1])
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> validProbe[Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO[pSid__KS_CAMERA_STREAMING_CONSENT_INFO(x_1)]])

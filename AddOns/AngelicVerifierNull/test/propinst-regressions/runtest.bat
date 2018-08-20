@@ -19,6 +19,7 @@ call:add irql1.bpl ..\..\..\PropInst\PropInst\ExampleProperties\checkIrql-razzle
 call:add irql2.bpl ..\..\..\PropInst\PropInst\ExampleProperties\checkIrql-razzle.avp
 call:add null0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\nullcheck-razzle.avp
 call:add rodrigo_refnull.bpl ..\..\..\PropInst\PropInst\ExampleProperties\nullcheck-csharp.avp
+call:add probe0.bpl ..\..\..\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.avp
 
 REM for %%f in (eeSlice3.bpl) do (
 set i=0

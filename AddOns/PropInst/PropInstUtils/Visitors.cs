@@ -407,7 +407,9 @@ namespace PropInstUtils
             var nArgs = node.Args.Select(x => base.VisitExpr(x)).ToList();
             node.Args = nArgs;
             var fcall = node.Fun as FunctionCall;
-            if (fcall != null && fcall.Func.HasAttribute(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn))
+            if (fcall != null 
+                && fcall.Func != null //for a function not declared in AVP file
+                && fcall.Func.HasAttribute(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn))
             {
                 var formals = new List<Variable>();
                 fcall.Func.InParams.Iter(a =>
