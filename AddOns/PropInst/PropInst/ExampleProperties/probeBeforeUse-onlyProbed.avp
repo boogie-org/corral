@@ -43,7 +43,7 @@ ProcedureRule
 // A model for KsUpdateCameraStreamingConsent which is present in a different module in ks\
 ProcedureRule
 {
-    procedure {:#ReplaceImplementation}   KsUpdateCameraStreamingConsent({:pointer} {:ptr "Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO"} x0: int) returns ({:scalar} r: int);
+    procedure {:#ReplaceImplementation} {:origName "KsUpdateCameraStreamingConsent"} KsUpdateCameraStreamingConsent({:pointer} {:ptr "Mem_T._KS_CAMERA_STREAMING_CONSENT_INFO"} x0: int) returns ({:scalar} r: int);
 }
 -->
 {
