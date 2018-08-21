@@ -1,0 +1,51 @@
+//Probe before use property
+//Every pointer use has to be Probed
+//If there is a kernel pointer, we will infer that is is already probed and infer a precondition
+//If it is a userland pointer, then the probe will validate it
+//If the pointer is probed along some path and not along others, we will see a warning
+//due to inconsistency
+
+GlobalDeclarations
+{
+  var {:propertyMap} validProbe : [int] bool;
+}
+
+TemplateVariables
+{
+  var p : int;
+}
+
+CmdRule
+{
+  assume {:nonnull} p != NULL;
+}
+-->
+{
+  assert(validProbe[p]);
+  #this;
+}
+
+
+ProcedureRule
+{
+  procedure ProbeForRead( p1 : int, p2 : int, p3 : int);
+  procedure ProbeForWrite( p1 : int, p2 :int, p3 : int);
+}
+-->
+{
+  assert (!validProbe[p1]);
+  validProbe[p1] := true;
+}
+
+// ------------ Specific to a module 
+
+
+// A model for KsUpdateCameraStreamingConsent which is present in a different module in ks\
+ProcedureRule
+{
+    procedure {:#ReplaceImplementation} {:origName "KsUpdateCameraStreamingConsent"} KsUpdateCameraStreamingConsent({:pointer} {:ptr "Mem_T._KS_CAMERA_STREAMING_CONSENT_INFO"} x0: int) returns ({:scalar} r: int);
+}
+-->
+{
+    assert(validProbe[Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO[pSid__KS_CAMERA_STREAMING_CONSENT_INFO(x0)]]);
+}
