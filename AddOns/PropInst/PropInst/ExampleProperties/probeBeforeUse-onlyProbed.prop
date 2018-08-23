@@ -1,0 +1,31 @@
+NTSTATUS KsUpdateCameraStreamingConsent(
+    _In_ const PKS_CAMERA_STREAMING_CONSENT_INFO CameraStreamingConsentInfo
+)
+{
+        // models the access path within 
+        // Status = pNotification->lpVtbl->UpdateCameraStreamingConsent(pNotification, CameraStreamingConsentInfo);
+        assert probed[CameraStreamingConsentInfo->pSid];
+	int x = *CameraStreamingConsentInfo->pSid;
+}
+
+
+NTKERNELAPI VOID ProbeForRead(
+  __in_data_source(USER_MODE) const volatile VOID *Address,
+  SIZE_T                                          Length,
+  ULONG                                           Alignment
+)
+{
+        assert !probed[Address];
+        probed[Address] = true;
+}
+
+
+NTKERNELAPI VOID ProbeForWrite(
+  __in_data_source(USER_MODE) volatile VOID *Address,
+  SIZE_T                                    Length,
+  ULONG                                     Alignment
+)
+{
+        assert !probed[Address];
+        probed[Address] = true;
+}

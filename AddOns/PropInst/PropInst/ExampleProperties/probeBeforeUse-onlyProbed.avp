@@ -28,24 +28,43 @@ CmdRule
 
 ProcedureRule
 {
-  procedure ProbeForRead( p1 : int, p2 : int, p3 : int);
-  procedure ProbeForWrite( p1 : int, p2 :int, p3 : int);
+  procedure {:#ReplaceImplementation} ProbeForRead( p1 : int, p2 : int, p3 : int);
 }
 -->
 {
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 18} {:print "Atomic Continuation"} true;
   assert (!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 19} {:print "Atomic Continuation"} true;
   validProbe[p1] := true;
+      assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 19} {:print "Return"} true;
 }
+
+ProcedureRule
+{
+  procedure {:#ReplaceImplementation} ProbeForWrite( p1 : int, p2 :int, p3 : int);
+}
+-->
+{
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 29} {:print "Atomic Continuation"} true;
+  assert (!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 30} {:print "Atomic Continuation"} true;
+  validProbe[p1] := true;
+      assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 30} {:print "Return"} true;
+}
+
 
 // ------------ Specific to a module 
 
 
-// A model for KsUpdateCameraStreamingConsent which is present in a different module in ks\
+
 ProcedureRule
 {
     procedure {:#ReplaceImplementation} {:origName "KsUpdateCameraStreamingConsent"} KsUpdateCameraStreamingConsent({:pointer} {:ptr "Mem_T._KS_CAMERA_STREAMING_CONSENT_INFO"} x0: int) returns ({:scalar} r: int);
 }
 -->
 {
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 7} {:print "Atomic Continuation"} true;
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 7} {:print "Return"} true;
     assert(validProbe[Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO[pSid__KS_CAMERA_STREAMING_CONSENT_INFO(x0)]]);
+    return;
 }
