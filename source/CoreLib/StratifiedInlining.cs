@@ -11,6 +11,7 @@ using Outcome = VC.VCGen.Outcome;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
 
+
 namespace CoreLib
 {
     /****************************************
@@ -1201,6 +1202,7 @@ namespace CoreLib
             **/
             while (true)
             {
+                /*
                 if (CommandLineOptions.Clo.UW == 0)
                     mode = VerifyMode.Vanilla;
                 else if (CommandLineOptions.Clo.UW == 1)
@@ -1216,6 +1218,24 @@ namespace CoreLib
                 {                    
                     mode = VerifyMode.OR_UW;
                     itrCount = CommandLineOptions.Clo.UW - 1; // for UW = k, do UW 1/k fraction of the times
+                }
+                */
+
+                if (CommandLineOptions.Clo.UW == 1000)
+                    mode = VerifyMode.Vanilla;
+                else if (CommandLineOptions.Clo.UW == 0)
+                    mode = VerifyMode.OR_UW;
+                else if (CommandLineOptions.Clo.UW == 100)
+                    mode = VerifyMode.UW;
+                else
+                {
+                    int bias = CommandLineOptions.Clo.UW;
+                    Random r = new Random();
+                    int toss = r.Next(1, 100);
+                    if (toss > bias)
+                        mode = VerifyMode.OR_UW;
+                    else
+                        mode = VerifyMode.UW;
                 }
 
                 List<string> ucore = null;
