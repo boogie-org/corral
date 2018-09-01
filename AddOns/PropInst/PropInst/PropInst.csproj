@@ -53,6 +53,9 @@
     <None Include="ExampleProperties\doubleFetch-noEpUserPtr.avp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="ExampleProperties\doubleFetch-noEpUserPtrWithAA.avp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="ExampleProperties\doubleFetch-withEpUserPtr.avp">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -60,6 +63,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="ExampleProperties\probeBeforeUse-noEpUserPtr.avp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="ExampleProperties\probeBeforeUse-onlyProbed.avp">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="ExampleProperties\probeBeforeUse-onlyProbed.prop">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="ExampleProperties\probeBeforeUse-withEpUserPtr.avp">
