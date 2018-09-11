@@ -14,6 +14,7 @@ using SimpleHoudini = cba.SimpleHoudini;
 using AvUtil;
 using PropInstUtils;
 
+
 namespace AngelicVerifierNull
 {
     class Options
@@ -153,7 +154,7 @@ namespace AngelicVerifierNull
                 }
                 program.writeToFile(args[0].Substring(0, args[0].Length - ".bpl".Length) + "_inst.bpl");
 
-
+                
                 //[Snigdha] recording all assertions for the current run
                 //todo: remember to be time-efficient
                 foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
@@ -391,7 +392,8 @@ namespace AngelicVerifierNull
             var corralIterativeStartTime = DateTime.Now;
 
             int iterCount = 0;
-            var ret = true;         
+            var ret = true;
+            
  
             // Pending traces; contraint id -> trace
             var pendingTraces = new Dictionary<int, ErrorTraceInfo>();
@@ -435,6 +437,9 @@ namespace AngelicVerifierNull
                     break;
                 }
 
+                
+                
+               
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex, prog, out concretize);
@@ -474,6 +479,12 @@ namespace AngelicVerifierNull
                 var stubs = instr.GetStubs(cex);
                 if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
                 var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
+
+                //retrieve the contents of the trace file and rewrite them to a better named file
+                
+
+                
+
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
 
@@ -549,8 +560,25 @@ namespace AngelicVerifierNull
                         {
                             // Relax env constraints
                             RelaxEnvironmentConstraints(instr, null, false);
+                            
                             //This block is for the successful block of an assert
-                            AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.BLOCK);
+                            var assertID = QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID");
+                           
+                            //collecting the results for the assertion
+                            AVNResult.addResult(assertID, AVNResult.ResultStatus.BLOCK);
+
+                            //printing the pruned program
+                            printCorralTracePruned(cex, prog, instr, assertID);
+
+
+                            /*BoogieUtil.PrintProgram(ppprog, assertID + "_inlinedProg.bpl");
+
+                            //printing the pruned program - first retrieve from the trace file
+                            Program prunedProgForAssert = BoogieUtil.ReadAndOnlyResolve(traceName+".bpl");
+                            BoogieUtil.PrintProgram(prunedProgForAssert, assertID + "_traceProg.bpl");*/
+
+
+
                         }
                     }
 
@@ -560,6 +588,59 @@ namespace AngelicVerifierNull
             }
             Stats.stop("run.corral.iterative");
             return ret;
+        }
+
+        private static void printCorralTracePruned(cba.ErrorTrace cex, PersistentProgram prog, AvnInstrumentation instr, string assertID)
+        {
+            cex = instr.mapBackTrace(cex);
+            var traceProgCons = new cba.RestrictToTrace(instr.input.getProgram(), new cba.InsertionTrans());
+            traceProgCons.addTrace(cex);
+            var tprog = traceProgCons.getProgram();
+            BoogieUtil.PrintProgram(tprog, "prunedProg_"+assertID+".bpl");
+        }
+
+
+
+        //helper method to study the trace
+        private static void dumpTrace(cba.ErrorTrace trace)
+        {
+           
+            foreach (var block in trace.Blocks)
+            {
+                Console.WriteLine("[Snigdha] {0} Block : {1}", trace.procName,block.blockName);
+                foreach(var cmd in block.Cmds)
+                {
+                    Console.WriteLine("[Snigdha]{0} : {1}", trace.procName,cmd);
+                    if (cmd.isCall())
+                    {
+                        cba.CallInstr ccmd = cmd as cba.CallInstr;
+                        if( ccmd!=null && ccmd.CalleeTrace!= null)
+                            dumpTrace(ccmd.CalleeTrace);
+                    }
+                    
+                }
+            }
+            
+        }
+
+
+        private static cba.ErrorTrace GetPrunedTrace(cba.ErrorTrace trace, string epName)
+        {
+            if (!trace.procName.Equals(epName))
+            {
+                foreach (var block in trace.Blocks)
+                {
+                    foreach (var cmd in block.Cmds)
+                    {
+                        if (cmd.isCall() && cmd.CalleeTrace != null)
+                        {
+                            return GetPrunedTrace(cmd.CalleeTrace, epName);
+                        }
+                    }
+                }
+            }
+                            
+            return trace;
         }
 
         private static AssertCmd GetFailingAssertFromTraceProg(AvnInstrumentation instr, Program pathProgram)
@@ -1143,6 +1224,8 @@ namespace AngelicVerifierNull
         }
 
 
+        
+
         // Given a counterexample trace 'trace' through a program 'program', return the
         // path program for that trace. The path program has a single implementation 
         // with straightline code, and all non-determinism is concretized
@@ -1153,11 +1236,15 @@ namespace AngelicVerifierNull
             // convert trace to a path program
             //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = true;
             var tinfo = new cba.InsertionTrans();
+            
             var traceProgCons = new cba.RestrictToTrace(program.getProgram(), tinfo);
             traceProgCons.addTrace(trace);
+            
             var tprog = traceProgCons.getProgram();
             //cba.RestrictToTrace.convertNonFailingAssertsToAssumes = false;
 
+           
+           
             // For AngelicUnknown procs that have an implementation, we need to create a symbolic constant
             // to mark their return value, and avoid using the actual implementation
             var angelicProcsWithBody = new HashSet<string>();
@@ -1218,7 +1305,9 @@ namespace AngelicVerifierNull
             CoreLib.SdvUtils.sdvAnnotateDefectTrace(tprog, corralConfig.trackedVars, false);
 
             // convert to a persistent program
+            
             var witness = new cba.PersistentCBAProgram(tprog, traceProgCons.getFirstNameInstance(program.mainProcName), 0);
+            
             // rewrite asserts back to main
             //witness = cba.DeepAssertRewrite.InstrumentTrace(witness);
 
@@ -1240,9 +1329,11 @@ namespace AngelicVerifierNull
 
             // optinally, dump the witness to a file
             // witness.writeToFile("corral_witness.bpl");
-
+           
             return witness;
         }
+
+       
 
         // Function takes in a Program and returns a list of integers corresponding to the assumes which have to be removed
         // The integers are present as {:SoftConstraint n}
@@ -1767,14 +1858,17 @@ namespace AngelicVerifierNull
         { 
             //An assert can be declared one of the above
             //Todo:  check can an assert be in state 1 in 1 method and state 2 in another
-            //DONTCARE stands for both passing and timing out assertions
-            public enum ResultStatus {DONTCARE, FAIL, BLOCK};
+            //PASS stands for both passing and timing out assertions
+            public enum ResultStatus {PASS, FAIL, BLOCK};
             //Stores results per assert
             static Dictionary<string, ResultStatus> assertResult = new Dictionary<string, ResultStatus>();
             //Stores the list of blocked asserts
             static HashSet<string> blockedAsserts = new HashSet<string>();
             //stores the list of all asserts
             static HashSet<string> allAsserts = new HashSet<string>();
+
+            //methodName and assert number separator
+            public const char NameSeparator = '$';
 
             //output file
             static TextWriter avnResultFile = null;
@@ -1790,6 +1884,7 @@ namespace AngelicVerifierNull
 
             public static void addResult(string assertID, ResultStatus status)
             {
+                
                 assertResult.Add(assertID, status);
                 if (status == ResultStatus.BLOCK)
                     blockedAsserts.Add(assertID);
@@ -1810,13 +1905,13 @@ namespace AngelicVerifierNull
                     Console.WriteLine("[Snigdha] {0}", assert);
             }
 
-            //add the results for the don't care cases
+            //add the results for the pass cases
             public static void adjustAssertResults()
             {
                 foreach(var assert in allAsserts)
                 {
                     if (!assertResult.ContainsKey(assert))
-                        assertResult.Add(assert, ResultStatus.DONTCARE);
+                        assertResult.Add(assert, ResultStatus.PASS);
                 }
             }
 
@@ -1824,7 +1919,7 @@ namespace AngelicVerifierNull
             {
                 adjustAssertResults();
                 avnResultFile = new System.IO.StreamWriter(resultfilename);
-                avnResultFile.WriteLine("printing all assertion IDs with their results in the program :");
+                //avnResultFile.WriteLine("printing all assertion IDs with their results in the program :");
                 foreach (var assert in assertResult.Keys)
                     avnResultFile.WriteLine("{0}:{1}", assert, assertResult[assert]);
 
@@ -1841,6 +1936,9 @@ namespace AngelicVerifierNull
 
             }
         }
+
+
+       
         #endregion
 
 

@@ -1,16 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Diagnostics;
+﻿using cba.Util;
 using Microsoft.Boogie;
-using cba.Util;
-using PersistentProgram = cba.PersistentCBAProgram;
-using btype = Microsoft.Boogie.Type;
-using System.IO;
-using System.Threading;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
 
 namespace FastAVN
 {
@@ -42,6 +38,7 @@ namespace FastAVN
         static bool keepLongestTrace = false;
         static bool useProvidedEntryPoints = false;
         static bool onlyUseRootsAsEntryPoints = false;
+        static bool dependentEntrypointExec = false; //whether to execute all entry points in parallel or in dependence order
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -100,6 +97,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/keepLongestTrace"))
                 Driver.keepLongestTrace = true;
+
+            if (args.Any(s => s == "/dependentEntrypointExec"))
+                Driver.dependentEntrypointExec = true;
             
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -474,51 +474,117 @@ namespace FastAVN
 
 
 
-            /*author: Snigdha
-             This is where the program is assigned to threads
-             Hope is that this is a good place to assign labels to assertions*/
-            //Console.WriteLine("[Snigdha] Printing all the assertions :");
              foreach(var impl in prog.TopLevelDeclarations.OfType<Implementation>())
             {
                 string methodName = impl.Proc + "";
                 
-                // Console.WriteLine("[Snigdha] method " + impl.Proc);
                 foreach (var block in impl.Blocks)
                 {
                     foreach(var cmd  in block.cmds.OfType<AssertCmd>())
                     {
                         int lineNum = cmd.Line;
-                        //Console.WriteLine("[Snigdha] before adding attributes : " + cmd);
-                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] { methodName+"_"+lineNum}), cmd.Attributes);
-                        //Console.WriteLine("[Snigdha] after adding attributes : " + cmd);
+                        
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] { methodName+ AssertEliminator.NameSeparator+lineNum}), cmd.Attributes);
+                        
 
                     }
 
                 }
             }
-            
-            
 
 
-            var threads = new List<Thread>();
-            for (int i = 0; i < numThreads; i++)
+            if (dependentEntrypointExec)
             {
-                var w = new Worker(prog, entrypoints);
-                if(!earlySplit)
-                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
-                else
-                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+                Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
+                callgraph.Successors(callgraph.Nodes.First());
+                Dictionary<string, List<string>> dependencyInfo = BuildEntryPointDependenceGraph(prog, entrypoints, callgraph);
+                HashSet<string> allEntryPointNames = new HashSet<string>();
+                entrypoints.Iter(impl => allEntryPointNames.Add(impl.Name));
+
+                //TODO remove this file later
+                var workingCopy = "tempProg.bpl";
+                BoogieUtil.PrintProgram(prog, workingCopy);
+                Program currentProgram = BoogieUtil.ReadAndOnlyResolve(workingCopy);
+                File.Delete(workingCopy);
+                
+
+                /*This code runs the entrypoints with no dependence
+                 and keeps modifying the dependence as and when the entrypoints are done.
+                 We assume for now that this graph is acyclic.
+                 Note: This method is still slow, and does not leverage the full possible parallism as of now*/
+                int parCount = 0;
+                while (!AllEntryPointsDone(dependencyInfo))
+                {
+                    parCount++;
+                    HashSet<string> currentEntrypointNames;
+                    //pick the one with zero dep and create threads for them
+                    ConcurrentBag<Implementation> currentEntrypoints = getIndependentEntrypoints(entrypoints, 
+                        dependencyInfo, out currentEntrypointNames);
+
+                    var threads = new List<Thread>();
+                    for (int i = 0; i < numThreads; i++)
+                    {
+                        //giving the independent entry points to the worker thread
+                        var w = new Worker(currentProgram, currentEntrypoints, allEntryPointNames);
+                        if (!earlySplit)
+                            threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
+                        else
+                            threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+                    }
+
+                    threads.Iter(t => t.Start());
+                    threads.Iter(t => t.Join());
+
+                    Console.WriteLine("end of run {0}", parCount);
+                    
+                    //replaces the asertions based on results
+                    if(ReplacementRequired(dependencyInfo))
+                        currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, currentEntrypointNames, allEntryPointNames);
+
+                    //remove the current independent and update the others in depgraph                
+                    foreach (var epName in currentEntrypointNames)
+                    {
+                        Console.WriteLine("Removing entry point {0} in run {1}", epName, parCount);
+                        dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
+                        dependencyInfo.Remove(epName);
+                    }
+
+                    //todo remove later
+                    Console.WriteLine("new dependency info :");
+                    foreach (var ep in dependencyInfo)
+                    {
+                        Console.WriteLine("{0} => {1}", ep.Key, ep.Value.Count);
+                    }
+
+                }
+
+
+            }
+            else
+            {
+                /* old code*/
+                var threads = new List<Thread>();
+                for (int i = 0; i < numThreads; i++)
+                {
+                    var w = new Worker(prog, entrypoints);
+                    if (!earlySplit)
+                        threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
+                    else
+                        threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+                }
+
+                threads.Iter(t => t.Start());
+                threads.Iter(t => t.Join());
             }
 
-            threads.Iter(t => t.Start());
-            threads.Iter(t => t.Join());
+
 
             if (Driver.createEntryPointBplsOnly)
             {
                 Console.WriteLine("Early exit due to /createEntryPointBplsOnly");
                 return;
             }
-
+            
             lock (fslock)
             {
                 epNames = new HashSet<string>(Worker.DirsCreated);
@@ -528,6 +594,62 @@ namespace FastAVN
                 printBugs(ref mergedBugs, epNames.Count);
                 mergeBugs(epNames);
             }
+        }
+
+        //this can be refined more later to inline on an entrypoint specific way
+        private static bool ReplacementRequired(Dictionary<string, List<string>> dependencyInfo)
+        {
+            return dependencyInfo.Any(dep => dependencyInfo[dep.Key].Count > 0);
+        }
+
+
+
+        //return the methods with no dependencies, i.e. empty lists
+        private static ConcurrentBag<Implementation> getIndependentEntrypoints(ConcurrentBag<Implementation> entrypoints,
+            Dictionary<string, List<string>> dependencyInfo, out HashSet<string> currentEntrypointsNames)
+        {
+            ConcurrentBag<Implementation> independentEntryPoints = new ConcurrentBag<Implementation>();
+            entrypoints.Where(impl => dependencyInfo.ContainsKey(impl.Proc.Name) && dependencyInfo[impl.Proc.Name].Count == 0).
+                Iter(impl => independentEntryPoints.Add(impl));
+          
+            currentEntrypointsNames = new HashSet<string>();
+            foreach (var ep in independentEntryPoints)
+                currentEntrypointsNames.Add(ep.Proc.Name.ToString());
+            
+            return independentEntryPoints;
+        }
+
+        private static bool AllEntryPointsDone(Dictionary<string, List<string>> dependencyInfo)
+        {
+            if (dependencyInfo.Keys.Count != 0)
+                return false;
+            else
+                return true;
+        }
+
+        /*This function extracts the dependence of the entrypoints from the call graph
+         TODO : Ensure this function returns an acyclic graph.*/
+        private static Dictionary<string, List<string>> BuildEntryPointDependenceGraph(Program prog, ConcurrentBag<Implementation> entrypoints,
+            Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
+        {
+            Dictionary<string, List<string>> entrypointDepGraph = new Dictionary<string, List<string>>();
+            
+            
+            foreach (var epImpl in entrypoints)
+                {
+                    string epName = epImpl.Proc.Name;
+                    List<string>  successors= new List<string>();
+                    BoogieUtil.GetReachableNodes(epName, callgraph).Where(funcName => !funcName.Equals(epName) && 
+                            entrypoints.Any(impl => impl.Proc.Name.Equals(funcName))).Iter(funcName 
+                            => successors.Add(funcName));
+                    entrypointDepGraph[epName] = successors;                    
+                }                
+            
+
+
+            
+
+            return entrypointDepGraph;
         }
 
         public static void HandleTimer(HashSet<string> epNames)
@@ -573,9 +695,15 @@ namespace FastAVN
                 impls.Iter(im => implNames.Add(im.Name));
             }
 
+            public Worker(Program program, ConcurrentBag<Implementation> impls, HashSet<string> implNames)
+            {
+                this.program = program;
+                this.impls = impls;
+                this.implNames = new HashSet<string>(implNames);
+            }
+
             public void RunSplitAndAv()
             {
-                Console.WriteLine("[Snigdha] In RunSplitAndAv" );
                 Implementation impl;
 
                 while (true)
@@ -636,7 +764,7 @@ namespace FastAVN
                     if (deadlineReached) return;
 
                     // spawn the job -- local
-                    Console.WriteLine("[Snigdha] value of avnPath :" + avnPath);
+                    
                     var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", pruneFile, avnArgs));
 
                     PostProcess(impl.Name, wd, output);
@@ -646,7 +774,6 @@ namespace FastAVN
             public void RunSplitAndAvhAndAv()
             {
                 Implementation impl;
-                Console.WriteLine("[Snigdha] In RunSplitAndAvhandAV");
                 while (true)
                 {
                     if (!impls.TryTake(out impl)) { break; }
@@ -1230,7 +1357,7 @@ namespace FastAVN
         {
             if (mainProcName == null)
                 return origProgram;
-
+            
             // delete all calls in CorralMain other than mainProcName
             mainProcName = sliceMainForProc(origProgram, mainProcName, implNames);
 
@@ -1325,5 +1452,787 @@ namespace FastAVN
             }
             return mallocProc;
         }
+
+        //This class contains the utilities to modify the assertions based on their analysis outcomes
+        public class AssertEliminator
+        {
+
+            //methodName and assert number separator
+            public const char NameSeparator = '$';
+            private static HashSet<string> callsToIgnore = null;
+            private static HashSet<string> choiceCallsToAdd = new HashSet<string>();
+
+            
+            
+
+            public static Program ReplaceAssertsOfDepImpls(Program currentProgram, HashSet<string> 
+                currentEntrypointNames, HashSet<string> AllEPNames)
+            {
+                HashSet<string> currentDirs = new HashSet<string>();
+
+                //get entrypoint directories
+                foreach (var dirPath in Worker.DirsCreated)
+                {
+                    string[] dirComp = dirPath.Split(Path.DirectorySeparatorChar);
+                    string dir = dirComp[dirComp.Length - 1];
+                    if (currentEntrypointNames.Any(name => dir.Equals(name)))
+                        currentDirs.Add(dirPath);
+                }
+
+                
+                foreach (var dir in currentDirs)
+                {
+                    string filename = Path.Combine(dir, "avnResult.txt");
+                    if (File.Exists(filename))
+                    {
+                        //adding the result
+                        string[] lines = File.ReadAllLines(filename);
+                        Dictionary<string, string> assertRes = new Dictionary<string, string>();
+                        lines.Iter(res => assertRes.Add(res.Split(':')[0], res.Split(':')[1]));
+
+                        //initialized per entrypoint
+                        choiceCallsToAdd = new HashSet<string>();
+                        foreach (var assertID in assertRes.Keys)
+                        {
+                            if (assertRes[assertID].Equals("PASS") ||
+                                assertRes[assertID].Equals("FAIL"))
+                            {
+                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
+                            }
+
+                            else if(assertRes[assertID].Equals("BLOCK"))
+                            {
+                                //replace assertion in the original program method
+                                ReplaceAssertByAssume(currentProgram, dir);
+                                currentProgram = ReplaceBlockedAsserts(currentProgram, assertID, dir, AllEPNames);
+                                
+                            }
+                        }
+
+                        ReplaceCallsForCallers(currentProgram, dir, AllEPNames);
+                       
+
+                    }
+
+                }
+
+
+                return currentProgram;
+            }
+
+
+            //this function replaces the asserts with the result PASS or FAIL, by an assume
+            public static Program ReplacePassOrFailAsserts(Program currentProgram, string assertID)
+            {
+                string functionName = assertID.Split(NameSeparator)[0];
+
+                var assertToAssume = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssertCmd;
+                    if (acmd == null || !QKeyValue.FindStringAttribute(acmd.Attributes, "uniqueAVNID").Equals(assertID)) return cmd;
+                    return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+                });
+                foreach (var impl in currentProgram.TopLevelDeclarations.OfType<Implementation>())
+                    if (impl.Proc.Name.Equals(functionName))
+                        foreach (var block in impl.Blocks)
+                            block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
+                return currentProgram;
+
+            }
+
+
+            private static Program ReplaceBlockedAsserts(Program currentProgram, string assertID, string dirName, HashSet<string> allEPNames)
+  
+            {
+
+                
+
+                Program prunedProgram = BoogieUtil.ReadAndOnlyResolve(Path.Combine(dirName, "prunedProg_" + assertID + ".bpl"));
+
+                //get the important elements
+        
+                string entrypoint = dirName;
+
+                //from the original program
+                Implementation origEpImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(im => im.Name.Equals(entrypoint)).First();
+
+
+                //from the pruned program
+                Implementation prunedEPImpl = prunedProgram.TopLevelDeclarations.OfType<Implementation>().Where(
+                    im => QKeyValue.FindStringAttribute(im.Attributes, "origRTname").Equals(entrypoint)).First();
+                string prunedEPName = prunedEPImpl.Name;
+
+
+
+                //1. inlining the methods called by the entry point
+
+                Program newPrunedProgram = InlinePrunedProgram(prunedProgram, prunedEPImpl, assertID);
+
+                
+                Dictionary<string, string> implRename = RenameTraceImpls(newPrunedProgram, assertID);
+
+
+                //removing the calls present due to pruning
+                SetCallsToIgnore(prunedProgram, currentProgram);            
+
+                foreach (var impl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    impl.Blocks.Iter(b => b.Cmds.RemoveAll(cmd => (cmd is CallCmd) && (callsToIgnore.Contains((cmd as CallCmd).Proc.Name))));
+                }
+
+
+                
+                //add all to the current program - both impl and procedure
+                foreach(var decl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    
+                    if (!currentProgram.TopLevelDeclarations.OfType<Implementation>().Any(im => im.Name.Equals(decl.Name)))
+                    {
+                        currentProgram.AddTopLevelDeclaration(decl);
+                        currentProgram.AddTopLevelDeclaration(decl.Proc);
+
+                    }
+                }
+
+
+               
+
+                //create the dummy choice method with the two calls
+
+
+                Procedure origEpProc = origEpImpl.Proc;
+                Procedure choiceProc = new Procedure(Token.NoToken, entrypoint+"$"+assertID + "$choice", origEpProc.TypeParameters, origEpProc.InParams,
+                    origEpProc.OutParams, origEpProc.Requires, origEpProc.Modifies, origEpProc.Ensures, origEpProc.Attributes);
+                Implementation choiceImpl = new Implementation(Token.NoToken, entrypoint + "$" + assertID + "$choice", origEpImpl.TypeParameters, origEpImpl.InParams,
+                    origEpImpl.OutParams, origEpImpl.LocVars, new List<Block>(), origEpImpl.Attributes);
+
+                
+                choiceImpl.Proc = choiceProc;
+                currentProgram.AddTopLevelDeclaration(choiceProc);
+                currentProgram.AddTopLevelDeclaration(choiceImpl);
+
+
+
+                //insert code in the original program for the call to the trace
+                choiceCallsToAdd.Add(choiceImpl.Name);
+                //ReplaceCallsForCallers(currentProgram, finalCallers, choiceImpl.Name, entrypoint);
+
+                List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, implRename[prunedEPName], entrypoint, assertID);
+                choiceImpl.Blocks.AddRange(choiceBlocks);
+
+                
+                return currentProgram;
+
+            }
+
+
+            //This function should replace all the reachable asserts from the entrypoint by assumes
+            private static void ReplaceAssertByAssume(Program currentProgram,  string entrypoint)
+            {
+                //replace the assert by assume in the original method
+
+                Implementation origImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(
+                    im => im.Proc.Name.Equals(entrypoint)).First();
+
+
+                var assertToAssume = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssertCmd;
+                    if (acmd == null) return cmd;
+                    return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+                });
+                foreach (var block in origImpl.Blocks)
+                            block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
+                
+                
+            }
+
+
+            //this function should be called at the end of on entry point and replace all it's calls with the series of calls to the choice methods
+            //the choice methods would have been added earlier 
+            //this is going to increase the size of programs per assertions - is it acceptable?
+            private static void ReplaceCallsForCallers(Program currentProgram, string entrypoint, 
+                HashSet<string> allEPNames)
+            {
+                Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(currentProgram);
+                callgraph.Successors(callgraph.Nodes.First());
+                IEnumerable<string> callers = callgraph.Predecessors(entrypoint);
+                var finalCallers = callers.Intersect(allEPNames);
+
+                foreach (var impl  in currentProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if (finalCallers.Contains(impl.Name))
+                    {
+                        List<Block> newBlocks = new List<Block>();
+                        foreach(var block in impl.Blocks)
+                        {
+                            List<Cmd> cmds = new List<Cmd>();
+                            foreach(var cmd in block.Cmds)
+                            {
+                                if (cmd is CallCmd)
+                                {
+                                    CallCmd ccmd = cmd as CallCmd;
+                                    if (ccmd.callee.Equals(entrypoint))
+                                    {
+
+                                        //add calls for all choice methods
+                                        foreach(var choice in choiceCallsToAdd)
+                                        {
+                                            CallCmd newcmd = new CallCmd(Token.NoToken, choice, ccmd.Ins, ccmd.Outs, ccmd.Attributes);
+                                            cmds.Add(newcmd);
+                                        }
+                                        
+                                    }
+                                    else
+                                        cmds.Add(ccmd);                                    
+                                }
+                                else
+                                    cmds.Add(cmd);
+                                
+                            }
+                            Block newBlock = new Block(Token.NoToken, block.Label, cmds, block.TransferCmd);
+                            newBlocks.Add(newBlock);
+                        }
+                        impl.Blocks.Clear();
+                        impl.Blocks.AddRange(newBlocks);
+                    }
+                }
+            }
+
+            private static List<Block> GetChoiceBlocks(Implementation choiceImpl, string prunedInlinedEPName, string entrypoint, 
+                string assertID)
+            {
+                List<Block> blocks = new List<Block>();
+                List<Expr> ins = new List<Expr>();
+                List<IdentifierExpr> outs = new List<IdentifierExpr>();
+
+                choiceImpl.InParams.Iter(inp => ins.Add(new IdentifierExpr(Token.NoToken, inp, inp.IsMutable)));
+                choiceImpl.OutParams.Iter(outp => outs.Add(new IdentifierExpr(Token.NoToken, outp, outp.IsMutable)));
+
+
+                //creating block 3 - the trace block
+                Block b3 = new Block(Token.NoToken, assertID + "TraceCall", new List<Cmd>(), new ReturnCmd(Token.NoToken));
+                Cmd callTraceCmd = new CallCmd(Token.NoToken, prunedInlinedEPName, ins, outs);
+                b3.Cmds.Add(callTraceCmd);
+
+                //creating block b2 - the original method block
+                Block b2 = new Block(Token.NoToken, assertID + "OrigCall", new List<Cmd>(), new ReturnCmd(Token.NoToken));
+                Cmd callOrigCmd = new CallCmd(Token.NoToken, entrypoint, ins, outs);
+                b2.Cmds.Add(callOrigCmd);
+
+                List<Block> succBlocks = new List<Block>();
+                succBlocks.Add(b3);
+                succBlocks.Add(b2);
+
+                List<string> succBlocksLabel = new List<string>();
+                succBlocksLabel.Add(b3.Label);
+                succBlocksLabel.Add(b2.Label);
+
+                //creating block 1
+                GotoCmd NDChoiceGoto = new GotoCmd(Token.NoToken, succBlocksLabel, succBlocks);
+                Block b1 = new Block(Token.NoToken, assertID + "$NDChoice1", new List<Cmd>(), NDChoiceGoto);
+
+                blocks.Add(b1);
+                blocks.Add(b2);
+                blocks.Add(b3);
+                return blocks;
+            }
+
+            private static void SetCallsToIgnore(Program prunedProgram, Program currentProgram)
+            {
+                //calls included due to the instrumentation
+                callsToIgnore = new HashSet<string>();
+
+                prunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(proc => !currentProgram.TopLevelDeclarations.OfType<Procedure>().Contains(proc)).
+                    Iter(proc => callsToIgnore.Add(proc.Name));
+
+                //retain the renamed methods
+                foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if ((QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") != null ||
+                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint") && callsToIgnore.Contains(impl.Proc.Name)))
+                        callsToIgnore.Remove(impl.Proc.Name);
+                }
+            }
+
+
+            //inlines the current entry point under analysis 
+            private static Program InlinePrunedProgram(Program prunedProgram, Implementation prunedEPImpl, string assertID)
+            {
+                //changing the entrypoint from corral_main to current entrypoint
+                var epProc = prunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(
+                    p => QKeyValue.FindBoolAttribute(p.Attributes, "entrypoint")).First();
+
+                if (epProc != null && !epProc.Name.Equals(prunedEPImpl.Name))
+                {
+                    //remove the unnecessary entrypoint impl
+
+                    prunedProgram.RemoveTopLevelDeclaration(epProc);
+                    var epImpl = prunedProgram.TopLevelDeclarations.OfType<Implementation>().Where(im => im.Name.Equals(epProc.Name)).First();
+                    prunedProgram.RemoveTopLevelDeclaration(epImpl);
+
+                    //add the entrypoint attirbute to the impl
+                    prunedEPImpl.Proc.AddAttribute("entrypoint");
+                    prunedEPImpl.AddAttribute("entrypoint");
+
+                }
+
+                //inlining
+                //is the bound OK?
+                cba.InliningPass inlineP = new cba.InliningPass(1);
+                //REVISE these bounds!
+                cba.PersistentCBAProgram pprunedProgram = new cba.PersistentCBAProgram(prunedProgram, prunedEPImpl.Name, 0);
+                var inlinedPProgram = inlineP.run(pprunedProgram);
+                var newPrunedProgram = inlinedPProgram.getProgram();
+
+
+                //remove the entrypoint attribute
+                var inlinedEPProc = newPrunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(p => QKeyValue.FindBoolAttribute(p.Attributes,
+                   "entrypoint")).First();
+
+                var inlinedEPImpl = newPrunedProgram.TopLevelDeclarations.OfType<Implementation>().Where(im => QKeyValue.FindBoolAttribute(im.Attributes,
+                   "entrypoint")).First();
+
+                QKeyValue newImplAttr = RemoveAttr(inlinedEPImpl.Attributes, "entrypoint");
+                QKeyValue newProcAttr = RemoveAttr(inlinedEPProc.Attributes, "entrypoint");
+
+                Procedure newInlinedProc = new Procedure(Token.NoToken, inlinedEPProc.Name, inlinedEPProc.TypeParameters, inlinedEPProc.InParams,
+                    inlinedEPProc.OutParams, inlinedEPProc.Requires, inlinedEPProc.Modifies, inlinedEPProc.Ensures, newProcAttr);
+
+                Implementation newInlinedImpl = new Implementation(Token.NoToken, inlinedEPImpl.Name, inlinedEPImpl.TypeParameters, inlinedEPImpl.InParams,
+                    inlinedEPImpl.OutParams, inlinedEPImpl.LocVars, inlinedEPImpl.StructuredStmts, newImplAttr);
+
+                //remove other asserts from the inlined program
+                var assertToAssume = new Func<Cmd, Cmd>(cmd =>
+                {
+                    var acmd = cmd as AssertCmd;
+                    if (acmd == null || QKeyValue.FindStringAttribute(acmd.Attributes, "uniqueAVNID").Equals(assertID)) return cmd;
+                    return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+                });
+                foreach (var block in newInlinedImpl.Blocks)
+                    block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
+                
+
+
+                newInlinedImpl.Proc = newInlinedProc;
+
+                newPrunedProgram.RemoveTopLevelDeclaration(inlinedEPImpl);
+                newPrunedProgram.RemoveTopLevelDeclaration(inlinedEPProc);
+                newPrunedProgram.AddTopLevelDeclaration(newInlinedImpl);
+                newPrunedProgram.AddTopLevelDeclaration(newInlinedProc);
+
+                
+
+                return newPrunedProgram;
+            }
+
+            private static QKeyValue RemoveAttr(QKeyValue attributes, string Key)
+            {
+                QKeyValue currentAttr = attributes;
+                QKeyValue newAttr = null;
+                while (currentAttr != null)
+                {
+                    if (!currentAttr.Key.Equals("entrypoint"))
+                    {
+                        if (newAttr == null)
+                        {
+                            newAttr = new QKeyValue(Token.NoToken, currentAttr.Key, currentAttr.Params, null);
+                        }
+                        else
+                        {
+                            newAttr = new QKeyValue(Token.NoToken, currentAttr.Key, currentAttr.Params, newAttr);
+                        }
+                    }
+                    currentAttr = currentAttr.Next;
+
+                }
+
+                return newAttr;
+            }
+
+            private static Dictionary<string, string> RenameTraceImpls(Program prunedProgram, string assertID)
+            {
+                Dictionary<string, string> renameInfo = new Dictionary<string, string>();
+
+                List<Declaration> declToAdd = new List<Declaration>();
+                List<Declaration> declToRemove = new List<Declaration>();
+                //renaming impls from the trace
+                string prefix = assertID + "$";
+                foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    
+                    Implementation newImpl = new Implementation(Token.NoToken, prefix + impl.Name, impl.TypeParameters, impl.InParams,
+                        impl.OutParams, impl.LocVars, impl.StructuredStmts, impl.Attributes);
+                    
+                    Procedure proc = impl.Proc;
+                    Procedure newProc = new Procedure(Token.NoToken, prefix + impl.Name, proc.TypeParameters, proc.InParams, proc.OutParams,
+                        proc.Requires, proc.Modifies, proc.Ensures, proc.Attributes);
+                    newImpl.Proc = newProc;
+                    
+                    declToAdd.Add(newProc);
+                    declToRemove.Add(proc);
+                    declToAdd.Add(newImpl);
+                    declToRemove.Add(impl);
+                    renameInfo.Add(impl.Name, newImpl.Name);
+                }
+
+                prunedProgram.RemoveTopLevelDeclarations(d => declToRemove.Contains(d));
+                prunedProgram.AddTopLevelDeclarations(declToAdd);
+                return renameInfo;
+            }
+
+           
+
+           
+
+            private static Program ReplaceBlockedAssertsOld(Program currentProgram, string assertID, string dirName)
+            {
+                string entrypoint = dirName;
+                
+
+                //get the file from the directory - bound to exist for blocked asserts -error check?
+                Program prunedProgram = BoogieUtil.ReadAndOnlyResolve(Path.Combine(dirName, "prunedProg_" + assertID + ".bpl"));
+
+                //may need list of where and requires clauses etc too - see the instrumentation closely
+                Dictionary<string, TypedIdent> epIns = new Dictionary<string, TypedIdent>();
+                Dictionary<string, TypedIdent> epOut = new Dictionary<string, TypedIdent>();
+                Dictionary<string, TypedIdent> epLocVars = new Dictionary<string, TypedIdent>();
+
+                //calls included due to the instrumentation
+
+                prunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(proc => !currentProgram.TopLevelDeclarations.OfType<Procedure>().Contains(proc)).
+                    Iter(proc => callsToIgnore.Add(proc.Name));
+
+                //retain the renamed methods
+                foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    if ((QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") != null ||
+                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint") && callsToIgnore.Contains(impl.Proc.Name)))
+                        callsToIgnore.Remove(impl.Proc.Name);
+                }
+
+
+
+
+                //initial prefix  for renaming all the variables to add it to the local vars of the callers
+                //should the variables be differentiated based on assertIDs too?
+                string uniqueVarPrefix = "traceInline$" + assertID + "$" + entrypoint + "$";
+
+                //for the list of commands
+                List<Cmd> cmdsToAdd = new List<Cmd>();
+
+                TraceInline inlineInfo = new TraceInline(entrypoint, uniqueVarPrefix, epIns, epOut, epLocVars, cmdsToAdd);
+                inlineInfo = ComputeInlinedBlock(prunedProgram, inlineInfo, assertID);
+
+                //manage the ins and outs finally here, including the decalration in this method
+
+
+
+               
+
+                return currentProgram;
+            }
+
+
+
+            private static TraceInline ComputeInlinedBlock(Program program, TraceInline inlineInfo, string assertId)
+            {
+                
+                Implementation mImpl = program.TopLevelDeclarations.OfType<Implementation>().Where(im => QKeyValue.FindStringAttribute(im.Attributes, "origRTname").Equals(inlineInfo.MethodName)).First();
+
+                //methods with no implementation
+                if (mImpl == null)
+                    return inlineInfo;
+
+                List<string> varsToRename = new List<string>();
+                //add the renamed variables to the list of ins, outs and loc vars
+                mImpl.InParams.Iter(v =>  inlineInfo.Ins.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
+                mImpl.OutParams.Iter(v => inlineInfo.Outs.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
+                mImpl.LocVars.Iter(v => inlineInfo.LocVars.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
+
+                varsToRename.AddRange(inlineInfo.Ins.Keys);
+                varsToRename.AddRange(inlineInfo.Outs.Keys);
+                varsToRename.AddRange(inlineInfo.LocVars.Keys);
+
+
+                
+                RewriteVars rw = new RewriteVars(inlineInfo.VarPrefix, varsToRename);
+                foreach (Block block in mImpl.Blocks)
+                {
+                    if (inlineInfo.AssertFound)
+                        break;
+                    foreach(Cmd cmd in block.Cmds)
+                    {
+                        if(cmd is AssertCmd)
+                        {
+                            var acmd = cmd as AssertCmd;
+                            if (QKeyValue.FindStringAttribute(acmd.Attributes, "uniqueAVNID").Equals(assertId))
+                            {
+                                inlineInfo.AssertFound = true;
+                                Expr assertExpr = rw.VisitExpr(acmd.Expr);
+                                inlineInfo.AddToInlinedTrace(new AssertCmd(Token.NoToken, assertExpr, acmd.Attributes));
+                            }
+                            else
+                            {
+                                //another assert found - convert to assume after renaming
+                                Expr assumeExpr = rw.VisitExpr(acmd.Expr);
+                                inlineInfo.AddToInlinedTrace(new AssumeCmd(Token.NoToken, assumeExpr, acmd.Attributes));
+                            }
+
+
+                        }
+
+                        if(cmd is CallCmd)
+                        {
+                            CallCmd ccmd = cmd as CallCmd;
+                            string procName = ccmd.Proc.Name;
+                            if (callsToIgnore.Contains(procName))
+                            {
+                                
+                                continue;
+                            }
+                            Implementation impl = program.TopLevelDeclarations.OfType<Implementation>().Where(im => im.Proc.Name.Equals(procName)).First();
+                            if(impl!=null)
+                            {
+                                //need to inline
+                                
+
+                                string origName = QKeyValue.FindStringAttribute(impl.Attributes, "origRTname");
+                                TraceInline newInlineInfo = new TraceInline(origName, inlineInfo.VarPrefix + "$" + origName+"$", new Dictionary<string, TypedIdent>(),
+                                    new Dictionary<string, TypedIdent>(), new Dictionary<string, TypedIdent>(), new List<Cmd>());
+
+                                newInlineInfo = ComputeInlinedBlock(program, newInlineInfo, assertId);
+
+                                //add the information from the recieved object
+                                inlineInfo.AssertFound = newInlineInfo.AssertFound;
+
+                                //add the actual to formal assignment
+                                //take care of the renaming
+                                for (int i = 0; i < ccmd.Ins.Count; i++)
+                                {
+                                    Expr actual = ccmd.Ins[i];
+                                    Expr renamedActual = rw.VisitExpr(actual);
+                                    Variable formal = impl.InParams[i];
+                                    TypedIdent renamedFormal = newInlineInfo.Ins[formal.Name];
+
+                                    IdentifierExpr expr = new IdentifierExpr(Token.NoToken, renamedFormal.Name, renamedFormal.Type, formal.IsMutable);
+                                    SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, expr);
+                                    List<AssignLhs> lhss = new List<AssignLhs>();
+                                    lhss.Add(lhs);
+                                    List<Expr> rhss = new List<Expr>();
+                                    rhss.Add(renamedActual);
+
+                                    AssignCmd acmd = new AssignCmd(Token.NoToken, lhss, rhss);
+                                   
+                                    inlineInfo.AddToInlinedTrace(acmd);
+                                }
+
+                                //add the rest of the trace
+                                inlineInfo.AddToInlinedTrace(newInlineInfo.InlinedTrace);
+
+                                //add the out variables assignment
+                                //take care of renaming
+                                //add the outs only if trace completed
+                               // if (!inlineInfo.AssertFound)
+                                //{
+                                    for (int i = 0; i < ccmd.Outs.Count; i++)
+                                    {
+                                        IdentifierExpr lhsexpr = rw.VisitExpr(ccmd.Outs[i]) as IdentifierExpr;
+                                        string formalName = newInlineInfo.Outs.Keys.ElementAt(i);
+                                        TypedIdent rhsExpr = newInlineInfo.Outs[formalName];
+                                        //is the false here correct? REVISE!!!
+                                        IdentifierExpr rhs = new IdentifierExpr(Token.NoToken, rhsExpr.Name, rhsExpr.Type, false);
+
+
+                                        //what if the return value was going in a map?? REVISE!!
+                                        SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, lhsexpr);
+                                        List<AssignLhs> lhss = new List<AssignLhs>();
+                                        lhss.Add(lhs);
+                                        List<Expr> rhss = new List<Expr>();
+                                        rhss.Add(rhs);
+
+                                        AssignCmd acmd = new AssignCmd(Token.NoToken, lhss, rhss);
+                                        // inlineInfo.AddToInlinedTrace(acmd);
+                                        
+
+
+
+                                    }
+                                //}
+                                
+                                //add the renamed variables for declaration - ISSUE! 
+                               /* newInlineInfo.Ins.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));
+                                newInlineInfo.Outs.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));
+                                newInlineInfo.LocVars.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));*/
+
+                            }
+                            else
+                            {
+                                //add the command as it is
+                                inlineInfo.AddToInlinedTrace(ccmd);
+                            }
+    
+
+
+
+                        }
+
+                        if(cmd is AssignCmd)
+                        {
+                            AssignCmd acmd = cmd as AssignCmd;
+                            List<AssignLhs> newLhss = new List<AssignLhs>();
+                            List<Expr> newRhss = new List<Expr>();
+
+                            foreach(AssignLhs e in acmd.Lhss)
+                            {
+                                if(e is SimpleAssignLhs)
+                                {
+                                    SimpleAssignLhs oldSlhs = e as SimpleAssignLhs;
+                                    IdentifierExpr newExpr = rw.VisitExpr(oldSlhs.AsExpr) as IdentifierExpr;
+                                    SimpleAssignLhs slhs = new SimpleAssignLhs(Token.NoToken, newExpr);
+                                    newLhss.Add(slhs);
+                                }
+                                //have a case for mapAssign too
+                                if(e is MapAssignLhs)
+                                {
+                                    MapAssignLhs me = e as MapAssignLhs;
+                                    //have a recursive method which calls visit on all indices and the map ID
+                                    
+                                }
+                            }
+
+                            foreach(Expr e in acmd.Rhss)
+                            {
+                                Expr newExpr = rw.VisitExpr(e);
+                                newRhss.Add(newExpr);
+                            }
+
+                            inlineInfo.AddToInlinedTrace(new AssignCmd(Token.NoToken, newLhss, newRhss));
+                        }
+
+                        
+                    }
+                    if(block.TransferCmd is ReturnCmd)
+                    {
+                        //assign output variable
+                    }
+                }
+                return inlineInfo;
+            }
+
+            
+           
+
+        }
+
+        class TraceInline
+        {
+            private Dictionary<string, TypedIdent> ins = new Dictionary<string, TypedIdent>();
+            private Dictionary<string, TypedIdent> outs = new Dictionary<string, TypedIdent>();
+            private Dictionary<string, TypedIdent> locVars = new Dictionary<string, TypedIdent>();
+            private List<Cmd> inlinedTrace = new List<Cmd>();
+            private string methodName;
+            private bool assertFound;
+            
+            private string varPrefix;
+
+            public TraceInline()
+            {
+                methodName = "";
+               
+                VarPrefix = "";
+            }
+
+            public TraceInline(string mName, string prefix, 
+                Dictionary<string, TypedIdent> ins, Dictionary<string, TypedIdent> outs, Dictionary<string, TypedIdent> locvar, 
+                List<Cmd> iTrace)
+            {
+                this.ins = new Dictionary<string, TypedIdent>(ins);
+                this.outs = new Dictionary<string, TypedIdent>(outs);
+                this.locVars = new Dictionary<string, TypedIdent>(locvar);
+                this.inlinedTrace = new List<Cmd>(iTrace);
+                methodName = mName;
+                
+                varPrefix = prefix;
+            }
+
+            public Dictionary<string, TypedIdent> Ins { get => ins; set => ins = value; }
+            public Dictionary<string, TypedIdent> Outs { get => outs; set => outs = value; }
+            public Dictionary<string, TypedIdent> LocVars { get => locVars; set => locVars = value; }
+            public string MethodName { get => methodName; set => methodName = value; }
+           
+            public string VarPrefix { get => varPrefix; set => varPrefix = value; }
+            public List<Cmd> InlinedTrace { get => inlinedTrace; set => inlinedTrace = value; }
+            public bool AssertFound { get => assertFound; set => assertFound = value; }
+
+            public void AddToInlinedTrace(Cmd cmd)
+            {
+                inlinedTrace.Add(cmd);
+            }
+
+            internal void AddToInlinedTrace(List<Cmd> inlinedTrace)
+            {
+                this.inlinedTrace.AddRange(new List<Cmd>(inlinedTrace));
+            }
+        }
+
+
+       
+        /// <summary>
+        /// this is a visitor that will rename the input parameters and local variables of a called method by attaching a
+        /// prefix
+        /// </summary>
+        class RewriteVars : StandardVisitor
+        {
+            string prefix;
+            List<string> varsToRename = new List<string>();
+            
+            
+
+            public RewriteVars(string prefix, List<string> varsToRename)
+            {
+                this.prefix = prefix;
+                this.varsToRename = new List<string>(varsToRename);
+            }
+
+            public override Expr VisitNAryExpr(NAryExpr node)
+            {
+                var ret = base.VisitNAryExpr(node) as NAryExpr;
+                List<Expr> renamedArgs = new List<Expr>();
+
+                //renaming the variables in the arguments
+                foreach (Expr e in node.Args)
+                {
+                    renamedArgs.Add(VisitExpr(e));
+                }
+
+                if(renamedArgs.Count>0)
+                {
+                    return new NAryExpr(Token.NoToken, node.Fun, renamedArgs, node.Immutable);
+                }
+
+                return ret;
+            }
+
+            
+
+            public override Expr VisitIdentifierExpr(IdentifierExpr node)
+            {
+                var ret = base.VisitIdentifierExpr(node) as IdentifierExpr;
+
+                if(varsToRename.Contains(node.Name))
+                {
+                    return new IdentifierExpr(Token.NoToken, prefix+node.Name, node.Type, node.Immutable);
+                }
+                return ret;
+            }
+
+            
+        }
     }
+
+    
 }
