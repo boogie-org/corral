@@ -139,12 +139,14 @@ namespace CoreLib
 
     public class Stats
     {
-        public int numInlined = 0;
+        public int numInlined = 1;
         public int vcSize = 0;
         public int bck = 0;
         public int stacksize = 0;
         public int calls = 0;
         public long time = 0;
+        public long iterations = 0;
+        public double inliningSuccessScore = 0;
 
         public void print()
         {
@@ -154,6 +156,8 @@ namespace CoreLib
             Console.WriteLine("total number of assertions in Z3 stack: " + stacksize);
             Console.WriteLine("total number of Z3 calls: " + calls);
             Console.WriteLine("total time spent in Z3: (tick) " + time);
+            Console.WriteLine("total iterations: " + iterations);
+            Console.WriteLine("total inlining success score: (percent) " + inliningSuccessScore);
             Console.WriteLine("-------------------------");
         }
     }
@@ -1186,6 +1190,7 @@ namespace CoreLib
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
             Outcome outcome = Outcome.Inconclusive;
+            int numScoreElements = 0;
 
             ForceInline(openCallSites, recBound);
 
@@ -1195,10 +1200,8 @@ namespace CoreLib
 
             /**
              * Command-line options:
-             * uw: 0 : Run Corral in the Vanilla mode(underapprox for bug and overapprox for expanding)
-             * uw: 1 : Run Corral in UnderApproximation widening mode(only underapprox)
-             * uw: k : Run 1 over - approximation for every(k - 1) underapproximation(both do expanding)
-             * uw: 1000 : Run stratified inlining using overapprox but by interesecting with unsat core
+             * uw: 1000 : Run Corral in the Vanilla mode(underapprox for bug and overapprox for expanding)
+             * otherwise : Run Corral with the given bias (as percentage) to run UnderApproximation widening versus overapprox refinement (0: only overapprox-refine; 100: only underapprox-widen)
             **/
             while (true)
             {
@@ -1220,6 +1223,8 @@ namespace CoreLib
                     itrCount = CommandLineOptions.Clo.UW - 1; // for UW = k, do UW 1/k fraction of the times
                 }
                 */
+
+                stats.iterations++;
 
                 if (CommandLineOptions.Clo.UW == 1000)
                     mode = VerifyMode.Vanilla;
@@ -1307,12 +1312,21 @@ namespace CoreLib
                 {
                     if (ucore == null)
                         return Outcome.Correct;
-
+                    
                     var toExpand1 = openCallSites.Where(s => ucore.Contains("label_" + s.callSiteExpr.ToString())).ToList();
+                    int totalCoreSize = ucore.Count;
+                    var inlinedProcsInCore = ucore.Filter(x => x.StartsWith("inlined_")).ToList();
+                    //int inlinedProcsInCoreCount = (inlinedProcsInCore == null) ? 0 : inlinedProcsInCore.ToList().Count;
+                    int inlinedProcsInCoreCount = inlinedProcsInCore.ToList().Count;
+                    double inlineSuccessRate = ((double) inlinedProcsInCoreCount * 100.00) / ((double) stats.numInlined);  // this give the usefulness of the inlined procedures in the proof
+                    stats.inliningSuccessScore = ((numScoreElements * stats.inliningSuccessScore) + inlineSuccessRate) / ((double) (numScoreElements + 1));
+                    numScoreElements++;
+                    MacroSI.PRINT_DETAIL("InlineSuccessRate = " + inlineSuccessRate.ToString());
+
                     foreach (var scs in toExpand1)
                     {
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs);
+                        var svc = Expand(scs, "inlined_" + scs.callSiteExpr.ToString());
                         if (svc != null)
                         {
                             openCallSites.UnionWith(svc.CallSites);
@@ -1849,6 +1863,11 @@ namespace CoreLib
         private StratifiedVC Expand(StratifiedCallSite scs)
         {
             return Expand(scs, null, true, false);
+        }
+
+        private StratifiedVC Expand(StratifiedCallSite scs, string name)
+        {
+            return Expand(scs, name, true, false);
         }
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
