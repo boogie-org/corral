@@ -1882,10 +1882,28 @@ namespace AngelicVerifierNull
 
             }
 
+            //the inliner should take care of the multiple blocked traces
+            //multiple failed traces are treated the same
             public static void addResult(string assertID, ResultStatus status)
             {
+                if(!assertResult.ContainsKey(assertID))
+                    assertResult.Add(assertID, status);
+                else
+                {
+                    if (status.Equals(assertResult[assertID]))
+                    {
+                        Console.WriteLine("[Snigdha] The results are same");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[Snigdha] The result is different :" + status);
+                        ResultStatus newStatus = status.Equals(ResultStatus.BLOCK) ? status : assertResult[assertID];
+                        assertResult.Remove(assertID);
+                        assertResult.Add(assertID, newStatus);
+
+                    }
+                }
                 
-                assertResult.Add(assertID, status);
                 if (status == ResultStatus.BLOCK)
                     blockedAsserts.Add(assertID);
 

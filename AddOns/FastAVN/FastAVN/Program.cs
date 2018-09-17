@@ -38,7 +38,8 @@ namespace FastAVN
         static bool keepLongestTrace = false;
         static bool useProvidedEntryPoints = false;
         static bool onlyUseRootsAsEntryPoints = false;
-        static bool dependentEntrypointExec = false; //whether to execute all entry points in parallel or in dependence order
+        static bool dependentEntrypointExec = false; //whether to execute all entry points in dependence order or not
+        static bool dependentEntrypointExecPar = false; //whether to the dependence execution should be parallel or not
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -100,6 +101,9 @@ namespace FastAVN
 
             if (args.Any(s => s == "/dependentEntrypointExec"))
                 Driver.dependentEntrypointExec = true;
+
+            if (args.Any(s => s == "/dependentEntrypointExecPar"))
+                Driver.dependentEntrypointExecPar = true;
             
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -361,6 +365,7 @@ namespace FastAVN
         public static Microsoft.Boogie.GraphUtil.Graph<string> CallGraph = null;
         public static Dictionary<Declaration, HashSet<string>> DeclToGlobalsUsed = null;
         public static Dictionary<Declaration, HashSet<string>> DeclToFunctionsUsed = null;
+        
 
         /// <summary>
         /// Run AVN binary on sliced programs
@@ -492,7 +497,7 @@ namespace FastAVN
                 }
             }
 
-
+            
             if (dependentEntrypointExec)
             {
                 Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
@@ -510,8 +515,7 @@ namespace FastAVN
 
                 /*This code runs the entrypoints with no dependence
                  and keeps modifying the dependence as and when the entrypoints are done.
-                 We assume for now that this graph is acyclic.
-                 Note: This method is still slow, and does not leverage the full possible parallism as of now*/
+                 We assume for now that this graph is acyclic. */
                 int parCount = 0;
                 while (!AllEntryPointsDone(dependencyInfo))
                 {
@@ -521,44 +525,35 @@ namespace FastAVN
                     ConcurrentBag<Implementation> currentEntrypoints = getIndependentEntrypoints(entrypoints, 
                         dependencyInfo, out currentEntrypointNames);
 
-                    var threads = new List<Thread>();
-                    for (int i = 0; i < numThreads; i++)
+                    //get entrypoint directories to get the entrypoints removed
+                    HashSet<string> removedEntrypointNames = new HashSet<string>();
+
+                    if (dependentEntrypointExecPar)
                     {
-                        //giving the independent entry points to the worker thread
-                        var w = new Worker(currentProgram, currentEntrypoints, allEntryPointNames);
-                        if (!earlySplit)
-                            threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
-                        else
-                            threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+                        removedEntrypointNames = ExecuteEPInParallel(currentProgram, currentEntrypoints, 
+                            allEntryPointNames, currentEntrypointNames);                     
                     }
-
-                    threads.Iter(t => t.Start());
-                    threads.Iter(t => t.Join());
-
-                    Console.WriteLine("end of run {0}", parCount);
+                    else
+                    {
+                        removedEntrypointNames = new HashSet<string>(currentEntrypointNames);
+                        ExecuteEPInSeq(currentProgram, currentEntrypoints, currentEntrypointNames, allEntryPointNames);
+                    }
                     
+                    printMesg("end of run " + parCount);
+
                     //replaces the asertions based on results
-                    if(ReplacementRequired(dependencyInfo))
-                        currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, currentEntrypointNames, allEntryPointNames);
+                    if (ReplacementRequired(dependencyInfo))
+                        currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, removedEntrypointNames, allEntryPointNames, callgraph);
+
 
                     //remove the current independent and update the others in depgraph                
-                    foreach (var epName in currentEntrypointNames)
+                    foreach (var epName in removedEntrypointNames)
                     {
-                        Console.WriteLine("Removing entry point {0} in run {1}", epName, parCount);
                         dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
                         dependencyInfo.Remove(epName);
                     }
 
-                    //todo remove later
-                    Console.WriteLine("new dependency info :");
-                    foreach (var ep in dependencyInfo)
-                    {
-                        Console.WriteLine("{0} => {1}", ep.Key, ep.Value.Count);
-                    }
-
                 }
-
-
             }
             else
             {
@@ -594,6 +589,59 @@ namespace FastAVN
                 printBugs(ref mergedBugs, epNames.Count);
                 mergeBugs(epNames);
             }
+        }
+
+        private static void ExecuteEPInSeq(Program currentProgram, ConcurrentBag<Implementation> currentEntrypoints, 
+            HashSet<string> currentEntrypointNames, HashSet<string> allEntryPointNames)
+        {
+            foreach (var ep in currentEntrypointNames)
+            {
+                ConcurrentBag<Implementation> currentEP = new ConcurrentBag<Implementation>(currentEntrypoints.
+                    Where(e => e.Name.Equals(ep)));
+                
+                Worker w = new Worker(currentProgram, currentEP, allEntryPointNames);
+                if (!earlySplit)
+                    w.RunSplitAndAv();
+                else
+                    w.RunSplitAndAvhAndAv();
+
+            }
+        }
+
+        private static HashSet<string> ExecuteEPInParallel(Program currentProgram, ConcurrentBag<Implementation> currentEntrypoints, 
+            HashSet<string> allEntryPointNames, HashSet<string> currentEntrypointNames)
+        {
+            HashSet<string> removedEPNames = new HashSet<string>();
+            var threads = new List<Thread>();
+            //parallel execution
+            for (int i = 0; i < numThreads; i++)
+            {
+                //giving the independent entry points to the worker thread
+                var w = new Worker(currentProgram, currentEntrypoints, allEntryPointNames);
+                if (!earlySplit)
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
+                else
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+            }
+
+            threads.Iter(t => t.Start());
+            threads.Iter(t => t.Join());
+
+            //extracting the entrypoints done
+            foreach (var dirPath in Worker.DirsCreated)
+            {
+                string[] dirComp = dirPath.Split(Path.DirectorySeparatorChar);
+                string dir = dirComp[dirComp.Length - 1];
+                if (currentEntrypointNames.Any(name => dir.Equals(name)))
+                    removedEPNames.Add(dirPath);
+            }
+
+            return removedEPNames;
+        }
+
+        private static void printMesg(string v)
+        {
+            Console.WriteLine("[Snigdha] {0}", v);
         }
 
         //this can be refined more later to inline on an entrypoint specific way
@@ -1466,18 +1514,9 @@ namespace FastAVN
             
 
             public static Program ReplaceAssertsOfDepImpls(Program currentProgram, HashSet<string> 
-                currentEntrypointNames, HashSet<string> AllEPNames)
+                removedEntryPoints, HashSet<string> AllEPNames, Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
             {
-                HashSet<string> currentDirs = new HashSet<string>();
-
-                //get entrypoint directories
-                foreach (var dirPath in Worker.DirsCreated)
-                {
-                    string[] dirComp = dirPath.Split(Path.DirectorySeparatorChar);
-                    string dir = dirComp[dirComp.Length - 1];
-                    if (currentEntrypointNames.Any(name => dir.Equals(name)))
-                        currentDirs.Add(dirPath);
-                }
+                HashSet<string> currentDirs = new HashSet<string>(removedEntryPoints);
 
                 
                 foreach (var dir in currentDirs)
@@ -1503,14 +1542,14 @@ namespace FastAVN
                             else if(assertRes[assertID].Equals("BLOCK"))
                             {
                                 //replace assertion in the original program method
-                                ReplaceAssertByAssume(currentProgram, dir);
+                                ReplaceAssertByAssume(currentProgram, dir, callgraph);
                                 currentProgram = ReplaceBlockedAsserts(currentProgram, assertID, dir, AllEPNames);
                                 
                             }
                         }
 
                         ReplaceCallsForCallers(currentProgram, dir, AllEPNames);
-                       
+                        
 
                     }
 
@@ -1579,12 +1618,15 @@ namespace FastAVN
                 foreach (var impl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
                 {
                     impl.Blocks.Iter(b => b.Cmds.RemoveAll(cmd => (cmd is CallCmd) && (callsToIgnore.Contains((cmd as CallCmd).Proc.Name))));
+                    //removing havoc commands
+                    impl.Blocks.Iter(b => b.Cmds.RemoveAll(cmd => (cmd is HavocCmd)));
                 }
 
 
-                
+
+
                 //add all to the current program - both impl and procedure
-                foreach(var decl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                foreach (var decl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
                 {
                     
                     if (!currentProgram.TopLevelDeclarations.OfType<Implementation>().Any(im => im.Name.Equals(decl.Name)))
@@ -1627,22 +1669,33 @@ namespace FastAVN
             }
 
 
-            //This function should replace all the reachable asserts from the entrypoint by assumes
-            private static void ReplaceAssertByAssume(Program currentProgram,  string entrypoint)
+            //TODO This function should replace all the reachable asserts from the entrypoint by assumes
+            private static void ReplaceAssertByAssume(Program currentProgram,  string entrypoint, 
+                Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
             {
-                //replace the assert by assume in the original method
+                //computing reachable methods
+              //  HashSet<string> epCallees = BoogieUtil.GetReachableNodes(entrypoint, callgraph);
 
-                Implementation origImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(
-                    im => im.Proc.Name.Equals(entrypoint)).First();
-
-
+                //replacing function
                 var assertToAssume = new Func<Cmd, Cmd>(cmd =>
                 {
                     var acmd = cmd as AssertCmd;
                     if (acmd == null) return cmd;
                     return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
                 });
-                foreach (var block in origImpl.Blocks)
+
+
+                //replace the assert by assume in the original method
+              /*  foreach (var callee in epCallees)
+                {
+
+                }*/
+                
+                Implementation origImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(
+                    im => im.Proc.Name.Equals(entrypoint)).First();
+
+
+                                foreach (var block in origImpl.Blocks)
                             block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
 
                 
@@ -1787,6 +1840,7 @@ namespace FastAVN
                 var inlinedPProgram = inlineP.run(pprunedProgram);
                 var newPrunedProgram = inlinedPProgram.getProgram();
 
+                BoogieUtil.PrintProgram(newPrunedProgram, "inlinedprunedprogram.bpl");
 
                 //remove the entrypoint attribute
                 var inlinedEPProc = newPrunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(p => QKeyValue.FindBoolAttribute(p.Attributes,
