@@ -1,0 +1,18 @@
+﻿<Properties StartupConfiguration="{B05D046D-A620-4233-9D52-0255C7A69760}|Default">
+  <MonoDevelop.Ide.Workbench ActiveDocument="source/CoreLib/StratifiedInlining.cs">
+    <Files>
+      <File FileName="source/CoreLib/StratifiedInlining.cs" Line="3468" Column="32" />
+      <File FileName="source/CoreLib/ConcurrentSolver.cs" Line="214" Column="32" />
+      <File FileName="boogie/Source/VCGeneration/RF.cs" Line="553" Column="15" />
+      <File FileName="boogie/Source/VCGeneration/StratifiedVC.cs" Line="20" Column="16" />
+      <File FileName="source/CoreLib/RF.cs" Line="71" Column="23" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.ItemProperties.cba PreferredExecutionTarget="MonoDevelop.Default" />
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MultiItemStartupConfigurations />
+</Properties>

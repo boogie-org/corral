@@ -58,7 +58,8 @@ namespace CoreLib
 
 		private void setupSoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<StratifiedCallSite> activeCandidates, HashSet<StratifiedCallSite> blockedCandidates, HashSet<StratifiedCallSite> mustreachCandidates, HashSet<StratifiedCallSite> candidateUniverse, HashSet<StratifiedCallSite> lastInlined, HashSet<StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
-			lock (RefinementFuzzing.Settings.lockThis)
+            Console.WriteLine("Inside setupSoftPartition\n");
+            lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
 			{
 				id = totalPartitions++;
@@ -97,12 +98,14 @@ namespace CoreLib
 
 		public SoftPartition(SoftPartition parent, int parentId, int partitionLevel, HashSet<VC.StratifiedCallSite> activeCandidates, HashSet<VC.StratifiedCallSite> blockedCandidates, HashSet<VC.StratifiedCallSite> mustreachCandidates, HashSet<VC.StratifiedCallSite> candidateUniverse, HashSet<VC.StratifiedCallSite> lastInlined, HashSet<VC.StratifiedCallSite> candidatesReachingRecBound, VCExpr prefixVC = null)
 		{
-			setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+            Console.WriteLine("Inside SoftPartition constructor 1\n");
+            setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
 		}
 
 		public SoftPartition(SoftPartition parentPartition, IEnumerable<StratifiedCallSite> newActiveCandidates, IEnumerable<StratifiedCallSite> newBlockedCandidates, HashSet<VC.StratifiedCallSite> newMustreachCandidates, IEnumerable<StratifiedCallSite> candidatesInlined, HashSet<StratifiedCallSite> candidatesThatReachingRecBound, VCExpr prefixVC = null)
 		{
-			HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
+            Console.WriteLine("Inside SoftPartition constructor 2\n");
+            HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
 			HashSet<StratifiedCallSite> candidateUniverse = new HashSet<StratifiedCallSite>();
 			HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> mustreachCandidates = new HashSet<StratifiedCallSite>();
@@ -225,10 +228,11 @@ namespace CoreLib
 		public int threadBudget; // Number of child threads that can be spawned by this thread
 		public int proverId;
 
-		public VerificationState(StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverBookeeper)
+		public VerificationState(StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverBookeeper, DI di)
 		{
-			//prover.Assert(vcMain, true);
-			//this.calls = calls;
+            Console.WriteLine("Inside VerificationState constructor 1\n");
+            //prover.Assert(vcMain, true);
+            //this.calls = calls;
             this.reporter = reporter;
 			//this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
 			vcSize = 0;
@@ -236,6 +240,13 @@ namespace CoreLib
 			threadBudget = RefinementFuzzing.Settings.totalThreadBudget;
 			proverId = 0;
             this.proverBookeeper = proverBookeeper;
+            this.siState = new StratifiedInlining.SiState();
+            this.siState.di = di;
+            this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
+            this.siState.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
+            this.siState.openCallSites = new HashSet<StratifiedCallSite>();
+            // set others
 		}
 
         /*
@@ -251,15 +262,18 @@ namespace CoreLib
 
 		public VerificationState(VerificationState vstate, StratifiedInliningErrorReporter reporter, int proverId, ProverStackBookkeeping proverBookeeper)
 		{
-			//this.calls = calls;
-			//this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
-			vcSize = vstate.vcSize;
+            Console.WriteLine("Inside VerificationState constructor 2\n");
+            //this.calls = calls;
+            //this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
+            vcSize = vstate.vcSize;
 			expansionCount = vstate.expansionCount;
 			//this.newVarCnt = vstate.newVarCnt;
 			this.threadBudget = vstate.threadBudget;
 			this.proverId = proverId;
             this.reporter = reporter;
             this.proverBookeeper = proverBookeeper;
+            this.siState = StratifiedInlining.SiState.SaveState(vstate.siState);
+
 		}
        
 	}
@@ -277,7 +291,8 @@ namespace CoreLib
 
 		public ProverArrayManager(int n, Program program, ProverInterface firstProver)
 		{
-			this.program = program;
+            Console.WriteLine("Inside ProverArrayManager constructor\n");
+            this.program = program;
 
 			proverArray = new ProverStackBookkeeping[n];
 			proverAvailable = new bool[n];
@@ -312,7 +327,8 @@ namespace CoreLib
 
 		public void ReturnProver(ProverStackBookkeeping prover, int ownerId, bool docheck = true)
 		{
-			lock (this)
+            Console.WriteLine("Inside ReturnProver\n");
+            lock (this)
 			{
 				int i = proverDict[prover];
 				proverAvailable[i] = true;
@@ -342,7 +358,8 @@ namespace CoreLib
 
 		public ProverStackBookkeeping BorrowProver(int ownerId)
 		{
-			lock (this)
+            Console.WriteLine("Inside BorrowProver\n");
+            lock (this)
 			{
 				// Try to search for a prover which had the same owner
 				for (int i = 0; i < numProvers; i++)
@@ -390,7 +407,8 @@ namespace CoreLib
 
 		public void RequestProver(ProverStackBookkeeping proverStackBookkeeping, int ownerId)
 		{
-			lock (this)
+            Console.WriteLine("Inside RequestProver\n");
+            lock (this)
 			{
 				int i = proverDict[proverStackBookkeeping];
 				Contract.Assert(proverAvailable[i]);
@@ -575,14 +593,16 @@ namespace CoreLib
 
 		public ProverInterface getMainProver()
 		{
-			Contract.Assert(RefinementFuzzing.Settings.preAllocateProvers);
+            Console.WriteLine("Inside getMainProver\n");
+            Contract.Assert(RefinementFuzzing.Settings.preAllocateProvers);
 
 			return mainProver;
 		}
 
 		public ProverInterface getInterpolatingProver()
 		{
-			Contract.Assert(RefinementFuzzing.Settings.preAllocateProvers);
+            Console.WriteLine("Inside getInterpolatingProver\n");
+            Contract.Assert(RefinementFuzzing.Settings.preAllocateProvers);
 			return null;
 		}
 
@@ -613,7 +633,8 @@ namespace CoreLib
 
 		internal void ReCreateProvers(Program program)
 		{
-			mainProver.Close();
+            Console.WriteLine("Inside ReCreateProvers\n");
+            mainProver.Close();
 			//interpolatingProver.Close();
 			mainProver = ProverInterface.CreateProver(program, null, true, CommandLineOptions.Clo.ProverKillTime);
 			//interpolatingProver = ProverInterface.CreateProver(program, null, true, CommandLineOptions.Clo.ProverKillTime);
@@ -691,19 +712,19 @@ namespace CoreLib
 		Random rand = new Random();
 		//StratifiedInlining.FCallHandler calls;
 		StratifiedInlining vcgen;
-		//public VerificationState vState;
-
+		
 		static int ctr = 0;
 
 		public ConcurrentSolver(StratifiedInlining vcgen, VerificationState vState)
 		{
-			this.vcgen = vcgen;
-			//this.calls = vState.calls;
-		}
+            Console.WriteLine("Inside ConcurrentSolver constructor\n");
+            this.vcgen = vcgen;
+        }
 
 		public VerifyResult Solve(List<StratifiedCallSite> entryPoints, VerificationState vState) // for a child, the entryPoints are the "open" candidates
 		{
-			List<SoftPartition> entryPartitions = new List<SoftPartition>();
+            Console.WriteLine("Inside solve 1\n");
+            List<SoftPartition> entryPartitions = new List<SoftPartition>();
 
 			foreach (StratifiedCallSite e in entryPoints)
 			{
@@ -728,7 +749,8 @@ namespace CoreLib
 
 		Tuple<Thread, RefinementFuzzing.ConcurrentContext> createThread(SoftPartition spawnForPartition, WaitHandle waitHandle, SoftPartition parentPartition, int proverIndex, VerificationState vState)
 		{
-			StratifiedInlining childVCgen = null;
+            Console.WriteLine("Inside createThread\n");
+            StratifiedInlining childVCgen = null;
 			ProverStackBookkeeping bookKeeper = null;
 
 			if (RefinementFuzzing.Settings.preAllocateProvers)
@@ -756,8 +778,12 @@ namespace CoreLib
 				childVCgen.proverStackBookkeeper = new ProverStackBookkeeping(childVCgen.prover, 0);
 
             // Put all of the necessary state into one object
-            var ChildVState = new VerificationState(childErrReporter, childVCgen.proverStackBookkeeper);
-
+            Console.WriteLine("point 3");
+            var size = vState.siState.di.ComputeSize();
+            Console.WriteLine("point 4");
+            var ChildVState = new VerificationState(vState, childErrReporter, bookKeeper.id, bookKeeper);
+            //var ChildVState = new VerificationState(vState, childErrReporter, childVCgen.proverStackBookkeeper); // complete it
+            //ChildVState.siState.di = vState.siState.di.Copy();
             RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
 
 			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
@@ -767,7 +793,8 @@ namespace CoreLib
 
 		Tuple<Thread, RefinementFuzzing.ConcurrentContext> createThreadWithProver(SoftPartition spawnForPartition, ProverStackBookkeeping bookKeeper, int childrenThreadBudget, WaitHandle waitHandle, SoftPartition parentPartition, VerificationState vState)
 		{
-			StratifiedInlining childVCgen = null;
+            Console.WriteLine("Inside createThreadWithProver\n");
+            StratifiedInlining childVCgen = null;
 			//ProverStackBookkeeping bookKeeper = null;
 
 			if (RefinementFuzzing.Settings.preAllocateProvers)
@@ -813,7 +840,8 @@ namespace CoreLib
 
 		public VerifyResult Solve(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
 		{
-			if (RefinementFuzzing.Settings.counterexampleEnumerationStrategy == RefinementFuzzing.Settings.CounterexampleEnumerationStrategy.DisjointModuleSummaries && RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.DefaultBreadthFirst)
+            Console.WriteLine("Inside solve 2\n");
+            if (RefinementFuzzing.Settings.counterexampleEnumerationStrategy == RefinementFuzzing.Settings.CounterexampleEnumerationStrategy.DisjointModuleSummaries && RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.DefaultBreadthFirst)
 				return Solve1(entryPartitions, vState);
 			else
 				return SolveSplit(entryPartitions, vState);
@@ -847,7 +875,8 @@ namespace CoreLib
 
 		public VerifyResult Solve1(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
 		{
-			Contract.Assert(RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.DefaultBreadthFirst);
+            Console.WriteLine("Inside Solve1\n");
+            Contract.Assert(RefinementFuzzing.Settings.traversalStyle == RefinementFuzzing.Settings.TraversalStyle.DefaultBreadthFirst);
 			Contract.Assert(RefinementFuzzing.Settings.useConcurrentSummaryDB);
 			Contract.Assert(RefinementFuzzing.Settings.threadJoinStrategy == RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns);
 
@@ -1140,6 +1169,7 @@ namespace CoreLib
 
         public VerifyResult SolveSplit(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
         {
+            Console.WriteLine("Inside SolveSplit\n");
             int threadBudget = 4;
 
             Debug.Assert(entryPartitions.Count == 1);
@@ -1338,6 +1368,7 @@ namespace CoreLib
 
         public VerifyResult Solve2(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
 		{
+            Console.WriteLine("Inside Solve2\n");
             int threadBudget = 1;
 
             workQueue = new WorkQueue(entryPartitions, WorkQueue.QType.BFS, vState);
@@ -1600,10 +1631,11 @@ namespace CoreLib
 
 		private void cleanup(Dictionary<int, Thread> currRunningThreadsDict, WaitHandle[] handles, double maxTime, int totalNumCalls, int numThreadsSpawned, Dictionary<Thread, RefinementFuzzing.ConcurrentContext> threadList, SoftPartition s)
 		{
-			// Abort remaining thread (if any, for example if bug found/error reported)
-			//currRunningThreadsDict.Values.Iter<Thread>(n => { n.Abort(); });
+            Console.WriteLine("Inside cleanup\n");
+            // Abort remaining thread (if any, for example if bug found/error reported)
+            //currRunningThreadsDict.Values.Iter<Thread>(n => { n.Abort(); });
 
-			lock (RefinementFuzzing.Settings.lockThis)
+            lock (RefinementFuzzing.Settings.lockThis)
 			{
 				RefinementFuzzing.Settings.globalThreadList.Remove(System.Threading.Thread.CurrentThread);
 
@@ -1647,8 +1679,9 @@ namespace CoreLib
 		private static bool first;
 		private ProverInterface.Outcome VerifyTest(SoftPartition s, out List<SoftPartition> partitions)
 		{
-			//throw new NotImplementedException();
-			int v;
+            Console.WriteLine("Inside VerifyTest\n");
+            //throw new NotImplementedException();
+            int v;
 
 			if (s.level > 3 || done)
 			{
@@ -1685,7 +1718,8 @@ namespace CoreLib
 
 		private VerifyResult Verify(SoftPartition s, out List<SoftPartition> partitions, out double solTime, VerificationState vState)
 		{
-			VerifyResult ret = vcgen.SolvePartition(s, vState, out partitions, out solTime);
+            Console.WriteLine("Inside Verify\n");
+            VerifyResult ret = vcgen.SolvePartition(s, vState, out partitions, out solTime);
 
 			return ret;
 		}
@@ -1732,8 +1766,9 @@ namespace CoreLib
 
 		public WorkQueue(List<SoftPartition> entrySoftPartitions, QType qType, VerificationState vState) // candidates are all funct
 		{
+            Console.WriteLine("Inside WorkQueue\n");
 
-			Contract.Assert(entrySoftPartitions.Count >= 1); // the other case has not been implemented
+            Contract.Assert(entrySoftPartitions.Count >= 1); // the other case has not been implemented
 
 			this.qType = qType;
 
@@ -1751,6 +1786,7 @@ namespace CoreLib
 
 		public SoftPartition getNextPartition(ProverStackBookkeeping bookKeeper)
 		{
+            Console.WriteLine("Inside getNextPartition\n");
             if (readyQ.Count == 0)
                 return null;
 

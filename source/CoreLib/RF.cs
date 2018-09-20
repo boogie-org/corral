@@ -49,7 +49,8 @@ namespace RefinementFuzzing
 		private static int threadIdCntr = 0;
 		public int getNewThreadId()
 		{
-			int id = -1;
+            Console.WriteLine("Inside getNewThreadId\n");
+            int id = -1;
 			lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock()) 
 			{
@@ -62,14 +63,15 @@ namespace RefinementFuzzing
 
 		public ConcurrentContext(StratifiedInlining vcgen, VerificationState vstate, SoftPartition spartition, WaitHandle waitHandles, ProverInterface prover)
 		{
-			id = getNewThreadId();
+            Console.WriteLine("Inside ConcurrentContext constructor\n");
+            id = getNewThreadId();
 
 			this.vcgen = vcgen;
 			this.vstate = vstate;
 			this.spartition = spartition;
 
 			vcgen.solver = new ConcurrentSolver(vcgen, vstate);
-
+            
 			this.waitHandles = waitHandles;
 
 			softPartitionPrefix = new List<SoftPartition>();
@@ -164,7 +166,8 @@ namespace RefinementFuzzing
 
 		public void ProcessContext()
 		{
-			Console.WriteLine("Thread Spawned!");
+            Console.WriteLine("Inside ProcessContext\n");
+            Console.WriteLine("Thread Spawned!");
 
 			List<SoftPartition> entryPartitions = new List<SoftPartition>();
 			entryPartitions.Add(spartition);
@@ -203,7 +206,8 @@ namespace RefinementFuzzing
 
 		public static Thread SpawnThread(ConcurrentContext context)
 		{
-			Thread oThread = new Thread(new ThreadStart(context.ProcessContext));
+            Console.WriteLine("Inside SpawnThread\n");
+            Thread oThread = new Thread(new ThreadStart(context.ProcessContext));
 
 			lock (RefinementFuzzing.Settings.lockThis)
 			{
@@ -245,9 +249,10 @@ namespace RefinementFuzzing
 
 		public static void SelectCandidates(StratifiedInlining.FCallHandler calls, ProverInterface prover, List<int> candidates)
 		{
-			//return;
+            Console.WriteLine("Inside SelectCandidates\n");
+            //return;
 
-			currRefinementRound++;
+            currRefinementRound++;
 
 			writer.WriteLine("(Original) " + currRefinementRound + ": " + candidates.Count);
 
@@ -262,7 +267,8 @@ namespace RefinementFuzzing
 
 		public static void SelectCandidates4(StratifiedInlining.FCallHandler calls, ProverInterface prover, List<int> candidates)
 		{
-			if (candidates.Count < 2)
+            Console.WriteLine("Inside SelectCandidates4\n");
+            if (candidates.Count < 2)
 				return;
 
 			List<int> newCandidates = new List<int>();
@@ -386,7 +392,8 @@ namespace RefinementFuzzing
 
 		public static void SelectCandidates3(StratifiedInlining.FCallHandler calls, ProverInterface prover, List<int> candidates)
 		{
-			if (candidates.Count < 3)
+            Console.WriteLine("Inside SelectCandidates3\n");
+            if (candidates.Count < 3)
 				return;
 
 			List<int> newCandidates = new List<int>();
@@ -437,7 +444,8 @@ namespace RefinementFuzzing
 
 		public static void SelectCandidates2(List<int> candidates)
 		{
-			List<int> newCandidates = new List<int>();
+            Console.WriteLine("Inside SelectCandidates2\n");
+            List<int> newCandidates = new List<int>();
 
 			//            while (newCandidates.Count <= (candidates.Count / baseProb)) { 
 			foreach (int id in candidates)
@@ -486,7 +494,8 @@ namespace RefinementFuzzing
 
 		public static void SelectCandidates1(List<int> candidates)
 		{
-			Console.WriteLine("candidates: ");
+            Console.WriteLine("Inside SelectCandidates1\n");
+            Console.WriteLine("candidates: ");
 			Settings.PrintAll(candidates);
 
 			Console.WriteLine("Removing: ");
@@ -680,7 +689,8 @@ namespace RefinementFuzzing
 
 		public static double getProbForPartitioning(int n)
 		{
-			if (n == 0) return seedProbForPartitioning;
+            Console.WriteLine("Inside getProbForPartitioning\n");
+            if (n == 0) return seedProbForPartitioning;
 
 			double inv = 1.0 / seedProbForPartitioning;
 			double v = Math.Pow((inv)/(inv - 1), n-1) / (inv-1);
