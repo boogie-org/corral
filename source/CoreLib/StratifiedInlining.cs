@@ -377,8 +377,14 @@ namespace CoreLib
         }
 
         /* depth in the call tree */
-        public int StackDepth(StratifiedCallSite cs)
+        public int StackDepth(VerificationState vstate, StratifiedCallSite cs)
         {
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
+            if (vstate != null)
+                parent = vstate.siState.parent;
+            else
+                parent = this.parent;
+
             int i = 1;
             StratifiedCallSite iter = cs;
             while (parent.ContainsKey(iter))
@@ -390,8 +396,14 @@ namespace CoreLib
         }
 
         /* depth of the recursion inlined so far */
-        public int RecursionDepth(StratifiedCallSite cs)
+        public int RecursionDepth(VerificationState vstate, StratifiedCallSite cs)
         {
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
+            if (vstate != null)
+                parent = vstate.siState.parent;
+            else
+                parent = this.parent;
+
             int i = 1;
             StratifiedCallSite iter = cs;
             while (parent.ContainsKey(iter))
@@ -404,9 +416,9 @@ namespace CoreLib
         }
 
         /* Has this call-site reached the bound, given extraRecBound */
-        public bool HasExceededRecursionDepth(StratifiedCallSite cs, int bound) {
+        public bool HasExceededRecursionDepth(VerificationState vstate, StratifiedCallSite cs, int bound) {
 
-            var i = RecursionDepth(cs);
+            var i = RecursionDepth(vstate, cs);
 
             // Usual
             if (!extraRecBound.ContainsKey(cs.callSite.calleeName))
@@ -732,7 +744,7 @@ namespace CoreLib
                 }
             });
             Console.WriteLine(vstate.reporter.attachedVC);
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[vstate.siState.parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -799,7 +811,7 @@ namespace CoreLib
                     }
                     catch(KeyNotFoundException)
                     {
-                        Console.WriteLine(cs.callSite.calleeName+" "+parent[cs].callSite.calleeName);
+                        Console.WriteLine(cs.callSite.calleeName);
                     }
                 }
                 //openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
@@ -879,7 +891,7 @@ namespace CoreLib
                 }
             });
             //var size = di.ComputeSize();
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[vState.siState.parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -943,9 +955,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                    if (HasExceededRecursionDepth(vState, cs, CommandLineOptions.Clo.RecursionBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(vState, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -1064,7 +1076,7 @@ namespace CoreLib
                 }
             });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[vState.siState.parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -1273,7 +1285,7 @@ namespace CoreLib
                         Push();
                         backtrackingPoints.Push(SiState.SaveState(this, openCallSites, vState.reporter.attachedVC, vState.reporter.attachedVCInv));
                         prevMustAsserted.Push(
-                          AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                          AssertMustReach(null, vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
                         applyDecisionToDI(DecisionType.MUST_REACH, maxVc);
                         treesize = vState.siState.di.ComputeSize();
@@ -1618,7 +1630,7 @@ namespace CoreLib
 
                                 decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
                                 applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[scs]);
-                                prevMustAsserted.Push(AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                                prevMustAsserted.Push(AssertMustReach(vState, vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
                                 count = count + 1;
                                 if (count > 4) break;
                             }
@@ -1645,7 +1657,7 @@ namespace CoreLib
 
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
                             applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[scs]);
-                            prevMustAsserted.Push(AssertMustReach(vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
+                            prevMustAsserted.Push(AssertMustReach(vState, vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
                         }
                         treesize = vState.siState.di.ComputeSize();
                         tt += (DateTime.Now - st);
@@ -1660,9 +1672,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                    if (HasExceededRecursionDepth(null, cs, CommandLineOptions.Clo.RecursionBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -1761,7 +1773,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
                         applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(
-                           AssertMustReach(vState.reporter.attachedVC[topDecision.cs], PrevAsserted(), vState.reporter));
+                           AssertMustReach(null, vState.reporter.attachedVC[topDecision.cs], PrevAsserted(), vState.reporter));
                         treesize = vState.siState.di.ComputeSize();
                     }
                 }
@@ -1909,9 +1921,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                    if (HasExceededRecursionDepth(null, cs, CommandLineOptions.Clo.RecursionBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -2001,7 +2013,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
                         applyDecisionToDI(DecisionType.MUST_REACH, reporter.attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(
-                           AssertMustReach(reporter.attachedVC[topDecision.cs], PrevAsserted(), reporter));
+                           AssertMustReach(null, reporter.attachedVC[topDecision.cs], PrevAsserted(), reporter));
                         treesize = di.ComputeSize();
                     }
 
@@ -2072,9 +2084,9 @@ namespace CoreLib
                 {                    
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                    if (HasExceededRecursionDepth(null, cs, CommandLineOptions.Clo.RecursionBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -2126,7 +2138,7 @@ namespace CoreLib
                             if (svc != null) openCallSites.UnionWith(svc.CallSites);
                             // Assert MustReach
                             prevMustAsserted.Push(
-                                AssertMustReach(svc, PrevAsserted(), reporter));
+                                AssertMustReach(null, svc, PrevAsserted(), reporter));
                         }
                     }
                 }
@@ -2181,7 +2193,7 @@ namespace CoreLib
                         var svc = Expand(null, topDecision.cs, reporter);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         prevMustAsserted.Push(
-                           AssertMustReach(svc, PrevAsserted(), reporter));
+                           AssertMustReach(null, svc, PrevAsserted(), reporter));
                     }
 
 
@@ -2212,9 +2224,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                    if (HasExceededRecursionDepth(null, cs, CommandLineOptions.Clo.RecursionBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         if (!boundAsserted.Contains(cs))
                         {
@@ -2286,9 +2298,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (RecursionDepth(cs) > CommandLineOptions.Clo.RecursionBound ||
+                    if (RecursionDepth(null, cs) > CommandLineOptions.Clo.RecursionBound ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         blocked.Add(cs);
                     }
@@ -2454,9 +2466,9 @@ namespace CoreLib
                 {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, recBound) ||
+                    if (HasExceededRecursionDepth(null, cs, recBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         procsHitRecBound.Add(cs.callSite.calleeName);
@@ -2464,7 +2476,7 @@ namespace CoreLib
                         boundHit = true;
                     }
                     // Non-uniform unfolding
-                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(null, cs) > 1)
                         softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
                 MacroSI.PRINT_DEBUG("    - check");
@@ -2487,8 +2499,8 @@ namespace CoreLib
                 var toExpand = reporter.callSitesToExpand;
                 if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
                 {
-                    var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
-                    toExpand = toExpand.Where(cs => RecursionDepth(cs) == min).ToList();
+                    var min = toExpand.Select(cs => RecursionDepth(null, cs)).Min();
+                    toExpand = toExpand.Where(cs => RecursionDepth(null, cs) == min).ToList();
                 }
                 foreach (var scs in toExpand)
                 {
@@ -2514,9 +2526,9 @@ namespace CoreLib
                 // force inline
                 var toExpand = new HashSet<StratifiedCallSite>(openCallSites.Where(cs => forceInlineProcs.Contains(cs.callSite.calleeName)));
                 // filter away ones that have reached the bound
-                toExpand.RemoveWhere(cs => HasExceededRecursionDepth(cs, recBound) ||
+                toExpand.RemoveWhere(cs => HasExceededRecursionDepth(null, cs, recBound) ||
                         (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound));
+                        StackDepth(null, cs) > CommandLineOptions.Clo.StackDepthBound));
                 if (toExpand.Count == 0) break;
 
                 foreach (var scs in toExpand)
@@ -2534,8 +2546,14 @@ namespace CoreLib
         }
 
         // Assert that we must reach this VC; returns the list of call sites asserted
-        public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
+        public List<Tuple<StratifiedVC, Block>> AssertMustReach(VerificationState vstate, StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
         {
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
+            if (vstate != null)
+                parent = vstate.siState.parent;
+            else
+                parent = this.parent;
+
             Console.WriteLine("Inside AssertMustReach\n");
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
@@ -2960,7 +2978,7 @@ namespace CoreLib
                 if (sp.mustreachCandidates.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
-                    AssertMustReach(svc, PrevAsserted(), vState.reporter).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
+                    AssertMustReach(vState, svc, PrevAsserted(), vState.reporter).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
                 }
             }
         }
@@ -3083,7 +3101,7 @@ namespace CoreLib
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (StratifiedCallSite scs in openCallSites)
                     {
-                        if (!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
+                        if (!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(vState, scs))) continue;
                         toRemove.Add(scs);
                         var ss = Expand(vState, scs, vState.reporter);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
@@ -3310,7 +3328,7 @@ namespace CoreLib
                 var nextOpenCallSites = new HashSet<StratifiedCallSite>();
                 foreach (StratifiedCallSite scs in openCallSites)
                 {
-                    if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound)) continue;
+                    if (HasExceededRecursionDepth(null, scs, CommandLineOptions.Clo.RecursionBound)) continue;
 
                     var ss = Expand(null, scs, reporter);
                     if(ss != null) nextOpenCallSites.UnionWith(ss.CallSites);
@@ -3328,7 +3346,7 @@ namespace CoreLib
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (StratifiedCallSite scs in openCallSites)
                     {
-                        if(!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
+                        if(!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(null, scs))) continue;
                         toRemove.Add(scs);
                         var ss = Expand(null, scs, reporter);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
@@ -3471,7 +3489,7 @@ namespace CoreLib
                 callsites.UnionWith(parent.Keys);
                 callsites.UnionWith(parent.Values);
                 callsites.ExceptWith(openCallSites);
-                callsites.Iter(scs => CallTree.Add(GetPersistentID(scs)));
+                callsites.Iter(scs => CallTree.Add(GetPersistentID(null, scs)));
 
                 prevMain = impl.Name;
                 prevDag = di.GetDag();
@@ -3492,7 +3510,7 @@ namespace CoreLib
         private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
         {
             DI di;
-            var parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
             if (vstate != null)
             {
                 di = vstate.siState.di;
@@ -3571,7 +3589,7 @@ namespace CoreLib
         private void Merge(VerificationState vstate, StratifiedCallSite scs, StratifiedVC vc, StratifiedInliningErrorReporter reporter)
         {
             DI di;
-            var parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
             if (vstate != null)
             {
                 di = vstate.siState.di;
@@ -3614,12 +3632,18 @@ namespace CoreLib
         }
 
         // Get persistent ID of a callsite
-        private string GetPersistentID(StratifiedCallSite scs)
+        private string GetPersistentID(VerificationState vstate, StratifiedCallSite scs)
         {
+            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
+            if (vstate != null)
+                parent = vstate.siState.parent;
+            else
+                parent = this.parent;
+
             if (!parent.ContainsKey(scs))
                 return string.Format("{0}_131_{1}", scs.callSite.calleeName, GetSiCallId(scs));
 
-            var ret = GetPersistentID(parent[scs]);
+            var ret = GetPersistentID(vstate, parent[scs]);
             return string.Format("{0}_262_{1}_393_{2}", ret, scs.callSite.calleeName, GetSiCallId(scs));
         }
 
@@ -3630,7 +3654,7 @@ namespace CoreLib
             if (reporter.attachedVCInv.ContainsKey(vc))
             {
                 var scs = reporter.attachedVCInv[vc];
-                ret = GetPersistentID(scs);
+                ret = GetPersistentID(null, scs);
             }
             return string.Format("{0}_262_{1}", ret, vc.info.impl.Name);
         }

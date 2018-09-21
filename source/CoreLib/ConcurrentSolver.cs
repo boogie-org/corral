@@ -244,6 +244,7 @@ namespace CoreLib
             this.siState.di = di;
             this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
             this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
+            Console.WriteLine("Initialized Parent");
             this.siState.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             this.siState.openCallSites = new HashSet<StratifiedCallSite>();
             // set others
