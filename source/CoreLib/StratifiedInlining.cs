@@ -289,7 +289,7 @@ namespace CoreLib
 
         public StratifiedInlining(StratifiedInlining si): base(si.program, si.logFilePath, si.appendLogFile, new List<Checker>(), null)
         {
-            Console.WriteLine("Inside StratifiedInlining constructor\n");
+            Console.WriteLine("Inside StratifiedInlining constructor (from parent) \n");
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
 
@@ -445,21 +445,23 @@ namespace CoreLib
 
         public struct SiState
         {
-            public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
-            public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
+            //public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
+            //public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
             public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            public HashSet<StratifiedCallSite> openCallSites;
+            //public HashSet<StratifiedCallSite> openCallSites;
             public DI di;
             //public int tst;
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, 
                     Dictionary<StratifiedCallSite, StratifiedVC> attachedVC, Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv)
             {
+                Debug.Assert(false); // should not get called in parallel implementation
+
                 Console.WriteLine("Inside sistate.savestate\n");
                 var ret = new SiState();
-                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
-                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
+                //ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
+                //ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
-                ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
+                //ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 ret.di = SI.di.Copy();
                 //ret.tst = 1;
                 return ret;                
@@ -469,10 +471,10 @@ namespace CoreLib
             {
                 Console.WriteLine("Inside sistate.savestate\n");
                 var ret = new SiState();
-                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(siState.attachedVC);
-                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(siState.attachedVCInv);
+                //ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(siState.attachedVC);
+                //ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(siState.attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(siState.parent);
-                ret.openCallSites = new HashSet<StratifiedCallSite>(siState.openCallSites);
+                //ret.openCallSites = new HashSet<StratifiedCallSite>(siState.openCallSites);
                 ret.di = siState.di.Copy();
                 //ret.tst = 1;
                 return ret;
@@ -480,12 +482,14 @@ namespace CoreLib
 
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
             {
+                Debug.Assert(false); // should not get called in parallel implementation
+
                 Console.WriteLine("Inside sistate.applystate\n");
-                reporter.attachedVC = attachedVC;
-                reporter.attachedVCInv = attachedVCInv;
+                //reporter.attachedVC = attachedVC;
+                //reporter.attachedVCInv = attachedVCInv;
                 SI.parent = parent;
                 SI.di = di;
-                openCallSites = this.openCallSites;
+                //openCallSites = this.openCallSites;
              }
         }
 
@@ -804,17 +808,13 @@ namespace CoreLib
                 var cnt = 0;
                 foreach (var cs in openCallSites)
                 {
-                    try
-                    {
-                        if (desc.Contains(containingVC(cs)))
-                            cnt += 1;
-                    }
-                    catch(KeyNotFoundException)
-                    {
-                        Console.WriteLine(cs.callSite.calleeName);
-                    }
+                    if (vstate.siState.parent.ContainsKey(cs))
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Found: " + cs.callSiteExpr.ToString() + " -> " + vstate.siState.parent[cs].callSiteExpr.ToString());
+                    else
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Not found: " + cs.callSiteExpr.ToString());
                 }
-                //openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+
+                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
 
                 // Push & Block
                 MacroSI.PRINT("{0}>>> Pushing Block minmax({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
@@ -2806,7 +2806,7 @@ namespace CoreLib
 		}
 
 
-		public ConcurrentSolver solver;
+		//public ConcurrentSolver solver;
 		//public static InterfaceMaps interfaceMaps;
 		//public static PartitionSelectionHeuristics partitionSelectionHeuristics;
 
@@ -3070,7 +3070,7 @@ namespace CoreLib
             if (RefinementFuzzing.Settings.preAllocateProvers)
             {
                 proverManager = new ProverArrayManager(RefinementFuzzing.Settings.totalThreadBudget, program, prover);
-                proverStackBookkeeper = proverManager.BorrowProver(0);
+                proverStackBookkeeper = proverManager.BorrowProver(null);
             }
             else
             {
@@ -3090,7 +3090,7 @@ namespace CoreLib
                 aTimer.Enabled = true;
             }
 
-            var vState = new VerificationState(reporter, proverStackBookkeeper, di);
+            var vState = new VerificationState(null, reporter, proverStackBookkeeper, di, this);
 
             #region Repopulate Call Tree
             if (cba.Util.BoogieVerify.options.CallTree != null && di.disabled)
@@ -3175,7 +3175,7 @@ namespace CoreLib
 
             //var vState = new VerificationState(reporter, proverStackBookkeeper);
             vState.vcSize += SizeComputingVisitor.ComputeSize(vc);
-            solver = new ConcurrentSolver(this, vState);
+            ConcurrentSolver solver = new ConcurrentSolver();
             //Console.WriteLine("point 1\n");
             //var size = di.ComputeSize();
             //Console.WriteLine("point 2\n");
@@ -3541,6 +3541,8 @@ namespace CoreLib
                 foreach (var newCallSite in svc.CallSites)
                 {
                     parent[newCallSite] = scs;
+
+                    Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; parent populate: " + newCallSite.callSiteExpr.ToString() + " - > " + scs.callSiteExpr.ToString());
                 }
                 VCExpr toassert;
 
@@ -5948,13 +5950,20 @@ namespace CoreLib
             this.reportTrace = false;
             this.reportTraceIfNothingToExpand = false;
             this.GlobalLabels = null;
-            this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
-            this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
 
             if (parentRepoter != null)
             {
-                this.attachedVC.Union(parentRepoter.attachedVC);
-                this.attachedVCInv.Union(parentRepoter.attachedVCInv);
+                this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(parentRepoter.attachedVC);
+                this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(parentRepoter.attachedVCInv);
+                this.candidatesToExpand = new List<StratifiedCallSite>(parentRepoter.candidatesToExpand);
+                this.callSitesToExpand = new List<StratifiedCallSite>(parentRepoter.callSitesToExpand);
+            }
+            else
+            {
+                this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+                this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
+                this.candidatesToExpand = new List<StratifiedCallSite>();
+                this.callSitesToExpand = new List<StratifiedCallSite>();
             }
 
         }

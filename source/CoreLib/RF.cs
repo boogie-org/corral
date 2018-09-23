@@ -43,6 +43,8 @@ namespace RefinementFuzzing
 		// return result
 		public VerifyResult res;
 
+        public List<SoftPartition> outPartitions;
+
 		// to notify the main thread on completion
 		WaitHandle waitHandles;
 
@@ -70,7 +72,7 @@ namespace RefinementFuzzing
 			this.vstate = vstate;
 			this.spartition = spartition;
 
-			vcgen.solver = new ConcurrentSolver(vcgen, vstate);
+			//vcgen.solver = new ConcurrentSolver(vcgen, vstate);
             
 			this.waitHandles = waitHandles;
 
@@ -173,12 +175,13 @@ namespace RefinementFuzzing
 			entryPartitions.Add(spartition);
 
             double solTime2 = 0;
-            List<SoftPartition> newPartitions = new List<SoftPartition>();
+            outPartitions = new List<SoftPartition>();
 
             //lock (RefinementFuzzing.Settings.lockThis)
             {
 				//res = vcgen.solver.Solve(entryPartitions, this.vstate);
-                res = vcgen.SolvePartition(spartition, vstate, out newPartitions, out solTime2, vcgen.proverStackBookkeeper, null, 1);
+                res = vcgen.SolvePartition(spartition, vstate, out outPartitions, out solTime2, vcgen.proverStackBookkeeper, null, 1);
+
             }
 
             
@@ -640,7 +643,7 @@ namespace RefinementFuzzing
 		// how many softpartitions to create from one parent
 		public static int SoftPartitionBound = 1;
 
-		public static int totalThreadBudget = 1;
+		public static int totalThreadBudget = 4;
 
 		public static System.Object lockThis = new System.Object();
 		public static StreamWriter primaryLog = new StreamWriter("PrimaryLog.txt");

@@ -100,7 +100,9 @@ namespace CoreLib
 		{
             Console.WriteLine("Inside SoftPartition constructor 1\n");
             setupSoftPartition(parent, parentId, partitionLevel, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
-		}
+
+            Console.WriteLine("Created Initial SoftPartition: " + printSoftPartition());
+        }
 
 		public SoftPartition(SoftPartition parentPartition, IEnumerable<StratifiedCallSite> newActiveCandidates, IEnumerable<StratifiedCallSite> newBlockedCandidates, HashSet<VC.StratifiedCallSite> newMustreachCandidates, IEnumerable<StratifiedCallSite> candidatesInlined, HashSet<StratifiedCallSite> candidatesThatReachingRecBound, VCExpr prefixVC = null)
 		{
@@ -131,6 +133,8 @@ namespace CoreLib
             prevMustAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
             
             setupSoftPartition(parentPartition, parentPartition.Id, parentPartition.level + 1, activeCandidates, blockedCandidates, mustreachCandidates, candidateUniverse, lastInlined, candidatesReachingRecBound, prefixVC);
+
+            Console.WriteLine("Created SoftPartition: " + printSoftPartition() + " from parent " + parentPartition.printSoftPartition());
 		}
 
 		private string printHashSet(HashSet<StratifiedCallSite> hs)
@@ -139,7 +143,7 @@ namespace CoreLib
 			sb.Append("{");
 			foreach (StratifiedCallSite i in hs)
 			{
-				sb.Append(i + ", ");
+				sb.Append(i.callSiteExpr + ", ");
 			}
 			//sb.Remove(-1, 1);
 			sb.Append("}");
@@ -208,9 +212,11 @@ namespace CoreLib
 	// Store important information related to a single VerifyImplementation query
 	public class VerificationState
 	{
-		// The call tree
-		//public StratifiedInlining.FCallHandler calls;
+        // The call tree
+        //public StratifiedInlining.FCallHandler calls;
         //public StratifiedInlining.ApiChecker checker;
+        public StratifiedInlining si;
+        public SoftPartition sp;
         public StratifiedInliningErrorReporter reporter;
         public ProverStackBookkeeping proverBookeeper;
 		// For statistics
@@ -228,11 +234,12 @@ namespace CoreLib
 		public int threadBudget; // Number of child threads that can be spawned by this thread
 		public int proverId;
 
-		public VerificationState(StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverBookeeper, DI di)
+		public VerificationState(SoftPartition sp, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverBookeeper, DI di, StratifiedInlining si)
 		{
             Console.WriteLine("Inside VerificationState constructor 1\n");
             //prover.Assert(vcMain, true);
             //this.calls = calls;
+            this.sp = sp;
             this.reporter = reporter;
 			//this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
 			vcSize = 0;
@@ -242,11 +249,12 @@ namespace CoreLib
             this.proverBookeeper = proverBookeeper;
             this.siState = new StratifiedInlining.SiState();
             this.siState.di = di;
-            this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
-            this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
+            this.si = si;
+            //this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            //this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             Console.WriteLine("Initialized Parent");
             this.siState.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
-            this.siState.openCallSites = new HashSet<StratifiedCallSite>();
+            //this.siState.openCallSites = new HashSet<StratifiedCallSite>();
             // set others
 		}
 
@@ -261,9 +269,10 @@ namespace CoreLib
 		}
         */
 
-		public VerificationState(VerificationState vstate, StratifiedInliningErrorReporter reporter, int proverId, ProverStackBookkeeping proverBookeeper)
+		public VerificationState(SoftPartition sp, VerificationState vstate, StratifiedInliningErrorReporter reporter, int proverId, ProverStackBookkeeping proverBookeeper)
 		{
             Console.WriteLine("Inside VerificationState constructor 2\n");
+            this.sp = sp;
             //this.calls = calls;
             //this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
             vcSize = vstate.vcSize;
@@ -274,7 +283,7 @@ namespace CoreLib
             this.reporter = reporter;
             this.proverBookeeper = proverBookeeper;
             this.siState = StratifiedInlining.SiState.SaveState(vstate.siState);
-
+            this.si = new StratifiedInlining(vstate.si);
 		}
        
 	}
@@ -347,25 +356,19 @@ namespace CoreLib
 				if (docheck)
 				{
 					Contract.Assert(ownerId == proverArray[i].Top());
-
-					if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
-					{
-						// cleanup
-						prover.Pop();  // Remove the owner as it may be stale
-					}
 				}
 			}
-		}
+        }
 
-		public ProverStackBookkeeping BorrowProver(int ownerId)
+		public ProverStackBookkeeping BorrowProver(SoftPartition sp)
 		{
             Console.WriteLine("Inside BorrowProver\n");
             lock (this)
 			{
 				// Try to search for a prover which had the same owner
-				for (int i = 0; i < numProvers; i++)
+				for (int i = 0; i < numProvers && sp != null; i++)
 				{
-					if (proverAvailable[i] && proverOwner[i] == ownerId)
+					if (proverAvailable[i] && proverOwner[i] == sp.parent.Id)
 					{
 						proverAvailable[i] = false;
 						// by default, all are trace provers
@@ -395,7 +398,10 @@ namespace CoreLib
 						//proverArray[i].isTraceProver = true;
 
 						proverAvailable[i] = false;
-						proverOwner[i] = ownerId;
+                        if (sp == null)
+                            proverOwner[i] = 0;
+                        else
+                            proverOwner[i] = sp.Id;
 						return proverArray[i];
 					}
 				}
@@ -712,15 +718,17 @@ namespace CoreLib
 		WorkQueue workQueue;
 		Random rand = new Random();
 		//StratifiedInlining.FCallHandler calls;
-		StratifiedInlining vcgen;
+		//StratifiedInlining vcgen;
 		
 		static int ctr = 0;
 
-		public ConcurrentSolver(StratifiedInlining vcgen, VerificationState vState)
+		/*
+         * public ConcurrentSolver(StratifiedInlining vcgen, VerificationState vState)
 		{
             Console.WriteLine("Inside ConcurrentSolver constructor\n");
             this.vcgen = vcgen;
         }
+        */
 
 		public VerifyResult Solve(List<StratifiedCallSite> entryPoints, VerificationState vState) // for a child, the entryPoints are the "open" candidates
 		{
@@ -739,11 +747,14 @@ namespace CoreLib
                 HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
 
 				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, mustreachCandidates, universalCandidates, universalCandidates, new HashSet<StratifiedCallSite>());
-
+                
 				entryPartitions.Add(s);
-			}
+                vState.sp = s;
+            }
 
-			VerifyResult ret = Solve(entryPartitions, vState);
+            VerifyResult ret = SolveSplit(entryPartitions, vState);
+
+            //VerifyResult ret = Solve(entryPartitions, vState);
 
 			return ret;
 		}
@@ -762,9 +773,9 @@ namespace CoreLib
                 if (spawnForPartition.candidateUniverse.Count == 1)
                     bookKeeper = vState.proverBookeeper;
                 else
-                    bookKeeper = StratifiedInlining.proverManager.BorrowProver(parentPartition.Id);
+                    bookKeeper = StratifiedInlining.proverManager.BorrowProver(spawnForPartition);
 
-				childVCgen = new StratifiedInlining(this.vcgen);
+                childVCgen = vState.si;
 			}
 			else
 				; // TODO childVCgen = new StratifiedInlining(this.vcgen, null, false, new List<Checker>(), null);
@@ -778,11 +789,21 @@ namespace CoreLib
 			else
 				childVCgen.proverStackBookkeeper = new ProverStackBookkeeping(childVCgen.prover, 0);
 
+            if (childVCgen.proverStackBookkeeper == null)
+            {
+                Console.WriteLine("Prover not available; number of provers should be more than number of threads!");
+                throw new System.Exception("Prover not available; number of provers should be more than number of threads!");
+            }
+
             // Put all of the necessary state into one object
             Console.WriteLine("point 3");
             var size = vState.siState.di.ComputeSize();
             Console.WriteLine("point 4");
-            var ChildVState = new VerificationState(vState, childErrReporter, bookKeeper.id, bookKeeper);
+            VerificationState ChildVState;
+            if (spawnForPartition.Id == 0)
+                ChildVState = vState;
+            else
+                ChildVState = new VerificationState(spawnForPartition, vState, childErrReporter, bookKeeper.id, bookKeeper);
             //var ChildVState = new VerificationState(vState, childErrReporter, childVCgen.proverStackBookkeeper); // complete it
             //ChildVState.siState.di = vState.siState.di.Copy();
             RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
@@ -823,7 +844,7 @@ namespace CoreLib
 			childErrReporter.SetCandidateHandler(childCalls);
 
 			// Put all of the necessary state into one object
-			var ChildVState = new VerificationState(vState, childErrReporter, bookKeeper.id, bookKeeper);
+			var ChildVState = new VerificationState(spawnForPartition, vState, childErrReporter, bookKeeper.id, bookKeeper);
 
 			if (RefinementFuzzing.Settings.preAllocateProvers)
 				childVCgen.proverStackBookkeeper = bookKeeper;
@@ -886,7 +907,7 @@ namespace CoreLib
 			//ProverStackBookkeeping primaryProver = vcgen.proverStackBookkeeper;
 
 			SoftPartition s;
-			while ((s = workQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
 			{
 				List<SoftPartition> partitions;
 
@@ -900,7 +921,7 @@ namespace CoreLib
                     lock (RefinementFuzzing.Settings.lockThis)
                     //using (RefinementFuzzing.Settings.timedLock.Lock()) 
                     {
-                        s.graphNode.scheduledOnProverId = vcgen.proverStackBookkeeper.id;
+                        s.graphNode.scheduledOnProverId = vState.si.proverStackBookkeeper.id;
                         s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
 
                         if (RefinementFuzzing.Settings.refreshExplorationGraph)
@@ -920,14 +941,14 @@ namespace CoreLib
 				List<Tuple<SoftPartition, ProverStackBookkeeping>> worklist = new List<Tuple<SoftPartition, ProverStackBookkeeping>>();
 				List<Tuple<SoftPartition, ProverStackBookkeeping>> deferredWorklist = new List<Tuple<SoftPartition, ProverStackBookkeeping>>();
 				//worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(s, vcgen.proverStackBookkeeper));
-				worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, vcgen.proverStackBookkeeper));
+				worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, vState.si.proverStackBookkeeper));
 
 				VerifyResult outcome;
 
 				HashSet<SoftPartition> CexList = new HashSet<SoftPartition>();
 
 				// Release prover -- we are spawning a thread and the parent will wait till it returns
-				ProverStackBookkeeping originalProver = vcgen.proverStackBookkeeper;
+				ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
 				//originalProver.isTraceProver = false;
 				//StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, s.Id);
 
@@ -1030,7 +1051,7 @@ namespace CoreLib
 						lock (s)
 						{
 							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Attempting to enter critical section for softpartition: " + s.Id);
-							outcome = vcgen.SolvePartition(s, vState, out partitions, out solTime, workElem.Item2, CexList, numProvers + 1); //available + the current prover
+							outcome = vState.si.SolvePartition(s, vState, out partitions, out solTime, workElem.Item2, CexList, numProvers + 1); //available + the current prover
 							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Leaving critical section for softpartition: " + s.Id);
 
 							if (partitions.Count > 1)
@@ -1055,7 +1076,7 @@ namespace CoreLib
 							else
 								;// Contract.Assert(worklist.Count == 0); // only the original prover remains in the worklist
 
-							vcgen.proverStackBookkeeper = originalProver;
+                            vState.si.proverStackBookkeeper = originalProver;
 							//vState.checker.prover = originalProver.getMainProver();
 							//vState.summaryDB.prover5 = originalProver.getInterpolatingProver();
 
@@ -1121,7 +1142,7 @@ namespace CoreLib
 						// got only softpartition
 
 						// request for a prover
-						ProverStackBookkeeping bookKeeper = StratifiedInlining.proverManager.BorrowProver(s.Id);
+						ProverStackBookkeeping bookKeeper = StratifiedInlining.proverManager.BorrowProver(s);
 
 						if (bookKeeper != null)
 						{
@@ -1171,7 +1192,7 @@ namespace CoreLib
         public VerifyResult SolveSplit(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
         {
             Console.WriteLine("Inside SolveSplit\n");
-            int threadBudget = 4;
+            int threadBudget = 1;
 
             Debug.Assert(entryPartitions.Count == 1);
 
@@ -1180,7 +1201,7 @@ namespace CoreLib
             int numThreadsSpawned = (entryPartitions.Count - 1 > threadBudget) ? threadBudget : entryPartitions.Count - 1;
 
             // Release prover -- we are spawning a thread and the parent will wait till it returns
-            ProverStackBookkeeping originalProver = vcgen.proverStackBookkeeper;
+            ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
             //StratifiedInlining.proverManager.BorrowProver(entryPartitions[0].Id);
             //StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, entryPartitions[0].Id);
 
@@ -1206,7 +1227,7 @@ namespace CoreLib
 
             do
             {
-                while (numRunningThreads < threadBudget && (s = workQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
+                while (numRunningThreads < threadBudget && (s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
                 {
                     numRunningThreads++;
 
@@ -1220,9 +1241,9 @@ namespace CoreLib
 
                     //RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
 
-                    int tokenid = vcgen.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
-                    Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s, nextThreadToRun, currState);
-                    vcgen.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                    int tokenid = vState.si.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                    Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s.parent, nextThreadToRun, currState);
+                    vState.si.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
                     threadList[tuple.Item1] = tuple.Item2;
 
                     // assign the new thread the 'id' of the completed thread on the WaitHandles
@@ -1250,6 +1271,8 @@ namespace CoreLib
                     Console.WriteLine("Join done");
                     //RefinementFuzzing.Settings.WritePrimaryLog(context.vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Joining Thread " + context.id + " for soft partition: " + context.spartition.Id);
 
+                    numRunningThreads--;
+
                     // Get the result fom the child
                     VerifyResult res = context.res;
 
@@ -1260,7 +1283,7 @@ namespace CoreLib
                     s = context.spartition;
 
                     if (res == VerifyResult.BugFound || res == VerifyResult.Errors)
-                    {   
+                    {
                         cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
                         return VerifyResult.BugFound;
                     }
@@ -1272,18 +1295,23 @@ namespace CoreLib
                     }
                     else if (res == VerifyResult.Partitioned)
                     {
-                        /* TODO
-                        if (nextThreadToRun <= partitions.Count - 1)
+                        StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+
+                        List<SoftPartition> newPartitions = context.outPartitions;
+                        /*
+                         * if (nextThreadToRun <= partitions.Count - 1)
                             partitions.RemoveRange(nextThreadToRun, (partitions.Count - nextThreadToRun));
+                            */
 
                         for (int i = 0; i < newPartitions.Count; i++)
                         {
-                            partitions.Add(newPartitions[i]);
-                            RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
-                        }
-                        */
-                    }
+                            workQueue.AddTask(newPartitions[i]);
+                            RefinementFuzzing.Settings.WritePartitioningLog(vState.si.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
 
+                        }
+                        
+                    }
+#if false
                     if (RefinementFuzzing.Settings.threadJoinStrategy == RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns)
                     {
                         List<SoftPartition> newPartitions = new List<SoftPartition>();
@@ -1301,7 +1329,7 @@ namespace CoreLib
                         // that all the expansions on the call-tree are recorded
                         // Also, due to these reasons, this partition cannot be run concurrently.
                         // .VerifyResult outcome2 = context.vcgen.SolvePartition(s, context.vstate, out newPartitions); 
-                        VerifyResult outcome2 = vcgen.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
+                        VerifyResult outcome2 = vState.si.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
 
                         if (RefinementFuzzing.Settings.estimateParallelism)
                         {
@@ -1333,6 +1361,7 @@ namespace CoreLib
                             }
                             */
                         }
+                
 
                         // Release prover (release it with the parent's as the thread did the job for the parent as the prover stack is so set up)
                         StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
@@ -1352,7 +1381,8 @@ namespace CoreLib
                         indexInRunningThreads = -1;
                         Contract.Assert(false);
                     }
-                }
+#endif
+                    }
                 else
                 {
                     // initial lot of threads
@@ -1377,7 +1407,7 @@ namespace CoreLib
             VerificationState currState = vState;
 
 			SoftPartition s;
-			while ((s = workQueue.getNextPartition(vcgen.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
 			{
 				List<SoftPartition> partitions;
 
@@ -1386,7 +1416,7 @@ namespace CoreLib
 					lock (RefinementFuzzing.Settings.lockThis)
 						//using (RefinementFuzzing.Settings.timedLock.Lock()) 
 					{
-						s.graphNode.scheduledOnProverId = vcgen.proverStackBookkeeper.id;
+						s.graphNode.scheduledOnProverId = vState.si.proverStackBookkeeper.id;
 						s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
 
 						if (RefinementFuzzing.Settings.refreshExplorationGraph)
@@ -1434,7 +1464,7 @@ namespace CoreLib
 					Contract.Assert(partitions != null);
 
 					if (!RefinementFuzzing.Settings.isConcurrent)
-						partitions.Iter<SoftPartition>(p => workQueue.TaskAdded(p));
+						partitions.Iter<SoftPartition>(p => workQueue.AddTask(p));
                     
 					if (RefinementFuzzing.Settings.isConcurrent)
 					{
@@ -1445,8 +1475,8 @@ namespace CoreLib
 							numThreadsSpawned = (partitions.Count -1 > threadBudget) ? threadBudget : partitions.Count - 1;
 
 							// Release prover -- we are spawning a thread and the parent will wait till it returns
-							ProverStackBookkeeping originalProver = vcgen.proverStackBookkeeper;
-							StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, s.Id);
+							ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
+							StratifiedInlining.proverManager.ReturnProver(vState.si.proverStackBookkeeper, s.Id);
 
 							WaitHandle[] handles = new WaitHandle[numThreadsSpawned];
 
@@ -1524,7 +1554,7 @@ namespace CoreLib
 										// that all the expansions on the call-tree are recorded
 										// Also, due to these reasons, this partition cannot be run concurrently.
 										// .VerifyResult outcome2 = context.vcgen.SolvePartition(s, context.vstate, out newPartitions); 
-										VerifyResult outcome2 = vcgen.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
+										VerifyResult outcome2 = vState.si.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
 
 										if (RefinementFuzzing.Settings.estimateParallelism)
 										{
@@ -1551,7 +1581,7 @@ namespace CoreLib
 											for (int i = 0; i < newPartitions.Count; i++)
 											{
 												partitions.Add(newPartitions[i]);
-												RefinementFuzzing.Settings.WritePartitioningLog(vcgen.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
+												RefinementFuzzing.Settings.WritePartitioningLog(vState.si.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
 											}
 										}
 
@@ -1586,11 +1616,11 @@ namespace CoreLib
 									// there is a thread to be run
 									SoftPartition spawnForPartition = partitions[nextThreadToRun];
 
-									RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
+									RefinementFuzzing.Settings.WritePrimaryLog(vState.si.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
 
-									int tokenid = vcgen.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+									int tokenid = vState.si.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
 									Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s, nextThreadToRun, null);
-									vcgen.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                                    vState.si.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
 									threadList[tuple.Item1] = tuple.Item2;
 
 									// assign the new thread the 'id' of the completed thread on the WaitHandles
@@ -1609,7 +1639,7 @@ namespace CoreLib
 							cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
 
 							// the parent should now get the prover back
-							StratifiedInlining.proverManager.RequestProver(vcgen.proverStackBookkeeper, s.Id);
+							StratifiedInlining.proverManager.RequestProver(vState.si.proverStackBookkeeper, s.Id);
 
 						}
 					}
@@ -1669,10 +1699,10 @@ namespace CoreLib
 				h.Close();
 			}
 
-			// update statistics
-			vcgen.timeTaken += maxTime;
-			vcgen.numCalls += totalNumCalls;
-			vcgen.threadsSpawned += numThreadsSpawned;
+            // update statistics
+            s.vState.si.timeTaken += maxTime;
+            s.vState.si.numCalls += totalNumCalls;
+			s.vState.si.threadsSpawned += numThreadsSpawned;
 		}
 
 
@@ -1720,7 +1750,7 @@ namespace CoreLib
 		private VerifyResult Verify(SoftPartition s, out List<SoftPartition> partitions, out double solTime, VerificationState vState)
 		{
             Console.WriteLine("Inside Verify\n");
-            VerifyResult ret = vcgen.SolvePartition(s, vState, out partitions, out solTime);
+            VerifyResult ret = vState.si.SolvePartition(s, vState, out partitions, out solTime);
 
 			return ret;
 		}
@@ -1801,7 +1831,7 @@ namespace CoreLib
 			readyQ.Remove(s);
 		}
 
-		public void TaskAdded(SoftPartition s)
+		public void AddTask(SoftPartition s)
 		{
 			readyQ.Add(s);
 		}
