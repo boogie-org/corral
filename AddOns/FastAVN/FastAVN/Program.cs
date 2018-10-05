@@ -1,5 +1,6 @@
 ﻿using cba.Util;
 using Microsoft.Boogie;
+using Microsoft.Boogie.GraphUtil;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -39,7 +40,7 @@ namespace FastAVN
         static bool useProvidedEntryPoints = false;
         static bool onlyUseRootsAsEntryPoints = false;
         static bool dependentEntrypointExec = false; //whether to execute all entry points in dependence order or not
-        static bool dependentEntrypointExecPar = false; //whether to the dependence execution should be parallel or not
+        
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -54,7 +55,6 @@ namespace FastAVN
         static void Main(string[] args)
         {
             Console.CancelKeyPress += Console_CancelKeyPress;
-
             if (args.Length < 1)
             {
                 Console.WriteLine("Usage: FastAVN file.bpl");
@@ -102,8 +102,10 @@ namespace FastAVN
             if (args.Any(s => s == "/dependentEntrypointExec"))
                 Driver.dependentEntrypointExec = true;
 
-            if (args.Any(s => s == "/dependentEntrypointExecPar"))
-                Driver.dependentEntrypointExecPar = true;
+            if(args.Any(s => s== "/printCallDependence"))
+            {
+                Driver.printCallDependence = true;
+            }
             
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
@@ -140,6 +142,8 @@ namespace FastAVN
             avnArgs += " /dumpResults:" + bugReportFileName + " ";
             avnArgs = " /EE:onlySlicAssumes+ /EE:ignoreAllAssumes- " + avnArgs;
 
+            
+            
             // Find AVN executable
             avnPath = findExe("AngelicVerifierNull.exe");
             avHarnessInstrPath = findExe("AvHarnessInstrumentation.exe");
@@ -209,6 +213,22 @@ namespace FastAVN
                         throw new Exception("Error running harness instrumentation");
 
                     program = BoogieUtil.ReadAndOnlyResolve(resultfile);
+
+
+
+                    //After instrumentation unrolling for removing the recursion
+                    int origBound = CommandLineOptions.Clo.RecursionBound;
+                    CommandLineOptions.Clo.RecursionBound = 2;
+                    cba.ExtractRecursionPass rollOut = new cba.ExtractRecursionPass();
+                    
+                    string epname = program.TopLevelDeclarations.OfType<NamedDeclaration>().Where(d => QKeyValue.FindBoolAttribute(d.Attributes,
+                        "entrypoint")).Select(nd => nd.Name).First();
+                    cba.PersistentCBAProgram tempProgram = new cba.PersistentCBAProgram(program, epname, 0);
+                    var rolledOutProgram = rollOut.run(tempProgram);
+                    program = rolledOutProgram.getProgram();
+                    //restoring the recursion bound 
+                    CommandLineOptions.Clo.RecursionBound = origBound;
+                    
 
                     // Do a run on instrumented program, filter out entrypoints
                     var entrypoint_impl = program.TopLevelDeclarations.OfType<Implementation>()
@@ -365,7 +385,8 @@ namespace FastAVN
         public static Microsoft.Boogie.GraphUtil.Graph<string> CallGraph = null;
         public static Dictionary<Declaration, HashSet<string>> DeclToGlobalsUsed = null;
         public static Dictionary<Declaration, HashSet<string>> DeclToFunctionsUsed = null;
-        
+        private static bool printCallDependence = false;
+
 
         /// <summary>
         /// Run AVN binary on sliced programs
@@ -497,20 +518,47 @@ namespace FastAVN
                 }
             }
 
-            
+            //BoogieUtil.PrintProgram(prog, "annotatedProg.bpl");
+
+           
+            Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
+            callgraph.Successors(callgraph.Nodes.First());
+            Dictionary<string, List<string>> dependencyInfo = BuildEntryPointDependenceGraph(prog, entrypoints, callgraph);
+
+            //only for debugging
+            if (printCallDependence)
+            {
+                printDependenceInfo(callgraph, dependencyInfo);
+            }
+
+
             if (dependentEntrypointExec)
             {
-                Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
-                callgraph.Successors(callgraph.Nodes.First());
-                Dictionary<string, List<string>> dependencyInfo = BuildEntryPointDependenceGraph(prog, entrypoints, callgraph);
+
+                //never modify this dictionary
+                Dictionary<string, List<string>> depInfoCopy = new Dictionary<string, List<string>>();
+                foreach(var e  in dependencyInfo.Keys)
+                {
+                    var newK = e + "";
+                    List<string> mem = new List<string>();
+                    foreach(var m in dependencyInfo[e])
+                    {
+                        mem.Add(m + "");
+                    }
+                    depInfoCopy.Add(newK, mem);
+                }
+
+
                 HashSet<string> allEntryPointNames = new HashSet<string>();
                 entrypoints.Iter(impl => allEntryPointNames.Add(impl.Name));
 
-                //TODO remove this file later
+                
+
+
                 var workingCopy = "tempProg.bpl";
                 BoogieUtil.PrintProgram(prog, workingCopy);
                 Program currentProgram = BoogieUtil.ReadAndOnlyResolve(workingCopy);
-                File.Delete(workingCopy);
+                //File.Delete(workingCopy);
                 
 
                 /*This code runs the entrypoints with no dependence
@@ -525,22 +573,14 @@ namespace FastAVN
                     ConcurrentBag<Implementation> currentEntrypoints = getIndependentEntrypoints(entrypoints, 
                         dependencyInfo, out currentEntrypointNames);
 
+                    
+                    
                     //get entrypoint directories to get the entrypoints removed
                     HashSet<string> removedEntrypointNames = new HashSet<string>();
-
-                    if (dependentEntrypointExecPar)
-                    {
-                        removedEntrypointNames = ExecuteEPInParallel(currentProgram, currentEntrypoints, 
-                            allEntryPointNames, currentEntrypointNames);                     
-                    }
-                    else
-                    {
-                        removedEntrypointNames = new HashSet<string>(currentEntrypointNames);
-                        ExecuteEPInSeq(currentProgram, currentEntrypoints, currentEntrypointNames, allEntryPointNames);
-                    }
+                    removedEntrypointNames = new HashSet<string>(currentEntrypointNames);
+                    ExecuteEPInSeq(currentProgram, currentEntrypoints, currentEntrypointNames, allEntryPointNames, depInfoCopy);
+                
                     
-                    printMesg("end of run " + parCount);
-
                     //replaces the asertions based on results
                     if (ReplacementRequired(dependencyInfo))
                         currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, removedEntrypointNames, allEntryPointNames, callgraph);
@@ -553,15 +593,29 @@ namespace FastAVN
                         dependencyInfo.Remove(epName);
                     }
 
+                    printMesg("end of run " + parCount);
+
                 }
             }
             else
             {
                 /* old code*/
+
+                //sorting the entrypoints for the older algorithm
+                ConcurrentQueue<Implementation> epQueue = new ConcurrentQueue<Implementation>();
+                int maxDep = dependencyInfo.Max(dep => dep.Value.Count);
+                for(int i = 0; i<= maxDep; i++)
+                {
+                    foreach(var ep  in dependencyInfo.Where(dep => dep.Value.Count == i))
+                    {
+                        epQueue.Enqueue(entrypoints.Where(e => e.Name.Equals(ep.Key)).First());
+                    }
+                }
+                
                 var threads = new List<Thread>();
                 for (int i = 0; i < numThreads; i++)
                 {
-                    var w = new Worker(prog, entrypoints);
+                    var w = new Worker(prog, epQueue);
                     if (!earlySplit)
                         threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
                     else
@@ -588,15 +642,103 @@ namespace FastAVN
                 printingOutput = true;
                 printBugs(ref mergedBugs, epNames.Count);
                 mergeBugs(epNames);
+
+                //printing results
+                AssertEliminator.printAVResults();
             }
         }
 
+        private static void printDependenceInfo(Graph<string> callgraph, Dictionary<string, List<string>> dependencyInfo)
+        {
+            string dir = "Info";
+            
+            if(Directory.Exists(dir))
+            {
+                Directory.Delete(dir, true);
+                Directory.CreateDirectory(dir);
+            }
+            else
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            string fname =Path.Combine(dir, "callgraph.txt");
+            if (File.Exists(fname))
+            {
+                File.Delete(fname);
+            }
+            List<string> callContents = new List<string>();
+            callContents.Add( "Printing the call graph :");
+            foreach (var node in callgraph.Nodes)
+            {
+                callContents.Add( node + " calls : ");
+                foreach (var succ in callgraph.Successors(node))
+                {
+                    callContents.Add( "==> " + succ);
+
+                }
+            }
+            File.AppendAllLines(fname, callContents);
+
+
+            var fname1 = Path.Combine(dir, "dependencyInfo.txt");
+            if (File.Exists(fname1))
+            {
+                File.Delete(fname1);
+            }
+            var count = 0;
+            var maxcount = dependencyInfo.Max(dep => dep.Value.Count);
+            List<string> depContents = new List<string>();
+            Console.WriteLine("the max count is : {0}", maxcount);
+            while (count <= maxcount)
+            {
+
+                foreach (var d in dependencyInfo.Where
+                    (dep => dep.Value.Count == count))
+                {
+                    depContents.Add("Entrypoint " + d.Key + " with count " + count + " depends on : ");
+                    foreach (var val in dependencyInfo[d.Key])
+                    {
+                        
+                        depContents.Add( "==> " + val);
+                    }
+
+                }
+                count++;
+            }
+            File.AppendAllLines(fname1, depContents);
+
+
+        }
+
+        private static string GetlistToPrint(List<string> value)
+        {
+            string listOfValues = "";
+            foreach(var s in value)
+            {
+                listOfValues += s + "\t";
+            }
+            return listOfValues;
+        }
+
+
         private static void ExecuteEPInSeq(Program currentProgram, ConcurrentBag<Implementation> currentEntrypoints, 
-            HashSet<string> currentEntrypointNames, HashSet<string> allEntryPointNames)
+            HashSet<string> currentEntrypointNames, HashSet<string> allEntryPointNames, Dictionary<string, List<string>> depInfoCopy)
         {
             foreach (var ep in currentEntrypointNames)
             {
-                ConcurrentBag<Implementation> currentEP = new ConcurrentBag<Implementation>(currentEntrypoints.
+                
+
+                var currentImpl = currentEntrypoints.Where(e => e.Name.Equals(ep)).First();
+                HashSet<string> succ = new HashSet<string>(depInfoCopy[ep]);
+                if (!EPhasAsserts(currentImpl) && AssertEliminator.NoBlockEP.Contains(succ))
+                {
+                    printMesg("skipping execution of :" + ep);
+                    continue;
+                }
+
+
+                ConcurrentQueue<Implementation> currentEP = new ConcurrentQueue<Implementation>(currentEntrypoints.
                     Where(e => e.Name.Equals(ep)));
                 
                 Worker w = new Worker(currentProgram, currentEP, allEntryPointNames);
@@ -604,11 +746,34 @@ namespace FastAVN
                     w.RunSplitAndAv();
                 else
                     w.RunSplitAndAvhAndAv();
-
+                
             }
         }
 
-        private static HashSet<string> ExecuteEPInParallel(Program currentProgram, ConcurrentBag<Implementation> currentEntrypoints, 
+        private static bool EPhasAsserts(Implementation currentImpl)
+        {
+            if (currentImpl == null)
+                return false;
+
+
+            foreach(var block in currentImpl.Blocks)
+            {
+                foreach(var cmd in block.Cmds)
+                {
+                    if(cmd is AssertCmd)
+                    {
+                        var acmd = cmd as AssertCmd;
+                        //ignoring assert true statements;
+                        if (!acmd.Expr.Equals(Expr.True))
+                            return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static HashSet<string> ExecuteEPInParallel(Program currentProgram, ConcurrentQueue<Implementation> currentEntrypoints, 
             HashSet<string> allEntryPointNames, HashSet<string> currentEntrypointNames)
         {
             HashSet<string> removedEPNames = new HashSet<string>();
@@ -659,12 +824,54 @@ namespace FastAVN
             ConcurrentBag<Implementation> independentEntryPoints = new ConcurrentBag<Implementation>();
             entrypoints.Where(impl => dependencyInfo.ContainsKey(impl.Proc.Name) && dependencyInfo[impl.Proc.Name].Count == 0).
                 Iter(impl => independentEntryPoints.Add(impl));
-          
+
+
+            
+
+
             currentEntrypointsNames = new HashSet<string>();
             foreach (var ep in independentEntryPoints)
                 currentEntrypointsNames.Add(ep.Proc.Name.ToString());
-            
+
             return independentEntryPoints;
+            
+
+            /*HashSet<string> epAdded = new HashSet<string>();
+             *if(independentEntryPoints.IsEmpty)
+              {
+                  //mutually recursive case
+                  foreach(var ep1 in dependencyInfo.Keys)
+                  {
+                      if (epAdded.Contains(ep1))
+                          continue;
+                      HashSet<string> toAdd = new HashSet<string>(dependencyInfo.Keys.Where(ep => dependencyInfo[ep].Contains(ep1) &&
+                          dependencyInfo[ep1].Contains(ep)));
+
+                      if (toAdd.Count() > 0)
+                      {
+                          toAdd.Add(ep1);
+
+                          int minLevel = toAdd.Min(e => dependencyInfo[e].Count);
+                          toAdd.RemoveWhere(e => dependencyInfo[e].Count > minLevel);
+
+                          foreach (var ep in toAdd)
+                          {
+                              var impl = entrypoints.Where(epImpl => epImpl.Name.Equals(ep)).First();
+                              if (!independentEntryPoints.Contains(impl))
+                              {
+
+                                  independentEntryPoints.Add(impl);
+                                  epAdded.Add(ep);
+                              }
+
+                          }
+                      }
+
+
+                  }
+              }
+              */
+
         }
 
         private static bool AllEntryPointsDone(Dictionary<string, List<string>> dependencyInfo)
@@ -728,14 +935,14 @@ namespace FastAVN
 
         class Worker
         {
-            ConcurrentBag<Implementation> impls;
+            ConcurrentQueue<Implementation> impls;
             public static ConcurrentBag<string> DirsCreated = new ConcurrentBag<string>();
             HashSet<string> implNames;
             Program program;
             static string counter_lock = "counter_lock";
             static int trunc_counter = 0;
 
-            public Worker(Program program, ConcurrentBag<Implementation> impls)
+            public Worker(Program program, ConcurrentQueue<Implementation> impls)
             {
                 this.program = program; 
                 this.impls = impls;
@@ -743,7 +950,7 @@ namespace FastAVN
                 impls.Iter(im => implNames.Add(im.Name));
             }
 
-            public Worker(Program program, ConcurrentBag<Implementation> impls, HashSet<string> implNames)
+            public Worker(Program program, ConcurrentQueue<Implementation> impls, HashSet<string> implNames)
             {
                 this.program = program;
                 this.impls = impls;
@@ -756,7 +963,7 @@ namespace FastAVN
 
                 while (true)
                 {
-                    if (!impls.TryTake(out impl)) { break; }
+                    if (!impls.TryDequeue(out impl)) { break; }
 
                     var name = impl.Name;
                     // clash of lower-case names?
@@ -801,6 +1008,7 @@ namespace FastAVN
                     File.Delete(pruneFile);
                     BoogieUtil.PrintProgram(shallowP, pruneFile); // dump sliced program
 
+                    
                     if (Driver.createEntryPointBplsOnly)
                     {
                         Console.WriteLine("Skipping AVN run for {0} given /createEntrypointBplsOnly", impl.Name);
@@ -812,7 +1020,7 @@ namespace FastAVN
                     if (deadlineReached) return;
 
                     // spawn the job -- local
-                    
+                   
                     var output = RemoteExec.run(wd, avnPath, string.Format("\"{0}\" {1}", pruneFile, avnArgs));
 
                     PostProcess(impl.Name, wd, output);
@@ -824,7 +1032,7 @@ namespace FastAVN
                 Implementation impl;
                 while (true)
                 {
-                    if (!impls.TryTake(out impl)) { break; }
+                    if (!impls.TryDequeue(out impl)) { break; }
 
                     var name = impl.Name;
                     // clash of lower-case names?
@@ -1509,9 +1717,9 @@ namespace FastAVN
             public const char NameSeparator = '$';
             private static HashSet<string> callsToIgnore = null;
             private static HashSet<string> choiceCallsToAdd = new HashSet<string>();
+            private static HashSet<string> noBlockEP = new HashSet<string>();
 
-            
-            
+            private static List<string> resultRec = new List<string>();
 
             public static Program ReplaceAssertsOfDepImpls(Program currentProgram, HashSet<string> 
                 removedEntryPoints, HashSet<string> AllEPNames, Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
@@ -1521,7 +1729,9 @@ namespace FastAVN
                 
                 foreach (var dir in currentDirs)
                 {
+                    bool entrypointBlocks = false;
                     string filename = Path.Combine(dir, "avnResult.txt");
+                    
                     if (File.Exists(filename))
                     {
                         //adding the result
@@ -1533,25 +1743,41 @@ namespace FastAVN
                         choiceCallsToAdd = new HashSet<string>();
                         foreach (var assertID in assertRes.Keys)
                         {
-                            if (assertRes[assertID].Equals("PASS") ||
-                                assertRes[assertID].Equals("FAIL"))
-                            {
-                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
-                            }
 
+                            
+                            if (assertRes[assertID].Equals("PASS"))
+                            {
+                                
+                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
+
+                            }
+                            else if (assertRes[assertID].Equals("FAIL"))
+                            {
+                                
+                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
+                                
+                            }
                             else if(assertRes[assertID].Equals("BLOCK"))
                             {
                                 //replace assertion in the original program method
+                                
                                 ReplaceAssertByAssume(currentProgram, dir, callgraph);
                                 currentProgram = ReplaceBlockedAsserts(currentProgram, assertID, dir, AllEPNames);
+                                entrypointBlocks = true;
                                 
                             }
+                            
                         }
 
                         ReplaceCallsForCallers(currentProgram, dir, AllEPNames);
-                        
+                           
 
                     }
+                    if (!entrypointBlocks) {
+                        NoBlockEP.Add(dir);
+                    }
+                    
+
 
                 }
 
@@ -1608,21 +1834,50 @@ namespace FastAVN
 
                 Program newPrunedProgram = InlinePrunedProgram(prunedProgram, prunedEPImpl, assertID);
 
-                
+               
                 Dictionary<string, string> implRename = RenameTraceImpls(newPrunedProgram, assertID);
 
 
                 //removing the calls present due to pruning
                 SetCallsToIgnore(prunedProgram, currentProgram);            
 
+
+                //cleaning up the pruned program
                 foreach (var impl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
                 {
+                    //removing the context calls
                     impl.Blocks.Iter(b => b.Cmds.RemoveAll(cmd => (cmd is CallCmd) && (callsToIgnore.Contains((cmd as CallCmd).Proc.Name))));
+                    
                     //removing havoc commands
                     impl.Blocks.Iter(b => b.Cmds.RemoveAll(cmd => (cmd is HavocCmd)));
+
+
+                    //removing  triggers and extra information added by concretization
+                    foreach (var block in impl.Blocks)
+                    {
+                        //trigger removing
+                        block.Cmds.RemoveAll(cmd => (cmd is AssumeCmd) && ((cmd as AssumeCmd).Expr is NAryExpr)  &&
+                        ((cmd as AssumeCmd).Expr as NAryExpr).Fun.FunctionName.Contains("unknownTrigger_"));
+
+
+                        //ID removing
+                        foreach(var cmd in block.Cmds)
+                        {
+                            if(cmd is CallCmd)
+                            {
+                                var ccmd = cmd as CallCmd;
+                                var newAttr = RemoveAttr(ccmd.Attributes, "ConcretizeCallId");
+                                ccmd.Attributes = newAttr;
+                            }
+                        }
+                    }
+
+                    
+                    
+
                 }
 
-
+                //BoogieUtil.PrintProgram(newPrunedProgram, "inlinedPrunedProgram" + (inlineFileCount++) + ".bpl");
 
 
                 //add all to the current program - both impl and procedure
@@ -1637,8 +1892,29 @@ namespace FastAVN
                     }
                 }
 
+                //REVISE : add all functions called by pruned program to currentprogram
+                HashSet<string> funcsUsed = new HashSet<string>();
+                var vu = new VarsUsed();
+                foreach(var impl in newPrunedProgram.TopLevelDeclarations.OfType<Implementation>())
+                {
+                    vu.Visit(impl);
+                    vu.functionsUsed.Iter(f => funcsUsed.Add(f));
+                }
+                
+                //remove the triggers
+                funcsUsed.RemoveWhere(f => f.Contains("unknownTrigger_"));
+                
+                foreach (var f in funcsUsed)
+                {
+                    var func = newPrunedProgram.TopLevelDeclarations.OfType<Function>().Where(fn => fn.Name.Equals(f)).First();
+                    if( currentProgram.Functions.Count() > 0 && !currentProgram.TopLevelDeclarations.OfType<Function>().Any(fn => fn.Name.Equals(f)))
+                    {
+                        currentProgram.AddTopLevelDeclaration(func);
+                    }
 
+                }
                
+                
 
                 //create the dummy choice method with the two calls
 
@@ -1669,13 +1945,11 @@ namespace FastAVN
             }
 
 
-            //TODO This function should replace all the reachable asserts from the entrypoint by assumes
+            //TODO This function should replace all the asserts in the entrypoint by assumes
             private static void ReplaceAssertByAssume(Program currentProgram,  string entrypoint, 
                 Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
             {
-                //computing reachable methods
-              //  HashSet<string> epCallees = BoogieUtil.GetReachableNodes(entrypoint, callgraph);
-
+                
                 //replacing function
                 var assertToAssume = new Func<Cmd, Cmd>(cmd =>
                 {
@@ -1684,20 +1958,12 @@ namespace FastAVN
                     return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
                 });
 
-
-                //replace the assert by assume in the original method
-              /*  foreach (var callee in epCallees)
-                {
-
-                }*/
-                
-                Implementation origImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(
+                Implementation impl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(
                     im => im.Proc.Name.Equals(entrypoint)).First();
-
-
-                                foreach (var block in origImpl.Blocks)
+                    if(impl != null)
+                        foreach (var block in impl.Blocks)
                             block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
-
+                
                 
                 
             }
@@ -1768,7 +2034,10 @@ namespace FastAVN
                 //creating block 3 - the trace block
                 Block b3 = new Block(Token.NoToken, assertID + "TraceCall", new List<Cmd>(), new ReturnCmd(Token.NoToken));
                 Cmd callTraceCmd = new CallCmd(Token.NoToken, prunedInlinedEPName, ins, outs);
+                Cmd finishcmd = new AssumeCmd(Token.NoToken, Expr.False);
                 b3.Cmds.Add(callTraceCmd);
+                b3.Cmds.Add(finishcmd);
+               
 
                 //creating block b2 - the original method block
                 Block b2 = new Block(Token.NoToken, assertID + "OrigCall", new List<Cmd>(), new ReturnCmd(Token.NoToken));
@@ -1798,9 +2067,18 @@ namespace FastAVN
                 //calls included due to the instrumentation
                 callsToIgnore = new HashSet<string>();
 
-                prunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(proc => !currentProgram.TopLevelDeclarations.OfType<Procedure>().Contains(proc)).
-                    Iter(proc => callsToIgnore.Add(proc.Name));
 
+                foreach(var pp in prunedProgram.TopLevelDeclarations.OfType<Procedure>())
+                {
+                    if(!currentProgram.TopLevelDeclarations.OfType<Procedure>().Any(p => p.Name.Equals(pp.Name)))
+                    {
+                        callsToIgnore.Add(pp.Name);
+                    }
+                }
+
+               
+                
+                
                 //retain the renamed methods
                 foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
                 {
@@ -1808,8 +2086,15 @@ namespace FastAVN
                         QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint") && callsToIgnore.Contains(impl.Proc.Name)))
                         callsToIgnore.Remove(impl.Proc.Name);
                 }
+
+               
+
+
             }
 
+            static int inlineFileCount = 0;
+
+            public static HashSet<string> NoBlockEP { get => noBlockEP; set => noBlockEP = value; }
 
             //inlines the current entry point under analysis 
             private static Program InlinePrunedProgram(Program prunedProgram, Implementation prunedEPImpl, string assertID)
@@ -1839,8 +2124,8 @@ namespace FastAVN
                 cba.PersistentCBAProgram pprunedProgram = new cba.PersistentCBAProgram(prunedProgram, prunedEPImpl.Name, 0);
                 var inlinedPProgram = inlineP.run(pprunedProgram);
                 var newPrunedProgram = inlinedPProgram.getProgram();
-
-                BoogieUtil.PrintProgram(newPrunedProgram, "inlinedprunedprogram.bpl");
+                
+                
 
                 //remove the entrypoint attribute
                 var inlinedEPProc = newPrunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(p => QKeyValue.FindBoolAttribute(p.Attributes,
@@ -1856,7 +2141,7 @@ namespace FastAVN
                     inlinedEPProc.OutParams, inlinedEPProc.Requires, inlinedEPProc.Modifies, inlinedEPProc.Ensures, newProcAttr);
 
                 Implementation newInlinedImpl = new Implementation(Token.NoToken, inlinedEPImpl.Name, inlinedEPImpl.TypeParameters, inlinedEPImpl.InParams,
-                    inlinedEPImpl.OutParams, inlinedEPImpl.LocVars, inlinedEPImpl.StructuredStmts, newImplAttr);
+                    inlinedEPImpl.OutParams, inlinedEPImpl.LocVars, inlinedEPImpl.Blocks, newImplAttr);
 
                 //remove other asserts from the inlined program
                 var assertToAssume = new Func<Cmd, Cmd>(cmd =>
@@ -1889,7 +2174,7 @@ namespace FastAVN
                 QKeyValue newAttr = null;
                 while (currentAttr != null)
                 {
-                    if (!currentAttr.Key.Equals("entrypoint"))
+                    if (!currentAttr.Key.Equals(Key))
                     {
                         if (newAttr == null)
                         {
@@ -1919,7 +2204,7 @@ namespace FastAVN
                 {
                     
                     Implementation newImpl = new Implementation(Token.NoToken, prefix + impl.Name, impl.TypeParameters, impl.InParams,
-                        impl.OutParams, impl.LocVars, impl.StructuredStmts, impl.Attributes);
+                        impl.OutParams, impl.LocVars, impl.Blocks, impl.Attributes);
                     
                     Procedure proc = impl.Proc;
                     Procedure newProc = new Procedure(Token.NoToken, prefix + impl.Name, proc.TypeParameters, proc.InParams, proc.OutParams,
@@ -1966,6 +2251,8 @@ namespace FastAVN
                     if ((QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") != null ||
                         QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint") && callsToIgnore.Contains(impl.Proc.Name)))
                         callsToIgnore.Remove(impl.Proc.Name);
+
+                    
                 }
 
 
@@ -2177,9 +2464,46 @@ namespace FastAVN
                 return inlineInfo;
             }
 
-            
-           
+            public static void printAVResults()
+            {
 
+                try
+                {
+                    string path = "bugresult_report.txt";
+                    if(File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+
+                    HashSet<string> dirs = new HashSet<string>(Worker.DirsCreated);
+
+                    foreach (var dirPath in dirs)
+                    {
+                        var filePath = Path.Combine(dirPath, "avnResult.txt");
+                        string[] dirComp = dirPath.Split(Path.DirectorySeparatorChar);
+                        string epName = dirComp[dirComp.Length - 1];
+                        string[] lines = File.ReadAllLines(filePath);
+                        foreach(var line in lines)
+                        {
+                            var assert = line.Split(':')[0];
+                            var result = line.Split(':')[1];
+                            if(result.Equals("FAIL") || result.Equals("BLOCK"))
+                            {
+                                var str = epName + ", " + assert + ", " + result + "\n";
+                                File.AppendAllText(path, str);
+                            }
+                            
+                        }
+
+                    }
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine("Error Reporting the results");
+                }
+                
+               
+            }
         }
 
         class TraceInline

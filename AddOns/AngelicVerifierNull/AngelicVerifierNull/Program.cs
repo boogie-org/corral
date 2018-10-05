@@ -171,6 +171,8 @@ namespace AngelicVerifierNull
                 Stats.stop("Cpu");
 
                 AVNResult.printAllAssertResults();
+                printAllBlockedExpr();
+                printAllLengths();
                
             }
             catch (Exception e)
@@ -186,6 +188,37 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
+        }
+
+        private static void printAllLengths()
+        {
+            string fname = "traceLengths.txt";
+            List<string> contents = new List<string>();
+            foreach(var entry in traceLength)
+            {
+                contents.Add(entry.Key + " : " + entry.Value);
+            }
+
+            try
+            {
+                File.AppendAllLines(fname, contents);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("Error while printng the trace lengths : {0}", e.Message);
+            }
+        }
+
+        private static void printAllBlockedExpr()
+        {
+            string fname = "blockedExpressions.txt";
+            if (File.Exists(fname))
+                File.Delete(fname);
+            foreach (var ex in blockedExpr)
+            {
+                File.AppendAllText(fname, ex.ToString() + "\n");
+            }
+
         }
 
         public static void HandleTimer(Stopwatch sw)
@@ -443,6 +476,7 @@ namespace AngelicVerifierNull
                 //get the pathProgram
                 CoreLib.SDVConcretizePathPass concretize;
                 var pprog = GetPathProgram(cex, prog, out concretize);
+                
 
                 var ppprog = pprog.getProgram();
                 var mainImpl = BoogieUtil.findProcedureImpl(ppprog.TopLevelDeclarations, pprog.mainProcName);
@@ -480,10 +514,13 @@ namespace AngelicVerifierNull
                 if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
                 var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
 
-                //retrieve the contents of the trace file and rewrite them to a better named file
+                //adding this call to extract additional info
                 
+                
+                int length = extractTraceLength(cex, 1);
+                traceLength.Add(traceCount + "", length);
 
-                
+               
 
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
@@ -570,7 +607,7 @@ namespace AngelicVerifierNull
                             //printing the pruned program
                             printCorralTracePruned(cex, prog, instr, assertID);
 
-
+                            AddBlockedExpr(eeStatus.Item2);
                             /*BoogieUtil.PrintProgram(ppprog, assertID + "_inlinedProg.bpl");
 
                             //printing the pruned program - first retrieve from the trace file
@@ -588,6 +625,37 @@ namespace AngelicVerifierNull
             }
             Stats.stop("run.corral.iterative");
             return ret;
+        }
+
+        private static int extractTraceLength(cba.ErrorTrace trace, int len)
+        {
+            
+            foreach (var block in trace.Blocks)
+            {
+                foreach (var cmd in block.Cmds)
+                {
+                    
+                    if (cmd.isCall())
+                    {
+                        cba.CallInstr ccmd = cmd as cba.CallInstr;
+                        if (ccmd != null && ccmd.CalleeTrace != null)
+                        {
+                            len = extractTraceLength(ccmd.CalleeTrace, len + 1);
+                            
+                        }
+                    }
+
+                }
+            }
+
+            return len;
+        }
+
+        private static List<Expr> blockedExpr = new List<Expr>();
+        private static Dictionary<string, int> traceLength = new Dictionary<string, int>();
+        private static void AddBlockedExpr(Expr item2)
+        {
+            blockedExpr.Add(item2);
         }
 
         private static void printCorralTracePruned(cba.ErrorTrace cex, PersistentProgram prog, AvnInstrumentation instr, string assertID)
@@ -1086,6 +1154,7 @@ namespace AngelicVerifierNull
         {
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
+            Console.WriteLine("Corrral called with timeout {0}, orig value {1}", corralTimeout, timeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
 
             var trackedVars = new HashSet<string>(corralConfig.trackedVars);
@@ -1371,6 +1440,7 @@ namespace AngelicVerifierNull
 
                 try
                 {
+                    Console.WriteLine("Corral being called in relax constraints with timeout {0}", timeoutRelax);
                     cex = RunCorral(pprog, null, timeoutRelax);
                 }
                 catch (Exception e)
@@ -1859,7 +1929,7 @@ namespace AngelicVerifierNull
             //An assert can be declared one of the above
             //Todo:  check can an assert be in state 1 in 1 method and state 2 in another
             //PASS stands for both passing and timing out assertions
-            public enum ResultStatus {PASS, FAIL, BLOCK};
+            public enum ResultStatus {PASS, FAIL, BLOCK, TIMEOUT};
             //Stores results per assert
             static Dictionary<string, ResultStatus> assertResult = new Dictionary<string, ResultStatus>();
             //Stores the list of blocked asserts
@@ -1878,7 +1948,8 @@ namespace AngelicVerifierNull
 
             public static void addToAllAsserts(string assertID)
             {
-                allAsserts.Add(assertID);
+                if(assertID!=null)
+                    allAsserts.Add(assertID);
 
             }
 
@@ -1886,6 +1957,9 @@ namespace AngelicVerifierNull
             //multiple failed traces are treated the same
             public static void addResult(string assertID, ResultStatus status)
             {
+                if (assertID == null)
+                    return;
+
                 if(!assertResult.ContainsKey(assertID))
                     assertResult.Add(assertID, status);
                 else
