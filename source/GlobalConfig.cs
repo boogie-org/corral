@@ -14,7 +14,7 @@ namespace cba
         public static bool useLocalVariableAbstraction = false;
 
         // Generate a C Trace for concurrency explorer
-        public static bool genCTrace = false;
+        public static TraceFormat? genCTrace = null;
 
         // Recusion bound
         public static int recursionBound = 2;

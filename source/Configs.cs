@@ -56,7 +56,7 @@ namespace cba
 
         public bool useLocalVariableAbstraction { get; private set; }
 
-        public bool genCTrace { get; private set; }
+        public TraceFormat? genCTrace { get; private set; }
         public bool noTrace { get; private set; }
         public bool noTraceOnDisk { get; private set; }
         public string traceProgram { get; private set; }
@@ -265,7 +265,7 @@ namespace cba
             trackedVars = new HashSet<string>();
             trackedVarsSecondary = new HashSet<string>();
             ignoreAssertMethods = new HashSet<string>();
-            genCTrace = false;
+            genCTrace = null;
             noTrace = false;
             noTraceOnDisk = false;
             traceProgram = null;
@@ -558,7 +558,7 @@ namespace cba
             else if (flag == "/printAllTraces")
             {
                 printAllTraces = true;
-                genCTrace = true;
+                genCTrace = TraceFormat.ConcurrencyExplorer;
             }
             else if (flag.StartsWith("/printInstrumented:"))
             {
@@ -615,7 +615,11 @@ namespace cba
             }
             else if (flag == "/tryCTrace")
             {
-                genCTrace = true;
+                genCTrace = TraceFormat.ConcurrencyExplorer;
+            }
+            else if (flag == "/tryCTrace:sdv")
+            {
+                genCTrace = TraceFormat.SDV;
             }
             else if (flag == "/noTrace")
             {

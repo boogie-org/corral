@@ -333,7 +333,7 @@ namespace cba
             var passes = new List<CompilerPass>(new CompilerPass[] { elPass, seqInstr, prune, rcalls, apass });
             var printTrace = new Action<ErrorTrace, string>((trace, fileName) =>
                 {
-                    if (!GlobalConfig.genCTrace)
+                    if (GlobalConfig.genCTrace == null)
                         return;
                     passes.Where(p => p != null)
                         .Iter(p => trace = p.mapBackTrace(trace));
@@ -387,8 +387,9 @@ namespace cba
                         BoogieUtil.PrintProgram(traceProg.getProgram(), config.traceProgram);
                     }
 
-                    if (GlobalConfig.genCTrace)
+                    if (GlobalConfig.genCTrace != null)
                     {
+                        PrintConcurrentProgramPath.traceFormat = GlobalConfig.genCTrace.Value;
                         PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, config.noTraceOnDisk ? null : traceName);
                     }
                     else
@@ -728,8 +729,9 @@ namespace cba
             config.trackedVars.UnionWith(initialTrackedVars);
 
             // Gather source info
-            if (GlobalConfig.genCTrace)
+            if (GlobalConfig.genCTrace != null)
             {
+                PrintConcurrentProgramPath.traceFormat = GlobalConfig.genCTrace.Value;
                 PrintConcurrentProgramPath.printData = config.printData;
                 PrintConcurrentProgramPath.gatherCSourceLineInfo(init);
             }
