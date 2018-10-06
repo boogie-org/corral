@@ -211,7 +211,7 @@ namespace CoreLib
         /* Procedures that hit the recursion bound */
         public HashSet<string> procsHitRecBound;
 
-        private DI di;
+        public DI di;
 
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -297,12 +297,14 @@ namespace CoreLib
 
             controlBoolean = new Dictionary<StratifiedVC, VCExpr>();
             //di = new DI(si, true);
+            di = si.di.Copy();
 
             parent.Union(si.parent);
             implementations.Union(si.implementations);
             forceInlineProcs.Union(si.forceInlineProcs);
             controlBoolean.Union(si.controlBoolean);
             this.mainVC = si.mainVC;
+
             stats = new Stats();
 
             this.extraRecBound = new Dictionary<string, int>();
@@ -379,12 +381,6 @@ namespace CoreLib
         /* depth in the call tree */
         public int StackDepth(VerificationState vstate, StratifiedCallSite cs)
         {
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-                parent = vstate.siState.parent;
-            else
-                parent = this.parent;
-
             int i = 1;
             StratifiedCallSite iter = cs;
             while (parent.ContainsKey(iter))
@@ -397,13 +393,7 @@ namespace CoreLib
 
         /* depth of the recursion inlined so far */
         public int RecursionDepth(VerificationState vstate, StratifiedCallSite cs)
-        {
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-                parent = vstate.siState.parent;
-            else
-                parent = this.parent;
-
+        { 
             int i = 1;
             StratifiedCallSite iter = cs;
             while (parent.ContainsKey(iter))
@@ -445,12 +435,12 @@ namespace CoreLib
 
         public struct SiState
         {
-            //public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
-            //public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
+            public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
+            public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
             public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            //public HashSet<StratifiedCallSite> openCallSites;
+            public HashSet<StratifiedCallSite> openCallSites;
             public DI di;
-            //public int tst;
+            public int tst;
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, 
                     Dictionary<StratifiedCallSite, StratifiedVC> attachedVC, Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv)
             {
@@ -458,12 +448,12 @@ namespace CoreLib
 
                 Console.WriteLine("Inside sistate.savestate\n");
                 var ret = new SiState();
-                //ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
-                //ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
+                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
+                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
-                //ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
+                ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 ret.di = SI.di.Copy();
-                //ret.tst = 1;
+                ret.tst = 1;
                 return ret;                
             }
 
@@ -471,12 +461,12 @@ namespace CoreLib
             {
                 Console.WriteLine("Inside sistate.savestate\n");
                 var ret = new SiState();
-                //ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(siState.attachedVC);
-                //ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(siState.attachedVCInv);
+                ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(siState.attachedVC);
+                ret.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(siState.attachedVCInv);
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(siState.parent);
-                //ret.openCallSites = new HashSet<StratifiedCallSite>(siState.openCallSites);
+                ret.openCallSites = new HashSet<StratifiedCallSite>(siState.openCallSites);
                 ret.di = siState.di.Copy();
-                //ret.tst = 1;
+                ret.tst = 1;
                 return ret;
             }
 
@@ -738,17 +728,17 @@ namespace CoreLib
             {
                 if (d == DecisionType.BLOCK)
                 {
-                    vstate.siState.di.DeleteNode(n);
+                    di.DeleteNode(n);
                 }
                 if (d == DecisionType.MUST_REACH)
                 {
-                    var disj = vstate.siState.di.DisjointNodes(n);
+                    var disj = di.DisjointNodes(n);
 
-                    disj.Iter(m => vstate.siState.di.DeleteNode(m));
+                    disj.Iter(m => di.DeleteNode(m));
                 }
             });
             Console.WriteLine(vstate.reporter.attachedVC);
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[vstate.siState.parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -770,7 +760,7 @@ namespace CoreLib
             var randomStack = new Stack<StratifiedCallSite>();
             // Lets split when the tree has become big enough
             Console.WriteLine("test");
-            var size = vstate.siState.di.ComputeSize();
+            var size = di.ComputeSize();
             Console.WriteLine("The tree size is {0}", size);
             if ((vstate.treesize == 0 && size > 2) || (vstate.treesize != 0 && size > vstate.treesize * 2))
             {
@@ -781,12 +771,16 @@ namespace CoreLib
                 int maxVcScore = 0;
 
                 var toRemove = new HashSet<StratifiedVC>();
-                var sizes = vstate.siState.di.ComputeSubtrees();
-                var disj = vstate.siState.di.ComputeNumDisjoint();
+                var sizes = di.ComputeSubtrees();
+                var disj = di.ComputeNumDisjoint();
 
                 foreach (var vc in vstate.reporter.attachedVCInv.Keys)
                 {
-                    if (!vstate.siState.di.VcExists(vc))
+                    var scs1 = vstate.reporter.attachedVCInv[vc];
+                    if (vstate.sp.blockedCandidates.Contains(scs1) || vstate.sp.mustreachCandidates.Contains(scs1)) // don't split on something already split on
+                        continue;
+                    
+                    if (!di.VcExists(vc))
                     {
                         toRemove.Add(vc);
                         continue;
@@ -801,6 +795,15 @@ namespace CoreLib
                 }
                 toRemove.Iter(vc => vstate.reporter.attachedVCInv.Remove(vc));
 
+                if (maxVc == null)
+                {
+                    return new HashSet<StratifiedCallSite>();
+                }
+
+                Console.WriteLine("Parent1: "); this.parent.Iter(p => Console.Write(p));
+                Console.WriteLine("Parent2: "); parent.Iter(p => Console.Write(p));
+                Console.WriteLine("Universe: "); vstate.sp.candidateUniverse.Iter(p => Console.WriteLine(p.callSiteExpr));
+                Console.WriteLine();
                 var scs = vstate.reporter.attachedVCInv[maxVc];
                 Debug.Assert(!openCallSites.Contains(scs));
 
@@ -808,8 +811,8 @@ namespace CoreLib
                 var cnt = 0;
                 foreach (var cs in openCallSites)
                 {
-                    if (vstate.siState.parent.ContainsKey(cs))
-                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Found: " + cs.callSiteExpr.ToString() + " -> " + vstate.siState.parent[cs].callSiteExpr.ToString());
+                    if (parent.ContainsKey(cs))
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Found: " + cs.callSiteExpr.ToString() + " -> " + parent[cs].callSiteExpr.ToString());
                     else
                         Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Not found: " + cs.callSiteExpr.ToString());
                 }
@@ -827,13 +830,160 @@ namespace CoreLib
                 prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                 splitCandidates.Add(scs);
                 applyDecisionToDI(DecisionType.BLOCK, maxVc);
-                vstate.treesize = vstate.siState.di.ComputeSize(); // Make treesize global
+                vstate.treesize = di.ComputeSize(); // Make treesize global
                 tt += (DateTime.Now - st);
             }
             return splitCandidates;
         }
 
+        public HashSet<StratifiedCallSite> Split_parallel(HashSet<StratifiedCallSite> openCallSites, VerificationState vstate)
+        {
+            Console.WriteLine("Inside Split\n");
+            //disabled
+            //return new HashSet<StratifiedCallSite>();
 
+            //StratifiedInliningErrorReporter reporter;
+            //var di = di;
+            //Console.WriteLine(di.timeTaken);
+            //Console.WriteLine(vstate.siState.tst);
+            vstate.reporter.reportTraceIfNothingToExpand = true;
+            //int treesize = 0;
+            var backtrackingPoints = new Stack<SiState>();
+            var decisions = new Stack<Decision>();
+            var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+            var splitCandidates = new HashSet<StratifiedCallSite>();
+            var timeGraph = new TimeGraph();
+
+            var indent = new Func<int, string>(i =>
+            {
+                var ret = "";
+                while (i > 0) { i--; ret += " "; }
+                return ret;
+            });
+
+            var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
+
+            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
+            {
+                if (d == DecisionType.BLOCK)
+                {
+                    di.DeleteNode(n);
+                }
+                if (d == DecisionType.MUST_REACH)
+                {
+                    var disj = di.DisjointNodes(n);
+
+                    disj.Iter(m => di.DeleteNode(m));
+                }
+            });
+            Console.WriteLine(vstate.reporter.attachedVC);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vstate.reporter.attachedVC[parent[scs]]);
+
+            var rand = new Random();
+            var reachedBound = false;
+
+            var tt = TimeSpan.Zero;
+            //int StackSize;
+            int count;
+            //var minVcStack = new Stack<StratifiedVC>();
+            //var vcScoreList = new List<Tuple<int, StratifiedVC>>();
+            //var saveScore = new Stack<Tuple<int, StratifiedVC>>();
+            var vcScoreIdealList = new List<StratifiedVC>();
+
+            SortedList<int, StratifiedVC> vcScoreList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            SortedList<int, StratifiedVC> vcScoreMRList = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            var Stackscs = new Stack<StratifiedCallSite>();
+            //vState.reporter.getCexCallSites = new Stack<StratifiedCallSite>();
+            var CexCallSites = new Stack<StratifiedCallSite>();
+            SortedList<int, StratifiedVC> Cexblocktopk = new SortedList<int, StratifiedVC>(new DuplicateKeyComparer<int>());
+            var randomStack = new Stack<StratifiedCallSite>();
+            // Lets split when the tree has become big enough
+            Console.WriteLine("test");
+            var size = di.ComputeSize();
+            Console.WriteLine("The tree size is {0}", size);
+            if ((vstate.treesize == 0 && size > 2) || (vstate.treesize != 0 && size > vstate.treesize * 2))
+            {
+                var st = DateTime.Now;
+
+                // find a node to split on
+                StratifiedVC maxVc = null;
+                int maxVcScore = 0;
+
+                var toRemove = new HashSet<StratifiedVC>();
+                var sizes = di.ComputeSubtrees();
+                var disj = di.ComputeNumDisjoint();
+
+                foreach (var vc in vstate.reporter.attachedVCInv.Keys)
+                {
+                    var scs1 = vstate.reporter.attachedVCInv[vc];
+                    if (vstate.sp.blockedCandidates.Contains(scs1) || vstate.sp.mustreachCandidates.Contains(scs1)) // don't split on something already split on
+                        continue;
+
+                    if (!di.VcExists(vc))
+                    {
+                        toRemove.Add(vc);
+                        continue;
+                    }
+
+                    var score = Math.Min(sizes[vc].Count, disj[vc]);
+                    if (score >= maxVcScore)
+                    {
+                        maxVc = vc;
+                        maxVcScore = score;
+                    }
+                }
+                toRemove.Iter(vc => vstate.reporter.attachedVCInv.Remove(vc));
+
+                if (maxVc == null)
+                {
+                    return new HashSet<StratifiedCallSite>();
+                }
+
+                Console.WriteLine("Parent1: "); this.parent.Iter(p => Console.Write(p));
+                Console.WriteLine("Parent2: "); parent.Iter(p => Console.Write(p));
+                Console.WriteLine("Universe: "); vstate.sp.candidateUniverse.Iter(p => Console.WriteLine(p.callSiteExpr));
+                Console.WriteLine();
+                var scs = vstate.reporter.attachedVCInv[maxVc];
+                Debug.Assert(!openCallSites.Contains(scs));
+
+                var desc = sizes[maxVc];
+                var cnt = 0;
+                foreach (var cs in openCallSites)
+                {
+                    if (parent.ContainsKey(cs))
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Found: " + cs.callSiteExpr.ToString() + " -> " + parent[cs].callSiteExpr.ToString());
+                    else
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; Not found: " + cs.callSiteExpr.ToString());
+                }
+
+                openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+
+                // Push & Block
+                MacroSI.PRINT("{0}>>> Pushing Block minmax({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
+                // stats.totalSplit++;
+                //var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
+                //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+
+                /*Push();
+                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));*/
+                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                splitCandidates.Add(scs);
+                applyDecisionToDI(DecisionType.BLOCK, maxVc);
+                vstate.treesize = di.ComputeSize(); // Make treesize global
+                tt += (DateTime.Now - st);
+            }
+            return splitCandidates;
+        }
+
+        static TimeGraph timeGraph = new TimeGraph();
+        public static Common.GraphUtil explorationGraph;
+        public static int debugGraphCounter = 0;
         public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
            VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
         {
@@ -850,8 +1000,8 @@ namespace CoreLib
 
             solTime = 0;
             //int treesize = 0;
-            var backtrackingPoints = new Stack<SiState>();
-            var decisions = new Stack<Decision>();
+            //var backtrackingPoints = new Stack<SiState>();
+            //var decisions = new Stack<Decision>();
             //var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
 
             HashSet<StratifiedCallSite> openCallSites = softPartition.activeCandidates;
@@ -860,7 +1010,6 @@ namespace CoreLib
             // TODO: This method needs to be fixed for blocked and mustreachsets
             OptimizedAssertVC(softPartition, vState, prover, proverStackBookkeeper);
 
-            var timeGraph = new TimeGraph();
 
             var indent = new Func<int, string>(i =>
             {
@@ -881,17 +1030,17 @@ namespace CoreLib
             {
                 if (d == DecisionType.BLOCK)
                 {
-                    vState.siState.di.DeleteNode(n);
+                    di.DeleteNode(n);
                 }
                 if (d == DecisionType.MUST_REACH)
                 {
-                    var disj = vState.siState.di.DisjointNodes(n);
+                    var disj = di.DisjointNodes(n);
 
-                    disj.Iter(m => vState.siState.di.DeleteNode(m));
+                    disj.Iter(m => di.DeleteNode(m));
                 }
             });
             //var size = di.ComputeSize();
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[vState.siState.parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -906,13 +1055,19 @@ namespace CoreLib
             var splitCandidates = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>(softPartition.candidatesReachingRecBound);
 
+            if (softPartition.parent == null)
+                explorationGraph.SetRoot(softPartition.graphNode);
+
             while (true)
             {
-                 //var size = this.di.ComputeSize();
+                //timeGraph.ToDot();
+                explorationGraph.WriteDot();
+
+                //var size = this.di.ComputeSize();
 
                 // StratifiedCallSite splitCand = null; // TODO: choose a split as per heuristic 
-                //vState.siState.di = this.di.Copy();
-                splitCandidates = Split(openCallSites, vState);
+                //di = this.di.Copy();
+                splitCandidates = Split_parallel(openCallSites, vState);
                 Console.WriteLine("SPLIT CANDIDATES COUNT : " + splitCandidates.Count);
                 if (splitCandidates.Count != 0)
                 { 
@@ -922,15 +1077,18 @@ namespace CoreLib
                     var splitCand = splitCandidates.Last();
                     if (splitCand != null)
                     {
-                        MacroSI.PRINT_DEBUG("Splitting decision on " + splitCand);
+                        MacroSI.PRINT_DEBUG("Splitting decision on: " + splitCand.callSiteExpr);
 
                         // The Blocked partition
                         HashSet<StratifiedCallSite> blockedSet1 = new HashSet<StratifiedCallSite>();
                         HashSet<StratifiedCallSite> mustreachSet1 = new HashSet<StratifiedCallSite>();
-
+                        
                         blockedSet1.Add(splitCand);
                         SoftPartition newPartition1 = new SoftPartition(softPartition, openCallSites, blockedSet1, mustreachSet1, vState.reporter.callSitesToExpand, candidatesReachingRecBound, vState.reporter.vcCache);
-                        
+
+                        var tgNode = string.Format("{0}__{1}", splitCand.callSite.calleeName, 0);
+                        timeGraph.AddEdge(tgNode, "BLOCK");
+
                         // The MustReach partition
 
                         HashSet<StratifiedCallSite> blockedSet2 = new HashSet<StratifiedCallSite>();
@@ -943,6 +1101,15 @@ namespace CoreLib
                         partitions.Add(newPartition1);
 
                         MacroSI.PRINT_DEBUG("parent sp: " + softPartition.Id + "; children: " + newPartition1.Id + ", " + newPartition2.Id);
+
+                        //var tgNode = string.Format("{0}__{1}", splitCand.callSite.calleeName, 0);
+                        timeGraph.AddEdge(tgNode, "MUSTREACH");
+
+                        lock (RefinementFuzzing.Settings.lockThis)
+                        {
+                            explorationGraph.AddEdge(softPartition.graphNode, newPartition1.graphNode, "\"BLOCK:" + splitCand.callSiteExpr + "\"");
+                            explorationGraph.AddEdge(softPartition.graphNode, newPartition2.graphNode, "\"REACH:" + splitCand.callSiteExpr + "\"");
+                        }
 
                         return VerifyResult.Partitioned;
                     }
@@ -972,13 +1139,15 @@ namespace CoreLib
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors/* && outcome != Outcome.Inconclusive*/)
                 {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("ERRORS"), "\"\"");
                     return VerifyResult.Errors; // done (T/O)
                 }
 
                 if (outcome == Outcome.Errors && vState.reporter.callSitesToExpand.Count == 0)
                 {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("BUG"), "\"\"");
                     return VerifyResult.BugFound; // done (error found)
                 }
 
@@ -1002,6 +1171,7 @@ namespace CoreLib
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                     //topState.ApplyState(this, ref openCallSites);
+                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("VERIFIED"), "\"\"");
                     MacroSI.PRINT_DEBUG("    Returning SolvePartition_parallel with VERIFIED  ");
                     break;
                 }
@@ -1066,17 +1236,17 @@ namespace CoreLib
             {
                 if (d == DecisionType.BLOCK)
                 {
-                    vState.siState.di.DeleteNode(n);
+                    di.DeleteNode(n);
                 }
                 if (d == DecisionType.MUST_REACH)
                 {
-                    var disj = vState.siState.di.DisjointNodes(n);
+                    var disj = di.DisjointNodes(n);
 
-                    disj.Iter(m => vState.siState.di.DeleteNode(m));
+                    disj.Iter(m => di.DeleteNode(m));
                 }
             });
 
-            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[vState.siState.parent[scs]]);
+            var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => vState.reporter.attachedVC[parent[scs]]);
 
             var rand = new Random();
             var reachedBound = false;
@@ -1095,7 +1265,7 @@ namespace CoreLib
             while (true)
             {
                 // Lets split when the tree has become big enough
-                var size = vState.siState.di.ComputeSize();
+                var size = di.ComputeSize();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "blocktopk")
                 {
                     //Console.WriteLine("Running block topk heuristic");
@@ -1110,12 +1280,12 @@ namespace CoreLib
                         int minVcScore = 0;
                         //Console.WriteLine("print inside topk");
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
                         //Console.WriteLine("The total number of calls in counterexample are {0}",  attachedVCInv.Keys.Count);
                         foreach (var vc in vState.reporter.attachedVCInv)
                         {
-                            if (!vState.siState.di.VcExists(vc.Key))
+                            if (!di.VcExists(vc.Key))
                             {
                                 toRemove.Add(vc.Key);
                                 continue;
@@ -1174,7 +1344,7 @@ namespace CoreLib
                             applyDecisionToDI(DecisionType.BLOCK, mvc);
                             prover.Assert(scs.callSiteExpr, false);
                         }
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                     vcScoreList.Clear();
@@ -1192,12 +1362,12 @@ namespace CoreLib
                         int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
 
                         foreach (var vc in vState.reporter.attachedVCInv.Keys)
                         {
-                            if (!vState.siState.di.VcExists(vc))
+                            if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
@@ -1233,7 +1403,7 @@ namespace CoreLib
 
 
                         prover.Assert(scs.callSiteExpr, false);
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                 }
@@ -1249,12 +1419,12 @@ namespace CoreLib
                         int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
 
                         foreach (var vc in vState.reporter.attachedVCInv.Keys)
                         {
-                            if (!vState.siState.di.VcExists(vc))
+                            if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
@@ -1288,7 +1458,7 @@ namespace CoreLib
                           AssertMustReach(null, vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
                         decisions.Push(new Decision(DecisionType.MUST_REACH, 0, scs));
                         applyDecisionToDI(DecisionType.MUST_REACH, maxVc);
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                 }
@@ -1304,15 +1474,15 @@ namespace CoreLib
                         int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
                         if (CexCallSites.Count != 0)
                         {
                             //foreach (var vc in reporter.getCexCallSites)
                             foreach (var vc in CexCallSites)
                             {
                                 //Console.WriteLine("The callsite in cex is {0}", vc);
-                                if (!vState.siState.di.VcExists(vState.reporter.attachedVC[vc]))
+                                if (!di.VcExists(vState.reporter.attachedVC[vc]))
                                 {
                                     toRemove.Add(vState.reporter.attachedVC[vc]);
                                     //Console.WriteLine("Removing VC of the callsite {0}", vc);
@@ -1348,7 +1518,7 @@ namespace CoreLib
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             applyDecisionToDI(DecisionType.BLOCK, maxVc);
                             prover.Assert(scs.callSiteExpr, false);
-                            treesize = vState.siState.di.ComputeSize();
+                            treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
                         }
                         vState.reporter.getCexCallSites.Clear();
@@ -1369,12 +1539,12 @@ namespace CoreLib
                         int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
 
                         foreach (var vc in vState.reporter.attachedVCInv.Keys)
                         {
-                            if (!vState.siState.di.VcExists(vc))
+                            if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
@@ -1408,7 +1578,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, maxVc);
                         prover.Assert(scs.callSiteExpr, false);
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                 }
@@ -1425,12 +1595,12 @@ namespace CoreLib
                         int maxVcScore = 0;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
                         randomStack.Clear();
                         foreach (var vc in vState.reporter.attachedVCInv.Keys)
                         {
-                            if (!vState.siState.di.VcExists(vc))
+                            if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
@@ -1461,7 +1631,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, vcr);
                         prover.Assert(scs.callSiteExpr, false);
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                 }
@@ -1478,12 +1648,12 @@ namespace CoreLib
                         int minVcScore = 9999999;
 
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
 
                         foreach (var vc in vState.reporter.attachedVCInv.Keys)
                         {
-                            if (!vState.siState.di.VcExists(vc))
+                            if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
                                 continue;
@@ -1517,7 +1687,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         applyDecisionToDI(DecisionType.BLOCK, minVc);
                         prover.Assert(scs.callSiteExpr, false);
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                 }
@@ -1531,12 +1701,12 @@ namespace CoreLib
 
                         // find a node to split on
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
                         int checkCount = Stackscs.Count;
                         foreach (var vc in vState.reporter.attachedVCInv)
                         {
-                            if (!vState.siState.di.VcExists(vc.Key))
+                            if (!di.VcExists(vc.Key))
                             {
                                 toRemove.Add(vc.Key);
                                 continue;
@@ -1589,11 +1759,11 @@ namespace CoreLib
                         // find a node to split on
                         int minVcScore = 0;
                         var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = vState.siState.di.ComputeSubtrees();
-                        var disj = vState.siState.di.ComputeNumDisjoint();
+                        var sizes = di.ComputeSubtrees();
+                        var disj = di.ComputeNumDisjoint();
                         foreach (var vc in vState.reporter.attachedVCInv)
                         {
-                            if (!vState.siState.di.VcExists(vc.Key))
+                            if (!di.VcExists(vc.Key))
                             {
                                 toRemove.Add(vc.Key);
                                 continue;
@@ -1659,7 +1829,7 @@ namespace CoreLib
                             applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[scs]);
                             prevMustAsserted.Push(AssertMustReach(vState, vState.reporter.attachedVC[scs], PrevAsserted(), vState.reporter));
                         }
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                         tt += (DateTime.Now - st);
                     }
                     // clear the SortedList
@@ -1764,7 +1934,7 @@ namespace CoreLib
                         decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                         applyDecisionToDI(DecisionType.BLOCK, vState.reporter.attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                     }
                     else
                     {
@@ -1774,7 +1944,7 @@ namespace CoreLib
                         applyDecisionToDI(DecisionType.MUST_REACH, vState.reporter.attachedVC[topDecision.cs]);
                         prevMustAsserted.Push(
                            AssertMustReach(null, vState.reporter.attachedVC[topDecision.cs], PrevAsserted(), vState.reporter));
-                        treesize = vState.siState.di.ComputeSize();
+                        treesize = di.ComputeSize();
                     }
                 }
 
@@ -2548,12 +2718,6 @@ namespace CoreLib
         // Assert that we must reach this VC; returns the list of call sites asserted
         public List<Tuple<StratifiedVC, Block>> AssertMustReach(VerificationState vstate, StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
         {
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-                parent = vstate.siState.parent;
-            else
-                parent = this.parent;
-
             Console.WriteLine("Inside AssertMustReach\n");
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
@@ -2868,10 +3032,10 @@ namespace CoreLib
             Console.WriteLine("Inside OptimizedAssertVC\n");
             List<int> proverStack = proverStackBookkeeper.getProverStackStatus().ToList();
 
-			Contract.Assert(proverStack.Count == 0                  // starting with an empty stack
-				|| proverStack.Contains(softPartition.Id)           // while going up --- stack needs to be popped
-				|| proverStack.Contains(softPartition.parent.Id));  // while going down --- softPartition needs to be pushed
-
+			//Contract.Assert(proverStack.Count == 0                  // starting with an empty stack
+			//	|| proverStack.Contains(softPartition.Id)           // while going up --- stack needs to be popped
+			//	|| proverStack.Contains(softPartition.parent.Id));  // while going down --- softPartition needs to be pushed
+             
 			SoftPartition s = softPartition;
 
 			SoftPartition s1 = softPartition;
@@ -2948,10 +3112,14 @@ namespace CoreLib
                 ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
 
             HashSet<StratifiedCallSite> ancestralCandidateUniverse = new HashSet<StratifiedCallSite>();
+            HashSet<StratifiedCallSite> ancestralBlocked = new HashSet<StratifiedCallSite>();
+            HashSet<StratifiedCallSite> ancestralMustReach = new HashSet<StratifiedCallSite>();
             SoftPartition p = sp.parent;
             while (p != null)
             {
                 ancestralCandidateUniverse.UnionWith(p.candidateUniverse);
+                ancestralBlocked.UnionWith(p.blockedCandidates);
+                ancestralMustReach.UnionWith(p.mustreachCandidates);
                 p = p.parent;
             }
 
@@ -2960,13 +3128,14 @@ namespace CoreLib
                 if (!vState.reporter.attachedVC.ContainsKey(scs))
                     continue;
 
-                if (ancestralCandidateUniverse.Contains(scs))
-                    continue;
-
                 var svc = vState.reporter.attachedVC[scs];
-                ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp);
 
-                if (sp.blockedCandidates.Contains(scs))
+                if (!ancestralCandidateUniverse.Contains(scs))
+                {
+                   ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp);
+                }
+
+                if (sp.blockedCandidates.Contains(scs) && !ancestralBlocked.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing Block ({0})", scs.callSite.calleeName);
                   
@@ -2975,7 +3144,7 @@ namespace CoreLib
                 }
 
                 // HashSet<Tuple<StratifiedVC, Block>> prevAsserted = new HashSet<Tuple<StratifiedVC, Block>>();
-                if (sp.mustreachCandidates.Contains(scs))
+                if (sp.mustreachCandidates.Contains(scs) && !ancestralMustReach.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
                     AssertMustReach(vState, svc, PrevAsserted(), vState.reporter).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
@@ -3052,7 +3221,7 @@ namespace CoreLib
             MacroSI.PRINT_DEBUG("Starting forward approach...");
 
 
-            var di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
+            di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
 
             Push();
 
@@ -3179,7 +3348,7 @@ namespace CoreLib
             //Console.WriteLine("point 1\n");
             //var size = di.ComputeSize();
             //Console.WriteLine("point 2\n");
-            //vState.siState.di = di;
+            //di = di;
             VerifyResult res = solver.Solve(entryPoints, vState);
 
             /*
@@ -3508,20 +3677,7 @@ namespace CoreLib
         }
 
         private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
-        {
-            DI di;
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-            {
-                di = vstate.siState.di;
-                parent = vstate.siState.parent;
-            }
-            else
-            {
-                di = this.di;
-                parent = this.parent;
-            }
-                
+        {       
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs, reporter);
@@ -3542,7 +3698,8 @@ namespace CoreLib
                 {
                     parent[newCallSite] = scs;
 
-                    Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; parent populate: " + newCallSite.callSiteExpr.ToString() + " - > " + scs.callSiteExpr.ToString());
+                    if (vstate != null)
+                        Console.WriteLine("SP: " + ((vstate.sp == null) ? -1 : vstate.sp.Id) + "; parent populate: " + newCallSite.callSiteExpr.ToString() + " - > " + scs.callSiteExpr.ToString());
                 }
                 VCExpr toassert;
 
@@ -3590,18 +3747,6 @@ namespace CoreLib
 
         private void Merge(VerificationState vstate, StratifiedCallSite scs, StratifiedVC vc, StratifiedInliningErrorReporter reporter)
         {
-            DI di;
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-            {
-                di = vstate.siState.di;
-                parent = vstate.siState.parent;
-            }
-            else
-            {
-                di = this.di;
-                parent = this.parent;
-            }
             MacroSI.PRINT_DEBUG("    ~ attaching to existing callsite ");
             prover.LogComment("Attaching for " + scs.callSite.calleeName);
             var toassert = AttachByEquality(scs, vc);
@@ -3636,12 +3781,6 @@ namespace CoreLib
         // Get persistent ID of a callsite
         private string GetPersistentID(VerificationState vstate, StratifiedCallSite scs)
         {
-            Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
-            if (vstate != null)
-                parent = vstate.siState.parent;
-            else
-                parent = this.parent;
-
             if (!parent.ContainsKey(scs))
                 return string.Format("{0}_131_{1}", scs.callSite.calleeName, GetSiCallId(scs));
 

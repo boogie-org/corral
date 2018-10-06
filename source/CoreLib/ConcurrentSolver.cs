@@ -62,6 +62,12 @@ namespace CoreLib
             lock (RefinementFuzzing.Settings.lockThis)
 				//using (RefinementFuzzing.Settings.timedLock.Lock())
 			{
+                if (parent == null)
+                {
+                    totalPartitions = 0;
+                    StratifiedInlining.explorationGraph = new Common.GraphUtil("debug" + StratifiedInlining.debugGraphCounter++ + ".dot");
+                }
+
 				id = totalPartitions++;
 				id2SoftPartition[id] = this;
 			}
@@ -78,19 +84,19 @@ namespace CoreLib
 			this.prefixVC = prefixVC;
 			//this.stale = false;
 
-			if (RefinementFuzzing.Settings.constructExplorationGraph)
+			//if (RefinementFuzzing.Settings.constructExplorationGraph)
 			{
 				lock (RefinementFuzzing.Settings.lockThis)
 				{
 					if (id != 0)
 					{
-						this.graphNode = new Common.GraphNode(id, this.lastInlined);
-						RefinementFuzzing.Settings.explorationGraph.AddEdge(parent.graphNode, this.graphNode);
+						this.graphNode = new Common.GraphNode(id, this.printSoftPartition());
+						//RefinementFuzzing.Settings.explorationGraph.AddEdge(parent.graphNode, this.graphNode);
 					}
 					else
 					{
-						this.graphNode = new Common.GraphNode(id, new HashSet<StratifiedCallSite>());
-						RefinementFuzzing.Settings.explorationGraph.SetRoot(this.graphNode);
+						this.graphNode = new Common.GraphNode(id, this.printSoftPartition());
+						//RefinementFuzzing.Settings.explorationGraph.SetRoot(this.graphNode);
 					}
 				}
 			}
@@ -222,7 +228,7 @@ namespace CoreLib
 		// For statistics
 		public int vcSize;
 		public int expansionCount;
-        public StratifiedInlining.SiState siState;
+        //public StratifiedInlining.SiState siState;
         public int treesize;
 		//public SummaryDB summaryDB;
 
@@ -247,13 +253,10 @@ namespace CoreLib
 			threadBudget = RefinementFuzzing.Settings.totalThreadBudget;
 			proverId = 0;
             this.proverBookeeper = proverBookeeper;
-            this.siState = new StratifiedInlining.SiState();
-            this.siState.di = di;
             this.si = si;
             //this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
             //this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             Console.WriteLine("Initialized Parent");
-            this.siState.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             //this.siState.openCallSites = new HashSet<StratifiedCallSite>();
             // set others
 		}
@@ -273,6 +276,7 @@ namespace CoreLib
 		{
             Console.WriteLine("Inside VerificationState constructor 2\n");
             this.sp = sp;
+            this.sp.vState = vstate;
             //this.calls = calls;
             //this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
             vcSize = vstate.vcSize;
@@ -282,7 +286,6 @@ namespace CoreLib
 			this.proverId = proverId;
             this.reporter = reporter;
             this.proverBookeeper = proverBookeeper;
-            this.siState = StratifiedInlining.SiState.SaveState(vstate.siState);
             this.si = new StratifiedInlining(vstate.si);
 		}
        
@@ -745,8 +748,9 @@ namespace CoreLib
 				HashSet<StratifiedCallSite> blockedCandidates = new HashSet<StratifiedCallSite>();
                 HashSet<StratifiedCallSite> mustreachCandidates = new HashSet<StratifiedCallSite>();
                 HashSet<StratifiedCallSite> activeCandidates = new HashSet<StratifiedCallSite>();
+                HashSet<StratifiedCallSite> lastinlinedCandidates = new HashSet<StratifiedCallSite>();
 
-				SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, mustreachCandidates, universalCandidates, universalCandidates, new HashSet<StratifiedCallSite>());
+                SoftPartition s = new SoftPartition(null, -1, 0, activeCandidates, blockedCandidates, mustreachCandidates, universalCandidates, lastinlinedCandidates, new HashSet<StratifiedCallSite>());
                 
 				entryPartitions.Add(s);
                 vState.sp = s;
@@ -797,7 +801,7 @@ namespace CoreLib
 
             // Put all of the necessary state into one object
             Console.WriteLine("point 3");
-            var size = vState.siState.di.ComputeSize();
+            //var size = vState.si.di.ComputeSize();
             Console.WriteLine("point 4");
             VerificationState ChildVState;
             if (spawnForPartition.Id == 0)
@@ -1227,8 +1231,11 @@ namespace CoreLib
 
             do
             {
+                bool done = true;
+
                 while (numRunningThreads < threadBudget && (s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
                 {
+                    done = false;
                     numRunningThreads++;
 
                     Console.WriteLine(s.printSoftPartition());
@@ -1253,7 +1260,12 @@ namespace CoreLib
                 //nextThreadToRun++;
 
                 //if (nextThreadToRun >= numThreadsSpawned) // only after the first 'numThreadsSpawned' threads have got spawned
-                if (true)
+                if (done)
+                {
+                    Console.WriteLine("DONE");
+                    break;
+                }
+                else
                 {
                     // Wait for a thread to complete and then handle it
 
@@ -1285,17 +1297,20 @@ namespace CoreLib
                     if (res == VerifyResult.BugFound || res == VerifyResult.Errors)
                     {
                         cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
+                        StratifiedInlining.explorationGraph.WriteDot();
                         return VerifyResult.BugFound;
                     }
                     else if (res == VerifyResult.Verified)
                     {
                         StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
-
-                        break;
+                        StratifiedInlining.explorationGraph.WriteDot();
+                        continue;
                     }
                     else if (res == VerifyResult.Partitioned)
                     {
                         StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+
+                        StratifiedInlining.explorationGraph.WriteDot();
 
                         List<SoftPartition> newPartitions = context.outPartitions;
                         /*
@@ -1383,13 +1398,14 @@ namespace CoreLib
                     }
 #endif
                     }
+#if false
                 else
                 {
                     // initial lot of threads
                     indexInRunningThreads = nextThreadToRun;
                     //handles[indexInRunningThreads] = new AutoResetEvent(false);
                 }
-
+#endif
 
             } while (true);
 
@@ -1821,7 +1837,7 @@ namespace CoreLib
             if (readyQ.Count == 0)
                 return null;
 
-            SoftPartition s = readyQ.First();
+            SoftPartition s = readyQ.Last();
             readyQ.Remove(s);
             return s;
         }
@@ -1835,5 +1851,10 @@ namespace CoreLib
 		{
 			readyQ.Add(s);
 		}
+
+        public bool isEmpty()
+        {
+            return (readyQ.Count == 0);
+        }
 	}
 }

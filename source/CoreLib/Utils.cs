@@ -16,7 +16,7 @@ namespace Common
 	{
 		GraphNode root;
 		HashSet<GraphNode> nodeSet = new HashSet<GraphNode>();
-		HashSet<Tuple<GraphNode, GraphNode>> edgeSet = new HashSet<Tuple<GraphNode, GraphNode>>();
+		HashSet<Tuple<GraphNode, GraphNode, String>> edgeSet = new HashSet<Tuple<GraphNode, GraphNode, String>>();
 
 		string fname;
 
@@ -25,12 +25,12 @@ namespace Common
 			this.fname = fname;
 		}
 
-		public void AddEdge(GraphNode n1, GraphNode n2)
+		public void AddEdge(GraphNode n1, GraphNode n2, String label)
 		{
 			n1.children.Enqueue(n2);
 			nodeSet.Add(n1);
 			nodeSet.Add(n2);
-			edgeSet.Add(new Tuple<GraphNode, GraphNode>(n1, n2));
+			edgeSet.Add(new Tuple<GraphNode, GraphNode, String>(n1, n2, label));
 		}
 
 		public void WriteDot()
@@ -41,8 +41,8 @@ namespace Common
 
 			foreach (GraphNode n in nodeSet)
 			{
-				if (n.scheduledOnProverId == -1)
-					continue;
+				//if (n.scheduledOnProverId == -1)
+				//	continue;
 
 				string attr = "";
 
@@ -68,12 +68,12 @@ namespace Common
 
 				sw.WriteLine(n.GetName() + " [" + attr + ", label = \"" + n.GetLabel() + "\"];");
 			}
-			foreach (Tuple<GraphNode, GraphNode> t in edgeSet)
+			foreach (Tuple<GraphNode, GraphNode, String> t in edgeSet)
 			{
-				if (t.Item1.scheduledOnProverId == -1 || t.Item2.scheduledOnProverId == -1)
-					continue;
+				//if (t.Item1.scheduledOnProverId == -1 || t.Item2.scheduledOnProverId == -1)
+				//	continue;
 
-				sw.WriteLine(t.Item1.GetName() + " -> " + t.Item2.GetName());
+				sw.WriteLine(t.Item1.GetName() + " -> " + t.Item2.GetName() + "[ label = " + t.Item3 + "];");
 			}
 
 			sw.WriteLine("}");
@@ -89,7 +89,8 @@ namespace Common
 	public class GraphNode
 	{
 		int id;
-		HashSet<VC.StratifiedCallSite> candidates = new HashSet<VC.StratifiedCallSite>();
+        //HashSet<VC.StratifiedCallSite> candidates = new HashSet<VC.StratifiedCallSite>();
+        String nodeLabel;
 		public int scheduledOnProverId = -1;
 		public Queue<int> solutionTime = new Queue<int>(); // time to solve this partition each time it is enqueued
 		public bool fromTrace = false;
@@ -103,22 +104,29 @@ namespace Common
 
 		public bool isSubsumed = false;
 		public double potentialParallelTime = 0;
+        public static int nodeIds = 100000;
 
-		public GraphNode(int id, HashSet<VC.StratifiedCallSite> candidates)
+        public static GraphNode GraphNodeExtraFactory(string label)
+        {
+            return new GraphNode(nodeIds++, label);
+        }
+
+		public GraphNode(int id, String nodeLabel)
 		{
 			this.id = id;
-			candidates.Iter<VC.StratifiedCallSite>(n => this.candidates.Add(n));
+            this.nodeLabel = nodeLabel;
+			//candidates.Iter<VC.StratifiedCallSite>(n => this.candidates.Add(n));
 		}
 
 		public override string ToString()
 		{
-			StringBuilder b = new StringBuilder();
-			candidates.Iter<VC.StratifiedCallSite>(n => b.Append("," + n));
+			//StringBuilder b = new StringBuilder();
+			//candidates.Iter<VC.StratifiedCallSite>(n => b.Append("," + n));
 
 			StringBuilder b1 = new StringBuilder();
 			solutionTime.Iter<int>(n => b1.Append("," + n));
 
-			return id + " (" + b.ToString() + ")\\n" +
+			return id + " (" + nodeLabel + ")\\n" +
 				"[" + scheduledOnProverId + "], " +
 				"provers:[" + proverArrayState + "]\\n" +
 				"bk = " + backtrackCount + "; " + 
