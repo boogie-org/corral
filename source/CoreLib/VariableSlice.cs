@@ -565,6 +565,10 @@ namespace cba
             {
                 if (!isTracked(e)) return false;
             }
+            if(lhs.Map is MapAssignLhs)
+            {
+                return indicesAreTracked(lhs.Map as MapAssignLhs);
+            }
             return true;
         }
     }
