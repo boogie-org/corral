@@ -16,6 +16,8 @@ namespace CoreLib
 {
 	public enum VerifyResult { Verified, Partitioned, BugFound, Errors, Interrupted };
 
+    public enum CreationMode { Root, Partitioned_MustReach, Partitioned_Block };
+
 	[Serializable()]
 	public class SoftPartition
 	{
@@ -26,6 +28,7 @@ namespace CoreLib
 		int parentId;
 		public SoftPartition parent;
 		public VCExpr prefixVC = null;  // hold the vc of the prefix trace; it does not include the VCs in the current softpartition (i.e. the candidates in lastInlined)
+        public CreationMode creationMode;
 
         public VerificationState vState;
 
@@ -65,7 +68,7 @@ namespace CoreLib
                 if (parent == null)
                 {
                     totalPartitions = 0;
-                    StratifiedInlining.explorationGraph = new Common.GraphUtil("debug" + StratifiedInlining.debugGraphCounter++ + ".dot");
+                    this.creationMode = CreationMode.Root;
                 }
 
 				id = totalPartitions++;
@@ -86,19 +89,7 @@ namespace CoreLib
 
 			//if (RefinementFuzzing.Settings.constructExplorationGraph)
 			{
-				lock (RefinementFuzzing.Settings.lockThis)
-				{
-					if (id != 0)
-					{
-						this.graphNode = new Common.GraphNode(id, this.printSoftPartition());
-						//RefinementFuzzing.Settings.explorationGraph.AddEdge(parent.graphNode, this.graphNode);
-					}
-					else
-					{
-						this.graphNode = new Common.GraphNode(id, this.printSoftPartition());
-						//RefinementFuzzing.Settings.explorationGraph.SetRoot(this.graphNode);
-					}
-				}
+				
 			}
 		}
 
@@ -165,7 +156,9 @@ namespace CoreLib
 			sb.Append("; blocked: " + printHashSet(blockedCandidates));
             sb.Append("; mustreach: " + printHashSet(mustreachCandidates));
             sb.Append("; universe: " + printHashSet(candidateUniverse));
-			sb.Append("; lastInlined: " + printHashSet(lastInlined) + "]");
+			sb.Append("; lastInlined: " + printHashSet(lastInlined) + "]\\n");
+            if (vState != null)
+                sb.Append("Prover: " + vState.proverBookeeper.id);
 			return sb.ToString();
 		}
 
@@ -254,6 +247,9 @@ namespace CoreLib
 			proverId = 0;
             this.proverBookeeper = proverBookeeper;
             this.si = si;
+            //si.proverStackBookkeeper = proverBookeeper;
+            //this.si.prover = proverBookeeper.getMainProver();
+            this.si.prover = null;
             //this.siState.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
             //this.siState.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             Console.WriteLine("Initialized Parent");
@@ -276,7 +272,7 @@ namespace CoreLib
 		{
             Console.WriteLine("Inside VerificationState constructor 2\n");
             this.sp = sp;
-            this.sp.vState = vstate;
+            this.sp.vState = this;
             //this.calls = calls;
             //this.checker = new StratifiedInlining.ApiChecker(prover, reporter);
             vcSize = vstate.vcSize;
@@ -287,6 +283,9 @@ namespace CoreLib
             this.reporter = reporter;
             this.proverBookeeper = proverBookeeper;
             this.si = new StratifiedInlining(vstate.si);
+            //this.si.proverStackBookkeeper = proverBookeeper;
+            //this.si.prover = proverBookeeper.getMainProver();
+            this.si.prover = null;
 		}
        
 	}
@@ -338,35 +337,40 @@ namespace CoreLib
 			proverArray.Iter<ProverStackBookkeeping>(n => n.timingStatisticsManager.PrintStatistics(n.id));
 		}
 
-		public void ReturnProver(ProverStackBookkeeping prover, int ownerId, bool docheck = true)
+		public void ReturnProver(SoftPartition sp, ProverStackBookkeeping prover, int ownerId, bool docheck = true)
 		{
             Console.WriteLine("Inside ReturnProver\n");
-            lock (this)
+            lock (RefinementFuzzing.Settings.lockThis)
 			{
 				int i = proverDict[prover];
 				proverAvailable[i] = true;
+                proverArray[i].getMainProver().owner = -1;
 
-				//proverDict.Remove(prover);
+                //proverDict.Remove(prover);
 
-				proverOwner[i] = ownerId;
+                proverOwner[i] = ownerId; // so that a child can grab this prover
 
+                /*
 				if (ownerId != proverArray[i].Top())
 				{
 					// after a join when a child returns the stack to the parent
 					proverArray[i].Pop();
 				}
 
+                
 				if (docheck)
 				{
 					Contract.Assert(ownerId == proverArray[i].Top());
-				}
-			}
+				}*/
+
+                Console.WriteLine("ReturnProver: SP:" + sp.Id + ", BookKeeper:" + i + ", Prover: " + proverArray[i].id);
+            }
         }
 
 		public ProverStackBookkeeping BorrowProver(SoftPartition sp)
 		{
             Console.WriteLine("Inside BorrowProver\n");
-            lock (this)
+            lock (RefinementFuzzing.Settings.lockThis)
 			{
 				// Try to search for a prover which had the same owner
 				for (int i = 0; i < numProvers && sp != null; i++)
@@ -374,9 +378,12 @@ namespace CoreLib
 					if (proverAvailable[i] && proverOwner[i] == sp.parent.Id)
 					{
 						proverAvailable[i] = false;
-						// by default, all are trace provers
-						//proverArray[i].isTraceProver = true;
-						return proverArray[i];
+                        proverArray[i].getMainProver().owner = sp.Id;
+                        // by default, all are trace provers
+                        //proverArray[i].isTraceProver = true;
+
+                        Console.WriteLine("BorrowProver: SP:" + sp.Id + ", BookKeeper:" + i + ", Prover: " + proverArray[i].id);
+                        return proverArray[i];
 					}
 				}
 
@@ -404,8 +411,16 @@ namespace CoreLib
                         if (sp == null)
                             proverOwner[i] = 0;
                         else
+                        {
                             proverOwner[i] = sp.Id;
-						return proverArray[i];
+                            proverArray[i].getMainProver().owner = sp.Id;
+                        }
+
+                        if (sp == null)
+                            Console.WriteLine("BorrowProver: SP:" + 0 + ", BookKeeper:" + i + ", Prover: " + proverArray[i].id);
+                        else
+                            Console.WriteLine("BorrowProver: SP:" + sp.Id + ", BookKeeper:" + i + ", Prover: " + proverArray[i].id);
+                        return proverArray[i];
 					}
 				}
 			}
@@ -417,8 +432,9 @@ namespace CoreLib
 
 		public void RequestProver(ProverStackBookkeeping proverStackBookkeeping, int ownerId)
 		{
+            Contract.Assert(false);
             Console.WriteLine("Inside RequestProver\n");
-            lock (this)
+            lock (RefinementFuzzing.Settings.lockThis)
 			{
 				int i = proverDict[proverStackBookkeeping];
 				Contract.Assert(proverAvailable[i]);
@@ -432,7 +448,7 @@ namespace CoreLib
 		{
 			int available = 0;
 
-			lock (this)
+			lock (RefinementFuzzing.Settings.lockThis)
 			{
 				proverAvailable.Iter<bool>(n => { if (n) available++; });
 			}
@@ -444,7 +460,7 @@ namespace CoreLib
 		{
 			int available = 0;
 
-			lock (this)
+			lock (RefinementFuzzing.Settings.lockThis)
 			{
 				proverAvailable.Iter<bool>(n => { if (n) available++; });
 			}
@@ -493,12 +509,17 @@ namespace CoreLib
             //metaStack = new SummariesMetadataInProverStack(this);
 
             this.id = id;
+            mainProver.id = id;
 		}
 
 		public void Push(SoftPartition sp)
 		{
 			proverStackStatus.Push(sp.Id);
-			if (mainProver != null) mainProver.Push();
+            ProverInterface.Outcome outcome;
+            lock (RefinementFuzzing.Settings.lockThis)
+            {
+                if (mainProver != null) mainProver.Push();
+            }
 			//interpolatingProver.Push();
 
 			//metaStack.Push(sp.activeCandidates, vstate);
@@ -531,11 +552,14 @@ namespace CoreLib
 		{
 			int id = proverStackStatus.Pop();
 
-			if (!RefinementFuzzing.Settings.noInterpolationOnMainProver)
-			{
-				if (mainProver != null) mainProver.Pop();
-				//	interpolatingProver.Pop();
-			}
+            //lock (RefinementFuzzing.Settings.lockThis)
+            {
+                if (!RefinementFuzzing.Settings.noInterpolationOnMainProver)
+                {
+                    if (mainProver != null) mainProver.Pop();
+                    //	interpolatingProver.Pop();
+                }
+            }
 
 			//metaStack.Pop();
 
@@ -555,13 +579,13 @@ namespace CoreLib
 			return proverStackStatus.Count();
 		}
 
-		private void Assert(VCExpr expr, string name)
+		private void Assert(VCExpr expr, string name, int owner)
 		{
 			//lock (RefinementFuzzing.Settings.lockThis) // there is a race on RefinementFuzzing.Settings.vcWithLabels
 			{
 				if (mainProver != null)
 				{
-					mainProver.Assert(expr, true); // emit lebels but no names
+					mainProver.Assert(expr, true, owner:owner); // emit lebels but no names
 				}
 
 				//interpolatingProver.Assert(expr, true);
@@ -591,14 +615,14 @@ namespace CoreLib
                  * */
 		}
 
-		public void Assert(VCExpr expr, string name, string comment)
+		public void Assert(VCExpr expr, string name, string comment, int owner)
 		{
             //if (mainProver != null) mainProver.Comment(comment);
             //interpolatingProver.Assert(expr, true);
             //interpolatingProver.Comment(comment);
 
             mainProver.LogComment(comment);
-            Assert(expr, name);
+            Assert(expr, name, owner:owner);
         }
 
 		public ProverInterface getMainProver()
@@ -720,10 +744,13 @@ namespace CoreLib
 
 		WorkQueue workQueue;
 		Random rand = new Random();
-		//StratifiedInlining.FCallHandler calls;
-		//StratifiedInlining vcgen;
-		
-		static int ctr = 0;
+        //StratifiedInlining.FCallHandler calls;
+        //StratifiedInlining vcgen;
+
+        public static Common.GraphUtil explorationGraph;
+        public static int debugGraphCounter = 0;
+
+        static int ctr = 0;
 
 		/*
          * public ConcurrentSolver(StratifiedInlining vcgen, VerificationState vState)
@@ -765,7 +792,6 @@ namespace CoreLib
 
 		Tuple<Thread, RefinementFuzzing.ConcurrentContext> createThread(SoftPartition spawnForPartition, WaitHandle waitHandle, SoftPartition parentPartition, int proverIndex, VerificationState vState)
 		{
-            Console.WriteLine("Inside createThread\n");
             StratifiedInlining childVCgen = null;
 			ProverStackBookkeeping bookKeeper = null;
 
@@ -785,19 +811,26 @@ namespace CoreLib
 				; // TODO childVCgen = new StratifiedInlining(this.vcgen, null, false, new List<Checker>(), null);
 
 			StratifiedInliningErrorReporter parentReporter = vState.reporter as StratifiedInliningErrorReporter;
-			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter.callback, parentReporter.si, parentReporter.mainVC, parentReporter); // TODO: handle the second and third arguments
+			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter, childVCgen); // TODO: handle the second and third arguments
 			//childErrReporter.SetCandidateHandler(childCalls);
 
+            /*
 			if (RefinementFuzzing.Settings.preAllocateProvers)
 				childVCgen.proverStackBookkeeper = bookKeeper;
 			else
 				childVCgen.proverStackBookkeeper = new ProverStackBookkeeping(childVCgen.prover, 0);
+                */
 
-            if (childVCgen.proverStackBookkeeper == null)
+            if (bookKeeper == null)
             {
                 Console.WriteLine("Prover not available; number of provers should be more than number of threads!");
                 throw new System.Exception("Prover not available; number of provers should be more than number of threads!");
             }
+
+            childVCgen.prover = bookKeeper.getMainProver();
+
+            Console.WriteLine("Inside createThread: SP:" + spawnForPartition.Id + ", BookKeeper:" + bookKeeper.id + ", Prover: " + childVCgen.prover.id + "\n");
+
 
             // Put all of the necessary state into one object
             Console.WriteLine("point 3");
@@ -812,7 +845,9 @@ namespace CoreLib
             //ChildVState.siState.di = vState.siState.di.Copy();
             RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
 
-			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
+            Contract.Assert(context.spartition.Id == context.vstate.proverBookeeper.getMainProver().owner);
+
+            Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
 
 			return new Tuple<Thread, RefinementFuzzing.ConcurrentContext>(t, context);
 		}
@@ -844,22 +879,26 @@ namespace CoreLib
 			//calls.setCurrProcAsMain();
 
 			StratifiedInliningErrorReporter parentReporter = vState.reporter as StratifiedInliningErrorReporter;
-			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter.callback, null, null, parentReporter); // Handle the last two arguments
+			StratifiedInliningErrorReporter childErrReporter = new StratifiedInliningErrorReporter(parentReporter, null); // Handle the last two arguments
 			childErrReporter.SetCandidateHandler(childCalls);
 
 			// Put all of the necessary state into one object
 			var ChildVState = new VerificationState(spawnForPartition, vState, childErrReporter, bookKeeper.id, bookKeeper);
 
+            /*
 			if (RefinementFuzzing.Settings.preAllocateProvers)
 				childVCgen.proverStackBookkeeper = bookKeeper;
 			else
 				childVCgen.proverStackBookkeeper = new ProverStackBookkeeping(childVCgen.prover, 0);
+                */
+            //Console.WriteLine("Spawning Threads. Press a key to continue...");
+            //Console.ReadKey();
 
-			//Console.WriteLine("Spawning Threads. Press a key to continue...");
-			//Console.ReadKey();
 
-			RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
-			Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
+            RefinementFuzzing.ConcurrentContext context = new RefinementFuzzing.ConcurrentContext(childVCgen, ChildVState, spawnForPartition, waitHandle, childVCgen.prover);
+
+            Contract.Assert(context.spartition.Id == context.vstate.proverBookeeper.getMainProver().owner);
+            Thread t = RefinementFuzzing.Concurrent.SpawnThread(context);
 
 			return new Tuple<Thread, RefinementFuzzing.ConcurrentContext>(t, context);
 		}
@@ -911,7 +950,7 @@ namespace CoreLib
 			//ProverStackBookkeeping primaryProver = vcgen.proverStackBookkeeper;
 
 			SoftPartition s;
-			while ((s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vState.proverBookeeper)) != null)
 			{
 				List<SoftPartition> partitions;
 
@@ -925,13 +964,13 @@ namespace CoreLib
                     lock (RefinementFuzzing.Settings.lockThis)
                     //using (RefinementFuzzing.Settings.timedLock.Lock()) 
                     {
-                        s.graphNode.scheduledOnProverId = vState.si.proverStackBookkeeper.id;
+                        s.graphNode.scheduledOnProverId = vState.proverBookeeper.id;
                         s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
 
-                        if (RefinementFuzzing.Settings.refreshExplorationGraph)
-                        {
-                            RefinementFuzzing.Settings.explorationGraph.WriteDot();
-                        }
+                        //if (RefinementFuzzing.Settings.refreshExplorationGraph)
+                        //{
+                        //    RefinementFuzzing.Settings.explorationGraph.WriteDot();
+                        //}
                     }
                 }
 
@@ -945,14 +984,14 @@ namespace CoreLib
 				List<Tuple<SoftPartition, ProverStackBookkeeping>> worklist = new List<Tuple<SoftPartition, ProverStackBookkeeping>>();
 				List<Tuple<SoftPartition, ProverStackBookkeeping>> deferredWorklist = new List<Tuple<SoftPartition, ProverStackBookkeeping>>();
 				//worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(s, vcgen.proverStackBookkeeper));
-				worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, vState.si.proverStackBookkeeper));
+				worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, vState.proverBookeeper));
 
 				VerifyResult outcome;
 
 				HashSet<SoftPartition> CexList = new HashSet<SoftPartition>();
 
 				// Release prover -- we are spawning a thread and the parent will wait till it returns
-				ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
+				ProverStackBookkeeping originalProver = vState.proverBookeeper;
 				//originalProver.isTraceProver = false;
 				//StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, s.Id);
 
@@ -996,7 +1035,7 @@ namespace CoreLib
 						currRunningThreadsDict.Remove(index);
 
 						Console.WriteLine("Join done");
-						RefinementFuzzing.Settings.WritePrimaryLog(context.vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Joining Thread " + context.id + " for soft partition: " + context.spartition.Id);
+						RefinementFuzzing.Settings.WritePrimaryLog(context.vstate.proverBookeeper.id, s.Id, "Solve", "Joining Thread " + context.id + " for soft partition: " + context.spartition.Id);
 
 						// Get the result fom the child
 						VerifyResult res = context.res;
@@ -1017,7 +1056,7 @@ namespace CoreLib
 						deferredWorklist.Clear();
 
 						// allow the prover to be used if possible
-						worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, context.vcgen.proverStackBookkeeper));
+						worklist.Add(new Tuple<SoftPartition, ProverStackBookkeeping>(null, context.vstate.proverBookeeper));
 					}
 
 					// combine S_ and _P to SP if possible 
@@ -1055,7 +1094,7 @@ namespace CoreLib
 						lock (s)
 						{
 							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Attempting to enter critical section for softpartition: " + s.Id);
-							outcome = vState.si.SolvePartition(s, vState, out partitions, out solTime, workElem.Item2, CexList, numProvers + 1); //available + the current prover
+							outcome = vState.si.SolvePartition(s, vState, out partitions, out solTime, CexList, numProvers + 1); //available + the current prover
 							RefinementFuzzing.Settings.WritePrimaryLog(workElem.Item2.id, s.Id, "Solve1", "Leaving critical section for softpartition: " + s.Id);
 
 							if (partitions.Count > 1)
@@ -1075,12 +1114,12 @@ namespace CoreLib
 							// Don't return the original prover as only it can do pops
 							if (workElem.Item2 != originalProver)
 							{
-                                StratifiedInlining.proverManager.ReturnProver(workElem.Item2, s.Id);
+                                StratifiedInlining.proverManager.ReturnProver(workElem.Item1, workElem.Item2, s.Id);
 							}
 							else
 								;// Contract.Assert(worklist.Count == 0); // only the original prover remains in the worklist
 
-                            vState.si.proverStackBookkeeper = originalProver;
+                            vState.proverBookeeper = originalProver;
 							//vState.checker.prover = originalProver.getMainProver();
 							//vState.summaryDB.prover5 = originalProver.getInterpolatingProver();
 
@@ -1193,19 +1232,60 @@ namespace CoreLib
 			}
 		}
 
+        void WritePartitionToGraph(SoftPartition sp, VerifyResult result)
+        {
+            String label = "\"\"";
+            String color = "\"\"";
+            if (sp.creationMode == CreationMode.Partitioned_Block)
+            {
+                StratifiedCallSite splitCand = (sp.blockedCandidates.Except(sp.parent.blockedCandidates)).First();
+                label = "\"BLOCK:" + splitCand.callSiteExpr + "\"";
+            }
+            else if (sp.creationMode == CreationMode.Partitioned_MustReach)
+            {
+                StratifiedCallSite splitCand = (sp.mustreachCandidates.Except(sp.parent.mustreachCandidates)).First();
+                label = "\"REACH:" + splitCand.callSiteExpr + "\"";
+            }
+            else if (sp.creationMode == CreationMode.Root)
+            {
+                explorationGraph = new Common.GraphUtil("debug" + debugGraphCounter++ + ".dot");
+            }
+            else
+                Debug.Assert(false);
+
+            if (result == VerifyResult.Verified)
+                color = "green";
+            else if (result == VerifyResult.Partitioned)
+                color = "yellow";
+            else if (result == VerifyResult.BugFound)
+                color = "orangered";
+            else if (result == VerifyResult.Errors)
+                color = "red";
+
+            lock (RefinementFuzzing.Settings.lockThis)
+            {
+                sp.graphNode = new Common.GraphNode(sp.Id, sp.printSoftPartition(), color);
+                if (sp.Id != 0)
+                    explorationGraph.AddEdge(sp.parent.graphNode, sp.graphNode, label);
+                explorationGraph.WriteDot();
+             }
+        }
+
+        public static int debug = 0;
+
         public VerifyResult SolveSplit(List<SoftPartition> entryPartitions, VerificationState vState) // for a child, the entryPoints are the "open" candidates
         {
             Console.WriteLine("Inside SolveSplit\n");
-            int threadBudget = 1;
+            int threadBudget = 2;
 
             Debug.Assert(entryPartitions.Count == 1);
-
+                
             workQueue = new WorkQueue(entryPartitions, WorkQueue.QType.BFS, vState);
 
             int numThreadsSpawned = (entryPartitions.Count - 1 > threadBudget) ? threadBudget : entryPartitions.Count - 1;
 
             // Release prover -- we are spawning a thread and the parent will wait till it returns
-            ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
+            ProverStackBookkeeping originalProver = vState.proverBookeeper;
             //StratifiedInlining.proverManager.BorrowProver(entryPartitions[0].Id);
             //StratifiedInlining.proverManager.ReturnProver(vcgen.proverStackBookkeeper, entryPartitions[0].Id);
 
@@ -1213,9 +1293,13 @@ namespace CoreLib
 
             Dictionary<Thread, RefinementFuzzing.ConcurrentContext> threadList = new Dictionary<Thread, RefinementFuzzing.ConcurrentContext>();
             Dictionary<int, Thread> currRunningThreadsDict = new Dictionary<int, Thread>();
+            Queue<int> freeHandles = new Queue<int>();
 
             for (int i = 0; i < handles.Count(); i++)
+            {
                 handles[i] = new ManualResetEvent(false);
+                freeHandles.Enqueue(i);
+            }
 
             int nextThreadToRun = 0;
             int indexInRunningThreads = 0;
@@ -1233,7 +1317,7 @@ namespace CoreLib
             {
                 bool done = true;
 
-                while (numRunningThreads < threadBudget && (s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
+                while (numRunningThreads < threadBudget && (s = workQueue.getNextPartition(vState.proverBookeeper)) != null)
                 {
                     done = false;
                     numRunningThreads++;
@@ -1246,15 +1330,22 @@ namespace CoreLib
                     // there is a thread to be run
                     SoftPartition spawnForPartition = s;
 
+                    indexInRunningThreads = freeHandles.Dequeue();
+
                     //RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
 
-                    int tokenid = vState.si.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                    //int tokenid = vState.si.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
                     Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s.parent, nextThreadToRun, currState);
-                    vState.si.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                    //vState.si.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
                     threadList[tuple.Item1] = tuple.Item2;
+
+                    Console.WriteLine("Thread listing:: partitionid:" + spawnForPartition.Id + "; threadId:" + tuple.Item1.ManagedThreadId + "; Index:" + indexInRunningThreads);
 
                     // assign the new thread the 'id' of the completed thread on the WaitHandles
                     currRunningThreadsDict[indexInRunningThreads] = tuple.Item1;
+
+                    if (debug++ > 1)
+                        ;
                 }
 
                 //nextThreadToRun++;
@@ -1270,6 +1361,9 @@ namespace CoreLib
                     // Wait for a thread to complete and then handle it
 
                     int index = WaitHandle.WaitAny(handles);
+                    freeHandles.Enqueue(index);
+
+                    Console.WriteLine("Thread Returned:: index:" + index + "; threadId:" + currRunningThreadsDict[index].ManagedThreadId);
 
                     (handles[index] as ManualResetEvent).Reset();
 
@@ -1294,23 +1388,25 @@ namespace CoreLib
                     //totalNumCalls += context.vcgen.numCalls;
                     s = context.spartition;
 
+                    WritePartitionToGraph(s, res);
+
                     if (res == VerifyResult.BugFound || res == VerifyResult.Errors)
                     {
                         cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
-                        StratifiedInlining.explorationGraph.WriteDot();
+
                         return VerifyResult.BugFound;
                     }
                     else if (res == VerifyResult.Verified)
                     {
-                        StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
-                        StratifiedInlining.explorationGraph.WriteDot();
+                        StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id);
+                        //StratifiedInlining.explorationGraph.WriteDot();
                         continue;
                     }
                     else if (res == VerifyResult.Partitioned)
                     {
-                        StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+                        StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id);
 
-                        StratifiedInlining.explorationGraph.WriteDot();
+                        //StratifiedInlining.explorationGraph.WriteDot();
 
                         List<SoftPartition> newPartitions = context.outPartitions;
                         /*
@@ -1321,7 +1417,7 @@ namespace CoreLib
                         for (int i = 0; i < newPartitions.Count; i++)
                         {
                             workQueue.AddTask(newPartitions[i]);
-                            RefinementFuzzing.Settings.WritePartitioningLog(vState.si.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
+                            RefinementFuzzing.Settings.WritePartitioningLog(vState.proverBookeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
 
                         }
                         
@@ -1423,7 +1519,7 @@ namespace CoreLib
             VerificationState currState = vState;
 
 			SoftPartition s;
-			while ((s = workQueue.getNextPartition(vState.si.proverStackBookkeeper)) != null)
+			while ((s = workQueue.getNextPartition(vState.proverBookeeper)) != null)
 			{
 				List<SoftPartition> partitions;
 
@@ -1432,7 +1528,7 @@ namespace CoreLib
 					lock (RefinementFuzzing.Settings.lockThis)
 						//using (RefinementFuzzing.Settings.timedLock.Lock()) 
 					{
-						s.graphNode.scheduledOnProverId = vState.si.proverStackBookkeeper.id;
+						s.graphNode.scheduledOnProverId = vState.proverBookeeper.id;
 						s.graphNode.proverArrayState = StratifiedInlining.proverManager.GetStatus();
 
 						if (RefinementFuzzing.Settings.refreshExplorationGraph)
@@ -1491,8 +1587,8 @@ namespace CoreLib
 							numThreadsSpawned = (partitions.Count -1 > threadBudget) ? threadBudget : partitions.Count - 1;
 
 							// Release prover -- we are spawning a thread and the parent will wait till it returns
-							ProverStackBookkeeping originalProver = vState.si.proverStackBookkeeper;
-							StratifiedInlining.proverManager.ReturnProver(vState.si.proverStackBookkeeper, s.Id);
+							ProverStackBookkeeping originalProver = vState.proverBookeeper;
+							StratifiedInlining.proverManager.ReturnProver(vState.sp, vState.proverBookeeper, s.Id);
 
 							WaitHandle[] handles = new WaitHandle[numThreadsSpawned];
 
@@ -1526,7 +1622,7 @@ namespace CoreLib
 
 									//context.vcgen.Close();
 									Console.WriteLine("Join done");
-									RefinementFuzzing.Settings.WritePrimaryLog(context.vcgen.proverStackBookkeeper.id, s.Id, "Solve", "Joining Thread " + context.id + " for soft partition: " + context.spartition.Id);
+									RefinementFuzzing.Settings.WritePrimaryLog(context.vstate.proverBookeeper.id, s.Id, "Solve", "Joining Thread " + context.id + " for soft partition: " + context.spartition.Id);
 
 									// Get the result fom the child
 									VerifyResult res = context.res;
@@ -1549,7 +1645,7 @@ namespace CoreLib
 										if (RefinementFuzzing.Settings.threadJoinStrategy != RefinementFuzzing.Settings.ThreadJoinStrategy.ContinueAfterFirstChildReturns)
 										{
 											// Release prover (release it with the parent's as the thread did the job for the parent as the prover stack is so set up)
-											StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+											StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id);
 										}
 									}
 
@@ -1570,7 +1666,7 @@ namespace CoreLib
 										// that all the expansions on the call-tree are recorded
 										// Also, due to these reasons, this partition cannot be run concurrently.
 										// .VerifyResult outcome2 = context.vcgen.SolvePartition(s, context.vstate, out newPartitions); 
-										VerifyResult outcome2 = vState.si.SolvePartition(s, vState, out newPartitions, out solTime2, context.vcgen.proverStackBookkeeper, partitionsInProgress, 1);
+										VerifyResult outcome2 = vState.si.SolvePartition(s, vState, out newPartitions, out solTime2, partitionsInProgress, 1);
 
 										if (RefinementFuzzing.Settings.estimateParallelism)
 										{
@@ -1585,7 +1681,7 @@ namespace CoreLib
 										}
 										else if (outcome2 == VerifyResult.Verified)
 										{
-											StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+											StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id);
 
 											break;
 										}
@@ -1597,12 +1693,12 @@ namespace CoreLib
 											for (int i = 0; i < newPartitions.Count; i++)
 											{
 												partitions.Add(newPartitions[i]);
-												RefinementFuzzing.Settings.WritePartitioningLog(vState.si.proverStackBookkeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
+												RefinementFuzzing.Settings.WritePartitioningLog(vState.proverBookeeper.id, s, 1, true, context.vstate, newPartitions[i], null);
 											}
 										}
 
 										// Release prover (release it with the parent's as the thread did the job for the parent as the prover stack is so set up)
-										StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id);
+										StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id);
 
 										// steal the 'id' of the completed thread for the next thread to run
 										indexInRunningThreads = index;
@@ -1632,11 +1728,11 @@ namespace CoreLib
 									// there is a thread to be run
 									SoftPartition spawnForPartition = partitions[nextThreadToRun];
 
-									RefinementFuzzing.Settings.WritePrimaryLog(vState.si.proverStackBookkeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
+									RefinementFuzzing.Settings.WritePrimaryLog(vState.proverBookeeper.id, s.Id, "Solve", "Creating Thread for soft partition: " + spawnForPartition.Id);
 
-									int tokenid = vState.si.proverStackBookkeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+									int tokenid = vState.proverBookeeper.timingStatisticsManager.StartTime(Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
 									Tuple<Thread, RefinementFuzzing.ConcurrentContext> tuple = createThread(spawnForPartition, handles[indexInRunningThreads], s, nextThreadToRun, null);
-                                    vState.si.proverStackBookkeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
+                                    vState.proverBookeeper.timingStatisticsManager.StopTime(tokenid, Common.TimingStatisticManager.TimingCategories.ThreadSpawn);
 									threadList[tuple.Item1] = tuple.Item2;
 
 									// assign the new thread the 'id' of the completed thread on the WaitHandles
@@ -1655,7 +1751,7 @@ namespace CoreLib
 							cleanup(currRunningThreadsDict, handles, maxTime, totalNumCalls, nextThreadToRun, threadList, s);
 
 							// the parent should now get the prover back
-							StratifiedInlining.proverManager.RequestProver(vState.si.proverStackBookkeeper, s.Id);
+							StratifiedInlining.proverManager.RequestProver(vState.proverBookeeper, s.Id);
 
 						}
 					}
@@ -1692,13 +1788,13 @@ namespace CoreLib
 					RefinementFuzzing.ConcurrentContext context = RefinementFuzzing.Settings.globalThreadList[t];
 					//currRunningThreadsDict.Remove(index);
 
-					context.vcgen.proverStackBookkeeper.timingStatisticsManager.AbortTimer();
-					RefinementFuzzing.Settings.oTimer.AbortTimer(context.vcgen.proverStackBookkeeper.id);
+					context.vstate.proverBookeeper.timingStatisticsManager.AbortTimer();
+					RefinementFuzzing.Settings.oTimer.AbortTimer(context.vstate.proverBookeeper.id);
 
-					StratifiedInlining.proverManager.ReturnProver(context.vcgen.proverStackBookkeeper, s.Id, false);
+					StratifiedInlining.proverManager.ReturnProver(context.spartition, context.vstate.proverBookeeper, s.Id, false);
 
 					if (!RefinementFuzzing.Settings.instantlyPropagateSummaries)
-						context.vcgen.proverStackBookkeeper.stalePartitions.Add(s);
+						context.vstate.proverBookeeper.stalePartitions.Add(s);
 				}
 			}
 

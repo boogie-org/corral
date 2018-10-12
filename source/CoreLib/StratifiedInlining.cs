@@ -678,16 +678,16 @@ namespace CoreLib
         }
 
         public VerifyResult SolvePartition(SoftPartition softPartition,
-           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+           VerificationState vState, out List<SoftPartition> partitions, out double solTime, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
         {
             Console.WriteLine("Inside SolvePartition\n");
             if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "parallel2")
             {
-                return SolvePartition_parallel(softPartition, vState, out partitions, out solTime, bookKeeper, siblingRunningPartitions, maxPartitions);
+                return SolvePartition_parallel(softPartition, vState, out partitions, out solTime, siblingRunningPartitions, maxPartitions);
             }
             else
             {
-                return SolvePartition_backtrack(softPartition, vState, out partitions, out solTime, bookKeeper, siblingRunningPartitions, maxPartitions);
+                return SolvePartition_backtrack(softPartition, vState, out partitions, out solTime, vState.proverBookeeper, siblingRunningPartitions, maxPartitions);
             }
         }
 
@@ -982,10 +982,8 @@ namespace CoreLib
         }
 
         static TimeGraph timeGraph = new TimeGraph();
-        public static Common.GraphUtil explorationGraph;
-        public static int debugGraphCounter = 0;
         public VerifyResult SolvePartition_parallel(SoftPartition softPartition,
-           VerificationState vState, out List<SoftPartition> partitions, out double solTime, ProverStackBookkeeping bookKeeper = null, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
+           VerificationState vState, out List<SoftPartition> partitions, out double solTime, HashSet<SoftPartition> siblingRunningPartitions = null, int maxPartitions = -1)
         {
             Console.WriteLine("Inside SolvePartition_parallel\n");
             //Console.WriteLine(di.ComputeSize());
@@ -996,7 +994,11 @@ namespace CoreLib
             Outcome outcome = Outcome.Inconclusive;
             vState.reporter.reportTraceIfNothingToExpand = true;
 
+            ProverStackBookkeeping proverStackBookkeeper = vState.proverBookeeper;
             ProverInterface prover = vState.proverBookeeper.getMainProver();
+
+            if ((prover != this.prover))
+                Contract.Assert(prover == this.prover);
 
             solTime = 0;
             //int treesize = 0;
@@ -1055,13 +1057,13 @@ namespace CoreLib
             var splitCandidates = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> candidatesReachingRecBound = new HashSet<StratifiedCallSite>(softPartition.candidatesReachingRecBound);
 
-            if (softPartition.parent == null)
-                explorationGraph.SetRoot(softPartition.graphNode);
+            //if (softPartition.parent == null)
+            //    explorationGraph.SetRoot(softPartition.graphNode);
 
             while (true)
             {
                 //timeGraph.ToDot();
-                explorationGraph.WriteDot();
+                //explorationGraph.WriteDot();
 
                 //var size = this.di.ComputeSize();
 
@@ -1105,11 +1107,16 @@ namespace CoreLib
                         //var tgNode = string.Format("{0}__{1}", splitCand.callSite.calleeName, 0);
                         timeGraph.AddEdge(tgNode, "MUSTREACH");
 
+                        newPartition1.creationMode = CreationMode.Partitioned_Block;
+                        newPartition2.creationMode = CreationMode.Partitioned_MustReach;
+
+                        /*
                         lock (RefinementFuzzing.Settings.lockThis)
                         {
                             explorationGraph.AddEdge(softPartition.graphNode, newPartition1.graphNode, "\"BLOCK:" + splitCand.callSiteExpr + "\"");
                             explorationGraph.AddEdge(softPartition.graphNode, newPartition2.graphNode, "\"REACH:" + splitCand.callSiteExpr + "\"");
                         }
+                        */
 
                         return VerifyResult.Partitioned;
                     }
@@ -1133,21 +1140,21 @@ namespace CoreLib
                 }
                 MacroSI.PRINT_DEBUG("    - check");
                 vState.reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = CheckVC(vState.reporter, vState.proverBookeeper.getMainProver());
+                outcome = CheckVC(vState.reporter, vState.proverBookeeper.getMainProver(), owner:softPartition.Id);
 
                 MacroSI.PRINT_DEBUG("    - checked: " + outcome);
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors/* && outcome != Outcome.Inconclusive*/)
                 {
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("ERRORS"), "\"\"");
+                    //explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("ERRORS"), "\"\"");
                     return VerifyResult.Errors; // done (T/O)
                 }
 
                 if (outcome == Outcome.Errors && vState.reporter.callSitesToExpand.Count == 0)
                 {
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("BUG"), "\"\"");
+                    //explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("BUG"), "\"\"");
                     return VerifyResult.BugFound; // done (error found)
                 }
 
@@ -1158,7 +1165,7 @@ namespace CoreLib
                     {
                         Stackscs.Push(scs);
                         openCallSites.Remove(scs);
-                        var svc = Expand(vState, scs, null, true, true, vState.reporter);
+                        var svc = Expand(vState, scs, null, true, true, vState.reporter, owner:softPartition.Id);
                         if (svc != null) openCallSites.UnionWith(svc.CallSites);
                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                     }
@@ -1171,7 +1178,7 @@ namespace CoreLib
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
 
                     //topState.ApplyState(this, ref openCallSites);
-                    explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("VERIFIED"), "\"\"");
+                    //explorationGraph.AddEdge(softPartition.graphNode, GraphNode.GraphNodeExtraFactory("VERIFIED"), "\"\"");
                     MacroSI.PRINT_DEBUG("    Returning SolvePartition_parallel with VERIFIED  ");
                     break;
                 }
@@ -2458,7 +2465,7 @@ namespace CoreLib
             var mainName = GetNewName("background");
             prover.AssertNamed(mainVC.vcexpr, true, mainName);
 
-            var reporter = new StratifiedInliningErrorReporter(callback, this, mainVC, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, mainVC);
             reporter.reportTraceIfNothingToExpand = true;
 
             while (true)
@@ -2716,13 +2723,16 @@ namespace CoreLib
         }
 
         // Assert that we must reach this VC; returns the list of call sites asserted
-        public List<Tuple<StratifiedVC, Block>> AssertMustReach(VerificationState vstate, StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter)
+        public List<Tuple<StratifiedVC, Block>> AssertMustReach(VerificationState vstate, StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted, StratifiedInliningErrorReporter reporter, int owner = 0)
         {
             Console.WriteLine("Inside AssertMustReach\n");
+
+            ProverInterface prover = vstate.proverBookeeper.getMainProver();
+
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true); 
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true, owner:owner); 
 
             if (!reporter.attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -2736,12 +2746,12 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true); 
+                    prover.Assert(vc.MustReach(callblock), true, owner:owner); 
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true); 
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true, owner:owner); 
             return ret;
         }
 
@@ -2802,7 +2812,7 @@ namespace CoreLib
 
                 var callerVC = new StratifiedVC(implName2StratifiedInliningInfo[caller.Name], implementations);
                 backboneRecDepth[caller.Name]++;
-                var callerReporter = new StratifiedInliningErrorReporter(reporter.callback, this, callerVC, reporter); // TODO: to be handled
+                var callerReporter = new StratifiedInliningErrorReporter(reporter, this); // TODO: to be handled
                 var callerOpenCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 callerOpenCallSites.UnionWith(callerVC.CallSites);
                 //Console.WriteLine("Adding call-sites: {0}", callerVC.CallSites.Select(s => s.callSiteExpr.ToString()).Concat(" "));
@@ -2884,7 +2894,7 @@ namespace CoreLib
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
-                var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+                var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
                 MustFail(svc);
 
                 outcome = Bck(svc, openCallSites, reporter, backbonedepth);
@@ -2976,7 +2986,7 @@ namespace CoreLib
 
 		static public ProverArrayManager proverManager;
 
-		public ProverStackBookkeeping proverStackBookkeeper;
+		//public ProverStackBookkeeping proverStackBookkeeper;
 
 		//public enum VerifyResult { Verified, Partitioned, BugFound, Errors, NoMoreConstraintPartition, Interrupted };
 
@@ -3029,7 +3039,9 @@ namespace CoreLib
         // TODO : This method has to be fixed
 		private void OptimizedAssertVC(SoftPartition softPartition, VerificationState vState, ProverInterface prover, ProverStackBookkeeping proverStackBookkeeper)
 		{
-            Console.WriteLine("Inside OptimizedAssertVC\n");
+            //lock (RefinementFuzzing.Settings.lockThis)
+            {
+                Console.WriteLine("Inside OptimizedAssertVC\n");
             List<int> proverStack = proverStackBookkeeper.getProverStackStatus().ToList();
 
 			//Contract.Assert(proverStack.Count == 0                  // starting with an empty stack
@@ -3078,27 +3090,28 @@ namespace CoreLib
 				t = t.parent;
 			}
 
+            
+                while (vcStack.Count > 0)
+                {
+                    SoftPartition sp = vcStack.Pop();
 
-			while (vcStack.Count > 0)
-			{
-				SoftPartition sp = vcStack.Pop();
-
-				proverStackBookkeeper.Push(sp);
-				{
-					assertVCForPartition(sp, vState);
-				}
-			}
+                    proverStackBookkeeper.Push(sp);
+                    {
+                        assertVCForPartition(sp, vState, softPartition.Id);
+                    }
+                }
+            }
             
 			return;
 		}
 
 
-		private void assertVCForPartition(SoftPartition sp, VerificationState vState)
+		private void assertVCForPartition(SoftPartition sp, VerificationState vState, int owner)
 		{
             Console.WriteLine("Inside assertVCForPartition\n");
-            // ProverStackBookkeeping p = null;
+            ProverStackBookkeeping proverStackBookkeeper = vState.proverBookeeper;
             //TODO: Assert VC using the Mustreach/Block decisions
-            ProverInterface prover = proverStackBookkeeper.getMainProver();
+            ProverInterface prover = vState.proverBookeeper.getMainProver();
             //ProverStackBookkeeping.getMainProver();
             Console.WriteLine("Finding a prover instance");
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
@@ -3109,7 +3122,7 @@ namespace CoreLib
             });
             
             if (sp.candidateUniverse.Count == 1)  // This is the root softpartition: note that sp.Id may not always be zero as it could be subsequent invocations from variable abstraction loop
-                ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp);
+                ProverAssert(mainVC.vcexpr, true, proverStackBookkeeper, sp, owner);
 
             HashSet<StratifiedCallSite> ancestralCandidateUniverse = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> ancestralBlocked = new HashSet<StratifiedCallSite>();
@@ -3132,14 +3145,14 @@ namespace CoreLib
 
                 if (!ancestralCandidateUniverse.Contains(scs))
                 {
-                   ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp);
+                   ProverAssert(svc.vcexpr, true, proverStackBookkeeper, sp, owner:owner);
                 }
 
                 if (sp.blockedCandidates.Contains(scs) && !ancestralBlocked.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing Block ({0})", scs.callSite.calleeName);
                   
-                    prover.Assert(scs.callSiteExpr, false);
+                    prover.Assert(scs.callSiteExpr, false, owner: owner);
                     //sp.prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                 }
 
@@ -3147,18 +3160,18 @@ namespace CoreLib
                 if (sp.mustreachCandidates.Contains(scs) && !ancestralMustReach.Contains(scs))
                 {
                     MacroSI.PRINT("Pushing MustReach ({0})", scs.callSite.calleeName);
-                    AssertMustReach(vState, svc, PrevAsserted(), vState.reporter).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
+                    AssertMustReach(vState, svc, PrevAsserted(), vState.reporter, vState.sp.Id).Iter(tup => sp.prevMustAsserted.Add(tup)); // TODO: prevAsserted needs to be fixed
                 }
             }
         }
 
-        void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null)
+        void ProverAssert(VCExpr vc, bool b, ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null, int owner = 0)
         {
             Console.WriteLine("Inside ProverAssert\n");
             if (useConcurrentSolver)
-                proverStackBookkeeper.Assert(vc, getNameForFormula(sp.Id, FormulaType.VC), getNameForFormula(sp.Id, FormulaType.VC));
+                proverStackBookkeeper.Assert(vc, getNameForFormula(sp.Id, FormulaType.VC), getNameForFormula(sp.Id, FormulaType.VC), owner:owner);
             else
-                prover.Assert(vc, b);
+                prover.Assert(vc, b, owner: sp.Id);
         }
 
         void ProverPush(ProverStackBookkeeping proverStackBookkeeper = null, SoftPartition sp = null, VerificationState vState = null)
@@ -3170,7 +3183,7 @@ namespace CoreLib
                 prover.Push();
         }
 
-        void ProverPop()
+        void ProverPop(ProverStackBookkeeping proverStackBookkeeper)
         {
             Console.WriteLine("Inside ProverPop\n");
             if (useConcurrentSolver)
@@ -3191,7 +3204,7 @@ namespace CoreLib
             useConcurrentSolver = true;
 
             // assert true to flush all one-time axioms, decls, etc
-            prover.Assert(VCExpressionGenerator.True, true);
+            prover.Assert(VCExpressionGenerator.True, true, owner:0);
 
             // Flush any axioms that came with the program before we start SI on this implementation
             prover.AssertAxioms();
@@ -3234,9 +3247,12 @@ namespace CoreLib
             prover.Assert(svc.vcexpr, true);
 
             Outcome outcome;
-            var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
-            if (RefinementFuzzing.Settings.preAllocateProvers)
+            ProverStackBookkeeping proverStackBookkeeper;
+
+            //if (RefinementFuzzing.Settings.preAllocateProvers)
+            if (true)
             {
                 proverManager = new ProverArrayManager(RefinementFuzzing.Settings.totalThreadBudget, program, prover);
                 proverStackBookkeeper = proverManager.BorrowProver(null);
@@ -3487,7 +3503,7 @@ namespace CoreLib
             prover.Assert(svc.vcexpr, true);
             
             Outcome outcome;
-            var reporter = new StratifiedInliningErrorReporter(callback, this, svc, null);
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
             
             #region Eager inlining
@@ -3671,12 +3687,12 @@ namespace CoreLib
         static int dumpCnt = 0;
 
         // Inline
-        private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
+        private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, StratifiedInliningErrorReporter reporter)
         {
-            return Expand(vstate, scs, null, true, false, reporter, proverStackBookkeeper);
+            return Expand(vstate, scs, null, true, false, reporter);
         }
 
-        private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, StratifiedInliningErrorReporter reporter, ProverStackBookkeeping proverStackBookeeper = null)
+        private StratifiedVC Expand(VerificationState vstate, StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge, StratifiedInliningErrorReporter reporter, int owner = 0)
         {       
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
@@ -3685,7 +3701,7 @@ namespace CoreLib
             ProverInterface currProver;
 
             if (useConcurrentSolver && cba.Util.BoogieVerify.options.StratifiedInlining != 100)
-                currProver = proverStackBookkeeper.getMainProver();
+                currProver = vstate.proverBookeeper.getMainProver();
             else
                 currProver = prover;
 
@@ -3714,7 +3730,7 @@ namespace CoreLib
                 else
                 {
                     var cb = GetControlBoolean(svc);
-                    toassert = AttachByEquality(scs, svc);
+                    toassert = AttachByEquality(scs, svc, currProver);
                     toassert = currProver.VCExprGen.Implies(scs.callSiteExpr, currProver.VCExprGen.And(cb, toassert));
                     toassert = currProver.VCExprGen.And(currProver.VCExprGen.Implies(cb, svc.vcexpr), toassert);
                 }
@@ -3728,7 +3744,7 @@ namespace CoreLib
                 if (name != null)
                     currProver.AssertNamed(toassert, true, name);
                 else
-                    currProver.Assert(toassert, true);
+                    currProver.Assert(toassert, true, owner:owner);
 
                 reporter.attachedVC[scs] = svc;
                 reporter.attachedVCInv[svc] = scs;
@@ -3805,11 +3821,17 @@ namespace CoreLib
         // ---------------------------------------- 
         // Original Attach works with interface variables renaming. We don't want this, as we backtrack sometimes.
         // We add an equality clause instead.
-        public static VCExpr AttachByEquality(StratifiedCallSite callee, StratifiedVC svcCallee)
+        public static VCExpr AttachByEquality(StratifiedCallSite callee, StratifiedVC svcCallee, ProverInterface altProver = null)
         {
             System.Diagnostics.Contracts.Contract.Assert(callee.callSite.interfaceExprs.Count == svcCallee.interfaceExprVars.Count);
             StratifiedInliningInfo info = svcCallee.info;
-            ProverInterface prover = info.vcgen.prover;
+            ProverInterface prover;
+
+            if (altProver == null)
+                prover = info.vcgen.prover;
+            else
+                prover = altProver;
+
             VCExpressionGenerator gen = prover.VCExprGen;
 
             VCExpr conjunction = VCExpressionGenerator.True;
@@ -3824,30 +3846,41 @@ namespace CoreLib
             return conjunction;
         }
 
-        private Outcome CheckVC(ProverInterface.ErrorHandler reporter, ProverInterface proverAlt=null)
+        private Outcome CheckVC(ProverInterface.ErrorHandler reporter, ProverInterface proverAlt=null, int owner = 0)
         {
-            stats.calls++;
-            var stopwatch = Stopwatch.StartNew();
             ProverInterface.Outcome outcome;
-            if (proverAlt == null) {
-                prover.Check();
-                outcome = prover.CheckOutcomeCore(reporter);
+
+            Contract.Assert(proverAlt == null || proverAlt == prover);
+            Contract.Assert(proverAlt.owner == owner);
+
+            // lock (RefinementFuzzing.Settings.lockThis)
+            {
+                stats.calls++;
+                var stopwatch = Stopwatch.StartNew();
+                if (proverAlt == null)
+                {
+                    prover.Check();
+                    outcome = prover.CheckOutcomeCore(reporter, owner:owner);
+                }
+                else
+                {
+                    proverAlt.Check();
+                    outcome = proverAlt.CheckOutcomeCore(reporter, owner: owner);
+                }
+                stats.time += stopwatch.ElapsedTicks;
             }
-            else {
-                proverAlt.Check();
-                outcome = proverAlt.CheckOutcomeCore(reporter);
-            }
-            stats.time += stopwatch.ElapsedTicks;
 
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
-        private Outcome CheckVC(List<VCExpr> softAssumptions, ProverInterface.ErrorHandler reporter)
+        private Outcome CheckVC(List<VCExpr> softAssumptions, ProverInterface.ErrorHandler reporter, int owner = 0)
         {
             List<int> unsatCore;
 
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
+
+            Contract.Assert(prover.owner == owner);
             ProverInterface.Outcome outcome = 
                 prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
             stats.time += stopwatch.ElapsedTicks;
@@ -6081,7 +6114,22 @@ namespace CoreLib
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
 
-        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC, StratifiedInliningErrorReporter parentRepoter)
+        public StratifiedInliningErrorReporter(StratifiedInliningErrorReporter parentRepoter, StratifiedInlining si)
+        {
+            this.callback = parentRepoter.callback;
+            this.si = si;
+            this.mainVC = new StratifiedVC(mainVC);
+            this.reportTrace = false;
+            this.reportTraceIfNothingToExpand = false;
+            this.GlobalLabels = null;
+
+            this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(parentRepoter.attachedVC);
+            this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(parentRepoter.attachedVCInv);
+            this.candidatesToExpand = new List<StratifiedCallSite>(parentRepoter.candidatesToExpand);
+            this.callSitesToExpand = new List<StratifiedCallSite>(parentRepoter.callSitesToExpand);
+        }
+
+        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC)
         {
             this.callback = callback;
             this.si = si;
@@ -6090,21 +6138,12 @@ namespace CoreLib
             this.reportTraceIfNothingToExpand = false;
             this.GlobalLabels = null;
 
-            if (parentRepoter != null)
-            {
-                this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(parentRepoter.attachedVC);
-                this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(parentRepoter.attachedVCInv);
-                this.candidatesToExpand = new List<StratifiedCallSite>(parentRepoter.candidatesToExpand);
-                this.callSitesToExpand = new List<StratifiedCallSite>(parentRepoter.callSitesToExpand);
-            }
-            else
-            {
-                this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
-                this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
-                this.candidatesToExpand = new List<StratifiedCallSite>();
-                this.callSitesToExpand = new List<StratifiedCallSite>();
-            }
-
+            
+            this.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            this.attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
+            this.candidatesToExpand = new List<StratifiedCallSite>();
+            this.callSitesToExpand = new List<StratifiedCallSite>();
+            
         }
 
         // TODO: remove this constructor
@@ -6151,7 +6190,7 @@ namespace CoreLib
             List<Absy> absyList = GetAbsyTrace(mainVC, labels);
             orderedStateIds = new List<Tuple<int, int>>();
 
-            var cex = NewTrace(mainVC, absyList, model);
+            var cex = NewTrace(mainVC, absyList, model, null);
             //cex.PrintModel();
 
             if (CommandLineOptions.Clo.StratifiedInliningVerbose > 2)
@@ -6262,7 +6301,7 @@ namespace CoreLib
             return ret;
         }
 
-        private Counterexample NewTrace(StratifiedVC svc, List<Absy> absyList, Model model)
+        private Counterexample NewTrace(StratifiedVC svc, List<Absy> absyList, Model model, ProverInterface proverAlt = null)
         {
             // assume that the assertion is in the last place??
             AssertCmd assertCmd = (AssertCmd)absyList[absyList.Count - 1];
@@ -6352,7 +6391,13 @@ namespace CoreLib
             }
 
             Block lastBlock = (Block)absyList[absyList.Count - 2];
-            Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, model, svc.info.mvInfo, si.prover.Context);
+            Counterexample newCounterexample;
+            
+            if (proverAlt == null)
+                newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, model, svc.info.mvInfo, si.prover.Context);
+            else
+                newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, model, svc.info.mvInfo, proverAlt.Context);
+
             newCounterexample.AddCalleeCounterexample(calleeCounterexamples);
             return newCounterexample;
         }

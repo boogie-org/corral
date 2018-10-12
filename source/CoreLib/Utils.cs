@@ -66,7 +66,7 @@ namespace Common
 					attr = "shape = hexagon";
 				}
 
-				sw.WriteLine(n.GetName() + " [" + attr + ", label = \"" + n.GetLabel() + "\"];");
+				sw.WriteLine(n.GetName() + " [" + attr + ", label = \"" + n.GetLabel() + "\", style = filled, fillcolor = \"" + n.color + "\"];");
 			}
 			foreach (Tuple<GraphNode, GraphNode, String> t in edgeSet)
 			{
@@ -77,6 +77,7 @@ namespace Common
 			}
 
 			sw.WriteLine("}");
+            sw.Flush();
 			sw.Close();
 		}
 
@@ -105,16 +106,18 @@ namespace Common
 		public bool isSubsumed = false;
 		public double potentialParallelTime = 0;
         public static int nodeIds = 100000;
+        public String color;
 
-        public static GraphNode GraphNodeExtraFactory(string label)
+        public static GraphNode GraphNodeExtraFactory(string label, String color)
         {
-            return new GraphNode(nodeIds++, label);
+            return new GraphNode(nodeIds++, label, color);
         }
 
-		public GraphNode(int id, String nodeLabel)
+		public GraphNode(int id, String nodeLabel, String color)
 		{
 			this.id = id;
             this.nodeLabel = nodeLabel;
+            this.color = color;
 			//candidates.Iter<VC.StratifiedCallSite>(n => this.candidates.Add(n));
 		}
 
@@ -126,12 +129,13 @@ namespace Common
 			StringBuilder b1 = new StringBuilder();
 			solutionTime.Iter<int>(n => b1.Append("," + n));
 
-			return id + " (" + nodeLabel + ")\\n" +
+            return id + " (" + nodeLabel + ")\\n";
+            /*+
 				"[" + scheduledOnProverId + "], " +
 				"provers:[" + proverArrayState + "]\\n" +
 				"bk = " + backtrackCount + "; " + 
 				"tm = [" + b1.ToString() + "]; " +
-				"pot = [" + (int) potentialParallelTime + "]; ";
+				"pot = [" + (int) potentialParallelTime + "]; ";*/
 		}
 
 		public string GetName()

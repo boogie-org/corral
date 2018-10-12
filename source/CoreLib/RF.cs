@@ -179,8 +179,11 @@ namespace RefinementFuzzing
 
             //lock (RefinementFuzzing.Settings.lockThis)
             {
-				//res = vcgen.solver.Solve(entryPartitions, this.vstate);
-                res = vcgen.SolvePartition(spartition, vstate, out outPartitions, out solTime2, vcgen.proverStackBookkeeper, null, 1);
+                //res = vcgen.solver.Solve(entryPartitions, this.vstate);
+                Contract.Assert(this.spartition.Id == this.vstate.proverBookeeper.getMainProver().owner);
+
+                vstate.si.prover = vstate.proverBookeeper.getMainProver();
+                res = vcgen.SolvePartition(spartition, vstate, out outPartitions, out solTime2, null, 1);
 
             }
 
@@ -195,7 +198,7 @@ namespace RefinementFuzzing
 				RefinementFuzzing.Settings.error_msg = "";
 			}*/
 
-			RefinementFuzzing.Settings.WritePrimaryLog(vcgen.proverStackBookkeeper.id, spartition.Id, "ProcessContext", "Returning thread: " + id);
+			RefinementFuzzing.Settings.WritePrimaryLog(vstate.proverBookeeper.id, spartition.Id, "ProcessContext", "Returning thread: " + id);
 
 			// notify the main thread
 
