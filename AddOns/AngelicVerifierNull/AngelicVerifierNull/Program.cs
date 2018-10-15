@@ -36,7 +36,7 @@ namespace AngelicVerifierNull
         // Flags for EE
         public static HashSet<string> EEflags = new HashSet<string>();
         // ExplainError timeout (in seconds)
-        public static int eeTimeout = 1000;
+        public static int eeTimeout = 20;
         // Flag for generalization
         public static bool generalize = true;
         // Max num. of attempts at blocking
@@ -156,14 +156,17 @@ namespace AngelicVerifierNull
 
                 
                 //[Snigdha] recording all assertions for the current run
-                //todo: remember to be time-efficient
                 foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
                     foreach (var block in impl.Blocks)
                         foreach (var cmd in block.cmds.OfType<AssertCmd>())
-                            AVNResult.addToAllAsserts(QKeyValue.FindStringAttribute(cmd.Attributes, "uniqueAVNID"));
+                        {
+                            AVNResult.addToAllAsserts(QKeyValue.FindStringAttribute(cmd.Attributes, "origUniqueAVNID"),
+                                QKeyValue.FindStringAttribute(cmd.Attributes, "uniqueAVNID"));
+                        }
+                            
 
                 //printing the assertions collected
-                //AVNResult.showAllAsserts();
+               // AVNResult.showAllAsserts();
 
                 //Analyze
                 RunCorralForAnalysis(program);
@@ -530,13 +533,15 @@ namespace AngelicVerifierNull
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) {
                     SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
                     // cannot be blocked, hence fail 
-                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                       QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
                     PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
                     // cannot be blocked, hence fail 
-                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                       QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
@@ -556,15 +561,17 @@ namespace AngelicVerifierNull
                             {
                                 PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
                                 done = false;
-                                // cannot be blocked, hence fail 
-                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                                // cannot be blocked, hence Pass
+                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                                QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.PASS);
                             }
                             else
                             {
                                 SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
                                 done = true;
-                                // cannot be blocked, hence fail 
-                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                                // cannot be blocked, hence Pass 
+                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                                QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.PASS);
                             }
                         }
                     }
@@ -591,7 +598,8 @@ namespace AngelicVerifierNull
                             // drop traces
                             inconsistent.Iter(id => pendingTraces.Remove(id));
                             // cannot be blocked, hence fail 
-                            AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                            AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                            QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
                         }
                         else
                         {
@@ -602,7 +610,8 @@ namespace AngelicVerifierNull
                             var assertID = QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID");
                            
                             //collecting the results for the assertion
-                            AVNResult.addResult(assertID, AVNResult.ResultStatus.BLOCK);
+                            AVNResult.addResult(assertID, QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"),
+                                AVNResult.ResultStatus.BLOCK);
 
                             //printing the pruned program
                             printCorralTracePruned(cex, prog, instr, assertID);
@@ -1153,6 +1162,7 @@ namespace AngelicVerifierNull
         static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string assertsPassedName, int corralTimeout)
         {
             corralIterationCount ++;
+            
             SetCorralTimeout(corralTimeout);
             Console.WriteLine("Corrral called with timeout {0}, orig value {1}", corralTimeout, timeout);
             CommandLineOptions.Clo.SimplifyLogFilePath = null;
@@ -1176,7 +1186,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/trackedVars, 
                 false);
 
-            //inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             var corralStart = DateTime.Now;
@@ -1927,15 +1937,15 @@ namespace AngelicVerifierNull
         public class AVNResult
         { 
             //An assert can be declared one of the above
-            //Todo:  check can an assert be in state 1 in 1 method and state 2 in another
+            
             //PASS stands for both passing and timing out assertions
             public enum ResultStatus {PASS, FAIL, BLOCK, TIMEOUT};
-            //Stores results per assert
-            static Dictionary<string, ResultStatus> assertResult = new Dictionary<string, ResultStatus>();
+            //Stores results per origAssertID and assertID
+            static Dictionary<Tuple<string,string>, ResultStatus> assertResult = new Dictionary<Tuple<string,string>, ResultStatus>();
             //Stores the list of blocked asserts
-            static HashSet<string> blockedAsserts = new HashSet<string>();
+            static HashSet<Tuple<string, string>> blockedAsserts = new HashSet<Tuple<string, string>>();
             //stores the list of all asserts
-            static HashSet<string> allAsserts = new HashSet<string>();
+            static HashSet<Tuple<string, string>> allAsserts = new HashSet<Tuple<string, string>>();
 
             //methodName and assert number separator
             public const char NameSeparator = '$';
@@ -1946,40 +1956,41 @@ namespace AngelicVerifierNull
             //output file name
             static string resultfilename = "avnResult.txt";
 
-            public static void addToAllAsserts(string assertID)
+            public static void addToAllAsserts(string origID, string assertID)
             {
-                if(assertID!=null)
-                    allAsserts.Add(assertID);
+                if(assertID!=null && origID != null)
+                {
+                    Tuple<string, string> val = new Tuple<string, string>(origID, assertID);
+                    allAsserts.Add(val);
+                }
+                    
 
             }
 
-            //the inliner should take care of the multiple blocked traces
-            //multiple failed traces are treated the same
-            public static void addResult(string assertID, ResultStatus status)
+            public static void addResult(string assertID, string origAssertId, ResultStatus status)
             {
-                if (assertID == null)
+                if (assertID == null || origAssertId == null)
                     return;
 
-                if(!assertResult.ContainsKey(assertID))
-                    assertResult.Add(assertID, status);
+                Tuple<string, string> key = new Tuple<string, string>(origAssertId, assertID);
+                if (!assertResult.ContainsKey(key))
+                {
+                    Console.WriteLine("adding result : {0} for assert {1}, origID {2}", status, assertID, origAssertId);
+                    assertResult.Add(key, status);
+                }
                 else
                 {
-                    if (status.Equals(assertResult[assertID]))
-                    {
-                        Console.WriteLine("[Snigdha] The results are same");
-                    }
-                    else
-                    {
-                        Console.WriteLine("[Snigdha] The result is different :" + status);
-                        ResultStatus newStatus = status.Equals(ResultStatus.BLOCK) ? status : assertResult[assertID];
-                        assertResult.Remove(assertID);
-                        assertResult.Add(assertID, newStatus);
+                    //keeping the last result
+                    Console.WriteLine("the result changed for assertion {2}, origID {3} from {0} to {1}", assertResult[key], status, assertID, origAssertId);
+                    assertResult.Remove(key);
+                    if (blockedAsserts.Contains(key))
+                        blockedAsserts.Remove(key);
 
-                    }
+                    assertResult.Add(key, status);
                 }
                 
                 if (status == ResultStatus.BLOCK)
-                    blockedAsserts.Add(assertID);
+                    blockedAsserts.Add(key);
 
             }
 
@@ -1987,7 +1998,7 @@ namespace AngelicVerifierNull
             {
                 Console.WriteLine("[Snigdha] printing all assertion IDs in the program :");
                 foreach (var assert in allAsserts)
-                    Console.WriteLine("[Snigdha] {0}",assert);
+                    Console.WriteLine("[Snigdha] {0}, {1}",assert.Item1, assert.Item2);
             }
 
             public static void showAllBlockedAsserts()
@@ -2003,7 +2014,11 @@ namespace AngelicVerifierNull
                 foreach(var assert in allAsserts)
                 {
                     if (!assertResult.ContainsKey(assert))
+                    {
                         assertResult.Add(assert, ResultStatus.PASS);
+                        
+                    }
+                        
                 }
             }
 
@@ -2013,7 +2028,7 @@ namespace AngelicVerifierNull
                 avnResultFile = new System.IO.StreamWriter(resultfilename);
                 //avnResultFile.WriteLine("printing all assertion IDs with their results in the program :");
                 foreach (var assert in assertResult.Keys)
-                    avnResultFile.WriteLine("{0}:{1}", assert, assertResult[assert]);
+                    avnResultFile.WriteLine("{0}:{1}:{2}", assert.Item2, assertResult[assert], assert.Item1);
 
                 avnResultFile.Flush();
 

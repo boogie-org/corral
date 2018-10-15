@@ -499,26 +499,9 @@ namespace FastAVN
             }
 
 
-
-             foreach(var impl in prog.TopLevelDeclarations.OfType<Implementation>())
-            {
-                string methodName = impl.Proc + "";
-                
-                foreach (var block in impl.Blocks)
-                {
-                    foreach(var cmd  in block.cmds.OfType<AssertCmd>())
-                    {
-                        int lineNum = cmd.Line;
-                        
-                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] { methodName+ AssertEliminator.NameSeparator+lineNum}), cmd.Attributes);
-                        
-
-                    }
-
-                }
-            }
-
-            //BoogieUtil.PrintProgram(prog, "annotatedProg.bpl");
+            assignAVNIDs(prog);
+             
+           
 
            
             Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
@@ -585,6 +568,8 @@ namespace FastAVN
                     if (ReplacementRequired(dependencyInfo))
                         currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, removedEntrypointNames, allEntryPointNames, callgraph);
 
+                    //reassign avn IDs
+                    currentProgram = reassignAVNID(currentProgram, removedEntrypointNames);
 
                     //remove the current independent and update the others in depgraph                
                     foreach (var epName in removedEntrypointNames)
@@ -602,14 +587,21 @@ namespace FastAVN
                 /* old code*/
 
                 //sorting the entrypoints for the older algorithm
+
                 ConcurrentQueue<Implementation> epQueue = new ConcurrentQueue<Implementation>();
-                int maxDep = dependencyInfo.Max(dep => dep.Value.Count);
-                for(int i = 0; i<= maxDep; i++)
+
+                while (!AllEntryPointsDone(dependencyInfo))
                 {
-                    foreach(var ep  in dependencyInfo.Where(dep => dep.Value.Count == i))
+                    HashSet<string> currentEpNames = new HashSet<string>();
+                    ConcurrentBag<Implementation> currentep = getIndependentEntrypoints(entrypoints, dependencyInfo, out currentEpNames);
+                    foreach (var epName in currentEpNames)
                     {
-                        epQueue.Enqueue(entrypoints.Where(e => e.Name.Equals(ep.Key)).First());
+                        
+                        epQueue.Enqueue(currentep.Where(ep => ep.Name.Equals(epName)).First());
+                        dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
+                        dependencyInfo.Remove(epName);
                     }
+
                 }
                 
                 var threads = new List<Thread>();
@@ -646,6 +638,54 @@ namespace FastAVN
                 //printing results
                 AssertEliminator.printAVResults();
             }
+        }
+
+        private static Program reassignAVNID(Program prog, HashSet<string> epnameSet)
+        {
+            foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                string methodName = impl.Name;
+                
+                int IDNum = 0;
+                foreach (var block in impl.Blocks)
+                {
+                    foreach (var cmd in block.cmds.OfType<AssertCmd>())
+                    {
+                        
+                        cmd.Attributes = AssertEliminator.RemoveAttr(cmd.Attributes, "uniqueAVNID");
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] {
+                            methodName + AssertEliminator.NameSeparator + IDNum++ }), cmd.Attributes);
+                       
+                    }
+
+                }
+            }
+
+            return prog;
+        }
+
+        private static void assignAVNIDs(Program prog)
+        {
+            foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+            {
+                string methodName = impl.Proc + "";
+
+                foreach (var block in impl.Blocks)
+                {
+                    foreach (var cmd in block.cmds.OfType<AssertCmd>())
+                    {
+                        int lineNum = cmd.Line;
+
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "uniqueAVNID", (new string[1] {
+                            methodName + AssertEliminator.NameSeparator + lineNum }), cmd.Attributes);
+                        cmd.Attributes = new QKeyValue(Token.NoToken, "origUniqueAVNID", (new string[1] {
+                            methodName + AssertEliminator.NameSeparator + lineNum }), cmd.Attributes);
+
+                    }
+
+                }
+            }
+
         }
 
         private static void printDependenceInfo(Graph<string> callgraph, Dictionary<string, List<string>> dependencyInfo)
@@ -825,10 +865,6 @@ namespace FastAVN
             entrypoints.Where(impl => dependencyInfo.ContainsKey(impl.Proc.Name) && dependencyInfo[impl.Proc.Name].Count == 0).
                 Iter(impl => independentEntryPoints.Add(impl));
 
-
-            
-
-
             currentEntrypointsNames = new HashSet<string>();
             foreach (var ep in independentEntryPoints)
                 currentEntrypointsNames.Add(ep.Proc.Name.ToString());
@@ -883,7 +919,7 @@ namespace FastAVN
         }
 
         /*This function extracts the dependence of the entrypoints from the call graph
-         TODO : Ensure this function returns an acyclic graph.*/
+         TODO : Ensure this function returns an acyclic graph. -DONE*/
         private static Dictionary<string, List<string>> BuildEntryPointDependenceGraph(Program prog, ConcurrentBag<Implementation> entrypoints,
             Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
         {
@@ -1716,7 +1752,8 @@ namespace FastAVN
             //methodName and assert number separator
             public const char NameSeparator = '$';
             private static HashSet<string> callsToIgnore = null;
-            private static HashSet<string> choiceCallsToAdd = new HashSet<string>();
+           // private static HashSet<string> choiceCallsToAdd = new HashSet<string>();
+            private static HashSet<string> traceCallsToAddToChoice = new HashSet<string>();
             private static HashSet<string> noBlockEP = new HashSet<string>();
 
             private static List<string> resultRec = new List<string>();
@@ -1731,16 +1768,21 @@ namespace FastAVN
                 {
                     bool entrypointBlocks = false;
                     string filename = Path.Combine(dir, "avnResult.txt");
-                    
+                    int epTraceCount = 0;
                     if (File.Exists(filename))
                     {
+                        //replacing asserts by aaume in the current method
+                        ReplaceAllAssertsByAssume(currentProgram, dir);
+
                         //adding the result
                         string[] lines = File.ReadAllLines(filename);
                         Dictionary<string, string> assertRes = new Dictionary<string, string>();
                         lines.Iter(res => assertRes.Add(res.Split(':')[0], res.Split(':')[1]));
 
                         //initialized per entrypoint
-                        choiceCallsToAdd = new HashSet<string>();
+                       // choiceCallsToAdd = new HashSet<string>();
+                        traceCallsToAddToChoice = new HashSet<string>();
+                        
                         foreach (var assertID in assertRes.Keys)
                         {
 
@@ -1748,34 +1790,33 @@ namespace FastAVN
                             if (assertRes[assertID].Equals("PASS"))
                             {
                                 
-                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
+                                currentProgram = ReplaceViolatingAssertByAssume(currentProgram, assertID);
 
                             }
                             else if (assertRes[assertID].Equals("FAIL"))
                             {
                                 
-                                currentProgram = ReplacePassOrFailAsserts(currentProgram, assertID);
+                                currentProgram = ReplaceViolatingAssertByAssume(currentProgram, assertID);
                                 
                             }
                             else if(assertRes[assertID].Equals("BLOCK"))
                             {
-                                //replace assertion in the original program method
-                                
-                                ReplaceAssertByAssume(currentProgram, dir, callgraph);
-                                currentProgram = ReplaceBlockedAsserts(currentProgram, assertID, dir, AllEPNames);
+                                //replace assertion in the original program method  and all reachable methods?                              
+                                currentProgram = ReplaceViolatingAssertByAssume(currentProgram, assertID);
+                                currentProgram = ReplaceBlockedAsserts(currentProgram, assertID, dir, AllEPNames, epTraceCount);
                                 entrypointBlocks = true;
-                                
+                                epTraceCount++;
                             }
                             
                         }
-
-                        ReplaceCallsForCallers(currentProgram, dir, AllEPNames);
-                           
-
                     }
                     if (!entrypointBlocks) {
                         NoBlockEP.Add(dir);
+                    }else
+                    {
+                        ReplaceCallsForCallers(currentProgram, dir, AllEPNames);
                     }
+
                     
 
 
@@ -1786,11 +1827,12 @@ namespace FastAVN
             }
 
 
-            //this function replaces the asserts with the result PASS or FAIL, by an assume
-            public static Program ReplacePassOrFailAsserts(Program currentProgram, string assertID)
+            
+            
+            public static Program ReplaceViolatingAssertByAssume(Program currentProgram, string assertID)
             {
                 string functionName = assertID.Split(NameSeparator)[0];
-
+                
                 var assertToAssume = new Func<Cmd, Cmd>(cmd =>
                 {
                     var acmd = cmd as AssertCmd;
@@ -1802,12 +1844,14 @@ namespace FastAVN
                         foreach (var block in impl.Blocks)
                             block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
 
+                
                 return currentProgram;
 
             }
 
 
-            private static Program ReplaceBlockedAsserts(Program currentProgram, string assertID, string dirName, HashSet<string> allEPNames)
+            private static Program ReplaceBlockedAsserts(Program currentProgram, string assertID, string dirName, 
+                HashSet<string> allEPNames, int traceNum)
   
             {
 
@@ -1835,7 +1879,7 @@ namespace FastAVN
                 Program newPrunedProgram = InlinePrunedProgram(prunedProgram, prunedEPImpl, assertID);
 
                
-                Dictionary<string, string> implRename = RenameTraceImpls(newPrunedProgram, assertID);
+                Dictionary<string, string> implRename = RenameTraceImpls(newPrunedProgram, traceNum);
 
 
                 //removing the calls present due to pruning
@@ -1913,12 +1957,14 @@ namespace FastAVN
                     }
 
                 }
-               
-                
+
+                //tracking the blocked traces to be called by the choice method for an entrypoint
+                traceCallsToAddToChoice.Add(implRename[prunedEPName]);
+
 
                 //create the dummy choice method with the two calls
 
-
+                /*
                 Procedure origEpProc = origEpImpl.Proc;
                 Procedure choiceProc = new Procedure(Token.NoToken, entrypoint+"$"+assertID + "$choice", origEpProc.TypeParameters, origEpProc.InParams,
                     origEpProc.OutParams, origEpProc.Requires, origEpProc.Modifies, origEpProc.Ensures, origEpProc.Attributes);
@@ -1930,31 +1976,31 @@ namespace FastAVN
                 currentProgram.AddTopLevelDeclaration(choiceProc);
                 currentProgram.AddTopLevelDeclaration(choiceImpl);
 
-
-
+                */
                 //insert code in the original program for the call to the trace
-                choiceCallsToAdd.Add(choiceImpl.Name);
+                //choiceCallsToAdd.Add(choiceImpl.Name);
+
+
                 //ReplaceCallsForCallers(currentProgram, finalCallers, choiceImpl.Name, entrypoint);
 
-                List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, implRename[prunedEPName], entrypoint, assertID);
+                /*List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, implRename[prunedEPName], entrypoint, assertID);
                 choiceImpl.Blocks.AddRange(choiceBlocks);
+                */
 
-                
                 return currentProgram;
 
             }
 
 
             //TODO This function should replace all the asserts in the entrypoint by assumes
-            private static void ReplaceAssertByAssume(Program currentProgram,  string entrypoint, 
-                Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
+            private static void ReplaceAllAssertsByAssume(Program currentProgram,  string entrypoint)
             {
                 
                 //replacing function
                 var assertToAssume = new Func<Cmd, Cmd>(cmd =>
                 {
                     var acmd = cmd as AssertCmd;
-                    if (acmd == null) return cmd;
+                    if (acmd == null || acmd.Expr.Equals(Expr.True)) return cmd;
                     return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
                 });
 
@@ -1969,12 +2015,31 @@ namespace FastAVN
             }
 
 
-            //this function should be called at the end of on entry point and replace all it's calls with the series of calls to the choice methods
-            //the choice methods would have been added earlier 
-            //this is going to increase the size of programs per assertions - is it acceptable?
+            //this function should be called at the end of on entry point and replace all it's calls with the choice method
+            // that calls the one out of the original method and the trace methods 
             private static void ReplaceCallsForCallers(Program currentProgram, string entrypoint, 
                 HashSet<string> allEPNames)
             {
+                //get the choice method and add it to the program
+
+                Implementation origEpImpl = currentProgram.TopLevelDeclarations.OfType<Implementation>().Where(im =>
+                im.Name.Equals(entrypoint)).First();
+
+                Procedure origEpProc = origEpImpl.Proc;
+                Procedure choiceProc = new Procedure(Token.NoToken, entrypoint + "$choice", origEpProc.TypeParameters, origEpProc.InParams,
+                   origEpProc.OutParams, origEpProc.Requires, origEpProc.Modifies, origEpProc.Ensures, origEpProc.Attributes);
+                Implementation choiceImpl = new Implementation(Token.NoToken, entrypoint + "$choice", origEpImpl.TypeParameters, origEpImpl.InParams,
+                    origEpImpl.OutParams, origEpImpl.LocVars, new List<Block>(), origEpImpl.Attributes);
+
+
+                choiceImpl.Proc = choiceProc;
+                currentProgram.AddTopLevelDeclaration(choiceProc);
+                currentProgram.AddTopLevelDeclaration(choiceImpl);
+
+                List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, entrypoint);
+                choiceImpl.Blocks.AddRange(choiceBlocks);
+
+
                 Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(currentProgram);
                 callgraph.Successors(callgraph.Nodes.First());
                 IEnumerable<string> callers = callgraph.Predecessors(entrypoint);
@@ -1995,13 +2060,10 @@ namespace FastAVN
                                     CallCmd ccmd = cmd as CallCmd;
                                     if (ccmd.callee.Equals(entrypoint))
                                     {
-
-                                        //add calls for all choice methods
-                                        foreach(var choice in choiceCallsToAdd)
-                                        {
-                                            CallCmd newcmd = new CallCmd(Token.NoToken, choice, ccmd.Ins, ccmd.Outs, ccmd.Attributes);
-                                            cmds.Add(newcmd);
-                                        }
+                                        //add call to the choice method instead
+                                        CallCmd newcmd = new CallCmd(Token.NoToken, choiceProc.Name, ccmd.Ins, ccmd.Outs, ccmd.Attributes);
+                                        cmds.Add(newcmd);
+                                        
                                         
                                     }
                                     else
@@ -2014,10 +2076,59 @@ namespace FastAVN
                             Block newBlock = new Block(Token.NoToken, block.Label, cmds, block.TransferCmd);
                             newBlocks.Add(newBlock);
                         }
-                        impl.Blocks.Clear();
-                        impl.Blocks.AddRange(newBlocks);
+                        impl.Blocks = newBlocks;
+                        
                     }
                 }
+            }
+
+            private static List<Block> GetChoiceBlocks(Implementation choiceImpl, string entrypoint)
+            {
+                List<Block> blocks = new List<Block>();
+                List<Expr> ins = new List<Expr>();
+                List<IdentifierExpr> outs = new List<IdentifierExpr>();
+
+                choiceImpl.InParams.Iter(inp => ins.Add(new IdentifierExpr(Token.NoToken, inp, inp.IsMutable)));
+                choiceImpl.OutParams.Iter(outp => outs.Add(new IdentifierExpr(Token.NoToken, outp, outp.IsMutable)));
+
+                //creating block b2 - the original method block
+                Block b2 = new Block(Token.NoToken,"OrigCall", new List<Cmd>(), new ReturnCmd(Token.NoToken));
+                Cmd callOrigCmd = new CallCmd(Token.NoToken, entrypoint, ins, outs);
+                b2.Cmds.Add(callOrigCmd);
+
+                //creating the blocks for trace calls
+                int traceCallIndex = 0;
+                List<Block> traceBlocks = new List<Block>();
+                List<Block> succBlocks = new List<Block>();
+                List<string> succBlocksLabel = new List<string>();
+                
+                foreach (var traceEp  in traceCallsToAddToChoice)
+                {
+                    Block b3 = new Block(Token.NoToken, "TraceCall"+ traceCallIndex, new List<Cmd>(), new ReturnCmd(Token.NoToken));
+                    Cmd callTraceCmd = new CallCmd(Token.NoToken, traceEp, ins, outs);
+                    Cmd finishcmd = new AssumeCmd(Token.NoToken, Expr.False);
+                    b3.Cmds.Add(callTraceCmd);
+                    b3.Cmds.Add(finishcmd);
+                    traceBlocks.Add(b3);
+                    traceCallIndex++;
+                    succBlocks.Add(b3);
+                    succBlocksLabel.Add(b3.Label);
+                }
+                
+                succBlocks.Add(b2);
+                succBlocksLabel.Add(b2.Label);
+
+                //creating block 1
+                GotoCmd NDChoiceGoto = new GotoCmd(Token.NoToken, succBlocksLabel, succBlocks);
+                Block b1 = new Block(Token.NoToken, entrypoint + "$NDChoice", new List<Cmd>(), NDChoiceGoto);
+
+                blocks.Add(b1);
+                blocks.Add(b2);
+                foreach(var b3 in traceBlocks)
+                    blocks.Add(b3);
+
+                return blocks;
+
             }
 
             private static List<Block> GetChoiceBlocks(Implementation choiceImpl, string prunedInlinedEPName, string entrypoint, 
@@ -2168,7 +2279,7 @@ namespace FastAVN
                 return newPrunedProgram;
             }
 
-            private static QKeyValue RemoveAttr(QKeyValue attributes, string Key)
+            public static QKeyValue RemoveAttr(QKeyValue attributes, string Key)
             {
                 QKeyValue currentAttr = attributes;
                 QKeyValue newAttr = null;
@@ -2192,22 +2303,30 @@ namespace FastAVN
                 return newAttr;
             }
 
-            private static Dictionary<string, string> RenameTraceImpls(Program prunedProgram, string assertID)
+            private static Dictionary<string, string> RenameTraceImpls(Program prunedProgram,  int tracenum)
             {
                 Dictionary<string, string> renameInfo = new Dictionary<string, string>();
 
                 List<Declaration> declToAdd = new List<Declaration>();
                 List<Declaration> declToRemove = new List<Declaration>();
                 //renaming impls from the trace
-                string prefix = assertID + "$";
+                
+                
                 foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
                 {
-                    
-                    Implementation newImpl = new Implementation(Token.NoToken, prefix + impl.Name, impl.TypeParameters, impl.InParams,
+                    string[] comp = impl.Name.Split('_');
+                    string name = "";
+                    for(int i =0; i< comp.Length-1; i++)
+                    {
+                        name = name + comp[i] + "_";
+                    }
+                    name = name +  tracenum;
+
+                    Implementation newImpl = new Implementation(Token.NoToken, name, impl.TypeParameters, impl.InParams,
                         impl.OutParams, impl.LocVars, impl.Blocks, impl.Attributes);
                     
                     Procedure proc = impl.Proc;
-                    Procedure newProc = new Procedure(Token.NoToken, prefix + impl.Name, proc.TypeParameters, proc.InParams, proc.OutParams,
+                    Procedure newProc = new Procedure(Token.NoToken, name, proc.TypeParameters, proc.InParams, proc.OutParams,
                         proc.Requires, proc.Modifies, proc.Ensures, proc.Attributes);
                     newImpl.Proc = newProc;
                     
