@@ -40,7 +40,7 @@ namespace FastAVN
         static bool useProvidedEntryPoints = false;
         static bool onlyUseRootsAsEntryPoints = false;
         static bool dependentEntrypointExec = false; //whether to execute all entry points in dependence order or not
-        
+        static bool reportFailOnRoot = false; //report angelic traces from module level entry points only
 
         static DateTime startingTime = DateTime.Now;
         static volatile bool deadlineReached = false;
@@ -107,6 +107,10 @@ namespace FastAVN
                 Driver.printCallDependence = true;
             }
             
+            if(args.Any(s => s == "/reportFailOnRoots"))
+            {
+                Driver.reportFailOnRoot = true;
+            }
             // user definded verbose level
             args.Where(s => s.StartsWith("/verbose:"))
                 .Iter(s => verbose = int.Parse(s.Substring("/verbose:".Length)));
@@ -191,6 +195,8 @@ namespace FastAVN
                 var entrypoints = new HashSet<string>();
                 Program program;
 
+               
+
                 if (!earlySplit)
                 {
                                     
@@ -229,7 +235,7 @@ namespace FastAVN
                     //restoring the recursion bound 
                     CommandLineOptions.Clo.RecursionBound = origBound;
                     
-
+                    
                     // Do a run on instrumented program, filter out entrypoints
                     var entrypoint_impl = program.TopLevelDeclarations.OfType<Implementation>()
                         .Where(impl => QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint"))
@@ -256,6 +262,20 @@ namespace FastAVN
 
                     entrypoints.IntersectWith(mayReach);
                 }
+
+                
+                //computing the entrypoints in the original program for the flag reportFailOnRoot
+                //take care of the renamed entrypoints due to recursion elimination
+                if (reportFailOnRoot)
+                {
+                    moduleEntrypoints = new HashSet<string>();
+                    Program prog_temp = BoogieUtil.ReadAndOnlyResolve(inputfile);
+                    prog_temp.TopLevelDeclarations.OfType<Implementation>().Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes,
+                        "entrypoint") || QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint")).Iter
+                        (impl => moduleEntrypoints.Add(impl.Name));
+                    
+                }
+
 
                 // do reachability analysis on procedures
                 RunAVN(program, entrypoints);
@@ -386,6 +406,7 @@ namespace FastAVN
         public static Dictionary<Declaration, HashSet<string>> DeclToGlobalsUsed = null;
         public static Dictionary<Declaration, HashSet<string>> DeclToFunctionsUsed = null;
         private static bool printCallDependence = false;
+        private static HashSet<string> moduleEntrypoints;
 
 
         /// <summary>
@@ -460,6 +481,8 @@ namespace FastAVN
                 else {
                     CallGraph.Edges.Iter(x => nonRootImpls.Add(x.Item2));
                 }
+                nonRootImpls.Iter(i => Console.WriteLine(i));
+
             }
 
             // entrypoints
@@ -469,6 +492,7 @@ namespace FastAVN
                 .Where(impl => entryPointExcludes == null || !matchesEntryPointExclude(impl.Name))
                 .Where(impl => nonRootImpls == null || !nonRootImpls.Contains(impl.Name)));
 
+           
             if(entrypoints.Count == 0)
             {
                 Console.WriteLine("No entrypoints... All verified.");
@@ -502,11 +526,15 @@ namespace FastAVN
             assignAVNIDs(prog);
              
            
-
            
             Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(prog);
             callgraph.Successors(callgraph.Nodes.First());
             Dictionary<string, List<string>> dependencyInfo = BuildEntryPointDependenceGraph(prog, entrypoints, callgraph);
+
+            HashSet<string> allEntryPointNames = new HashSet<string>();
+            entrypoints.Iter(impl => allEntryPointNames.Add(impl.Name));
+
+            
 
             //only for debugging
             if (printCallDependence)
@@ -518,104 +546,28 @@ namespace FastAVN
             if (dependentEntrypointExec)
             {
 
-                //never modify this dictionary
-                Dictionary<string, List<string>> depInfoCopy = new Dictionary<string, List<string>>();
-                foreach(var e  in dependencyInfo.Keys)
-                {
-                    var newK = e + "";
-                    List<string> mem = new List<string>();
-                    foreach(var m in dependencyInfo[e])
-                    {
-                        mem.Add(m + "");
-                    }
-                    depInfoCopy.Add(newK, mem);
-                }
-
-
-                HashSet<string> allEntryPointNames = new HashSet<string>();
-                entrypoints.Iter(impl => allEntryPointNames.Add(impl.Name));
-
+                RunAVUsingDepAnalysis(prog, entrypoints, dependencyInfo, allEntryPointNames);
                 
-
-
-                var workingCopy = "tempProg.bpl";
-                BoogieUtil.PrintProgram(prog, workingCopy);
-                Program currentProgram = BoogieUtil.ReadAndOnlyResolve(workingCopy);
-                //File.Delete(workingCopy);
-                
-
-                /*This code runs the entrypoints with no dependence
-                 and keeps modifying the dependence as and when the entrypoints are done.
-                 We assume for now that this graph is acyclic. */
-                int parCount = 0;
-                while (!AllEntryPointsDone(dependencyInfo))
-                {
-                    parCount++;
-                    HashSet<string> currentEntrypointNames;
-                    //pick the one with zero dep and create threads for them
-                    ConcurrentBag<Implementation> currentEntrypoints = getIndependentEntrypoints(entrypoints, 
-                        dependencyInfo, out currentEntrypointNames);
-
-                    
-                    
-                    //get entrypoint directories to get the entrypoints removed
-                    HashSet<string> removedEntrypointNames = new HashSet<string>();
-                    removedEntrypointNames = new HashSet<string>(currentEntrypointNames);
-                    ExecuteEPInSeq(currentProgram, currentEntrypoints, currentEntrypointNames, allEntryPointNames, depInfoCopy);
-                
-                    
-                    //replaces the asertions based on results
-                    if (ReplacementRequired(dependencyInfo))
-                        currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, removedEntrypointNames, allEntryPointNames, callgraph);
-
-                    //reassign avn IDs
-                    currentProgram = reassignAVNID(currentProgram, removedEntrypointNames);
-
-                    //remove the current independent and update the others in depgraph                
-                    foreach (var epName in removedEntrypointNames)
-                    {
-                        dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
-                        dependencyInfo.Remove(epName);
-                    }
-
-                    printMesg("end of run " + parCount);
-
-                }
             }
             else
             {
-                /* old code*/
-
-                //sorting the entrypoints for the older algorithm
-
-                ConcurrentQueue<Implementation> epQueue = new ConcurrentQueue<Implementation>();
-
-                while (!AllEntryPointsDone(dependencyInfo))
+                if (reportFailOnRoot)
                 {
-                    HashSet<string> currentEpNames = new HashSet<string>();
-                    ConcurrentBag<Implementation> currentep = getIndependentEntrypoints(entrypoints, dependencyInfo, out currentEpNames);
-                    foreach (var epName in currentEpNames)
+                    HashSet<string> nonRootEPs = new HashSet<string>(dependencyInfo.Keys.Where(ep => (!moduleEntrypoints.Contains(ep)) ||
+                    (moduleEntrypoints.Contains(ep) && dependencyInfo.Any(dep => moduleEntrypoints.Contains(dep.Key) && dep.Value.Contains(ep)))));
+
+                    var epimpl = entrypoints.Where(ep => nonRootEPs.Contains(ep.Name));
+                    entrypoints = new ConcurrentBag<Implementation>(entrypoints.Except(epimpl));
+                    foreach (var ep in nonRootEPs)
                     {
-                        
-                        epQueue.Enqueue(currentep.Where(ep => ep.Name.Equals(epName)).First());
-                        dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
-                        dependencyInfo.Remove(epName);
+                        dependencyInfo.Where(dep => dep.Value.Contains(ep)).Iter(dep => dep.Value.Remove(ep));
+                        dependencyInfo.Remove(ep);
                     }
 
                 }
+                /* old code*/
+                RunAVWithoutDepAnalysis(prog, entrypoints, dependencyInfo, allEntryPointNames);
                 
-                var threads = new List<Thread>();
-                for (int i = 0; i < numThreads; i++)
-                {
-                    var w = new Worker(prog, epQueue);
-                    if (!earlySplit)
-                        threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
-                    else
-                        threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
-                }
-
-                threads.Iter(t => t.Start());
-                threads.Iter(t => t.Join());
             }
 
 
@@ -637,6 +589,102 @@ namespace FastAVN
 
                 //printing results
                 AssertEliminator.printAVResults();
+            }
+        }
+
+        private static void RunAVWithoutDepAnalysis(Program prog, ConcurrentBag<Implementation> entrypoints, Dictionary<string, List<string>> dependencyInfo, HashSet<string> allEntryPointNames)
+        {
+            //sorting the entrypoints for the older algorithm
+
+            ConcurrentQueue<Implementation> epQueue = new ConcurrentQueue<Implementation>();
+
+            while (!AllEntryPointsDone(dependencyInfo))
+            {
+                HashSet<string> currentEpNames = new HashSet<string>();
+                ConcurrentBag<Implementation> currentep = getIndependentEntrypoints(entrypoints, dependencyInfo, out currentEpNames);
+                foreach (var epName in currentEpNames)
+                {
+
+                    epQueue.Enqueue(currentep.Where(ep => ep.Name.Equals(epName)).First());
+                    dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
+                    dependencyInfo.Remove(epName);
+                }
+
+            }
+
+            var threads = new List<Thread>();
+            for (int i = 0; i < numThreads; i++)
+            {
+                var w = new Worker(prog, epQueue, allEntryPointNames);
+                if (!earlySplit)
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAv)));
+                else
+                    threads.Add(new Thread(new ThreadStart(w.RunSplitAndAvhAndAv)));
+            }
+
+            threads.Iter(t => t.Start());
+            threads.Iter(t => t.Join());
+        }
+
+        private static void RunAVUsingDepAnalysis(Program prog, ConcurrentBag<Implementation> entrypoints, 
+            Dictionary<string, List<string>> dependencyInfo, HashSet<string> allEntryPointNames)
+        {
+            //never modify this dictionary
+            Dictionary<string, List<string>> depInfoCopy = new Dictionary<string, List<string>>();
+            foreach (var e in dependencyInfo.Keys)
+            {
+                var newK = e + "";
+                List<string> mem = new List<string>();
+                foreach (var m in dependencyInfo[e])
+                {
+                    mem.Add(m + "");
+                }
+                depInfoCopy.Add(newK, mem);
+            }
+
+            var workingCopy = "tempProg.bpl";
+            BoogieUtil.PrintProgram(prog, workingCopy);
+            Program currentProgram = BoogieUtil.ReadAndOnlyResolve(workingCopy);
+            //File.Delete(workingCopy);
+
+
+            /*This code runs the entrypoints with no dependence
+             and keeps modifying the dependence as and when the entrypoints are done.
+             We assume for now that this graph is acyclic. */
+            int parCount = 0;
+            while (!AllEntryPointsDone(dependencyInfo))
+            {
+                parCount++;
+                HashSet<string> currentEntrypointNames;
+                //pick the one with zero dep and create threads for them
+                ConcurrentBag<Implementation> currentEntrypoints = getIndependentEntrypoints(entrypoints,
+                    dependencyInfo, out currentEntrypointNames);
+
+
+
+                //get entrypoint directories to get the entrypoints removed
+                HashSet<string> removedEntrypointNames = new HashSet<string>();
+                removedEntrypointNames = new HashSet<string>(currentEntrypointNames);
+                ExecuteEPInSeq(currentProgram, currentEntrypoints, currentEntrypointNames, allEntryPointNames, depInfoCopy);
+
+
+                //replaces the asertions based on results
+                if (ReplacementRequired(dependencyInfo))
+                    currentProgram = AssertEliminator.ReplaceAssertsOfDepImpls(currentProgram, 
+                        removedEntrypointNames, allEntryPointNames);
+
+                //reassign avn IDs
+                currentProgram = reassignAVNID(currentProgram, removedEntrypointNames);
+
+                //remove the current independent and update the others in depgraph                
+                foreach (var epName in removedEntrypointNames)
+                {
+                    dependencyInfo.Where(ep => ep.Value.Contains(epName)).Iter(ep => ep.Value.Remove(epName));
+                    dependencyInfo.Remove(epName);
+                }
+
+                printMesg("end of run " + parCount);
+
             }
         }
 
@@ -1759,7 +1807,7 @@ namespace FastAVN
             private static List<string> resultRec = new List<string>();
 
             public static Program ReplaceAssertsOfDepImpls(Program currentProgram, HashSet<string> 
-                removedEntryPoints, HashSet<string> AllEPNames, Microsoft.Boogie.GraphUtil.Graph<string> callgraph)
+                removedEntryPoints, HashSet<string> AllEPNames)
             {
                 HashSet<string> currentDirs = new HashSet<string>(removedEntryPoints);
 
@@ -1795,7 +1843,6 @@ namespace FastAVN
                             }
                             else if (assertRes[assertID].Equals("FAIL"))
                             {
-                                
                                 currentProgram = ReplaceViolatingAssertByAssume(currentProgram, assertID);
                                 
                             }
