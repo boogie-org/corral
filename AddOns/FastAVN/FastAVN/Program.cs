@@ -100,8 +100,12 @@ namespace FastAVN
                 Driver.keepLongestTrace = true;
 
             if (args.Any(s => s == "/dependentEntrypointExec"))
+            {
                 Driver.dependentEntrypointExec = true;
-
+                avnArgs += " /depEPAnalysis ";
+            }
+                
+            
             if(args.Any(s => s== "/printCallDependence"))
             {
                 Driver.printCallDependence = true;
@@ -545,24 +549,25 @@ namespace FastAVN
 
             if (dependentEntrypointExec)
             {
+                
+                Dictionary<string, List<string>> depInfoCopy = getDepCopy(dependencyInfo);
 
-                RunAVUsingDepAnalysis(prog, entrypoints, dependencyInfo, allEntryPointNames);
+                RunAVUsingDepAnalysis(prog, entrypoints, dependencyInfo, allEntryPointNames, depInfoCopy);
+
+                if (reportFailOnRoot)
+                {
+                    RootLevelCheck.moduleEntryPoints = moduleEntrypoints;
+                    RootLevelCheck.checkForRootLevelFails(prog, depInfoCopy,entrypoints, allEntryPointNames);
+                    
+                }
                 
             }
             else
             {
                 if (reportFailOnRoot)
                 {
-                    HashSet<string> nonRootEPs = new HashSet<string>(dependencyInfo.Keys.Where(ep => (!moduleEntrypoints.Contains(ep)) ||
-                    (moduleEntrypoints.Contains(ep) && dependencyInfo.Any(dep => moduleEntrypoints.Contains(dep.Key) && dep.Value.Contains(ep)))));
-
-                    var epimpl = entrypoints.Where(ep => nonRootEPs.Contains(ep.Name));
-                    entrypoints = new ConcurrentBag<Implementation>(entrypoints.Except(epimpl));
-                    foreach (var ep in nonRootEPs)
-                    {
-                        dependencyInfo.Where(dep => dep.Value.Contains(ep)).Iter(dep => dep.Value.Remove(ep));
-                        dependencyInfo.Remove(ep);
-                    }
+                    //modifies dependency info
+                    entrypoints = getRootLevelEntryPoints(dependencyInfo, entrypoints);                    
 
                 }
                 /* old code*/
@@ -592,6 +597,52 @@ namespace FastAVN
             }
         }
 
+       
+
+        private static Dictionary<string, List<string>> getDepCopy(Dictionary<string, List<string>> dependencyInfo)
+        {
+            Dictionary<string, List<string>> copy = new Dictionary<string, List<string>>();
+            foreach (var e in dependencyInfo.Keys)
+            {
+                var newK = e + "";
+                List<string> mem = new List<string>();
+                foreach (var m in dependencyInfo[e])
+                {
+                    mem.Add(m + "");
+                }
+                copy.Add(newK, mem);
+            }
+            return copy;
+        }
+
+        private static ConcurrentBag<Implementation> getRootLevelEntryPoints(Dictionary<string, List<string>> dependencyInfo,
+            ConcurrentBag<Implementation> oldEps)
+        {
+            ConcurrentBag<Implementation> result = new ConcurrentBag<Implementation>();
+            HashSet<string> nonRootEPs = new HashSet<string>();
+            foreach (var ep in dependencyInfo.Keys.Where(key => !moduleEntrypoints.Contains(key)))
+                nonRootEPs.Add(ep);
+
+            foreach (var mep in moduleEntrypoints)
+            {
+                if (dependencyInfo.Any(dep => moduleEntrypoints.Contains(dep.Key) && dep.Value.Contains(mep)))
+                    nonRootEPs.Add(mep);
+            }
+
+            var epimpl = oldEps.Where(ep => nonRootEPs.Contains(ep.Name));
+            result = new ConcurrentBag<Implementation>(oldEps.Except(epimpl));
+            foreach (var ep in nonRootEPs)
+            {
+                dependencyInfo.Where(dep => dep.Value.Contains(ep)).Iter(dep => dep.Value.Remove(ep));
+                dependencyInfo.Remove(ep);
+            }
+
+            return result;
+        }
+
+
+
+        
         private static void RunAVWithoutDepAnalysis(Program prog, ConcurrentBag<Implementation> entrypoints, Dictionary<string, List<string>> dependencyInfo, HashSet<string> allEntryPointNames)
         {
             //sorting the entrypoints for the older algorithm
@@ -627,21 +678,10 @@ namespace FastAVN
         }
 
         private static void RunAVUsingDepAnalysis(Program prog, ConcurrentBag<Implementation> entrypoints, 
-            Dictionary<string, List<string>> dependencyInfo, HashSet<string> allEntryPointNames)
+            Dictionary<string, List<string>> dependencyInfo, HashSet<string> allEntryPointNames, 
+            Dictionary<string, List<string>> depInfoCopy)
         {
-            //never modify this dictionary
-            Dictionary<string, List<string>> depInfoCopy = new Dictionary<string, List<string>>();
-            foreach (var e in dependencyInfo.Keys)
-            {
-                var newK = e + "";
-                List<string> mem = new List<string>();
-                foreach (var m in dependencyInfo[e])
-                {
-                    mem.Add(m + "");
-                }
-                depInfoCopy.Add(newK, mem);
-            }
-
+           
             var workingCopy = "tempProg.bpl";
             BoogieUtil.PrintProgram(prog, workingCopy);
             Program currentProgram = BoogieUtil.ReadAndOnlyResolve(workingCopy);
@@ -920,41 +960,7 @@ namespace FastAVN
             return independentEntryPoints;
             
 
-            /*HashSet<string> epAdded = new HashSet<string>();
-             *if(independentEntryPoints.IsEmpty)
-              {
-                  //mutually recursive case
-                  foreach(var ep1 in dependencyInfo.Keys)
-                  {
-                      if (epAdded.Contains(ep1))
-                          continue;
-                      HashSet<string> toAdd = new HashSet<string>(dependencyInfo.Keys.Where(ep => dependencyInfo[ep].Contains(ep1) &&
-                          dependencyInfo[ep1].Contains(ep)));
-
-                      if (toAdd.Count() > 0)
-                      {
-                          toAdd.Add(ep1);
-
-                          int minLevel = toAdd.Min(e => dependencyInfo[e].Count);
-                          toAdd.RemoveWhere(e => dependencyInfo[e].Count > minLevel);
-
-                          foreach (var ep in toAdd)
-                          {
-                              var impl = entrypoints.Where(epImpl => epImpl.Name.Equals(ep)).First();
-                              if (!independentEntryPoints.Contains(impl))
-                              {
-
-                                  independentEntryPoints.Add(impl);
-                                  epAdded.Add(ep);
-                              }
-
-                          }
-                      }
-
-
-                  }
-              }
-              */
+           
 
         }
 
@@ -1025,6 +1031,10 @@ namespace FastAVN
             Program program;
             static string counter_lock = "counter_lock";
             static int trunc_counter = 0;
+            bool level2 = false;
+            public static int folcount = 0;
+
+            public bool Level2 { get => level2; set => level2 = value; }
 
             public Worker(Program program, ConcurrentQueue<Implementation> impls)
             {
@@ -1062,6 +1072,11 @@ namespace FastAVN
 
                     var tp = TruncatePath(name);
                     var wd = Path.Combine(Environment.CurrentDirectory, tp);
+                    if (Level2)
+                    {
+                        wd = Path.Combine(Path.Combine(Environment.CurrentDirectory, "level2Results"), tp + folcount++);
+                    }
+                        
                     
                     DirsCreated.Add(tp);
 
@@ -1806,6 +1821,14 @@ namespace FastAVN
 
             private static List<string> resultRec = new List<string>();
 
+            //for the 2 level analysis - entrypoint, currentAVID, originalAVID
+            public static List<Tuple<string, string, string>> failingTraceInfo = new List<Tuple<string, string, string>>();
+            
+            public static void resetTraceCallsToAdd()
+            {
+                traceCallsToAddToChoice = new HashSet<string>();
+            }
+
             public static Program ReplaceAssertsOfDepImpls(Program currentProgram, HashSet<string> 
                 removedEntryPoints, HashSet<string> AllEPNames)
             {
@@ -1819,13 +1842,22 @@ namespace FastAVN
                     int epTraceCount = 0;
                     if (File.Exists(filename))
                     {
-                        //replacing asserts by aaume in the current method
+                        //replacing asserts by assume in the current method
                         ReplaceAllAssertsByAssume(currentProgram, dir);
 
                         //adding the result
                         string[] lines = File.ReadAllLines(filename);
                         Dictionary<string, string> assertRes = new Dictionary<string, string>();
-                        lines.Iter(res => assertRes.Add(res.Split(':')[0], res.Split(':')[1]));
+                        Dictionary<string, string> nameMap = new Dictionary<string, string>();
+
+                        foreach(var line in lines)
+                        {
+                            string[] comp = line.Split(':');
+                            assertRes.Add(comp[0], comp[1]);
+                            nameMap.Add(comp[0], comp[2]);
+                        }
+                        
+
 
                         //initialized per entrypoint
                        // choiceCallsToAdd = new HashSet<string>();
@@ -1844,6 +1876,8 @@ namespace FastAVN
                             else if (assertRes[assertID].Equals("FAIL"))
                             {
                                 currentProgram = ReplaceViolatingAssertByAssume(currentProgram, assertID);
+                                if (Driver.reportFailOnRoot)
+                                    failingTraceInfo.Add(new Tuple<string, string, string>(dir, assertID, nameMap[assertID]));
                                 
                             }
                             else if(assertRes[assertID].Equals("BLOCK"))
@@ -1897,7 +1931,7 @@ namespace FastAVN
             }
 
 
-            private static Program ReplaceBlockedAsserts(Program currentProgram, string assertID, string dirName, 
+            public static Program ReplaceBlockedAsserts(Program currentProgram, string assertID, string dirName, 
                 HashSet<string> allEPNames, int traceNum)
   
             {
@@ -2009,31 +2043,6 @@ namespace FastAVN
                 traceCallsToAddToChoice.Add(implRename[prunedEPName]);
 
 
-                //create the dummy choice method with the two calls
-
-                /*
-                Procedure origEpProc = origEpImpl.Proc;
-                Procedure choiceProc = new Procedure(Token.NoToken, entrypoint+"$"+assertID + "$choice", origEpProc.TypeParameters, origEpProc.InParams,
-                    origEpProc.OutParams, origEpProc.Requires, origEpProc.Modifies, origEpProc.Ensures, origEpProc.Attributes);
-                Implementation choiceImpl = new Implementation(Token.NoToken, entrypoint + "$" + assertID + "$choice", origEpImpl.TypeParameters, origEpImpl.InParams,
-                    origEpImpl.OutParams, origEpImpl.LocVars, new List<Block>(), origEpImpl.Attributes);
-
-                
-                choiceImpl.Proc = choiceProc;
-                currentProgram.AddTopLevelDeclaration(choiceProc);
-                currentProgram.AddTopLevelDeclaration(choiceImpl);
-
-                */
-                //insert code in the original program for the call to the trace
-                //choiceCallsToAdd.Add(choiceImpl.Name);
-
-
-                //ReplaceCallsForCallers(currentProgram, finalCallers, choiceImpl.Name, entrypoint);
-
-                /*List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, implRename[prunedEPName], entrypoint, assertID);
-                choiceImpl.Blocks.AddRange(choiceBlocks);
-                */
-
                 return currentProgram;
 
             }
@@ -2064,7 +2073,7 @@ namespace FastAVN
 
             //this function should be called at the end of on entry point and replace all it's calls with the choice method
             // that calls the one out of the original method and the trace methods 
-            private static void ReplaceCallsForCallers(Program currentProgram, string entrypoint, 
+            public static void ReplaceCallsForCallers(Program currentProgram, string entrypoint, 
                 HashSet<string> allEPNames)
             {
                 //get the choice method and add it to the program
@@ -2086,7 +2095,7 @@ namespace FastAVN
                 List<Block> choiceBlocks = GetChoiceBlocks(choiceImpl, entrypoint);
                 choiceImpl.Blocks.AddRange(choiceBlocks);
 
-
+                //TODO this is too expensive! Need to pull this up!
                 Microsoft.Boogie.GraphUtil.Graph<string> callgraph = BoogieUtil.GetCallGraph(currentProgram);
                 callgraph.Successors(callgraph.Nodes.First());
                 IEnumerable<string> callers = callgraph.Predecessors(entrypoint);
@@ -2393,243 +2402,10 @@ namespace FastAVN
 
            
 
-            private static Program ReplaceBlockedAssertsOld(Program currentProgram, string assertID, string dirName)
-            {
-                string entrypoint = dirName;
-                
-
-                //get the file from the directory - bound to exist for blocked asserts -error check?
-                Program prunedProgram = BoogieUtil.ReadAndOnlyResolve(Path.Combine(dirName, "prunedProg_" + assertID + ".bpl"));
-
-                //may need list of where and requires clauses etc too - see the instrumentation closely
-                Dictionary<string, TypedIdent> epIns = new Dictionary<string, TypedIdent>();
-                Dictionary<string, TypedIdent> epOut = new Dictionary<string, TypedIdent>();
-                Dictionary<string, TypedIdent> epLocVars = new Dictionary<string, TypedIdent>();
-
-                //calls included due to the instrumentation
-
-                prunedProgram.TopLevelDeclarations.OfType<Procedure>().Where(proc => !currentProgram.TopLevelDeclarations.OfType<Procedure>().Contains(proc)).
-                    Iter(proc => callsToIgnore.Add(proc.Name));
-
-                //retain the renamed methods
-                foreach (var impl in prunedProgram.TopLevelDeclarations.OfType<Implementation>())
-                {
-                    if ((QKeyValue.FindStringAttribute(impl.Attributes, "origRTname") != null ||
-                        QKeyValue.FindBoolAttribute(impl.Proc.Attributes, "entrypoint") && callsToIgnore.Contains(impl.Proc.Name)))
-                        callsToIgnore.Remove(impl.Proc.Name);
-
-                    
-                }
+            
 
 
-
-
-                //initial prefix  for renaming all the variables to add it to the local vars of the callers
-                //should the variables be differentiated based on assertIDs too?
-                string uniqueVarPrefix = "traceInline$" + assertID + "$" + entrypoint + "$";
-
-                //for the list of commands
-                List<Cmd> cmdsToAdd = new List<Cmd>();
-
-                TraceInline inlineInfo = new TraceInline(entrypoint, uniqueVarPrefix, epIns, epOut, epLocVars, cmdsToAdd);
-                inlineInfo = ComputeInlinedBlock(prunedProgram, inlineInfo, assertID);
-
-                //manage the ins and outs finally here, including the decalration in this method
-
-
-
-               
-
-                return currentProgram;
-            }
-
-
-
-            private static TraceInline ComputeInlinedBlock(Program program, TraceInline inlineInfo, string assertId)
-            {
-                
-                Implementation mImpl = program.TopLevelDeclarations.OfType<Implementation>().Where(im => QKeyValue.FindStringAttribute(im.Attributes, "origRTname").Equals(inlineInfo.MethodName)).First();
-
-                //methods with no implementation
-                if (mImpl == null)
-                    return inlineInfo;
-
-                List<string> varsToRename = new List<string>();
-                //add the renamed variables to the list of ins, outs and loc vars
-                mImpl.InParams.Iter(v =>  inlineInfo.Ins.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
-                mImpl.OutParams.Iter(v => inlineInfo.Outs.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
-                mImpl.LocVars.Iter(v => inlineInfo.LocVars.Add(v.Name, new TypedIdent(Token.NoToken, inlineInfo.VarPrefix + v.Name, v.TypedIdent.Type)));
-
-                varsToRename.AddRange(inlineInfo.Ins.Keys);
-                varsToRename.AddRange(inlineInfo.Outs.Keys);
-                varsToRename.AddRange(inlineInfo.LocVars.Keys);
-
-
-                
-                RewriteVars rw = new RewriteVars(inlineInfo.VarPrefix, varsToRename);
-                foreach (Block block in mImpl.Blocks)
-                {
-                    if (inlineInfo.AssertFound)
-                        break;
-                    foreach(Cmd cmd in block.Cmds)
-                    {
-                        if(cmd is AssertCmd)
-                        {
-                            var acmd = cmd as AssertCmd;
-                            if (QKeyValue.FindStringAttribute(acmd.Attributes, "uniqueAVNID").Equals(assertId))
-                            {
-                                inlineInfo.AssertFound = true;
-                                Expr assertExpr = rw.VisitExpr(acmd.Expr);
-                                inlineInfo.AddToInlinedTrace(new AssertCmd(Token.NoToken, assertExpr, acmd.Attributes));
-                            }
-                            else
-                            {
-                                //another assert found - convert to assume after renaming
-                                Expr assumeExpr = rw.VisitExpr(acmd.Expr);
-                                inlineInfo.AddToInlinedTrace(new AssumeCmd(Token.NoToken, assumeExpr, acmd.Attributes));
-                            }
-
-
-                        }
-
-                        if(cmd is CallCmd)
-                        {
-                            CallCmd ccmd = cmd as CallCmd;
-                            string procName = ccmd.Proc.Name;
-                            if (callsToIgnore.Contains(procName))
-                            {
-                                
-                                continue;
-                            }
-                            Implementation impl = program.TopLevelDeclarations.OfType<Implementation>().Where(im => im.Proc.Name.Equals(procName)).First();
-                            if(impl!=null)
-                            {
-                                //need to inline
-                                
-
-                                string origName = QKeyValue.FindStringAttribute(impl.Attributes, "origRTname");
-                                TraceInline newInlineInfo = new TraceInline(origName, inlineInfo.VarPrefix + "$" + origName+"$", new Dictionary<string, TypedIdent>(),
-                                    new Dictionary<string, TypedIdent>(), new Dictionary<string, TypedIdent>(), new List<Cmd>());
-
-                                newInlineInfo = ComputeInlinedBlock(program, newInlineInfo, assertId);
-
-                                //add the information from the recieved object
-                                inlineInfo.AssertFound = newInlineInfo.AssertFound;
-
-                                //add the actual to formal assignment
-                                //take care of the renaming
-                                for (int i = 0; i < ccmd.Ins.Count; i++)
-                                {
-                                    Expr actual = ccmd.Ins[i];
-                                    Expr renamedActual = rw.VisitExpr(actual);
-                                    Variable formal = impl.InParams[i];
-                                    TypedIdent renamedFormal = newInlineInfo.Ins[formal.Name];
-
-                                    IdentifierExpr expr = new IdentifierExpr(Token.NoToken, renamedFormal.Name, renamedFormal.Type, formal.IsMutable);
-                                    SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, expr);
-                                    List<AssignLhs> lhss = new List<AssignLhs>();
-                                    lhss.Add(lhs);
-                                    List<Expr> rhss = new List<Expr>();
-                                    rhss.Add(renamedActual);
-
-                                    AssignCmd acmd = new AssignCmd(Token.NoToken, lhss, rhss);
-                                   
-                                    inlineInfo.AddToInlinedTrace(acmd);
-                                }
-
-                                //add the rest of the trace
-                                inlineInfo.AddToInlinedTrace(newInlineInfo.InlinedTrace);
-
-                                //add the out variables assignment
-                                //take care of renaming
-                                //add the outs only if trace completed
-                               // if (!inlineInfo.AssertFound)
-                                //{
-                                    for (int i = 0; i < ccmd.Outs.Count; i++)
-                                    {
-                                        IdentifierExpr lhsexpr = rw.VisitExpr(ccmd.Outs[i]) as IdentifierExpr;
-                                        string formalName = newInlineInfo.Outs.Keys.ElementAt(i);
-                                        TypedIdent rhsExpr = newInlineInfo.Outs[formalName];
-                                        //is the false here correct? REVISE!!!
-                                        IdentifierExpr rhs = new IdentifierExpr(Token.NoToken, rhsExpr.Name, rhsExpr.Type, false);
-
-
-                                        //what if the return value was going in a map?? REVISE!!
-                                        SimpleAssignLhs lhs = new SimpleAssignLhs(Token.NoToken, lhsexpr);
-                                        List<AssignLhs> lhss = new List<AssignLhs>();
-                                        lhss.Add(lhs);
-                                        List<Expr> rhss = new List<Expr>();
-                                        rhss.Add(rhs);
-
-                                        AssignCmd acmd = new AssignCmd(Token.NoToken, lhss, rhss);
-                                        // inlineInfo.AddToInlinedTrace(acmd);
-                                        
-
-
-
-                                    }
-                                //}
-                                
-                                //add the renamed variables for declaration - ISSUE! 
-                               /* newInlineInfo.Ins.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));
-                                newInlineInfo.Outs.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));
-                                newInlineInfo.LocVars.Iter(v => inlineInfo.Ins.Add(v.Key, v.Value));*/
-
-                            }
-                            else
-                            {
-                                //add the command as it is
-                                inlineInfo.AddToInlinedTrace(ccmd);
-                            }
-    
-
-
-
-                        }
-
-                        if(cmd is AssignCmd)
-                        {
-                            AssignCmd acmd = cmd as AssignCmd;
-                            List<AssignLhs> newLhss = new List<AssignLhs>();
-                            List<Expr> newRhss = new List<Expr>();
-
-                            foreach(AssignLhs e in acmd.Lhss)
-                            {
-                                if(e is SimpleAssignLhs)
-                                {
-                                    SimpleAssignLhs oldSlhs = e as SimpleAssignLhs;
-                                    IdentifierExpr newExpr = rw.VisitExpr(oldSlhs.AsExpr) as IdentifierExpr;
-                                    SimpleAssignLhs slhs = new SimpleAssignLhs(Token.NoToken, newExpr);
-                                    newLhss.Add(slhs);
-                                }
-                                //have a case for mapAssign too
-                                if(e is MapAssignLhs)
-                                {
-                                    MapAssignLhs me = e as MapAssignLhs;
-                                    //have a recursive method which calls visit on all indices and the map ID
-                                    
-                                }
-                            }
-
-                            foreach(Expr e in acmd.Rhss)
-                            {
-                                Expr newExpr = rw.VisitExpr(e);
-                                newRhss.Add(newExpr);
-                            }
-
-                            inlineInfo.AddToInlinedTrace(new AssignCmd(Token.NoToken, newLhss, newRhss));
-                        }
-
-                        
-                    }
-                    if(block.TransferCmd is ReturnCmd)
-                    {
-                        //assign output variable
-                    }
-                }
-                return inlineInfo;
-            }
-
+            
             public static void printAVResults()
             {
 
@@ -2672,109 +2448,161 @@ namespace FastAVN
             }
         }
 
-        class TraceInline
-        {
-            private Dictionary<string, TypedIdent> ins = new Dictionary<string, TypedIdent>();
-            private Dictionary<string, TypedIdent> outs = new Dictionary<string, TypedIdent>();
-            private Dictionary<string, TypedIdent> locVars = new Dictionary<string, TypedIdent>();
-            private List<Cmd> inlinedTrace = new List<Cmd>();
-            private string methodName;
-            private bool assertFound;
-            
-            private string varPrefix;
-
-            public TraceInline()
-            {
-                methodName = "";
-               
-                VarPrefix = "";
-            }
-
-            public TraceInline(string mName, string prefix, 
-                Dictionary<string, TypedIdent> ins, Dictionary<string, TypedIdent> outs, Dictionary<string, TypedIdent> locvar, 
-                List<Cmd> iTrace)
-            {
-                this.ins = new Dictionary<string, TypedIdent>(ins);
-                this.outs = new Dictionary<string, TypedIdent>(outs);
-                this.locVars = new Dictionary<string, TypedIdent>(locvar);
-                this.inlinedTrace = new List<Cmd>(iTrace);
-                methodName = mName;
-                
-                varPrefix = prefix;
-            }
-
-            public Dictionary<string, TypedIdent> Ins { get => ins; set => ins = value; }
-            public Dictionary<string, TypedIdent> Outs { get => outs; set => outs = value; }
-            public Dictionary<string, TypedIdent> LocVars { get => locVars; set => locVars = value; }
-            public string MethodName { get => methodName; set => methodName = value; }
-           
-            public string VarPrefix { get => varPrefix; set => varPrefix = value; }
-            public List<Cmd> InlinedTrace { get => inlinedTrace; set => inlinedTrace = value; }
-            public bool AssertFound { get => assertFound; set => assertFound = value; }
-
-            public void AddToInlinedTrace(Cmd cmd)
-            {
-                inlinedTrace.Add(cmd);
-            }
-
-            internal void AddToInlinedTrace(List<Cmd> inlinedTrace)
-            {
-                this.inlinedTrace.AddRange(new List<Cmd>(inlinedTrace));
-            }
-        }
-
-
        
-        /// <summary>
-        /// this is a visitor that will rename the input parameters and local variables of a called method by attaching a
-        /// prefix
-        /// </summary>
-        class RewriteVars : StandardVisitor
+       
+        public class RootLevelCheck
         {
-            string prefix;
-            List<string> varsToRename = new List<string>();
-            
-            
+            public static HashSet<string> moduleEntryPoints { get; set; }
+            private static Dictionary<string, Block> traceBlocks;
 
-            public RewriteVars(string prefix, List<string> varsToRename)
+
+
+
+            public static void checkForRootLevelFails(Program prog, Dictionary<string, List<string>> depinfo,
+             ConcurrentBag<Implementation> entrypoints, HashSet<string> allEntryPointNames)
             {
-                this.prefix = prefix;
-                this.varsToRename = new List<string>(varsToRename);
-            }
-
-            public override Expr VisitNAryExpr(NAryExpr node)
-            {
-                var ret = base.VisitNAryExpr(node) as NAryExpr;
-                List<Expr> renamedArgs = new List<Expr>();
-
-                //renaming the variables in the arguments
-                foreach (Expr e in node.Args)
+                Utils.Print("Starting Level 2 : Analyzing roots for bugs", Utils.PRINT_TAG.AV_OUTPUT);
+                Stats.resume("twoLevelCheck");
+                
+                
+                
+                //remove all assertions in the program
+                var assertToAssume = new Func<Cmd, Cmd>(cmd =>
                 {
-                    renamedArgs.Add(VisitExpr(e));
+                    var acmd = cmd as AssertCmd;
+                    if (acmd == null) return cmd;
+                    return new AssumeCmd(cmd.tok, acmd.Expr, acmd.Attributes);
+                });
+                foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+                    foreach (var block in impl.Blocks)
+                        block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
+
+               
+                
+                //reset entrypoints to roots
+                entrypoints = Driver.getRootLevelEntryPoints(depinfo, entrypoints);
+                HashSet<string> entrypointNames = new HashSet<string>(entrypoints.Select(ep => ep.Name));
+                
+
+                
+                //2 level roots analysis starts 
+                //remember the entry points for which choice methods are generated 
+                HashSet<string> epChoiceMethodsGenerated = new HashSet<string>();
+                traceBlocks = new Dictionary<string, Block>();
+                foreach (var entry in AssertEliminator.failingTraceInfo)
+                {
+                    
+                    if(entrypoints.Any(impl => impl.Name.Equals(entry.Item1)))
+                    {
+                        //already a root level violation - report
+                        Console.WriteLine("Found Root Level Violation in method {0} for assertion {1}" , entry.Item1, entry.Item3);
+                        continue;
+                    }
+
+                    AssertEliminator.resetTraceCallsToAdd();
+                    
+                    string traceFuncname = entry.Item1+ "_trace_" + 0;
+                    prog = AssertEliminator.ReplaceBlockedAsserts(prog, entry.Item2, entry.Item1, allEntryPointNames, 0);
+                    ReplaceCalls(prog, entry.Item1, allEntryPointNames, epChoiceMethodsGenerated.Contains(entry.Item1), traceFuncname);
+                    
+                    
+                    ConcurrentQueue<Implementation> epQ = new ConcurrentQueue<Implementation>(entrypoints);
+                    Worker w = new Worker(prog, epQ, allEntryPointNames);
+                    w.Level2 = true;
+                    avnArgs = avnArgs + " /noEE ";
+
+                    //TODO - add the split and AVH here?
+                    w.RunSplitAndAv();
+                    
+                    
+                    
+                    //check if error found - check for angelic trace in directory
+                    foreach(var epname in entrypointNames)
+                    {
+                        if (CheckforRootError(epname))
+                        {
+                            Utils.Print("Found Root Level Violation in method " + epname + " for assertion " + entry.Item3, Utils.PRINT_TAG.AV_DEBUG);
+                        }
+                    }
+                    
+
+
+
+                    //restore the program - remove trace choice from the choice methods
+                    //remove the trace method from the program 
+                    RemoveTraceblock(prog, entry.Item1);
+                    Implementation tImpl = prog.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(traceFuncname)).First();
+                    prog.RemoveTopLevelDeclaration(tImpl.Proc);
+                    prog.RemoveTopLevelDeclaration(tImpl);
+                    epChoiceMethodsGenerated.Add(entry.Item1);
                 }
 
-                if(renamedArgs.Count>0)
-                {
-                    return new NAryExpr(Token.NoToken, node.Fun, renamedArgs, node.Immutable);
-                }
+                Stats.stop("twoLevelCheck");
 
-                return ret;
             }
 
-            
-
-            public override Expr VisitIdentifierExpr(IdentifierExpr node)
+            private static bool CheckforRootError(string epName)
             {
-                var ret = base.VisitIdentifierExpr(node) as IdentifierExpr;
+                bool errorFound = false;
+                string foldername = Path.Combine(Path.Combine(Environment.CurrentDirectory, "level2Results"), epName + (Worker.folcount - 1));
+                if (Directory.Exists(foldername) &&  Directory.EnumerateFiles(foldername).Any(f => f.Contains("Angelic")))
+                    errorFound = true;
 
-                if(varsToRename.Contains(node.Name))
-                {
-                    return new IdentifierExpr(Token.NoToken, prefix+node.Name, node.Type, node.Immutable);
-                }
-                return ret;
+                return errorFound;
+
             }
 
-            
+            private static void RemoveTraceblock(Program prog, string ep)
+            {
+                Implementation chMeth = prog.TopLevelDeclarations.OfType<Implementation>().Where(
+                      impl => impl.Name.Equals(ep + "$choice")).First();
+                Block choiceBlock = chMeth.Blocks.Where(b => b.Label.Equals(ep + "$NDChoice")).First();
+                GotoCmd choicecmd = choiceBlock.TransferCmd as GotoCmd;
+                choicecmd.labelNames.Remove("TraceCall0");
+
+                Block tracebloc = chMeth.Blocks.Where(b => b.Label.Equals("TraceCall0")).First();
+                chMeth.Blocks.Remove(tracebloc);
+            }
+
+            private static void ReplaceCalls(Program prog, string ep, HashSet<string> allEntryPointNames, bool chMethGenerated,
+                string traceFuncName)
+            {
+                if(!chMethGenerated)
+                {
+                    AssertEliminator.ReplaceCallsForCallers(prog, ep, allEntryPointNames);
+                    AddToTraceBlocks(prog, ep);
+                }
+                else
+                {
+                    //the restoring would have "disabled" the traceblock
+                    //add the label to the first block to enable the traceblock
+                    RestoreTraceBlock(prog, ep);
+                    
+                }
+            }
+
+            private static void RestoreTraceBlock(Program prog, string ep)
+            {
+                Implementation chMeth = prog.TopLevelDeclarations.OfType<Implementation>().Where(
+                        impl => impl.Name.Equals(ep + "$choice")).First();
+                Block choiceBlock = chMeth.Blocks.Where(b => b.Label.Equals(ep + "$NDChoice")).First();
+                Block traceBlock = traceBlocks[ep];
+
+                GotoCmd choiceGoto = choiceBlock.TransferCmd as GotoCmd;
+                choiceGoto.labelNames.Add(traceBlock.Label);
+                chMeth.Blocks.Add(traceBlock);
+            }
+
+
+
+            private static void AddToTraceBlocks(Program prog, string ep)
+            {
+                Implementation chMeth = prog.TopLevelDeclarations.OfType<Implementation>().Where(
+                       impl => impl.Name.Equals(ep + "$choice")).First();
+                Block tracebloc = chMeth.Blocks.Where(b => b.Label.Equals("TraceCall0")).First();
+                traceBlocks.Add(ep, tracebloc);
+
+            }
         }
     }
 

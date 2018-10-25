@@ -75,6 +75,7 @@ namespace AngelicVerifierNull
         static bool trackAllVars = false; //track all variables
         static bool dumpTimedoutCorralQueries = false;
         static bool runHoudini = false;
+        static bool depEPAnalysis = false;
 
         public enum PRINT_TRACE_MODE { Boogie, Sdv };
         public static PRINT_TRACE_MODE printTraceMode = PRINT_TRACE_MODE.Boogie;
@@ -154,29 +155,22 @@ namespace AngelicVerifierNull
                 }
                 program.writeToFile(args[0].Substring(0, args[0].Length - ".bpl".Length) + "_inst.bpl");
 
+
+                if (depEPAnalysis)
+                    recordAssertIDs(prog);
                 
-                //[Snigdha] recording all assertions for the current run
-                foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
-                    foreach (var block in impl.Blocks)
-                        foreach (var cmd in block.cmds.OfType<AssertCmd>())
-                        {
-                            AVNResult.addToAllAsserts(QKeyValue.FindStringAttribute(cmd.Attributes, "origUniqueAVNID"),
-                                QKeyValue.FindStringAttribute(cmd.Attributes, "uniqueAVNID"));
-                        }
-                            
-
-                //printing the assertions collected
-               // AVNResult.showAllAsserts();
-
                 //Analyze
                 RunCorralForAnalysis(program);
 
                 Stats.stop("Cpu");
 
-                AVNResult.printAllAssertResults();
-                printAllBlockedExpr();
-                printAllLengths();
-               
+                if (depEPAnalysis)
+                {
+                    AVNResult.printAllAssertResults();
+                    printAllBlockedExpr(); //only for debugging and internal comparison
+                }
+
+
             }
             catch (Exception e)
             {
@@ -191,6 +185,18 @@ namespace AngelicVerifierNull
                 Utils.Print(string.Format("TotalTime(ms) : {0}", sw.ElapsedMilliseconds), Utils.PRINT_TAG.AV_STATS);
                 if (ResultsFile != null) ResultsFile.Close();
             }
+        }
+
+        private static void recordAssertIDs(Program prog)
+        {
+            //[Snigdha] recording all assertions for the current run
+            foreach (var impl in prog.TopLevelDeclarations.OfType<Implementation>())
+                foreach (var block in impl.Blocks)
+                    foreach (var cmd in block.cmds.OfType<AssertCmd>())
+                    {
+                        AVNResult.addToAllAsserts(QKeyValue.FindStringAttribute(cmd.Attributes, "origUniqueAVNID"),
+                            QKeyValue.FindStringAttribute(cmd.Attributes, "uniqueAVNID"));
+                    }
         }
 
         private static void printAllLengths()
@@ -317,6 +323,9 @@ namespace AngelicVerifierNull
             Options.UseDuplicator = true;
             if (args.Any(s => s == "/nodup"))
                 Options.UseDuplicator = false;
+
+            if (args.Any(s => s == "/depEPAnalysis"))
+                depEPAnalysis = true;
 
             if (resultsfilename != null)
             {
@@ -532,16 +541,20 @@ namespace AngelicVerifierNull
 
                 if (eeStatus.Item1 == REFINE_ACTIONS.SUPPRESS) {
                     SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
-                    // cannot be blocked, hence fail 
-                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
-                       QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                    
+                    if(depEPAnalysis)
+                        AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                            QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.SHOW_AND_SUPPRESS)
                 {
                     PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
-                    // cannot be blocked, hence fail 
-                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
-                       QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
+                    
+                    if (depEPAnalysis)
+                    {
+                        HandleErrorTraceResult(failingAssert, AVNResult.ResultStatus.FAIL, cex, prog, instr);                        
+                    }
+                        
                 }
                 else if (eeStatus.Item1 == REFINE_ACTIONS.BLOCK_PATH)
                 {
@@ -561,16 +574,18 @@ namespace AngelicVerifierNull
                             {
                                 PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
                                 done = false;
-                                // cannot be blocked, hence Pass
-                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+
+                                if (depEPAnalysis)
+                                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
                                 QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.PASS);
                             }
                             else
                             {
                                 SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
                                 done = true;
-                                // cannot be blocked, hence Pass 
-                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+
+                                if (depEPAnalysis)
+                                    AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
                                 QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.PASS);
                             }
                         }
@@ -597,34 +612,22 @@ namespace AngelicVerifierNull
                             inconsistent.Iter(id => instr.RemoveInputSuppression(id));
                             // drop traces
                             inconsistent.Iter(id => pendingTraces.Remove(id));
-                            // cannot be blocked, hence fail 
-                            AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
+                            
+                            if (depEPAnalysis)
+                                AVNResult.addResult(QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID"),
                             QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"), AVNResult.ResultStatus.FAIL);
                         }
                         else
                         {
                             // Relax env constraints
                             RelaxEnvironmentConstraints(instr, null, false);
-                            
-                            //This block is for the successful block of an assert
-                            var assertID = QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID");
-                           
-                            //collecting the results for the assertion
-                            AVNResult.addResult(assertID, QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"),
-                                AVNResult.ResultStatus.BLOCK);
-
-                            //printing the pruned program
-                            printCorralTracePruned(cex, prog, instr, assertID);
-
-                            AddBlockedExpr(eeStatus.Item2);
-                            /*BoogieUtil.PrintProgram(ppprog, assertID + "_inlinedProg.bpl");
-
-                            //printing the pruned program - first retrieve from the trace file
-                            Program prunedProgForAssert = BoogieUtil.ReadAndOnlyResolve(traceName+".bpl");
-                            BoogieUtil.PrintProgram(prunedProgForAssert, assertID + "_traceProg.bpl");*/
-
-
-
+                            if (depEPAnalysis)
+                            {
+                                HandleErrorTraceResult(failingAssert, AVNResult.ResultStatus.BLOCK, cex, prog, instr);
+                                //this is for debugging and comparison only
+                                AddBlockedExpr(eeStatus.Item2);
+                                
+                            }
                         }
                     }
 
@@ -635,6 +638,22 @@ namespace AngelicVerifierNull
             Stats.stop("run.corral.iterative");
             return ret;
         }
+
+        private static void HandleErrorTraceResult(AssertCmd failingAssert, AVNResult.ResultStatus res,
+            cba.ErrorTrace cex, PersistentProgram prog, AvnInstrumentation instr)
+        {
+            //This block is for the successful block of an assert
+            var assertID = QKeyValue.FindStringAttribute(failingAssert.Attributes, "uniqueAVNID");
+
+            //collecting the results for the assertion
+            AVNResult.addResult(assertID, QKeyValue.FindStringAttribute(failingAssert.Attributes, "origUniqueAVNID"),
+                res);
+
+            //printing the pruned program
+            printCorralTracePruned(cex, prog, instr, assertID);
+        }
+
+
 
         private static int extractTraceLength(cba.ErrorTrace trace, int len)
         {
@@ -1186,7 +1205,7 @@ namespace AngelicVerifierNull
                 /*do variable refinement*/trackedVars, 
                 false);
 
-            inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
+           // inputProg.writeToFile("cquery" + corralIterationCount + ".bpl");
 
             cba.ErrorTrace cexTrace = null;
             var corralStart = DateTime.Now;
@@ -1994,20 +2013,8 @@ namespace AngelicVerifierNull
 
             }
 
-            public static void showAllAsserts()
-            {
-                Console.WriteLine("[Snigdha] printing all assertion IDs in the program :");
-                foreach (var assert in allAsserts)
-                    Console.WriteLine("[Snigdha] {0}, {1}",assert.Item1, assert.Item2);
-            }
 
-            public static void showAllBlockedAsserts()
-            {
-                Console.WriteLine("[Snigdha] printing all blocked assertion IDs in the program :");
-                foreach (var assert in blockedAsserts)
-                    Console.WriteLine("[Snigdha] {0}", assert);
-            }
-
+            
             //add the results for the pass cases
             public static void adjustAssertResults()
             {
@@ -2035,13 +2042,7 @@ namespace AngelicVerifierNull
 
             }
 
-            public static void showAllAssertResults()
-            {
-                Console.WriteLine("[Snigdha] printing all assertion IDs with their results in the program :");
-                foreach (var assert in assertResult.Keys)
-                    Console.WriteLine("[Snigdha] {0} : {1}", assert, assertResult[assert]);
-
-            }
+            
         }
 
 
