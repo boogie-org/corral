@@ -2499,42 +2499,53 @@ namespace FastAVN
                         continue;
                     }
 
-                    AssertEliminator.resetTraceCallsToAdd();
-                    
-                    string traceFuncname = entry.Item1+ "_trace_" + 0;
-                    prog = AssertEliminator.ReplaceBlockedAsserts(prog, entry.Item2, entry.Item1, allEntryPointNames, 0);
-                    ReplaceCalls(prog, entry.Item1, allEntryPointNames, epChoiceMethodsGenerated.Contains(entry.Item1), traceFuncname);
-                    
-                    
-                    ConcurrentQueue<Implementation> epQ = new ConcurrentQueue<Implementation>(entrypoints);
-                    Worker w = new Worker(prog, epQ, allEntryPointNames);
-                    w.Level2 = true;
-                    avnArgs = avnArgs + " /noEE ";
-
-                    //TODO - add the split and AVH here?
-                    w.RunSplitAndAv();
-                    
-                    
-                    
-                    //check if error found - check for angelic trace in directory
-                    foreach(var epname in entrypointNames)
+                    try
                     {
-                        if (CheckforRootError(epname))
+
+                        AssertEliminator.resetTraceCallsToAdd();
+
+                        string traceFuncname = entry.Item1 + "_trace_" + 0;
+                        prog = AssertEliminator.ReplaceBlockedAsserts(prog, entry.Item2, entry.Item1, allEntryPointNames, 0);
+                        ReplaceCalls(prog, entry.Item1, allEntryPointNames, epChoiceMethodsGenerated.Contains(entry.Item1), traceFuncname);
+
+
+                        ConcurrentQueue<Implementation> epQ = new ConcurrentQueue<Implementation>(entrypoints);
+                        Worker w = new Worker(prog, epQ, allEntryPointNames);
+                        w.Level2 = true;
+                        avnArgs = avnArgs + " /noEE ";
+
+                        //TODO - add the split and AVH here?
+                        w.RunSplitAndAv();
+
+
+
+                        //check if error found - check for angelic trace in directory
+                        foreach (var epname in entrypointNames)
                         {
-                            Utils.Print("Found Root Level Violation in method " + epname + " for assertion " + entry.Item3, Utils.PRINT_TAG.AV_DEBUG);
+                            if (CheckforRootError(epname))
+                            {
+                                Utils.Print("Found Root Level Violation in method " + epname + " for assertion " + entry.Item3, Utils.PRINT_TAG.AV_DEBUG);
+                            }
                         }
+
+
+
+
+                        //restore the program - remove trace choice from the choice methods
+                        //remove the trace method from the program 
+                        RemoveTraceblock(prog, entry.Item1);
+                        Implementation tImpl = prog.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(traceFuncname)).First();
+                        prog.RemoveTopLevelDeclaration(tImpl.Proc);
+                        prog.RemoveTopLevelDeclaration(tImpl);
+                        epChoiceMethodsGenerated.Add(entry.Item1);
+
                     }
-                    
-
-
-
-                    //restore the program - remove trace choice from the choice methods
-                    //remove the trace method from the program 
-                    RemoveTraceblock(prog, entry.Item1);
-                    Implementation tImpl = prog.TopLevelDeclarations.OfType<Implementation>().Where(impl => impl.Name.Equals(traceFuncname)).First();
-                    prog.RemoveTopLevelDeclaration(tImpl.Proc);
-                    prog.RemoveTopLevelDeclaration(tImpl);
-                    epChoiceMethodsGenerated.Add(entry.Item1);
+                    catch(Exception e)
+                    {
+                        Utils.Print("Exception thrown in RootLevelCheck :" + e.Message, Utils.PRINT_TAG.AV_WARNING);
+                        Utils.Print(e.StackTrace, Utils.PRINT_TAG.AV_WARNING);
+                    }
+                   
                 }
 
                 Stats.stop("twoLevelCheck");
