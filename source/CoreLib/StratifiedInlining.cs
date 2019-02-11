@@ -830,6 +830,8 @@ namespace CoreLib
 
         public Outcome UnSatCoreSplitStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
         {
+            //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
+
             Outcome outcome = Outcome.Inconclusive;
             reporter.reportTraceIfNothingToExpand = true;
             var boundHit = false;
