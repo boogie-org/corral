@@ -401,12 +401,8 @@ namespace CoreLib
             }
 
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, ref HashSet<StratifiedCallSite> previousSplitSites)
-            {
-                SI.attachedVC = attachedVC;
-                SI.attachedVCInv = attachedVCInv;
-                SI.parent = parent;
-                SI.di = di;
-                openCallSites = this.openCallSites;
+            {               
+                ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
             }
         }
