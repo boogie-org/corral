@@ -119,7 +119,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy /Y "$(TargetDir)$(ProjectName).exe" "$(TargetDir)\..\..\..\..\fastavn\fastavn\bin\debug\"</PostBuildEvent>
+    <PostBuildEvent Condition=" '$(OS)' == 'Windows_NT' ">copy /Y "$(TargetDir)$(MSBuildProjectName).exe" "$(TargetDir)\..\..\..\..\FastAVN\FastAVN\bin\$(Configuration)\"</PostBuildEvent>
+    <PostBuildEvent Condition=" '$(OS)' != 'Windows_NT' ">cp "$(TargetDir)$(MSBuildProjectName).exe" "$(TargetDir)\..\..\..\..\FastAVN\FastAVN\bin\$(Configuration)\"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
