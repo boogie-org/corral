@@ -742,7 +742,7 @@ namespace cba
             return inputProg;
         }
 
-        // Inline procedures call from inside a CodeExpr
+        // Inline procedures called from inside a CodeExpr
         public static void PreProcessCodeExpr(Program program)
         {
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())

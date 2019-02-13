@@ -190,6 +190,30 @@ namespace cba.Util
 
     }
 
+    public class ProcsCalledVisitor : FixedVisitor
+    {
+        HashSet<string> procsCalled;
+
+        ProcsCalledVisitor()
+        {
+            procsCalled = new HashSet<string>();
+        }
+
+        public static HashSet<string> GetProceduresCalled(Absy node)
+        {
+            var fu = new ProcsCalledVisitor();
+            fu.Visit(node);
+            return fu.procsCalled;
+        }
+
+        public override Cmd VisitCallCmd(CallCmd node)
+        {
+            procsCalled.Add(node.callee);
+            return base.VisitCallCmd(node);
+        }
+
+    }
+
     // Use this class to find a variable of a particular name
     public class FindVars : FixedVisitor
     {
