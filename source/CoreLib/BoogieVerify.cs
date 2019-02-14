@@ -314,8 +314,8 @@ namespace cba.Util
                 vcSize = (vcgen as StratifiedVCGen).vcsize;
                 if (options.CallTree != null)
                 {
-                    options.CallTree = VC.StratifiedVCGen.callTree;
-                    VC.StratifiedVCGen.callTree = null;
+                    options.CallTree = (vcgen as StratifiedVCGen).callTree;
+                    (vcgen as StratifiedVCGen).callTree = null;
                 }
             }
             else if (vcgen is CoreLib.StratifiedInlining)
