@@ -16,6 +16,7 @@ namespace SplitParClient
         public const int Normal = 1;
         public const int Debug = 2;
         public const int Verbose = 5;
+        public const int Simple = 6;
 
         public static bool noDebuggingOutput = false;
         public static bool printMemUsage = false;
@@ -46,15 +47,18 @@ namespace SplitParClient
         {
             if (level == LogWithAddress.Normal)
             {
-                level = Debug;
+                //level = Debug;
             }
 
             switch (level)
             {
                 case Debug:
                     if (!noDebuggingOutput)
-                    { 
-                        debugOut.Write(msg);
+                    {
+                        lock (debugOut)
+                        {
+                            debugOut.Write(msg);
+                        }
                     }
                     break;
                 case Warning:
@@ -71,7 +75,10 @@ namespace SplitParClient
                     {
                         Console.Write(msg);
                     }
-                    debugOut.Write(msg);
+                    lock (debugOut)
+                    {
+                        debugOut.Write(msg);
+                    }
                     break;
             }
 
@@ -93,7 +100,15 @@ namespace SplitParClient
         {
             if (noDebuggingOutput)
                 return true;
-            return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            if (level != Simple)
+            {
+                if (file.LastIndexOf("\\") >= 0)
+                    return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+                else
+                    return Write(level, file + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine); 
+            }
+            else
+                return Write(Debug, msg + Environment.NewLine);
         }
 
         public static bool WriteLine(string msg,

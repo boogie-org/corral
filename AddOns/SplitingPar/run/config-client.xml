@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SplitParConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Root>C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar</Root>
+  <Utils>
+    <Util name="SplitParClient" dir="client" exe="SplitParClient.exe" arguments="/useProverEvaluate /di /doNotUseLabels /recursionBound:3 /newStratifiedInlining:splitpar /si /dumpCorralState:calltree.txt /connectionPort:12000"/>
+  </Utils>
+  <RemoteRoots>
+  </RemoteRoots>
+  <BoogieFiles>
+    <Files value="1394vdev_pendedcompletedrequest2_0.bpl"/>
+  </BoogieFiles>
+</SplitParConfig>

@@ -9,11 +9,107 @@ using System.Diagnostics.Contracts;
 using System.IO;
 using VC;
 using cba.Util;
+using System.Net.Sockets;
+using System.Net.Http;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace cba.Util
 {
     public static class BoogieVerify
     {
+        public static class AccumulatedStats
+        {
+            public static int totalTasks = 0;
+            public static double loadingCTTime = 0;
+            public static double z3Time = 0;
+            public static double checkTime = 0;
+            public static double decisionTime = 0;
+            public static double getOutComeCoreTime = 0;
+            public static double mustReachParTime = 0;
+            public static double communicationTime = 0;
+            public static double sendingCallTreeTime = 0;
+            public static double checkingAvailabilityTime = 0;
+
+            public static void Reset()
+            {
+                totalTasks = 0;
+                loadingCTTime = 0;
+                z3Time = 0;
+                checkTime = 0;
+                decisionTime = 0;
+                getOutComeCoreTime = 0;
+                mustReachParTime = 0;
+                communicationTime = 0;
+                sendingCallTreeTime = 0;
+                checkingAvailabilityTime = 0;
+            }
+
+            public static void DumpStats()
+            {
+                var outf = new StreamWriter("ClientStats.xml", false);
+
+                outf.WriteLine(@"<?xml version=""1.0"" encoding=""utf-8"" ?>");
+                outf.WriteLine(@"<ClientStats xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"">");
+                outf.WriteLine(@"<TotalTasks>{0}</TotalTasks>", totalTasks);
+
+                outf.WriteLine(@"<MustReachParallel>");
+                outf.WriteLine(@"   <SIDecisionsTime>{0}</SIDecisionsTime>", decisionTime.ToString("F2"));
+                outf.WriteLine(@"   <Z3Time>{0}</Z3Time>", z3Time.ToString("F2"));
+                outf.WriteLine(@"   <Total>{0}</Total>", mustReachParTime.ToString("F2"));
+                outf.WriteLine(@"</MustReachParallel>");
+
+                outf.WriteLine(@"<InliningCallTreesTime>{0}</InliningCallTreesTime>", loadingCTTime.ToString("F2"));
+
+                outf.WriteLine(@"<TotalTime>");
+                outf.WriteLine(@"   <WorkingTime>{0}</WorkingTime>", 0);
+                outf.WriteLine(@"   <WaittingTime>{0}</WaittingTime>", 0);
+                outf.WriteLine(@"   <Total>{0}</Total>", 0);
+                outf.WriteLine(@"</TotalTime>");
+
+                outf.WriteLine(@"</ClientStats>");
+                outf.Close();
+            }
+
+            public static string ToStringStats()
+            {
+                string stats = string.Format("Total tasks: {0}", totalTasks) + Environment.NewLine +
+                        string.Format("Must Reach Parallel time: {0}", mustReachParTime.ToString("F2")) + Environment.NewLine +
+                        string.Format("\tZ3 time: {0}", z3Time.ToString("F2")) + Environment.NewLine +
+                        string.Format("\tCommunication time: {0}", communicationTime.ToString("F2")) + Environment.NewLine +
+                        string.Format("\t\tChecking availability time: {0}", checkingAvailabilityTime.ToString("F2")) + Environment.NewLine +
+                        string.Format("\t\tSending calltree time: {0}", sendingCallTreeTime.ToString("F2")) + Environment.NewLine +
+                        string.Format("\tDecisions time: {0}", decisionTime.ToString("F2")) + Environment.NewLine +
+                        string.Format("Inlining calltrees: {0}", loadingCTTime.ToString("F2"));
+                return stats;
+            }
+        }
+
+        public enum DecisionType { MUST_REACH, BLOCK }
+        public class Decision : Tuple<DecisionType, int, StratifiedCallSite, string>
+        {
+            public Decision(DecisionType dt, int num, StratifiedCallSite cs, string taskID)
+                : base(dt, num, cs, taskID) { }
+
+            public DecisionType decisionType
+            {
+                get { return Item1; }
+            }
+
+            public int num
+            {
+                get { return Item2; }
+            }
+
+            public StratifiedCallSite cs
+            {
+                get { return Item3; }
+            }
+
+            public string taskID
+            {
+                get { return Item4; }
+            }
+        }
         public enum ReturnStatus { OK, NOK, ReachedBound };
         public static readonly string ExtraRecBoundAttr = "SIextraRecBound";
 
@@ -36,9 +132,100 @@ namespace cba.Util
         public static bool useDuality = false;
         public static HashSet<string> procsHitRecBound = new HashSet<string>();
         public static bool PrintImplsBeingVerified = false;
+        
 
         // TODO: move this elsewhere
         public static HashSet<string> ignoreAssertMethods;
+
+        // SplitPar module
+        public static string fileName = ""; 
+        public static Socket socketConnection;
+        public static VC.VCGen vcgen = null;
+        public static List<Decision> decisions = new List<Decision>();
+
+        public enum ConnectionType
+        {
+            SOCKET,
+            CLOUD,
+            Other
+        }
+
+        public class DistributedConfig
+        {
+            public static bool SingleConnectionOnly = false; 
+            public static bool ContinueSearch = true;
+            public static int SplitSpeed = 0;
+
+            public static double TimeThresholdOrg = 0.0;
+            public static double TimeThreshold = 0.2;
+            public static int SplitThresholdOrg = 1;
+            public static int SplitThreshold = 1;
+
+            public static int QueueUpperBound = 10;
+            public static int SplitingBound = 100;
+            public static int QueueLowerBound = 0;
+            public static double MinWorkingTime = 0;
+
+            public static ConnectionType ConnectionType;
+            public static string MsgSeperator = ";";
+
+            public static bool AskBeforeSending = false;
+            public static double InstanceSplitThreshold = 20;
+            public static void Setup()
+            {
+                if (options.connectionType.Equals("socket"))
+                    ConnectionType = ConnectionType.SOCKET;
+                else if (options.connectionType.Equals("cloud"))
+                    ConnectionType = ConnectionType.CLOUD;
+                else
+                    ConnectionType = ConnectionType.Other;
+                SlowSplit();
+
+                if (options.prevSIState == null ||
+                    options.prevSIState.Name == null || 
+                    options.prevSIState.Name.Length == 0)
+                    SplitSpeed = 1;
+            }
+
+            public static void UpdateSplittingSpeed()
+            {
+                switch (SplitSpeed)
+                {
+                    case 1:
+                        FastSplit();
+                        SplitSpeed = -1;
+                        break;
+                    case 2:
+                        NormalSplit();
+                        SplitSpeed = -1;
+                        break;
+                    case 3:
+                        SlowSplit();
+                        SplitSpeed = -1;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            public static void FastSplit()
+            {
+                TimeThreshold = 0.01;
+                SplitThreshold = 1;
+            }
+
+            public static void NormalSplit()
+            {
+                TimeThreshold = Math.Min(TimeThreshold, 0.1);
+                SplitThreshold = 2;
+            }
+
+            public static void SlowSplit()
+            {
+                TimeThreshold = 2;
+                SplitThreshold = 2;
+            }
+        }
 
         public static void setTimeOut(int TO)
         {
@@ -87,26 +274,28 @@ namespace cba.Util
             allErrors = new List<BoogieErrorTrace>();
             timedOut = new List<string>();
             Debug.Assert(program != null);
-            
+
             // Make a copy of the input program
             var duper = new FixedDuplicator(true);
             var origProg = new Dictionary<string, Implementation>();
 
-            if (needErrorTraces)
+            if (needErrorTraces ||
+                BoogieVerify.options.connectionType != null)
             {
                 foreach (var decl in program.TopLevelDeclarations)
                 {
                     if (decl is Implementation)
                     {
                         var origImpl = duper.VisitImplementation(decl as Implementation);
+                        origImpl.Proc = (decl as Implementation).Proc;
                         origProg.Add(origImpl.Name, origImpl);
                     }
                 }
             }
-            
+
             if (removeAsserts)
                 RemoveAsserts(program);
-            
+
             // Set options
             options.Set();
 
@@ -159,28 +348,31 @@ namespace cba.Util
                 .OfType<Implementation>()
                 .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")));
 
-
-            VC.VCGen vcgen = null;
             try
             {
                 Debug.Assert(CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed);
-                Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
-                if (options.newStratifiedInlining) {
-                  if(options.newStratifiedInliningAlgo.ToLower() == "duality") Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
-                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
+                Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
+                if (options.newStratifiedInlining)
+                {
+                    if (options.newStratifiedInliningAlgo.ToLower() == "duality")
+                        Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
+                    if (vcgen == null || 
+                        BoogieVerify.DistributedConfig.SingleConnectionOnly || 
+                        BoogieVerify.options.connectionType == null)
+                        vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
                 }
                 else
-                   // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                    // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
 
 
                     if (!useDuality || !isCBA || !needErrorTraces || options.StratifiedInlining > 1 || mains.Count > 1)
-                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
-                    else
-                    {
-                        CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
-                        CommandLineOptions.Clo.FixedPointEngine = "duality";
-                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>(), options.extraRecBound);
-                    }
+                    vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                else
+                {
+                    CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
+                    CommandLineOptions.Clo.FixedPointEngine = "duality";
+                    vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>(), options.extraRecBound);
+                }
             }
             catch (ProverException e)
             {
@@ -196,7 +388,7 @@ namespace cba.Util
 
             foreach (var impl in mains)
             {
-                if(PrintImplsBeingVerified) 
+                if (PrintImplsBeingVerified)
                     Log.WriteLine(Log.Verbose, "Verifying implementation " + impl.Name);
 
                 List<Counterexample> errors;
@@ -206,9 +398,8 @@ namespace cba.Util
                 try
                 {
                     var start = DateTime.Now;
-
+                    BoogieVerify.AccumulatedStats.totalTasks += 1;
                     outcome = vcgen.VerifyImplementation(impl, out errors);
-
                     var end = DateTime.Now;
 
                     TimeSpan elapsed = end - start;
@@ -241,7 +432,13 @@ namespace cba.Util
                         ret = ReturnStatus.ReachedBound;
                         break;
                     case VC.VCGen.Outcome.Inconclusive:
-                        throw new InternalError("z3 says inconclusive");
+                        if (BoogieVerify.options.connectionType != null && BoogieVerify.options.connectionType.ToLower().Equals("cloud"))
+                        {
+                            ret = ReturnStatus.ReachedBound;
+                            break;
+                        }
+                        else
+                            throw new InternalError("z3 says inconclusive");
                     case VC.VCGen.Outcome.OutOfMemory:
                         // wipe out any counterexamples
                         timedOut.Add(impl.Name); errors = new List<Counterexample>();
@@ -251,7 +448,13 @@ namespace cba.Util
                         timedOut.Add(impl.Name); errors = new List<Counterexample>();
                         break;
                     default:
-                        throw new InternalError("z3 unknown response");
+                        if (BoogieVerify.options.connectionType != null && BoogieVerify.options.connectionType.ToLower().Equals("cloud"))
+                        {
+                            ret = ReturnStatus.ReachedBound;
+                            break;
+                        }
+                        else
+                            throw new InternalError("z3 unknown response");
                 }
 
                 Log.WriteLine(Log.Debug, outcome.ToString());
@@ -331,7 +534,16 @@ namespace cba.Util
             else
                 CallTreeSize = 0;
 
-            vcgen.Close();
+            // restore program
+            if (BoogieVerify.options.connectionType != null)
+            {
+                program.RemoveTopLevelDeclarations(decl => (decl is Implementation));
+
+                foreach (var decl in origProg)
+                    program.AddTopLevelDeclaration(decl.Value);
+            }
+            if (BoogieVerify.DistributedConfig.SingleConnectionOnly)
+                vcgen.Close();
             CommandLineOptions.Clo.TheProverFactory.Close();
 
             return ret;
@@ -357,7 +569,7 @@ namespace cba.Util
             parentTree[root] = parent;
 
             color[root] = 1;
-            
+
             var succs = Succ(root);
             foreach (var s in succs)
                 DFS(s, root, Succ, color, parentTree, cycle);
@@ -373,7 +585,7 @@ namespace cba.Util
         // Rename basic blocks, local variables
         // Add "havoc locals" at the beginning
         // block return
-        private static void RenameImpl(Implementation impl, Dictionary<string, Tuple<Block,Implementation>> origProg)
+        private static void RenameImpl(Implementation impl, Dictionary<string, Tuple<Block, Implementation>> origProg)
         {
             var origImpl = (new FixedDuplicator(true)).VisitImplementation(impl);
             var origBlocks = BoogieUtil.labelBlockMapping(origImpl);
@@ -516,7 +728,7 @@ namespace cba.Util
             VC.StratifiedVCGenBase vcgen = null;
             try
             {
-                if(options.newStratifiedInlining) 
+                if (options.newStratifiedInlining)
                     vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
                 else
                     vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
@@ -601,7 +813,7 @@ namespace cba.Util
 
             foreach (var s in options.CallTree)
             {
-                var tokens = s.Split(new string[] {"_131_"}, StringSplitOptions.RemoveEmptyEntries);
+                var tokens = s.Split(new string[] { "_131_" }, StringSplitOptions.RemoveEmptyEntries);
                 if (tokens.Length < 2) continue;
                 ret.Add(tokens[tokens.Length - 2]);
             }
@@ -617,7 +829,7 @@ namespace cba.Util
 
             var newTrace = new List<Block>();
             var newTraceCallees = new Dictionary<TraceLocation, CalleeCounterexampleInfo>();
-            
+
             Block currOrigBlock = null;
             Implementation currOrigImpl = null;
             int currOrigInstr = 0;
@@ -664,7 +876,7 @@ namespace cba.Util
                         var cmd = currOrigBlock.Cmds[currOrigInstr] as CallCmd;
                         if (cmd != null && cmd.callee == calleeName)
                             break;
-                        currOrigInstr++;                        
+                        currOrigInstr++;
                     }
                     Debug.Assert(currOrigInstr != currOrigBlock.Cmds.Count);
                     newTraceCallees.Add(new TraceLocation(newTrace.Count - 1, currOrigInstr), calleeInfo);
@@ -792,6 +1004,345 @@ namespace cba.Util
 
     public class BoogieVerifyOptions
     {
+        [Serializable]
+        public class SplitState
+        {
+            private bool doubleEncoding = true;
+            public string Author = "";
+            public string Name = "";
+            public HashSet<string> CallTree;
+            //  MUST_REACH = 0, BLOCK = 1
+            public List<Tuple<string, int>> SplitingNodes = null;
+
+            public SplitState()
+            {
+                Name = "";
+                CallTree = new HashSet<string>();
+                SplitingNodes = new List<Tuple<string, int>>();
+            }
+
+            public SplitState(string file)
+            {
+                Name = Path.GetFileName(file);
+                var tmp = GetSplitState(file);
+                if (tmp != null)
+                {
+                    CallTree = new HashSet<string>(tmp.CallTree);
+                    SplitingNodes = new List<Tuple<string, int>>(tmp.SplitingNodes);
+                }
+                else
+                {
+                    CallTree = new HashSet<string>();
+                    SplitingNodes = new List<Tuple<string, int>>();
+                }
+            }
+
+            public SplitState(HashSet<string> callTree, Tuple<string, int> splitingNode)
+            {
+                CallTree = new HashSet<string>(callTree);
+                SplitingNodes = new List<Tuple<string, int>>();
+                SplitingNodes.Add(new Tuple<string, int>(splitingNode.Item1, splitingNode.Item2));
+            }
+
+            public SplitState(HashSet<string> callTree, List<Tuple<string, int>> splitingNodes)
+            {
+                CallTree = new HashSet<string>(callTree);
+                SplitingNodes = new List<Tuple<string, int>>(splitingNodes);
+            }
+
+            public SplitState(string name, HashSet<string> callTree, List<Tuple<string, int>> splitingNodes)
+            {
+                Name = name;
+                CallTree = new HashSet<string>(callTree);
+                SplitingNodes = new List<Tuple<string, int>>(splitingNodes);
+            }
+
+            public SplitState(string author, string name, HashSet<string> callTree, List<Tuple<string, int>> splitingNodes)
+            {
+                Author = author;
+                Name = name;
+                CallTree = new HashSet<string>(callTree);
+                SplitingNodes = new List<Tuple<string, int>>(splitingNodes);
+            }
+
+            public SplitState Clone()
+            {
+                return new SplitState(Author, Name, CallTree, SplitingNodes);
+            }
+
+            public void UpdateCallTree(HashSet<string> callTree)
+            {
+                CallTree = new HashSet<string>(callTree);
+            }
+
+            public void RecordNewSplit(Tuple<string, int> split)
+            {
+                SplitingNodes.Add(split);
+            }
+
+            public void Pop()
+            {
+                SplitingNodes.RemoveAt(SplitingNodes.Count - 1);
+            }
+
+            public bool IsParent(SplitState child)
+            {
+                foreach (var node in SplitingNodes)
+                {
+                    bool found = false;
+                    foreach(var _node in child.SplitingNodes)
+                    {
+                        if (node.Item1.Equals(_node.Item1) && (node.Item2 == _node.Item2))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        return false;
+                }
+                return true;
+            }
+
+            public int FindDiff(SplitState prevState)
+            {
+                int pos = 0;
+                for (int i = 0; i < SplitingNodes.Count; ++i)
+                {
+                    if (!(SplitingNodes[i].Item1.Equals(prevState.SplitingNodes[i].Item1) &&
+                        SplitingNodes[i].Item2 == prevState.SplitingNodes[i].Item2)) {
+                        pos = i;
+                        break;
+                    }
+                }
+
+                return prevState.SplitingNodes.Count - pos;
+            }
+
+            public void RemoveInlinedCallSites(SplitState parent)
+            {
+                List<Tuple<string, int>> tmp = new List<Tuple<string, int>>();
+                foreach (var node in SplitingNodes)
+                {
+                    bool found = false;
+                    foreach (var _node in parent.SplitingNodes)
+                    {
+                        if (node.Item1.Equals(_node.Item1) && (node.Item2 == _node.Item2))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        tmp.Add(node);
+                }
+                SplitingNodes = new List<Tuple<string, int>>(tmp);
+            }
+
+            public SplitState GetSplitState(string file)
+            {
+                Name = Path.GetFileName(file);
+                if (file == null || !System.IO.File.Exists(file))
+                    return null;
+
+                var serailizer = new BinaryFormatter();
+                FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+                var cs = (SplitState)serailizer.Deserialize(stream);
+                stream.Close();
+
+                return cs;
+            }
+
+            public void DumpSplitingState(string file)
+            {
+                if (file != null)
+                {
+                    BinaryFormatter serializer = new BinaryFormatter();
+                    FileStream stream = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
+                    serializer.Serialize(stream, this);
+                    stream.Close();
+                }
+            }
+
+            public SplitState EncodeCallTree()
+            {
+                if (doubleEncoding)
+                    return EncodeCallTreeAndSplittingNodes();
+
+                string connector = "_262_";
+                var tmp = CallTree.ToList();
+                List<string> listCS = tmp.OrderBy(x => x.Length).ToList();
+                List<Tuple<string, int>> encoded = new List<Tuple<string, int>>();
+                 
+                List<string> fullCT = new List<string>();
+                for (int i = 0; i < listCS.Count; ++i)
+                {
+                    int connectorIndex = listCS[i].LastIndexOf(connector);
+                    if (connectorIndex > 0)
+                    {
+                        int k = -2;
+                        string suffix = listCS[i].Substring(connectorIndex);
+                        for (int j = encoded.Count - 1; j >= 0; --j)
+                            if ((fullCT[j] + suffix).Equals(listCS[i]))
+                            {
+                                k = j;
+                                break;
+                            }
+                        Debug.Assert(k != -2);
+                        encoded.Add(new Tuple<string, int>(suffix, k));
+                        fullCT.Add(listCS[i]);
+                    }
+                    else {
+                        encoded.Add(new Tuple<string, int>(listCS[i], -1));
+                        fullCT.Add(listCS[i]);
+                    }
+                }
+                 
+                HashSet<string> tmpHash = new HashSet<string>();
+                for (int i = 0; i < encoded.Count; ++i)
+                    tmpHash.Add(encoded[i].Item2.ToString() + "__" + i + "_" + encoded[i].Item1);
+                return new SplitState(Author, Name, tmpHash, SplitingNodes);
+            }
+
+            public SplitState EncodeCallTreeAndSplittingNodes()
+            {
+                string connector = "_262_";
+                var tmp = CallTree.ToList();
+                List<string> listCS = tmp.OrderBy(x => x.Length).ToList();
+                List<Tuple<string, int>> encoded = new List<Tuple<string, int>>();
+
+                List<string> fullCT = new List<string>();
+                for (int i = 0; i < listCS.Count; ++i)
+                {
+                    int connectorIndex = listCS[i].LastIndexOf(connector);
+                    if (connectorIndex > 0)
+                    {
+                        int k = -2;
+                        string suffix = listCS[i].Substring(connectorIndex);
+                        for (int j = encoded.Count - 1; j >= 0; --j)
+                            if ((fullCT[j] + suffix).Equals(listCS[i]))
+                            {
+                                k = j;
+                                break;
+                            }
+                        Debug.Assert(k != -2);
+                        encoded.Add(new Tuple<string, int>(suffix, k));
+                        fullCT.Add(listCS[i]);
+                    }
+                    else
+                    {
+                        encoded.Add(new Tuple<string, int>(listCS[i], -1));
+                        fullCT.Add(listCS[i]);
+                    }
+                }
+
+                HashSet<string> tmpHash = new HashSet<string>();
+                for (int i = 0; i < encoded.Count; ++i)
+                    tmpHash.Add(encoded[i].Item2.ToString() + "__" + i + "_" + encoded[i].Item1);
+
+                List<Tuple<string, int>> tmpSplitingNodes = new List<Tuple<string, int>>();
+                foreach (var node in SplitingNodes)
+                {
+                    int connectorIndex = node.Item1.LastIndexOf(connector);
+                    if (connectorIndex > 0)
+                    {
+                        int k = -2;
+                        string suffix = node.Item1.Substring(connectorIndex);
+                        for (int j = encoded.Count - 1; j >= 0; --j)
+                            if ((fullCT[j] + suffix).Equals(node.Item1))
+                            {
+                                k = j;
+                                break;
+                            }
+                        Debug.Assert(k != -2);
+                        tmpSplitingNodes.Add(new Tuple<string, int>(k.ToString() + "__" + suffix, node.Item2));
+                    }
+                    else
+                    {
+                        tmpSplitingNodes.Add(new Tuple<string, int>("-1__" + node.Item1, node.Item2));
+                    }
+                }
+                return new SplitState(Author, Name, tmpHash, tmpSplitingNodes);
+            }
+
+            public SplitState DecodeCallTree()
+            {
+                if (CallTree.Any(s => (s[0] > '0' && s[0] <= '9')))
+                {
+
+                    if (doubleEncoding)
+                        return DecodeCallTreeAndSplittingNode();
+                    List<string> tmpList = new List<string>();
+                    Dictionary<int, Tuple<string, int>> callTreeDict = new Dictionary<int, Tuple<string, int>>();
+                    foreach (var s in CallTree)
+                    {
+                        var parent = Int32.Parse(s.Substring(0, s.IndexOf("__")));
+                        var str = s.Substring(s.IndexOf("__") + 2);
+
+                        var id = Int32.Parse(str.Substring(0, str.IndexOf("_")));
+                        callTreeDict[id] = new Tuple<string, int>(str.Substring(str.IndexOf("_") + 1), parent);
+                    }
+
+                    HashSet<string> tmpHash = new HashSet<string>();
+                    foreach (var ct in callTreeDict)
+                    {
+                        int itsParent = ct.Value.Item2;
+                        string itsSelf = ct.Value.Item1;
+                        while (itsParent != -1)
+                        {
+                            Debug.Assert(callTreeDict.ContainsKey(itsParent));
+                            itsSelf = callTreeDict[itsParent].Item1 + itsSelf;
+                            itsParent = callTreeDict[itsParent].Item2;
+                        }
+                        tmpHash.Add(itsSelf);
+                    }
+                    return new SplitState(Author, Name, tmpHash, SplitingNodes);
+                }
+                else
+                    return this;
+            }
+
+            public SplitState DecodeCallTreeAndSplittingNode()
+            {
+                List<string> tmpList = new List<string>();
+                Dictionary<int, Tuple<string, int>> callTreeDict = new Dictionary<int, Tuple<string, int>>();
+                foreach (var s in CallTree)
+                {
+                    var parent = Int32.Parse(s.Substring(0, s.IndexOf("__")));
+                    var str = s.Substring(s.IndexOf("__") + 2);
+
+                    var id = Int32.Parse(str.Substring(0, str.IndexOf("_")));
+                    callTreeDict[id] = new Tuple<string, int>(str.Substring(str.IndexOf("_") + 1), parent);
+                }
+
+                HashSet<string> tmpHash = new HashSet<string>();
+                foreach (var ct in callTreeDict)
+                {
+                    int itsParent = ct.Value.Item2;
+                    string itsSelf = ct.Value.Item1;
+                    while (itsParent != -1)
+                    {
+                        itsSelf = callTreeDict[itsParent].Item1 + itsSelf;
+                        itsParent = callTreeDict[itsParent].Item2;
+                    }
+                    tmpHash.Add(itsSelf);
+                }
+
+                List<Tuple<string, int>> tmpSplitingNodes = new List<Tuple<string, int>>();
+                foreach (var node in SplitingNodes)
+                {
+                    var itsParent = Int32.Parse(node.Item1.Substring(0, node.Item1.IndexOf("__")));
+                    var itsSelf = node.Item1.Substring(node.Item1.IndexOf("__") + 2);
+                    while (itsParent != -1)
+                    {
+                        itsSelf = callTreeDict[itsParent].Item1 + itsSelf;
+                        itsParent = callTreeDict[itsParent].Item2;
+                    }
+                    tmpSplitingNodes.Add(new Tuple<string, int>(itsSelf, node.Item2));
+                }
+                return new SplitState(Author, Name, tmpHash, tmpSplitingNodes);
+            }
+        }
         // For eager inlining
         public int StratifiedInlining
         {
@@ -813,8 +1364,10 @@ namespace cba.Util
         public bool NonUniformUnfolding;
 
         public HashSet<string> CallTree;
-        public string prevSIState; // path to prev SI state
-        public string connectionPort; // socket port to connect clientController
+        public SplitState prevSIState; 
+        public string connectionType; // Socket or Cloud
+        public string address;
+        public bool loadOnly;
 
         public bool StratifiedInliningWithoutModels;
         public bool UseProverEvaluate;
@@ -822,7 +1375,7 @@ namespace cba.Util
 
         public bool useFwdBck;
         public bool useDI;
-        
+
         // Bound on maximum procs that can be inlined (0 = no bound)
         public int maxInlinedBound;
 
@@ -843,7 +1396,9 @@ namespace cba.Util
             NonUniformUnfolding = false;
             CallTree = null;
             prevSIState = null;
-            connectionPort = null;
+            address = null; 
+            connectionType = null;
+            loadOnly = false;
             StratifiedInliningWithoutModels = false;
             UseProverEvaluate = true;
             ModelViewFile = null;
@@ -864,8 +1419,10 @@ namespace cba.Util
             ret.newStratifiedInliningAlgo = newStratifiedInliningAlgo;
             ret.NonUniformUnfolding = NonUniformUnfolding;
             ret.CallTree = CallTree;
-            ret.prevSIState = prevSIState;
-            ret.connectionPort = connectionPort;
+            ret.prevSIState = prevSIState; 
+            ret.connectionType = connectionType;
+            ret.address = address;
+            ret.loadOnly = loadOnly;
             if (CallTree != null)
             {
                 ret.CallTree = new HashSet<string>(CallTree);
@@ -879,7 +1436,7 @@ namespace cba.Util
             ret.useDI = useDI;
             ret.maxInlinedBound = maxInlinedBound;
             ret.extraRecBound = new Dictionary<string, int>(ret.extraRecBound);
-            ret.extraFlags.UnionWith(extraFlags);            
+            ret.extraFlags.UnionWith(extraFlags);
             return ret;
         }
 

@@ -1,0 +1,28 @@
+﻿{
+  "inputs": [
+    {
+      "type": "EventSource",
+      "sources": [
+        { "providerName": "Microsoft-ServiceFabric-Services" },
+        { "providerName": "Microsoft-ServiceFabric-Actors" },
+        // (replace the following value with your service's ServiceEventSource name)
+        { "providerName": "MyCompany-DistributedCorral-ServerStateful" }
+      ]
+    }
+  ],
+  "filters": [
+    {
+      "type": "drop",
+      "include": "Level < 0"
+    }
+  ],
+  "outputs": [
+    {
+      "type": "ApplicationInsights",
+
+      // 20 "clients",
+      "instrumentationKey": ""
+    }
+  ],
+  "schemaVersion": "2016-08-11"
+}

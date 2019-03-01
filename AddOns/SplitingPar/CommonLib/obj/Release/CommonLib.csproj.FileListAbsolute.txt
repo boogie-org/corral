@@ -1,0 +1,6 @@
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\bin\Release\CommonLib.dll.config
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\bin\Release\CommonLib.dll
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\bin\Release\CommonLib.pdb
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\obj\Release\CommonLib.csproj.CoreCompileInputs.cache
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\obj\Release\CommonLib.dll
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\CommonLib\obj\Release\CommonLib.pdb

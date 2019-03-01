@@ -19,7 +19,20 @@ namespace SplitParServer
             this.callTreeDir = callTreeDir;
             this.level = level;
         }
-         
+
+        public bool Equals(BplTask obj)
+        {
+            var other = obj as BplTask;
+            if (other == null) return false;
+
+            if (!author.Equals(other.author))
+                return false;
+            if (!callTreeDir.Equals(other.callTreeDir))
+                return false;
+
+            return true;
+        }
+
         public string ToString()
         {
             return string.Format("{0} >>> {1}:{2}", Utils.Indent(level), author, callTreeDir);

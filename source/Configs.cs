@@ -160,7 +160,11 @@ namespace cba
 
         public string prevSIState { get; private set; }
 
-        public string connectionPort { get; private set; }
+        public string connectionType { get; private set; }
+
+        public string httpAddress { get; private set; }
+
+        public bool loadOnly { get; private set; }
 
         public static Configs parseCommandLine(string[] args)
         {
@@ -355,7 +359,9 @@ namespace cba
             explainQuantifiers = null;
 
             prevSIState = null;
-            connectionPort = null;
+            connectionType = null;
+            httpAddress = null;
+            loadOnly = false;
         }
 
 
@@ -779,10 +785,19 @@ namespace cba
                 var split = flag.Split(sep);
                 prevSIState = split[1];
             }
-            else if (flag.StartsWith("/connectionPort:"))
+            else if (flag.StartsWith("/connectionType:"))
             {
                 var split = flag.Split(sep);
-                connectionPort = split[1];
+                connectionType = split[1].ToLower();
+            }
+            else if (flag.StartsWith("/httpAddress:"))
+            {
+                var split = flag.Split(sep);
+                httpAddress = flag.Substring("/httpAddress:".Length);
+            }
+            else if (flag.StartsWith("/loadOnly"))
+            {
+                loadOnly = true;
             }
             else
             {

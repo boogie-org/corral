@@ -1,0 +1,63 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace StatefulUploadService
+{
+    using System.IO;
+    using System.Net.Http.Headers;
+    using System.Threading.Tasks;
+    using System.Web.Http;
+    using Microsoft.ServiceFabric.Data;
+    using Microsoft.ServiceFabric.Data.Collections;
+
+    /// <summary>
+    /// Default controller.
+    /// </summary>
+    public class DefaultController : ApiController
+    {
+        private readonly IReliableStateManager stateManager;
+
+        public DefaultController(IReliableStateManager stateManager)
+        {
+            this.stateManager = stateManager;
+        } 
+
+        [HttpGet]
+        [Route("Count")]
+        public async Task<IHttpActionResult> Count()
+        {
+            IReliableDictionary<string, long> statsDictionary = await this.stateManager.GetOrAddAsync<IReliableDictionary<string, long>>("statsDictionary");
+
+            using (ITransaction tx = this.stateManager.CreateTransaction())
+            {
+                ConditionalValue<long> result = await statsDictionary.TryGetValueAsync(tx, "Number of Words Processed");
+
+                if (result.HasValue)
+                {
+                    return this.Ok(result.Value);
+                }
+            }
+
+            return this.Ok(0);
+        }
+
+        [HttpPut]
+        [Route("AddWord/{word}")]
+        public async Task<IHttpActionResult> AddWord(string word)
+        {
+            IReliableQueue<string> queue = await this.stateManager.GetOrAddAsync<IReliableQueue<string>>("inputQueue");
+
+            using (ITransaction tx = this.stateManager.CreateTransaction())
+            {
+                await queue.EnqueueAsync(tx, word);
+
+                await tx.CommitAsync();
+            }
+
+            return this.Ok();
+        }
+    }
+}

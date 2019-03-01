@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -63,6 +64,12 @@ namespace CommonLib
             {          
                 CopyFile(System.IO.Path.Combine(root, src.value), System.IO.Path.Combine(remote, Utils.DataDir, System.IO.Path.GetFileName(src.value)));
             }
+
+            // clean run folder
+            var oldFiles = System.IO.Directory.GetFiles(System.IO.Path.Combine(remote, Utils.RunDir));
+            foreach (var file in oldFiles)
+                if (file.EndsWith("txt") || file.EndsWith("dot") || file.EndsWith("out") || file.EndsWith("xml"))
+                    System.IO.File.Delete(System.IO.Path.GetFullPath(file));
         }
 
         static void CopyFolder(string root, string remote, string folder, bool force)
@@ -77,6 +84,7 @@ namespace CommonLib
                     System.IO.Directory.CreateDirectory(System.IO.Path.Combine(remote, folder));
                     //Console.WriteLine("copy {0} {1}", file, remotefile);
                     System.IO.File.Copy(file, remotefile, true);
+                    File.SetAttributes(remotefile, FileAttributes.Normal);
                 }
             }
         }
@@ -90,6 +98,7 @@ namespace CommonLib
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest));
             Console.WriteLine("copy {0} {1}", src, dest);
             System.IO.File.Copy(src, dest, true);
+            File.SetAttributes(dest, FileAttributes.Normal);
         } 
 
 

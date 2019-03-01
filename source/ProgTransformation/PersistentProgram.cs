@@ -13,7 +13,7 @@ namespace ProgTransformation
 
     // PersistentProgram does not allow
     // in-place modifications to its internal program. 
-    public class PersistentProgram: PersistentProgramAbs
+    public class PersistentProgram : PersistentProgramAbs
     {
         public static bool useIO = true;
         public static int memLimit = 0;
@@ -116,7 +116,7 @@ namespace ProgTransformation
         public static void CheckMemoryPressure()
         {
             if (PersistentProgram.memLimit == 0) return;
-            
+
             // Check if we're within 80% of the limit
             var mem = BoogieUtil.GetMemUsage();
             if (mem < (0.8) * PersistentProgram.memLimit) return;
@@ -160,7 +160,7 @@ namespace ProgTransformation
                 stat++;
             }
 
-            if(stat != 0)
+            if (stat != 0)
                 Console.WriteLine("Moved {0} files to disk to save memory", stat);
 
             // Force GC
@@ -215,17 +215,17 @@ namespace ProgTransformation
             }
             else if (programStream is MemoryStream)
             {
-                
+
                 FileStream fs = new FileStream(fname, FileMode.Create);
                 fs.Write((programStream as MemoryStream).GetBuffer(), 0, (int)(programStream as MemoryStream).Length);
                 fs.Close();
             }
-            else 
+            else
             {
                 System.Diagnostics.Debug.Assert(programStream is string);
                 System.IO.File.WriteAllText(fname, (string)programStream);
             }
-            
+
         }
 
         // Return a new copy of the program

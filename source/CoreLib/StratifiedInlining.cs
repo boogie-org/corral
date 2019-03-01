@@ -16,6 +16,9 @@ using Microsoft.Boogie.GraphUtil;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace CoreLib
 {
@@ -162,83 +165,6 @@ namespace CoreLib
             Console.WriteLine("-------------------------");
         }
     }
-
-    [Serializable]
-    public class SplitState
-    {
-        public HashSet<string> CallTree; 
-        //  MUST_REACH = 0, BLOCK = 1
-        public List<Tuple<string, int>> SplitingNodes = null;
-
-        public SplitState()
-        {
-            CallTree = new HashSet<string>();
-            SplitingNodes = new List<Tuple<string, int>>();
-        }
-
-        public SplitState(string file)
-        {
-            var tmp = GetSplitState(file);
-            if (tmp != null)
-            {
-                CallTree = new HashSet<string>(tmp.CallTree);
-                SplitingNodes = new List<Tuple<string, int>>(tmp.SplitingNodes);
-            }
-            else
-            {
-                CallTree = new HashSet<string>();
-                SplitingNodes = new List<Tuple<string, int>>();
-            }
-        }
-
-        public SplitState(HashSet<string> callTree, Tuple<string, int> splitingNode)
-        {
-            CallTree = new HashSet<string>(callTree);
-            SplitingNodes = new List<Tuple<string, int>>();
-            SplitingNodes.Add(new Tuple<string, int>(splitingNode.Item1, splitingNode.Item2));
-        }
-
-        public SplitState(HashSet<string> callTree, List<Tuple<string, int>> splitingNodes)
-        {
-            CallTree = new HashSet<string>(callTree);
-            SplitingNodes = new List<Tuple<string, int>>(splitingNodes); 
-        }
-
-        public void UpdateCallTree(HashSet<string> callTree)
-        {
-            CallTree = new HashSet<string>(callTree);
-        }
-
-        public void RecordNewSplit(Tuple<string, int> split)
-        {
-            SplitingNodes.Add(split);
-        }
-
-        public SplitState GetSplitState(string file)
-        {
-            if (file == null || !System.IO.File.Exists(file))
-                return null;
-
-            var serailizer = new BinaryFormatter();
-            FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
-            var cs = (SplitState)serailizer.Deserialize(stream);
-            stream.Close();
-
-            return cs;
-        }  
-
-        public void DumpSplitingState(string file)
-        {
-            if (file != null)
-            { 
-                BinaryFormatter serializer = new BinaryFormatter();
-                FileStream stream = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
-                serializer.Serialize(stream, this);
-                stream.Close();
-            }
-        }
-    }
-
 
     /****************************************
     *          Stratified Inlining          *
@@ -444,6 +370,14 @@ namespace CoreLib
             prover.Push();
         }
 
+        protected async Task PushAsync()
+        {
+            await Task.Run(() =>
+            {
+                Push();
+            });
+        }
+
         /* for measuring Z3 stack */
         protected void Pop()
         {
@@ -482,6 +416,7 @@ namespace CoreLib
         }
 
         enum DecisionType { MUST_REACH, BLOCK };
+
         class Decision : Tuple<DecisionType, int, StratifiedCallSite>
         {
             public Decision(DecisionType dt, int num, StratifiedCallSite cs)
@@ -500,32 +435,6 @@ namespace CoreLib
             public StratifiedCallSite cs
             {
                 get { return Item3; }
-            }
-        }
-
-        class DecisionWithTaskID : Tuple<DecisionType, int, StratifiedCallSite, int>
-        {
-            public DecisionWithTaskID(DecisionType dt, int num, StratifiedCallSite cs, int taskID)
-                : base(dt, num, cs, taskID) { }
-
-            public DecisionType decisionType
-            {
-                get { return Item1; }
-            }
-
-            public int num
-            {
-                get { return Item2; }
-            }
-
-            public StratifiedCallSite cs
-            {
-                get { return Item3; }
-            }
-
-            public int taskID
-            {
-                get { return Item4; }
             }
         }
 
@@ -563,7 +472,29 @@ namespace CoreLib
 
             public void ToDot()
             {
-                using (var fs = new System.IO.StreamWriter("tg" + (dmpCnt++) + ".dot"))
+                using (var fs = new System.IO.StreamWriter("tg" + (dmpCnt++) + ".dot", false))
+                {
+                    fs.WriteLine("digraph TG {");
+
+                    foreach (var tup in Nodes)
+                    {
+                        fs.WriteLine("{0} [label=\"{1}\"]", tup.Key, tup.Value);
+                    }
+
+                    foreach (var tup in Edges)
+                    {
+                        foreach (var tgt in tup.Value)
+                            fs.WriteLine("{0} -> {1} [label=\"{2} {3}\"]", tup.Key, tgt.Item1, tgt.Item2, tgt.Item3.ToString("F2"));
+                    }
+
+                    fs.WriteLine("}");
+
+                }
+            }
+
+            public void ToDot(string fileName)
+            {
+                using (var fs = new System.IO.StreamWriter("tg_" + fileName + ".dot", false))
                 {
                     fs.WriteLine("digraph TG {");
 
@@ -685,7 +616,7 @@ namespace CoreLib
             }
         }
 
-        List<StratifiedCallSite> getParents(StratifiedCallSite scs)
+        List<StratifiedCallSite> GetParents(StratifiedCallSite scs)
         {
             List<StratifiedCallSite> parents = new List<StratifiedCallSite>();
             StratifiedCallSite currCS = scs;
@@ -697,142 +628,58 @@ namespace CoreLib
             return parents;
         }
 
-        // Comment TODO
-        public Outcome MustReachSplitParallelStyle(
-            SplitState prevSplitState,
-            HashSet<StratifiedCallSite> openCallSites,
-            StratifiedInliningErrorReporter reporter)
+        List<string> GetParents(string child)
         {
-            Outcome outcome = Outcome.Inconclusive;
-            reporter.reportTraceIfNothingToExpand = true;            
+            List<string> parents = new List<string>();
+            string connector = "_262_";
+            while (child.Contains(connector))
+            {
+                child = child.Substring(0, child.LastIndexOf(connector));
+                parents.Add(child);
+            }
+            return parents;
+        } 
+         
+        public Outcome MustReachSplitParallelStyle(
+            HashSet<StratifiedCallSite> openCallSites,
+            StratifiedInliningErrorReporter reporter,
+            List<Tuple<string, string>> addingEdges)
+        {
+            Outcome outcome = Outcome.Correct;
+            reporter.reportTraceIfNothingToExpand = true;
+            BoogieVerifyOptions.SplitState prevSplitState = null;
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
             var backtrackingPoints = new Stack<SiState>();
-            var decisions = new Stack<DecisionWithTaskID>();
+            var splitStateQueue = new Queue<BoogieVerifyOptions.SplitState>();
+            var handledCallTrees = new HashSet<string>();
+            BoogieVerify.decisions = new List<BoogieVerify.Decision>();
             var timeGraph = new TimeGraph();
-            Socket server = null;
-            string exportSuffix = "split.txt";
-            string readyMsg = "Client is ready";
-            string completionMsg = "Complete";
-            string doingMsg = "Doing";
-            int portNumber = 12000; // let skip the user-define port at the moment
-            int msgSize = 1024;
+            string exportPrefix = "";
+            bool withinBound = true;
+            double z3LastPhases = 0;
+            if (BoogieVerify.options.prevSIState != null)
+            {
+                string tmpFileName = Path.GetFileName(BoogieVerify.options.prevSIState.Name);
+                exportPrefix = tmpFileName.Substring(0, tmpFileName.IndexOf(SocketUtil.MsgSuffix)) + "_";
+                withinBound = tmpFileName.Count(ch => ch == '_') < BoogieVerify.DistributedConfig.SplitingBound ? true : false;
+                prevSplitState = BoogieVerify.options.prevSIState.Clone();
+            }
+            else
+                prevSplitState = new BoogieVerifyOptions.SplitState();
+            BoogieVerify.DistributedConfig.Setup(); 
+
             int treesize = di.ComputeSize();
+            Socket connection = BoogieVerify.socketConnection;
+            string address = BoogieVerify.options.address;
+            HttpClient httpSendCT = new HttpClient();
+            HttpClient httpCheckAvail = new HttpClient(); 
+            var startPar = DateTime.Now;
+            var lastSent = DateTime.Now;
 
             var EncodeStr = new Func<string, byte[]>((s) =>
             {
                 return Encoding.ASCII.GetBytes(s);
             });
-
-            #region Set up connection
-            if (cba.Util.BoogieVerify.options.connectionPort != null)
-            {
-                var localIP = new Func<string>(() =>
-                {
-                    var host = Dns.GetHostEntry(Dns.GetHostName());
-                    foreach (var ip in host.AddressList)
-                    {
-                        if (ip.AddressFamily == AddressFamily.InterNetwork)
-                        {
-                            return ip.ToString();
-                        }
-                    }
-                    return null;
-                });
-
-                if (System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
-                {
-                    if (false)
-                    {
-                        #region do not use it
-                        try
-                        {                           
-                            IPHostEntry ipHostInfo = Dns.Resolve(localIP());
-                            IPAddress ipAddress = ipHostInfo.AddressList[0];
-                            IPEndPoint remoteEP = new IPEndPoint(ipAddress, portNumber);
-
-
-                            server = new Socket(AddressFamily.InterNetwork,
-                                SocketType.Stream, ProtocolType.Tcp);
-
-                            try
-                            {
-                                server.Connect(remoteEP);
-
-                                LogWithAddress.WriteLine(string.Format("Socket connected {0}", server.RemoteEndPoint.ToString()));
-
-                                byte[] data = new byte[msgSize];
-                                int receivedDataLength = server.Receive(data); //Wait for the data
-                                string stringData = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
-                                LogWithAddress.WriteLine(string.Format("{0}", stringData)); //Write the data on the screen
-
-                                // reply the server
-                                server.Send(EncodeStr(string.Format("{0}: {1}", localIP(), readyMsg)));
-                            }
-                            catch (ArgumentNullException ane)
-                            {
-                                LogWithAddress.WriteLine(string.Format("ArgumentNullException : {0}", ane.ToString()));
-                            }
-                            catch (SocketException se)
-                            {
-                                LogWithAddress.WriteLine(string.Format("SocketException : {0}", se.ToString()));
-                            }
-                            catch (Exception e)
-                            {
-                                LogWithAddress.WriteLine(string.Format("Unexpected exception : {0}", e.ToString()));
-                            }
-
-                        }
-                        catch
-                        {
-                            LogWithAddress.WriteLine(string.Format("Cannot connect the server."));
-                        }
-                        #endregion
-                    }
-                    else
-                    {
-                        IPHostEntry ipHostInfo = Dns.Resolve(Dns.GetHostName());
-                        IPAddress ipAddress = ipHostInfo.AddressList[0];
-                        IPEndPoint localEndPoint = new IPEndPoint(ipAddress, portNumber);
-
-
-                        server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
-                        try
-                        {
-                            server.Bind(localEndPoint);
-                            server.Listen(10);
-                            lock (LogWithAddress.debugOut)
-                            {
-                                LogWithAddress.WriteLine(string.Format("Waiting for a connection..."));
-                            }
-                            server = server.Accept();
-                            lock (LogWithAddress.debugOut)
-                            {
-                                LogWithAddress.WriteLine(string.Format("Connected"));
-                            }
-                            server.Send(EncodeStr("Hello " + server.RemoteEndPoint.ToString()));
-
-                            // wait for the reply message
-                            byte[] data = new byte[msgSize];
-                            int receivedDataLength = server.Receive(data); //Wait for the data
-                            string stringData = Encoding.ASCII.GetString(data, 0, receivedDataLength); //Decode the data received
-
-                            lock (LogWithAddress.debugOut)
-                            {
-                                LogWithAddress.WriteLine(string.Format("{0}", stringData)); //Write the data on the screen
-                            }
-                        }
-                        catch
-                        {
-                            lock (LogWithAddress.debugOut)
-                            {
-                                LogWithAddress.WriteLine(string.Format("Error"));
-                            }
-                        }
-                    }
-                }
-            }
-            #endregion
 
             var indent = new Func<int, string>(i =>
             {
@@ -849,7 +696,7 @@ namespace CoreLib
                 return ret;
             });
 
-            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
+            var ApplyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
             {
                 if (d == DecisionType.BLOCK)
                 {
@@ -861,201 +708,374 @@ namespace CoreLib
 
                     disj.Iter(m => di.DeleteNode(m));
                 }
-            });
+            }); 
 
-            var rand = new Random();
-            var decideToBlockOrReach = new Func<bool>(() =>
+            var ShouldReachNode = new Func<bool>(() =>
             {
-                if (prevSplitState.SplitingNodes.Count == 0)
-                    return true; // rand.Next(100) != 0;
-                else
-                    return false;
+                return false;
             });
 
             var taskFile = new Func<int, string>((taskID) =>
             {
-                return taskID + exportSuffix;
+                return exportPrefix + taskID + SocketUtil.MsgSuffix;
             });
 
-            var taskExists = new Func<int, bool>((taskID) =>
+            var TaskExists = new Func<string, bool>((taskID) =>
             {
-                if (File.Exists(taskFile(taskID)))
-                    return true; // rand.Next(100) != 0;
+                if (File.Exists(taskID))
+                    return true;
                 else
                     return false;
             });
+            
+            var ShouldSendCT = new Func<bool>(() =>
+            {
+                return 
+                    0.2 < (DateTime.Now - lastSent).TotalSeconds &&
+                    Math.Min(5, BoogieVerify.DistributedConfig.MinWorkingTime) < (DateTime.Now - startPar).TotalSeconds &&
+                    z3LastPhases >= BoogieVerify.DistributedConfig.TimeThreshold;
+            });
+
+            var ShouldCreateCT = new Func<bool>(() =>
+            {
+                return splitStateQueue.Count < BoogieVerify.DistributedConfig.QueueUpperBound;
+            });
+
+            var ShouldSplit = new Func<bool>(() =>
+            {
+                var size = di.ComputeSize();
+                return ((treesize == 0 && size > BoogieVerify.DistributedConfig.SplitThreshold) ||
+                    (treesize != 0 && size > treesize + BoogieVerify.DistributedConfig.SplitThreshold)) &&
+                    z3LastPhases >= Math.Min(0.2, BoogieVerify.DistributedConfig.TimeThreshold);
+            });
+
+            var SendCallTree = new Action(() =>
+            {
+                if (!ShouldSendCT())
+                { 
+                    return;
+                }
+                z3LastPhases = 0;
+                bool found = false;
+                while (!found && splitStateQueue.Count > 0)
+                {
+                    if (splitStateQueue.Count > BoogieVerify.DistributedConfig.QueueLowerBound)
+                    {
+                        var callTree = splitStateQueue.Dequeue();
+                        if (!handledCallTrees.Contains(callTree.Name))
+                        {
+                            var startCommunication = DateTime.Now;
+                            found = true;
+                            LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("\t Sending {0} | States remaining: {1} | z3LastPhases : {2} | TimeThreshold : {3}", callTree.Name, splitStateQueue.Count, z3LastPhases, BoogieVerify.DistributedConfig.TimeThreshold));
+                            switch (BoogieVerify.DistributedConfig.ConnectionType)
+                            {
+                                case BoogieVerify.ConnectionType.SOCKET:
+                                    // write to file
+                                    callTree.DumpSplitingState(callTree.Name);
+
+                                    // inform server 
+                                    if (connection != null && withinBound)
+                                    {
+                                        // decisions.Count fileName
+                                        connection.Send(EncodeStr(BoogieVerify.decisions.Count.ToString() + ":" + callTree.Name + BoogieVerify.DistributedConfig.MsgSeperator));
+                                    } 
+                                    break;
+
+                                case BoogieVerify.ConnectionType.CLOUD:
+                                    lastSent = DateTime.Now;
+                                    var fileName = BoogieVerify.fileName;
+                                    Task.Run(() =>
+                                    {
+                                        bool sentSuccessfully = true;
+                                        while (sentSuccessfully)
+                                        {
+                                            if (!handledCallTrees.Contains(callTree.Name))
+                                            {
+                                                sentSuccessfully = false;
+                                                bool adding = true;
+                                                if (BoogieVerify.DistributedConfig.AskBeforeSending)
+                                                    adding = AskServerStatus(httpSendCT, address);
+
+                                                string rep = "";
+                                                if (adding)
+                                                {
+                                                    var state = callTree.EncodeCallTree();
+                                                    rep = SendCallTreeAsync(httpSendCT, address, state, fileName);
+                                                }
+                                                else
+                                                    rep = HttpUtil.NotAdded;
+                                                
+                                                if (rep.Equals(HttpUtil.NotAdded) || rep.Length == 0)
+                                                {
+                                                    BoogieVerify.DistributedConfig.SplitThreshold += 2;
+                                                    BoogieVerify.DistributedConfig.TimeThreshold += BoogieVerify.DistributedConfig.TimeThresholdOrg;
+                                                    BoogieVerify.DistributedConfig.AskBeforeSending = true;
+                                                    //splitStateQueue.Enqueue(callTree);
+                                                    break;
+                                                }
+                                                else if (rep.Equals(HttpUtil.FastSplit))
+                                                {
+                                                    sentSuccessfully = true;
+                                                    BoogieVerify.DistributedConfig.NormalSplit();
+                                                }
+                                                else if (rep.Equals(HttpUtil.NormalSplit))
+                                                {
+                                                    sentSuccessfully = true;
+                                                    BoogieVerify.DistributedConfig.NormalSplit();
+                                                }
+                                                else if (rep.Equals(HttpUtil.SlowSplit))
+                                                {
+                                                    sentSuccessfully = true;
+                                                    BoogieVerify.DistributedConfig.SlowSplit();
+                                                }
+                                            }
+                                            break;
+                                            lock (splitStateQueue)
+                                            {
+                                                if (splitStateQueue.Count > 0)
+                                                    callTree = splitStateQueue.Dequeue();
+                                                else
+                                                    break;
+                                            }
+                                        }
+                                    });
+                                    break;
+                                default:
+                                    break;
+                            }
+                            var communicationTime = (DateTime.Now - startCommunication);
+                            BoogieVerify.AccumulatedStats.sendingCallTreeTime += communicationTime.TotalSeconds;
+                            BoogieVerify.AccumulatedStats.communicationTime += communicationTime.TotalSeconds;
+                        } 
+                    }
+                } 
+            });
+
+            foreach (var edge in addingEdges)
+            {
+                timeGraph.AddEdge(edge.Item1, edge.Item2);
+            }
 
             var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
             var reachedBound = false;
-            var tt = TimeSpan.Zero;            
+            var tt = TimeSpan.Zero;
             bool continueWorkingIfNoOneHelped = true;
-            while (true)
+            int fileCounter = 0; 
+             
+            HashSet<string> usedSplitedNodes = new HashSet<string>();
+            if (BoogieVerify.options.prevSIState != null && BoogieVerify.options.prevSIState.SplitingNodes != null)
             {
-                // Lets split when the tree has become big enough
+                foreach (var n in BoogieVerify.options.prevSIState.SplitingNodes)
+                {
+                    usedSplitedNodes.Add(n.Item1);
+                    var parents = GetParents(n.Item1);
+                    foreach (var p in parents)
+                        usedSplitedNodes.Add(p);
+                }
+            }
+
+            while (BoogieVerify.DistributedConfig.ContinueSearch)
+            {
+                BoogieVerify.DistributedConfig.UpdateSplittingSpeed();
+
                 var size = di.ComputeSize();
 
                 // if the tree is big enough to split && some available machines are available
-                if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
-                {
+                if (ShouldSplit()) 
+                { 
                     var st = DateTime.Now;
 
                     // find a node to split on
-                    StratifiedVC maxVc = null;
-                    int maxVcScore = 0;
 
-                    var toRemove = new HashSet<StratifiedVC>();
                     var sizes = di.ComputeSubtrees();
                     var disj = di.ComputeNumDisjoint();
 
-                    foreach (var vc in attachedVCInv.Keys)
+                    #region choosing a node to do splitting 
+                    var ChooseSplittingNode = new Func<StratifiedVC>(() =>
                     {
-                        if (!di.VcExists(vc))
+                        int _chosenScore = 0;
+                        StratifiedVC _chosenVc = null;
+
+                        var toRemove = new HashSet<StratifiedVC>();
+                        foreach (var vc in attachedVCInv.Keys)
                         {
-                            toRemove.Add(vc);
-                            continue;
+                            if (!di.VcExists(vc))
+                            {
+                                toRemove.Add(vc);
+                                continue;
+                            }
+
+                            if (parent.ContainsKey(attachedVCInv[vc]) && disj[vc] != disj[attachedVC[parent[attachedVCInv[vc]]]] && disj[vc] > 0)
+                            {
+                                var score = Math.Min(sizes[vc].Count, disj[vc]);
+                                if (score >= _chosenScore)
+                                {
+                                    if (!usedSplitedNodes.Contains(GetPersistentID(attachedVCInv[vc])))
+                                    {
+                                        var csReachBound = HasExceededRecursionDepth(attachedVCInv[vc], CommandLineOptions.Clo.RecursionBound) ||
+                                                           (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                                           StackDepth(attachedVCInv[vc]) > CommandLineOptions.Clo.StackDepthBound);
+                                        if (!csReachBound)
+                                        {
+                                            _chosenVc = vc;
+                                            _chosenScore = score;
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+                        return _chosenVc;
+                    });
+                    #endregion
 
-                        var score = Math.Min(sizes[vc].Count, disj[vc]);
-                        if (score >= maxVcScore)
-                        {
-                            maxVc = vc;
-                            maxVcScore = score;
-                        }
-                    }
-                    toRemove.Iter(vc => attachedVCInv.Remove(vc));
+                    StratifiedVC chosenVc = ChooseSplittingNode();
 
-                    var scs = attachedVCInv[maxVc];
-                    Debug.Assert(!openCallSites.Contains(scs));
-
-                    var desc = sizes[maxVc];
-                    var cnt = 0;
-                    openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
-
-                    // make a decision 
-                    if (decideToBlockOrReach())
+                    if (chosenVc != null)
                     {
-                        #region export spliting state + block scs
-                        List<StratifiedCallSite> parents = getParents(scs);
-                        var callsites = new HashSet<StratifiedCallSite>();
-                        callsites.UnionWith(parent.Keys);
-                        callsites.UnionWith(parent.Values);
-                        callsites.ExceptWith(openCallSites);
-                        foreach (var cs in parents)
+                        int chosenScore = Math.Min(sizes[chosenVc].Count, disj[chosenVc]);
+                        var scs = attachedVCInv[chosenVc];
+                        Debug.Assert(!openCallSites.Contains(scs));
+
+                        var desc = sizes[chosenVc];
+                        var cnt = 0;
+                        openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0); 
+
+                        if (!usedSplitedNodes.Contains(GetPersistentID(scs)))
                         {
-                            var tmp = di.DisjointNodes(attachedVC[cs]);
-                            HashSet<StratifiedCallSite> disjSet = new HashSet<StratifiedCallSite>();
-                            tmp.Iter(vc => disjSet.Add(attachedVCInv[vc]));
-                            callsites.ExceptWith(disjSet);
+                            usedSplitedNodes.Add(GetPersistentID(scs));
+                            var parents = GetParents(scs);
+                            foreach (var p in parents)
+                                usedSplitedNodes.Add(GetPersistentID(p));
+
+                            // make a decision 
+                            if (ShouldReachNode())
+                            {
+                                #region export spliting state + block scs 
+                                var callsites = new HashSet<StratifiedCallSite>();
+                                if (ShouldCreateCT())
+                                {
+                                    callsites.UnionWith(parent.Keys);
+                                    callsites.UnionWith(parent.Values);
+                                    callsites.ExceptWith(openCallSites);
+
+                                    CallTree = new HashSet<string>();
+                                    callsites.Iter(cs =>
+                                    {
+                                        string tmp = GetPersistentID(cs);
+                                    //LogWithAddress.WriteLine(tmp);
+                                    CallTree.Add(tmp);
+                                    });
+                                }
+                                string scsPersistentID = GetPersistentID(scs);
+
+                                // create a SplitState with new calltree + add a new split state: scsID and 1 - means blocking scs
+                                List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>>(BoogieVerify.options.prevSIState.SplitingNodes);
+                                newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 1));
+                                fileCounter++;
+
+                                if (CallTree.Count > 0)
+                                {
+                                    foreach (var s in newSplitNodes)
+                                    {
+                                        CallTree.Add(s.Item1);
+                                        var listNodes = GetParents(s.Item1);
+                                        listNodes.Iter(n => CallTree.Add(n));
+                                    }
+
+                                    splitStateQueue.Enqueue(new BoogieVerifyOptions.SplitState(taskFile(fileCounter), CallTree, newSplitNodes));
+                                } 
+                                #endregion
+
+                                // Push must reach 
+                                LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0}>>> Pushing Must-Reach({1}, {2}, {3}, {4}, {5})", indent(BoogieVerify.decisions.Count), scs.callSite.calleeName, sizes[chosenVc].Count, disj[chosenVc], size, stats.numInlined));
+                                var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, chosenScore);
+                                timeGraph.AddEdge(tgNode, BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
+
+                                Push();
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                                lock (BoogieVerify.decisions)
+                                {
+                                    BoogieVerify.decisions.Add(new BoogieVerify.Decision(BoogieVerify.DecisionType.MUST_REACH, 0, scs, taskFile(fileCounter)));
+                                }
+                                ApplyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                                prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
+                                prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 0));
+                                treesize = di.ComputeSize();
+
+                                tt += (DateTime.Now - st);
+                            }
+                            else
+                            {
+                                // must reach scs
+                                #region export spliting state + must reach scs 
+
+                                var callsites = new HashSet<StratifiedCallSite>();
+                                CallTree = new HashSet<string>();
+                                if (ShouldCreateCT())
+                                {
+                                    callsites.UnionWith(parent.Keys);
+                                    callsites.UnionWith(parent.Values);
+                                    callsites.ExceptWith(openCallSites);
+                                    callsites.Iter(cs =>
+                                    {
+                                        string tmp = GetPersistentID(cs);
+                                        CallTree.Add(tmp);
+                                    });
+                                }
+                                string scsPersistentID = GetPersistentID(scs);
+
+                                // create a SplitState with new calltree + add a new split state: scsID and 1 - means must-reach scs
+                                List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>>(prevSplitState.SplitingNodes);
+                                newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 0));
+                                fileCounter++;
+                                if (CallTree.Count > 0)
+                                {
+                                    foreach (var s in newSplitNodes)
+                                    {
+                                        CallTree.Add(s.Item1);
+                                        var listNodes = GetParents(s.Item1);
+                                        listNodes.Iter(n => CallTree.Add(n));
+                                    }
+                                    splitStateQueue.Enqueue(new BoogieVerifyOptions.SplitState(taskFile(fileCounter), CallTree, newSplitNodes));
+                                }
+                                
+                                #endregion
+
+                                // Push & Block
+                                LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(BoogieVerify.decisions.Count), scs.callSite.calleeName, sizes[chosenVc].Count, disj[chosenVc], size, stats.numInlined));
+                                var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, chosenScore);
+                                timeGraph.AddEdge(tgNode, BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
+
+                                Push();
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
+                                prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                lock (BoogieVerify.decisions)
+                                {
+                                    BoogieVerify.decisions.Add(new BoogieVerify.Decision(BoogieVerify.DecisionType.BLOCK, 0, scs, taskFile(fileCounter)));
+                                }
+                                ApplyDecisionToDI(DecisionType.BLOCK, chosenVc);
+                                prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 1));
+                                prover.Assert(scs.callSiteExpr, false);
+                                treesize = di.ComputeSize();
+
+                                tt += (DateTime.Now - st);
+                            }
                         }
-
-                        CallTree = new HashSet<string>();
-                        callsites.Iter(cs =>
-                        {
-                            string tmp = GetPersistentID(cs);
-                            //LogWithAddress.WriteLine(tmp);
-                            CallTree.Add(tmp);
-                        });
-
-                        string scsPersistentID = GetPersistentID(scs);
-
-                        // create a SplitState with new calltree + add a new split state: scsID and 1 - means blocking scs
-                        List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>> (prevSplitState.SplitingNodes);
-                        newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 1));
-                        SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
-
-                        // write to file
-                        forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
-
-                        // inform server 
-                        if (server != null)
-                        {
-                            // decisions.Count fileName
-                            server.Send(EncodeStr(decisions.Count.ToString() + ":" + taskFile(newSplitNodes.Count)));
-                        }
-                        #endregion
-
-                        // Push must reach 
-                        MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), scs.callSite.calleeName);
-                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
-                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-
-                        Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
-                        decisions.Push(new DecisionWithTaskID(DecisionType.MUST_REACH, 0, scs, newSplitNodes.Count));
-                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
-                        prevMustAsserted.Push(AssertMustReach(attachedVC[scs], PrevAsserted()));
-                        prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 0));
-                        treesize = di.ComputeSize();
-
-                        tt += (DateTime.Now - st);
-                    }
-                    else
-                    {
-                        // must reach scs
-                        #region export spliting state + must reach scs
-                        List<StratifiedCallSite> parents = getParents(scs);
-                                                
-                        var callsites = new HashSet<StratifiedCallSite>();
-                        callsites.UnionWith(parent.Keys);
-                        callsites.UnionWith(parent.Values);
-                        callsites.ExceptWith(openCallSites);
-                        foreach (var cs in parents)
-                        {
-                            var tmp = di.DisjointNodes(attachedVC[cs]);
-                            HashSet<StratifiedCallSite> disjSet = new HashSet<StratifiedCallSite>();
-                            tmp.Iter(vc => disjSet.Add(attachedVCInv[vc]));
-                            callsites.ExceptWith(disjSet);
-                        }
-
-                        CallTree = new HashSet<string>();
-                        callsites.Iter(cs =>
-                        {
-                            string tmp = GetPersistentID(cs);
-                            //LogWithAddress.WriteLine(tmp);
-                            CallTree.Add(tmp);
-                        });
-
-                        string scsPersistentID = GetPersistentID(scs);
-
-                        // create a SplitState with new calltree + add a new split state: scsID and 1 - means must-reach scs
-                        List<Tuple<string, int>> newSplitNodes = new List<Tuple<string, int>>(prevSplitState.SplitingNodes);
-                        newSplitNodes.Add(new Tuple<string, int>(scsPersistentID, 0));
-                        SplitState forOtherMachine = new SplitState(CallTree, newSplitNodes);
-
-                        // write to file
-                        forOtherMachine.DumpSplitingState(taskFile(newSplitNodes.Count));
-                        
-                        // inform server 
-                        if (server != null)
-                        {
-                            // decisions.Count fileName
-                            server.Send(EncodeStr(decisions.Count.ToString() + ":" + taskFile(newSplitNodes.Count)));
-                        }
-                        #endregion
-
-                        // Push & Block
-                        MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
-                        var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, maxVcScore);
-                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-
-                        Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
-                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                        decisions.Push(new DecisionWithTaskID(DecisionType.BLOCK, 0, scs, newSplitNodes.Count));
-                        applyDecisionToDI(DecisionType.BLOCK, maxVc);
-                        prevSplitState.RecordNewSplit(new Tuple<string, int>(scsPersistentID, 1));
-                        prover.Assert(scs.callSiteExpr, false);
-                        treesize = di.ComputeSize();
-
-                        tt += (DateTime.Now - st);
-                    }
+                    }                    
                 }
                 else
                 {
                     // dont split, do nothing
                 }
 
-                MacroSI.PRINT_DEBUG("  - overapprox");
+                while (splitStateQueue.Count > 0)
+                {
+                    var queueSize = splitStateQueue.Count;
+                    SendCallTree();
+                    if (queueSize <= splitStateQueue.Count)
+                        break;
+                }
 
                 // Find cex
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -1069,22 +1089,28 @@ namespace CoreLib
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
                     }
-                }
-                MacroSI.PRINT_DEBUG("    - check");
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = CheckVC(reporter);
+                } 
 
-                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+                reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                var startTime = DateTime.Now;
+                outcome = CheckVC(reporter);
+                var timeUsed = (DateTime.Now - startTime).TotalSeconds;
+                z3LastPhases = timeUsed;
+                BoogieVerify.AccumulatedStats.z3Time += timeUsed; 
+
+                // forcing close
+                if (BoogieVerify.DistributedConfig.ContinueSearch == false)
+                    break;
 
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    timeGraph.AddEdgeDone(BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
                     break; // done (T/O)
                 }
 
                 if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
                 {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    timeGraph.AddEdgeDone(BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
                     break; // done (error found)
                 }
 
@@ -1099,52 +1125,102 @@ namespace CoreLib
                     }
                 }
                 else
-                {                    
+                {
                     // outcome == Outcome.Correct
                     if (continueWorkingIfNoOneHelped)
                     {
-                        DecisionWithTaskID topDecision = null;
+                        findAvailableTask:
+                        bool taskAvailable = true;
+                        BoogieVerify.Decision topDecision = null;
                         SiState topState = SiState.SaveState(this, openCallSites);
-                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        timeGraph.AddEdgeDone(BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
                         var doneBT = false;
                         var npops = 0;
-                        do
-                        { 
-                            if (decisions.Count == 0)
+                        lock (BoogieVerify.decisions)
+                        {
+                            do
                             {
-                                doneBT = true;
-                                break;
-                            }
+                                if (BoogieVerify.decisions.Count == 0)
+                                {
+                                    doneBT = true;
+                                    break;
+                                }
 
-                            topDecision = decisions.Peek();
-                            topState = backtrackingPoints.Peek();
+                                topDecision = BoogieVerify.decisions[BoogieVerify.decisions.Count - 1];
+                                topState = backtrackingPoints.Peek();
 
-                            // Pop
-                            Pop();
-                            decisions.Pop();
-                            backtrackingPoints.Pop();
-                            prevMustAsserted.Pop();
-                            npops++;
-                            MacroSI.PRINT("{0}>>> Pop", indent(decisions.Count));
-                            if (topDecision.num == 0 && !taskExists(topDecision.taskID) && topDecision.taskID > 0)
-                                MacroSI.PRINT("{0}>>> (task {1} was picked up)", indent(decisions.Count), topDecision.taskID);
-                        } while (topDecision.num == 1 || !taskExists(topDecision.taskID));
+                                // Pop
+                                Pop();
+                                BoogieVerify.decisions.RemoveAt(BoogieVerify.decisions.Count - 1);
+                                backtrackingPoints.Pop();
+                                prevMustAsserted.Pop();
+                                prevSplitState.Pop();
 
+                                npops++;
+                                LogWithAddress.WriteLine(string.Format("{0}>>> Pop", indent(BoogieVerify.decisions.Count)));
+                                taskAvailable = true;
+
+                                if (topDecision.num == 0)
+                                {
+                                    var startCommunication = DateTime.Now;
+                                    switch (BoogieVerify.DistributedConfig.ConnectionType)
+                                    {
+                                        case BoogieVerify.ConnectionType.SOCKET:
+                                            taskAvailable = TaskExists(topDecision.taskID);
+                                            break;
+                                        case BoogieVerify.ConnectionType.CLOUD:
+                                            taskAvailable = CheckAvailability(httpCheckAvail, address, topDecision.taskID);
+                                            break;
+                                        default:
+                                            taskAvailable = true;
+                                            break;
+                                    }
+                                    var checkingAvailabilityTime = DateTime.Now - startCommunication;
+                                    BoogieVerify.AccumulatedStats.checkingAvailabilityTime += checkingAvailabilityTime.TotalSeconds;
+                                    BoogieVerify.AccumulatedStats.communicationTime += checkingAvailabilityTime.TotalSeconds;
+                                }
+
+                                if (topDecision.num == 0 && !taskAvailable && topDecision.taskID.Length > 0)
+                                {
+                                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0}>>> (task {1} was picked up)", indent(BoogieVerify.decisions.Count), topDecision.taskID));
+                                    timeGraph.AddEdgeDone(BoogieVerify.decisions.Count == 0 ? "" : topDecision.taskID);
+                                }
+
+                            } while (topDecision.num == 1 || !taskAvailable);
+                        }
                         if (doneBT)
                             break;
 
-                        // TODO: need to handle concurrency
-                        // inform server 
-                        if (server != null)
+                        switch (BoogieVerify.DistributedConfig.ConnectionType)
                         {
-                            // decisions.Count fileName
-                            server.Send(EncodeStr(doingMsg + ":" + taskFile(topDecision.taskID)));
+                            case BoogieVerify.ConnectionType.SOCKET:
+                                // remove the task 
+                                try
+                                {
+                                    File.Delete(topDecision.taskID);
+                                    LogWithAddress.WriteLine(string.Format("{0}>>> (doing task {1}:{2})", indent(BoogieVerify.decisions.Count), topDecision.taskID, topDecision.taskID));
+                                    // inform server 
+                                    if (connection != null)
+                                    {
+                                        // decisions.Count fileName
+                                        connection.Send(EncodeStr(SocketUtil.DoingMsg + ":" + topDecision.taskID + BoogieVerify.DistributedConfig.MsgSeperator));
+                                    }
+                                }
+                                catch (Exception)
+                                {
+                                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0} is not available", topDecision.taskID));
+                                    goto findAvailableTask;
+                                }
+                                break;
+                            case BoogieVerify.ConnectionType.CLOUD:
+                                // server has already removed the task once it checks availability
+                                LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format(">>> doing task {0}", topDecision.taskID));
+                                break;
+                            default:
+                                break;
                         }
 
-                        // remove the task 
-                        File.Delete(taskFile(topDecision.taskID));
-                        MacroSI.PRINT("{0}>>> (doing task {1})", indent(decisions.Count), topDecision.taskID);
-                        
+                        handledCallTrees.Add(topDecision.taskID);
                         topState.ApplyState(this, ref openCallSites);
                         timeGraph.Pop(npops - 1);
 
@@ -1153,44 +1229,53 @@ namespace CoreLib
                         Push();
                         backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
-                        if (topDecision.decisionType == DecisionType.MUST_REACH)
+                        if (topDecision.decisionType == BoogieVerify.DecisionType.MUST_REACH)
                         {
                             // Block
                             prover.Assert(topDecision.cs.callSiteExpr, false);
-                            MacroSI.PRINT("{0}>>> Pushing Block({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
-                            decisions.Push(new DecisionWithTaskID(DecisionType.BLOCK, 1, topDecision.cs, 0));
-                            applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
+                            LogWithAddress.WriteLine(string.Format("{0}>>> Pushing Block({1})", indent(BoogieVerify.decisions.Count), topDecision.cs.callSite.calleeName));
+                            lock (BoogieVerify.decisions)
+                            {
+                                BoogieVerify.decisions.Add(new BoogieVerify.Decision(BoogieVerify.DecisionType.BLOCK, 1, topDecision.cs, ""));
+                            }
+                            ApplyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                            prevSplitState.RecordNewSplit(new Tuple<string, int>(GetPersistentID(topDecision.cs), 1));
                             treesize = di.ComputeSize();
                         }
                         else
                         {
                             // Must Reach
-                            MacroSI.PRINT("{0}>>> Pushing Must-Reach({1})", indent(decisions.Count), topDecision.cs.callSite.calleeName);
-                            decisions.Push(new DecisionWithTaskID(DecisionType.MUST_REACH, 1, topDecision.cs, 0));
-                            applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
+                            LogWithAddress.WriteLine(string.Format("{0}>>> Pushing Must-Reach({1})", indent(BoogieVerify.decisions.Count), topDecision.cs.callSite.calleeName));
+                            lock (BoogieVerify.decisions)
+                            {
+                                BoogieVerify.decisions.Add(new BoogieVerify.Decision(BoogieVerify.DecisionType.MUST_REACH, 1, topDecision.cs, ""));
+                            }
+                            ApplyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(
                                AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            prevSplitState.RecordNewSplit(new Tuple<string, int>(GetPersistentID(topDecision.cs), 0));
                             treesize = di.ComputeSize();
                         }
                     }
-                    
+
                     else
                         break;
                 }
-
             }
+            BoogieVerify.AccumulatedStats.mustReachParTime += (DateTime.Now - startPar).TotalSeconds;
+            BoogieVerify.AccumulatedStats.decisionTime += tt.TotalSeconds;
             reporter.reportTraceIfNothingToExpand = false;
-
-            #region Close the connection
-            if (server != null)
+            if (BoogieVerify.DistributedConfig.ConnectionType != BoogieVerify.ConnectionType.CLOUD)
             {
-                server.Send(EncodeStr(completionMsg)); 
+                if (BoogieVerify.options.prevSIState != null)
+                    timeGraph.ToDot(BoogieVerify.options.prevSIState.Name.Substring(0, BoogieVerify.options.prevSIState.Name.IndexOf(".txt")));
+                else
+                    timeGraph.ToDot();
+                BoogieVerify.AccumulatedStats.DumpStats();
             }
-            #endregion
-            Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2")); 
-
-            if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
+            if (outcome == Outcome.Correct && reachedBound)
+                return Outcome.ReachedBound;
             return outcome;
         }
 
@@ -1223,18 +1308,18 @@ namespace CoreLib
             });
 
             var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
-               {
-                   if (d == DecisionType.BLOCK)
-                   {
-                       di.DeleteNode(n);
-                   }
-                   if (d == DecisionType.MUST_REACH)
-                   {
-                       var disj = di.DisjointNodes(n);
+            {
+                if (d == DecisionType.BLOCK)
+                {
+                    di.DeleteNode(n);
+                }
+                if (d == DecisionType.MUST_REACH)
+                {
+                    var disj = di.DisjointNodes(n);
 
-                       disj.Iter(m => di.DeleteNode(m));
-                   }
-               });
+                    disj.Iter(m => di.DeleteNode(m));
+                }
+            });
 
             var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
@@ -1448,20 +1533,20 @@ namespace CoreLib
             });
 
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
-                {
-                    var ret = new HashSet<Tuple<StratifiedVC, Block>>();
-                    prevMustAsserted.ToList().Iter(ls =>
-                        ls.Iter(tup => ret.Add(tup)));
-                    return ret;
-                });
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
 
             var rand = new Random();
             var reachedBound = false;
 
             var decideToInline = new Func<bool>(() =>
-                {
-                    return false; // rand.Next(100) != 0;
-                });
+            {
+                return false; // rand.Next(100) != 0;
+            });
 
             while (true)
             {
@@ -1903,6 +1988,122 @@ namespace CoreLib
             return outcome;
         }
 
+        bool CheckAvailability(HttpClient httpClient, string address, string taskID)
+        {
+            if (HttpUtil.ActiveServer)
+            {
+                // check in the local list
+                if (taskID.EndsWith("split.txt"))
+                {
+                    return true;
+                }
+                else
+                    return false;
+            }
+            else
+            {
+                // sync ask the server if the task is available
+                UriBuilder primaryReplicaUriBuilder = new UriBuilder(address);
+                primaryReplicaUriBuilder.Query = string.Format("{0}={1}", HttpUtil.Avail, taskID);
+
+                var rep = httpClient.GetStringAsync(primaryReplicaUriBuilder.Uri).Result;
+                if (rep.Equals(HttpUtil.Yes))
+                    return true;
+                else
+                    return false;
+            }
+        }
+
+        /**
+         * async httpPost
+         */
+        void SendCallTree(HttpClient httpClient, string address, BoogieVerifyOptions.SplitState callTree, Queue<BoogieVerifyOptions.SplitState> splitStateQueue)
+        {
+            var fileName = BoogieVerify.fileName;
+            Task.Run(() =>
+            {
+                bool adding = true;
+                if (BoogieVerify.DistributedConfig.AskBeforeSending)
+                    adding = AskServerStatus(httpClient, address);
+
+                string rep = "";
+                if (adding)
+                {
+                    var state = callTree.EncodeCallTree();
+                    rep = SendCallTreeAsync(httpClient, address, state, fileName);
+                }
+                else
+                    rep = HttpUtil.NotAdded;
+
+                if (rep.Equals(HttpUtil.NotAdded))
+                {
+                    BoogieVerify.DistributedConfig.SplitThreshold += 2;
+                    BoogieVerify.DistributedConfig.TimeThreshold += BoogieVerify.DistributedConfig.TimeThresholdOrg;
+                    BoogieVerify.DistributedConfig.AskBeforeSending = true;
+                    lock (splitStateQueue)
+                    {
+                        splitStateQueue.Enqueue(callTree);
+                    }
+                }
+                else if (rep.Equals(HttpUtil.FastSplit))
+                {
+                    BoogieVerify.DistributedConfig.FastSplit();
+                }
+                else
+                {
+
+                }
+            });
+        }
+
+        bool AskServerStatus(HttpClient httpClient, string address)
+        {
+            UriBuilder primaryReplicaUriBuilder = new UriBuilder(address);
+            JsonContent tmp = new JsonContent(string.Format("{0}={1}",
+                        HttpUtil.AskStatus, HttpUtil.AskStatus));
+            var rep = httpClient.PostAsync(address, tmp).Result;
+            string repStr = rep.Content.ReadAsStringAsync().Result;
+            if (repStr.Equals(HttpUtil.NotAdded))
+                return false;
+            else
+                return true;
+        }
+
+        string SendCallTreeAsync(HttpClient httpClient, string address, BoogieVerifyOptions.SplitState state, string fileName)
+        {
+            string callSitesMsg = "";
+            foreach (var ct in state.CallTree)
+            {
+                callSitesMsg = callSitesMsg + ct + ";";
+            }
+            callSitesMsg = callSitesMsg.Substring(0, callSitesMsg.Length - 1);
+
+            string splitNodesMsg = "";
+            foreach (var node in state.SplitingNodes)
+            {
+                splitNodesMsg = splitNodesMsg + node.Item1 + ";" + node.Item2 + ";";
+            }
+            splitNodesMsg = splitNodesMsg.Substring(0, splitNodesMsg.Length - 1);
+
+            UriBuilder primaryReplicaUriBuilder = new UriBuilder(address);
+            // send all calltrees
+            try
+            {
+                JsonContent tmp = new JsonContent(string.Format("{0}={1}&{2}={3}&{4}={5}&{6}={7}",
+                    HttpUtil.NewCallTree, state.Name,
+                    HttpUtil.NewCallSites, callSitesMsg,
+                    HttpUtil.SplitNodes, splitNodesMsg,
+                    HttpUtil.FileName, fileName));
+                var rep = httpClient.PostAsync(address, tmp).Result;
+                string repStr = rep.Content.ReadAsStringAsync().Result;
+                return repStr;
+            }
+            catch (Exception e)
+            {
+                LogWithAddress.WriteLine(string.Format("{0}", e.ToString()));
+            }
+            return "";
+        }
         void ForceInline(HashSet<StratifiedCallSite> openCallSites, int recBound)
         {
             do
@@ -2100,15 +2301,15 @@ namespace CoreLib
             var indexLast = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
 
             var AssertVar = new Action<int, bool>((index, b) =>
+            {
+                if (cba.Util.BoogieVerify.assertsPassedIsInt)
                 {
-                    if (cba.Util.BoogieVerify.assertsPassedIsInt)
-                    {
-                        Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
-                        prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
-                    }
-                    else
-                        prover.Assert(svc.interfaceExprVars[index], b);
-                });
+                    Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+                    prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
+                }
+                else
+                    prover.Assert(svc.interfaceExprVars[index], b);
+            });
 
             // assertVar[First] is not set
             AssertVar(indexFirst, true);
@@ -2143,11 +2344,13 @@ namespace CoreLib
         /* verification */
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
-            startTime = DateTime.UtcNow;
+            startTime = DateTime.UtcNow; 
+            prover.FullReset(prover.VCExprGen);
+            stats = new Stats();
+            attachedVC.Clear();
+            attachedVCInv.Clear();
 
-            procsHitRecBound = new HashSet<string>();
-
-            // Find all procedures that are "forced inline"
+            // Find all procedures that are "forced inline" 
             forceInlineProcs.UnionWith(program.TopLevelDeclarations.OfType<Implementation>()
                 .Where(p => BoogieUtil.checkAttrExists(ForceInlineAttr, p.Attributes) || BoogieUtil.checkAttrExists(ForceInlineAttr, p.Proc.Attributes))
                 .Select(p => p.Name));
@@ -2171,20 +2374,23 @@ namespace CoreLib
 
             di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
 
-            Push();
 
-            StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
-            mainVC = svc;
+            StratifiedVC svc = null;
+            if (mainVC == null || !mainVC.info.impl.Name.Equals(impl.Name))
+            {
+                svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
+                mainVC = svc;
+            }
+            else
+                svc = mainVC;
             di.RegisterMain(svc);
             HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
+
+            Push();
             prover.Assert(svc.vcexpr, true);
 
             Outcome outcome;
-            SplitState splitState = new SplitState();
             var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
-
-            // must reach main
-            //Tuple<StratifiedCallSite, DecisionType> splitingNode = new Tuple<StratifiedCallSite, DecisionType>(attachedVCInv[mainVC], DecisionType.MUST_REACH);
 
             #region Eager inlining
             // Eager inlining 
@@ -2218,64 +2424,232 @@ namespace CoreLib
             });
 
             // partial inlining procs 
-            if (cba.Util.BoogieVerify.options.prevSIState != null)
+            bool reachedBound = false;
+            List<Tuple<string, string>> addingEdges = new List<Tuple<string, string>>();
+            
+             
+            if (BoogieVerify.options.prevSIState != null)
             {
-                string prevSIStateFile = cba.Util.BoogieVerify.options.prevSIState;
-                splitState = new SplitState(prevSIStateFile);
-                while (true)
-                {
-                    var toAdd = new HashSet<StratifiedCallSite>();
-                    var toRemove = new HashSet<StratifiedCallSite>();
-                    foreach (StratifiedCallSite scs in openCallSites)
-                    {                        
-                        string nodePersistenID = GetPersistentID(scs);
-                        // if node is not in calltree
-                        if (!splitState.CallTree.Contains(nodePersistenID))
-                            continue;
-                        toRemove.Add(scs);
-                        var ss = Expand(scs, null, true, true);
-                        if (ss != null) toAdd.UnionWith(ss.CallSites);
+                BoogieVerifyOptions.SplitState splitState = new BoogieVerifyOptions.SplitState();
+                BoogieVerifyOptions.SplitState prevSplitState = new BoogieVerifyOptions.SplitState();
+                List<StratifiedCallSite> removedCallsitesBak = new List<StratifiedCallSite>();
 
-                        // check if it was one of the spliting node
+                BoogieVerify.DistributedConfig.MinWorkingTime = 0;
+                //while ((BoogieVerify.options.prevSIState == null || BoogieVerify.options.prevSIState.Name.Equals("waitingCT")) && BoogieVerify.continueSearch) { Thread.Sleep(1000); }
+                //openCallSites = new HashSet<StratifiedCallSite>(mainVC.CallSites);
+                while ((cba.Util.BoogieVerify.options.prevSIState != null && !BoogieVerify.options.prevSIState.Name.Equals(prevSplitState.Name)) ||
+                    BoogieVerify.options.loadOnly)
+                {
+                    if (cba.Util.BoogieVerify.options.prevSIState == null ||
+                        prevSplitState.Name.Equals(BoogieVerify.options.prevSIState.Name))
+                    {
+                        Thread.Sleep(1000);
+                        continue;
+                    }
+                    else
+                    {
+                        BoogieVerify.options.prevSIState = BoogieVerify.options.prevSIState.DecodeCallTree().Clone();
+                        splitState = BoogieVerify.options.prevSIState.Clone();
+                        if (!prevSplitState.IsParent(splitState))
+                        {
+                            BoogieVerify.DistributedConfig.ContinueSearch = false;
+                            LogWithAddress.WriteLine(string.Format("Error: {0}", BoogieVerify.options.prevSIState.Name));
+                            break;
+                        }
+                        // verify 2 calltree files
+                        //if (!prevSplitState.IsParent(splitState))
+                        //{
+                        //    int pushDifference = splitState.FindDiff(prevSplitState);
+                        //    for (int i = 0; i < pushDifference; ++i)
+                        //        prover.Pop();
+                        //}
+                        splitState.RemoveInlinedCallSites(prevSplitState); 
+                    }
+
+                    var startTime = DateTime.Now;
+                    List<Tuple<string, int>> splitingNodeOrg = new List<Tuple<string, int>>(splitState.SplitingNodes);
+                    List<StratifiedCallSite> removedCallsites = new List<StratifiedCallSite>();
+
+                    List<StratifiedCallSite> tmp = new List<StratifiedCallSite>();
+                    // restore the removedCallsites
+                    foreach (var scs in removedCallsitesBak)
+                    {
+                        var nodePersistenID = GetPersistentID(scs);
                         bool found = false;
-                        int splitingType = -1;
+                        // only save callsite if it is one of SplitNodes
                         foreach (var node in splitState.SplitingNodes)
-                            if (node.Item1.Equals(nodePersistenID))
+                            if (nodePersistenID.Equals(node.Item1))
                             {
+                                removedCallsites.Add(scs);
                                 found = true;
-                                splitingType = node.Item2;
                                 break;
                             }
-
-                        if (found)                        
-                        {
-                            switch (splitingType)
-                            {
-                                case 0:
-                                    MacroSI.PRINT(">>> Pushing Must-Reach({0})", scs.callSite.calleeName);
-                                    applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
-                                    // add must-reach constraint
-                                    AssertMustReach(attachedVC[scs], new HashSet<Tuple<StratifiedVC, Block>>());
-                                    break;
-                                case 1:
-                                    MacroSI.PRINT(">>> Pushing Block({0})", scs.callSite.calleeName);
-                                    applyDecisionToDI(DecisionType.BLOCK, attachedVC[scs]);
-                                    // add must-reach constraint
-                                    prover.Assert(scs.callSiteExpr, false);                                                
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-                        MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
+                        if (!found)
+                            tmp.Add(scs);
                     }
-                    openCallSites.ExceptWith(toRemove);
-                    openCallSites.UnionWith(toAdd);
-                    if (toRemove.Count == 0) break;
+                    removedCallsitesBak = new List<StratifiedCallSite>(tmp); 
+
+                    int inliningCnt = 0;
+                    while (true)
+                    {
+                        var toAdd = new HashSet<StratifiedCallSite>();
+                        var toRemove = new HashSet<StratifiedCallSite>();
+
+                        foreach (StratifiedCallSite scs in openCallSites)
+                        {
+                            string nodePersistenID = GetPersistentID(scs);
+                            // if node is not in calltree  
+                            if (!splitState.CallTree.Contains(nodePersistenID))
+                            {
+                                continue;
+                            }
+                            else
+                            {
+                                // Stop if we've reached the recursion bound or
+                                // the stack-depth bound (if there is one)
+                                if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound) ||
+                                    (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                    StackDepth(scs) > CommandLineOptions.Clo.StackDepthBound))
+                                {
+                                    prover.Assert(scs.callSiteExpr, false);
+                                    reachedBound = true;
+                                    toRemove.Add(scs);
+                                    continue;
+                                }
+                            }
+                            toRemove.Add(scs);
+
+                            StratifiedVC ss = Expand(scs, null, true, true);
+                            inliningCnt++;
+                            LogWithAddress.WriteLine(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName));
+                            if (ss != null) toAdd.UnionWith(ss.CallSites);
+                            
+
+                            bool found = false;
+                            // only save callsite if it is one of SplitNodes
+                            foreach (var node in splitState.SplitingNodes)
+                                if (nodePersistenID.Equals(node.Item1))
+                                {
+                                    removedCallsites.Add(scs);
+                                    found = true;
+                                }
+                            if (!found)
+                                removedCallsitesBak.Add(scs);
+                        }
+
+                        int foundCnt = 0;
+
+                        // not efficient, should be a better implementation
+                        //foreach (var scs in toRemove)
+                        //{
+                        //    var nodePersistenID = GetPersistentID(scs);
+
+                        //    bool found = false;
+                        //    // only save callsite if it is one of SplitNodes
+                        //    foreach (var node in splitState.SplitingNodes)
+                        //        if (nodePersistenID.Equals(node.Item1))
+                        //        {
+                        //            removedCallsites.Add(scs);
+                        //            found = true;
+                        //            break;
+                        //        }
+                        //    if (!found)
+                        //        removedCallsitesBak.Add(scs);
+                        //}
+
+                        foreach (var node in splitState.SplitingNodes)
+                        {
+                            bool found = false;
+                            foreach (var scs in removedCallsites)
+                            {
+                                var nodePersistenID = GetPersistentID(scs);
+                                // check if it was one of the spliting nodes
+                                if (nodePersistenID.Equals(node.Item1))
+                                {
+                                    found = true;
+                                    foundCnt++;
+                                    //if (prevSplitState != null && prevSplitState.Name.EndsWith("split.txt"))
+                                    //{
+                                    //    bool existing = false;
+                                    //    foreach (var sc in prevSplitState.SplitingNodes)
+                                    //        if (sc.Item1.Equals(node.Item1) && sc.Item2 == node.Item2)
+                                    //            existing = true;
+                                    //    if (existing)
+                                    //        break; ;
+                                    //}
+
+                                    int splitingType = node.Item2;
+                                    Push();
+                                    var tgNode = string.Format("{0}__{1}", scs.callSite.calleeName, "?");
+                                    switch (splitingType)
+                                    {
+                                        case 0:
+                                            prover.LogComment(string.Format(">>> Pushing Must-Reach({0})", scs.callSite.calleeName));
+                                            LogWithAddress.WriteLine(string.Format(">>> Pushing Must-Reach({0})", scs.callSite.calleeName));
+                                            addingEdges.Add(new Tuple<string, string>(tgNode, addingEdges.Count == 0 ? "" : "Must Reach"));
+                                            applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[scs]);
+                                            // add must-reach constraint
+                                            AssertMustReach(attachedVC[scs], new HashSet<Tuple<StratifiedVC, Block>>());
+                                            break;
+                                        case 1:
+                                            prover.LogComment(string.Format(">>> Pushing Block({0})", scs.callSite.calleeName));
+                                            LogWithAddress.WriteLine(string.Format(">>> Pushing Block({0})", scs.callSite.calleeName));
+                                            addingEdges.Add(new Tuple<string, string>(tgNode, addingEdges.Count == 0 ? "" : "Block")); 
+                                            applyDecisionToDI(DecisionType.BLOCK, attachedVC[scs]);
+                                            // add block constraint
+                                            prover.Assert(scs.callSiteExpr, false);
+                                            break;
+                                        default:
+                                            break;
+                                    }
+
+                                    break;
+                                } 
+                            }
+                            if (!found)
+                                break;
+                        }
+
+                        splitState.SplitingNodes.RemoveRange(0, foundCnt);
+                        if (splitState.SplitingNodes.Count == 0)
+                        {
+                            openCallSites.ExceptWith(toRemove);
+                            openCallSites.UnionWith(toAdd);
+                            break;
+                        }
+                        openCallSites.ExceptWith(toRemove);
+                        openCallSites.UnionWith(toAdd);
+                        if (toRemove.Count == 0)
+                        { 
+                            break;
+                        }
+                    }
+
+                    // clean opencallsite for the last time
+                    var lastRemove = new HashSet<StratifiedCallSite>();
+
+                    foreach (StratifiedCallSite scs in openCallSites)
+                    {
+                        if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound) ||
+                                (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                StackDepth(scs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(scs.callSiteExpr, false);
+                            reachedBound = true;
+                            lastRemove.Add(scs); 
+                        }
+                    }
+                    openCallSites.ExceptWith(lastRemove);
+
+                    prevSplitState = BoogieVerify.options.prevSIState.Clone();
+                    BoogieVerify.DistributedConfig.MinWorkingTime += (DateTime.Now - startTime).TotalSeconds;
+                    BoogieVerify.AccumulatedStats.loadingCTTime += BoogieVerify.DistributedConfig.MinWorkingTime;
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Inlining: {0} procs", inliningCnt));
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Loading calltree {0}: {1}s", splitState.Name, BoogieVerify.DistributedConfig.MinWorkingTime.ToString("F2")));
                 }
             }
 
-            else if (cba.Util.BoogieVerify.options.CallTree != null && di.disabled)
+            else if (BoogieVerify.options.CallTree != null && di.disabled)
             {
                 while (true)
                 {
@@ -2284,12 +2658,12 @@ namespace CoreLib
                     foreach (StratifiedCallSite scs in openCallSites)
                     {
                         // if node is not in calltree
-                        if (!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs)))
+                        if (!BoogieVerify.options.CallTree.Contains(GetPersistentID(scs)))
                             continue;
                         toRemove.Add(scs);
                         var ss = Expand(scs);
                         if (ss != null) toAdd.UnionWith(ss.CallSites);
-                        MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
+                        LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Eagerly inlining: {0}", scs.callSite.calleeName));
                     }
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
@@ -2367,13 +2741,26 @@ namespace CoreLib
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "splitpar" && !di.disabled)
             {
                 var startTimer = DateTime.Now;
-                LogWithAddress.WriteLine(Log.Debug, "Entering MustReachSplitParallelControler zone");
+                outcome = Outcome.Correct;
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
-                outcome = MustReachSplitParallelStyle(splitState, openCallSites, reporter);
-                var endTimer = DateTime.Now;
-                TimeSpan diff = endTimer - startTimer;
+                try
+                {
+                    outcome = MustReachSplitParallelStyle(openCallSites, reporter, addingEdges);
+                    if (outcome == Outcome.Correct && reachedBound)
+                        outcome = Outcome.Correct;
+                    var endTimer = DateTime.Now;
+                    TimeSpan diff = endTimer - startTimer;
 
-                LogWithAddress.WriteLine(Log.Debug, "Time for MustReachSplitParallelControler:  [" + diff.TotalSeconds + " s]");
+                    string name = "";
+                    if (BoogieVerify.options.prevSIState != null)
+                        name = BoogieVerify.options.prevSIState.Name;
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Time for MustReachSplitParallelControler {0}:  [{1} s]", name, diff.TotalSeconds.ToString("F2")));
+                }
+                catch (Exception e)
+                {
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0}", e.ToString()));
+                }
+
             }
             else
             {
@@ -2406,7 +2793,26 @@ namespace CoreLib
                 }
             }
 
-            Pop();
+            if (BoogieVerify.options.connectionType.Equals("cloud")) {
+                LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Quitting"));
+                return outcome;
+                if (!BoogieVerify.DistributedConfig.ContinueSearch)
+                {
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Quitting"));
+                    return Outcome.Correct;
+                }
+                else
+                {
+                    if (BoogieVerify.options.prevSIState != null)
+                        SendVerificationResult(new HttpClient(), BoogieVerify.options.address, BoogieVerify.options.prevSIState.Name, outcome);
+                    else
+                        SendVerificationResult(new HttpClient(), BoogieVerify.options.address, "", outcome);
+                    BoogieVerify.options.prevSIState = new BoogieVerifyOptions.SplitState();
+                    BoogieVerify.options.prevSIState.Name = "waitingCT"; 
+                }
+            }
+            if (BoogieVerify.DistributedConfig.SingleConnectionOnly == true)
+                Pop();
 
             if (BoogieVerify.options.extraFlags.Contains("DiCheckSanity"))
                 di.CheckSanity();
@@ -2440,6 +2846,32 @@ namespace CoreLib
         }
 
         static int dumpCnt = 0;
+        private void SendVerificationResult(HttpClient httpClient, string address, string input, Outcome result)
+        {
+            UriBuilder primaryReplicaUriBuilder = new UriBuilder(address);
+            int ret = 0;
+            switch (result)
+            {
+                case Outcome.Correct:
+                    ret = 1;
+                    break;
+                case Outcome.ReachedBound:
+                    ret = 1;
+                    break;
+                case Outcome.Errors:
+                    ret = 2;
+                    break;
+                default:
+                    ret = 0;
+                    break;
+            }
+            primaryReplicaUriBuilder.Query = string.Format("{0}={1}&{2}={3}",  
+                                                        HttpUtil.Server2ClientInput, input,
+                                                        HttpUtil.VerificationOutcome, ret);
+
+            var tmp = httpClient.GetStringAsync(primaryReplicaUriBuilder.Uri).Result;
+        }
+
 
         // Inline
         private StratifiedVC Expand(StratifiedCallSite scs)
@@ -2449,6 +2881,8 @@ namespace CoreLib
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
         {
+            if (attachedVC.ContainsKey(scs))
+                return attachedVC[scs];
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
@@ -2457,7 +2891,7 @@ namespace CoreLib
             if (candidate == null)
             {
                 stats.numInlined++;
-                var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
+                StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
 
                 foreach (var newCallSite in svc.CallSites)
                 {
@@ -2587,9 +3021,18 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
+            var startTime = DateTime.Now;
             prover.Check();
+
             stats.time += stopwatch.ElapsedTicks;
+            startTime = DateTime.Now;
+
+            // in the case of forcing close
+            if (BoogieVerify.DistributedConfig.ContinueSearch == false)
+                return Outcome.Correct;
+
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
+            BoogieVerify.AccumulatedStats.getOutComeCoreTime += (DateTime.Now - startTime).TotalSeconds;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
@@ -2609,13 +3052,13 @@ namespace CoreLib
         {
             var name2VC = new Dictionary<string, StratifiedVC>();
             var getSVC = new Func<string, StratifiedVC>(name =>
-                {
-                    if (name2VC.ContainsKey(name))
-                        return name2VC[name];
-                    var tt = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
-                    name2VC.Add(name, tt);
-                    return tt;
-                });
+            {
+                if (name2VC.ContainsKey(name))
+                    return name2VC[name];
+                var tt = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
+                name2VC.Add(name, tt);
+                return tt;
+            });
 
             Push();
 
@@ -2980,7 +3423,8 @@ namespace CoreLib
         {
             var ret = new HashSet<StratifiedVC>();
             var disj = currentDag.AllDisjointNodes();
-            disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
+            if (disj.ContainsKey(vcNodeMap[vc]))
+                disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
             return ret;
         }
 
@@ -3853,11 +4297,11 @@ namespace CoreLib
             if (strategy != MERGING_STRATEGY.OPT)
             {
                 var NodeToCalls = new Func<DagNode, List<Tuple<DagNode, int, string>>>(n =>
-                    {
-                        var r = new List<Tuple<DagNode, int, string>>();
-                        implToCalls[n.ImplName].Iter(t => r.Add(Tuple.Create(n, t.Item1, t.Item2)));
-                        return r;
-                    });
+                {
+                    var r = new List<Tuple<DagNode, int, string>>();
+                    implToCalls[n.ImplName].Iter(t => r.Add(Tuple.Create(n, t.Item1, t.Item2)));
+                    return r;
+                });
 
                 var opencalls = new List<Tuple<DagNode, int, string>>();
                 opencalls.AddRange(NodeToCalls(Root));
@@ -3945,15 +4389,15 @@ namespace CoreLib
                 var idsExtended = new HashSet<string> { rootid };
 
                 lazyExtendDag = new Action<string>(id =>
+                {
+                    foreach (var n in sorted)
                     {
-                        foreach (var n in sorted)
-                        {
-                            if (idsExtended.Contains(n)) continue;
-                            idsExtended.Add(n);
-                            ExtendAndCompress(n, idgraph, idToProc, implToCalls, id2numnodes);
-                            if (n == id) break;
-                        }
-                    });
+                        if (idsExtended.Contains(n)) continue;
+                        idsExtended.Add(n);
+                        ExtendAndCompress(n, idgraph, idToProc, implToCalls, id2numnodes);
+                        if (n == id) break;
+                    }
+                });
 
                 if (lazy)
                     return 0;

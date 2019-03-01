@@ -1,0 +1,11 @@
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\SplitParServer.exe.config
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\SplitParServer.exe
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\SplitParServer.pdb
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\CommonLib.dll
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\CommonLib.pdb
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\bin\Debug\CommonLib.dll.config
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\obj\Debug\SplitParServer.csprojAssemblyReference.cache
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\obj\Debug\SplitParServer.csproj.CoreCompileInputs.cache
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\obj\Debug\SplitParServer.csproj.CopyComplete
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\obj\Debug\SplitParServer.exe
+C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar\SplitParServer\obj\Debug\SplitParServer.pdb

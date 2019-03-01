@@ -1,0 +1,1002 @@
+8/24/2018 7:35:26 PM     data\1394diag_completerequeststatuscheck_0.bpl      56.55s          4 clients        NOK
+8/24/2018 7:38:01 PM     data\1394diag_completerequeststatuscheck_0.bpl      92.81s          3 clients        NOK
+8/27/2018 9:01:48 AM     data\1394diag_completerequeststatuscheck_0.bpl      91.91s          2 clients        NOK
+8/24/2018 7:45:16 PM     data\1394diag_completerequeststatuscheck_0.bpl     256.33s          1 clients        NOK
+8/24/2018 7:55:44 PM        data\61883_forwardedatbadirqlallocate_1.bpl     571.13s          4 clients         RB
+8/27/2018 8:51:18 AM                      data\daytona_ioallocate_1.bpl      24.33s          3 clients         RB
+8/27/2018 8:52:21 AM                      data\daytona_ioallocate_1.bpl      22.54s          4 clients         RB
+8/27/2018 8:53:26 AM                      data\daytona_ioallocate_1.bpl      28.45s          2 clients         RB
+8/27/2018 8:54:17 AM                      data\daytona_ioallocate_1.bpl      37.34s          1 clients         RB
+8/24/2018 7:58:47 PM        data\1394vdev_pendedcompletedrequest2_0.bpl      35.74s          4 clients         RB
+8/27/2018 8:55:59 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      37.96s          3 clients         OK
+8/27/2018 8:56:53 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      38.07s          2 clients         RB
+8/27/2018 8:58:37 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      65.87s          1 clients         OK
+8/27/2018 9:03:01 AM        data\1394vdev_pendedcompletedrequest3_0.bpl      20.11s          4 clients        NOK
+8/27/2018 9:03:45 AM        data\1394vdev_pendedcompletedrequest3_0.bpl      19.27s          3 clients        NOK
+8/27/2018 9:04:29 AM        data\1394vdev_pendedcompletedrequest3_0.bpl      24.66s          2 clients        NOK
+8/27/2018 9:05:38 AM        data\1394vdev_pendedcompletedrequest3_0.bpl      44.67s          1 clients        NOK
+8/27/2018 9:08:51 AM                    data\61883_multremovelock_1.bpl     143.11s          4 clients         RB
+8/27/2018 9:11:07 AM                    data\61883_multremovelock_1.bpl     105.71s          3 clients         RB
+8/27/2018 9:13:21 AM                    data\61883_multremovelock_1.bpl     111.38s          2 clients         RB
+8/27/2018 9:17:11 AM                    data\61883_multremovelock_1.bpl     208.94s          1 clients         RB
+8/27/2018 9:19:01 AM                data\cyyport_doublecompletion_0.bpl      71.69s          4 clients        NOK
+8/27/2018 9:20:54 AM                data\cyyport_doublecompletion_0.bpl      69.98s          3 clients        NOK
+8/27/2018 9:24:24 AM                data\cyyport_doublecompletion_0.bpl     146.09s          2 clients        NOK
+8/27/2018 9:27:14 AM                data\cyyport_doublecompletion_0.bpl     142.26s          1 clients        NOK
+8/27/2018 10:29:28 AM                    data\61883_multremovelock_1.bpl     101.84s          4 clients         RB
+8/27/2018 11:51:45 AM                    data\61883_multremovelock_1.bpl     362.17s          4 clients         RB
+8/27/2018 5:30:16 PM                    data\61883_multremovelock_1.bpl     807.99s          4 clients         RB
+8/27/2018 5:39:12 PM                    data\61883_multremovelock_1.bpl      61.71s          4 clients         RB
+8/27/2018 6:07:12 PM                    data\61883_multremovelock_1.bpl     119.54s          4 clients         RB
+8/27/2018 6:11:58 PM                    data\61883_multremovelock_1.bpl     209.35s          1 clients         RB
+8/27/2018 6:14:44 PM                    data\61883_multremovelock_1.bpl     110.88s          2 clients         RB
+8/27/2018 6:19:54 PM                    data\61883_multremovelock_1.bpl     123.03s          3 clients         RB
+8/27/2018 7:11:52 PM                    data\61883_multremovelock_1.bpl     122.31s          4 clients         RB
+8/27/2018 7:29:16 PM                    data\61883_multremovelock_1.bpl     186.17s          4 clients         RB
+8/28/2018 9:22:14 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      95.86s          3 clients         RB 
+8/28/2018 9:52:17 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      59.18s          4 clients         RB
+rse-server-13
+	Total tasks: 7
+	Must Reach Parallel time: 30.00
+		Z3 time: 26.00
+	Loading calltrees: 13.86
+	Working time: 46.10
+	Waiting time: 10.64
+	Total running time: 56.74
+rse-server-14
+	Total tasks: 7
+	Must Reach Parallel time: 28.30
+		Z3 time: 24.74
+	Loading calltrees: 14.42
+	Working time: 45.03
+	Waiting time: 11.20
+	Total running time: 56.24
+rse-server-12
+	Total tasks: 3
+	Must Reach Parallel time: 43.43
+		Z3 time: 38.39
+	Loading calltrees: 3.16
+	Working time: 48.86
+	Waiting time: 5.84
+	Total running time: 54.71
+rse-server-15
+	Total tasks: 3
+	Must Reach Parallel time: 47.80
+		Z3 time: 41.30
+	Loading calltrees: 2.36
+	Working time: 51.99
+	Waiting time: 4.27
+	Total running time: 56.25
+8/28/2018 9:54:53 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      48.57s          3 clients         RB
+rse-server-13
+	Total tasks: 4
+	Must Reach Parallel time: 29.13
+		Z3 time: 25.33
+	Loading calltrees: 6.09
+	Working time: 37.17
+	Waiting time: 8.64
+	Total running time: 45.82
+rse-server-14
+	Total tasks: 4
+	Must Reach Parallel time: 27.55
+		Z3 time: 23.58
+	Loading calltrees: 6.50
+	Working time: 35.96
+	Waiting time: 9.28
+	Total running time: 45.24
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 40.05
+		Z3 time: 34.63
+	Loading calltrees: 0.38
+	Working time: 42.57
+	Waiting time: 1.42
+	Total running time: 43.99
+8/28/2018 9:56:28 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      74.58s          2 clients         RB
+rse-server-13
+	Total tasks: 2
+	Must Reach Parallel time: 61.57
+		Z3 time: 54.85
+	Loading calltrees: 0.91
+	Working time: 64.19
+	Waiting time: 7.45
+	Total running time: 71.65
+rse-server-14
+	Total tasks: 13
+	Must Reach Parallel time: 39.10
+		Z3 time: 33.61
+	Loading calltrees: 19.58
+	Working time: 61.75
+	Waiting time: 10.05
+	Total running time: 71.80
+8/28/2018 9:58:01 AM        data\1394vdev_pendedcompletedrequest2_0.bpl      74.28s          1 clients         OK
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 69.54
+		Z3 time: 60.30
+	Loading calltrees: 0.00
+	Working time: 71.16
+	Waiting time: 0.19
+	Total running time: 71.35
+8/28/2018 9:59:48 AM                data\cyyport_doublecompletion_0.bpl      34.95s          4 clients         RB
+rse-server-13
+	Total tasks: 14
+	Must Reach Parallel time: 0.16
+		Z3 time: 0.11
+	Loading calltrees: 9.44
+	Working time: 13.06
+	Waiting time: 18.53
+	Total running time: 31.60
+rse-server-14
+	Total tasks: 9
+	Must Reach Parallel time: 6.16
+		Z3 time: 5.05
+	Loading calltrees: 6.22
+	Working time: 15.28
+	Waiting time: 16.27
+	Total running time: 31.55
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 18.17
+		Z3 time: 15.77
+	Loading calltrees: 0.44
+	Working time: 20.94
+	Waiting time: 9.49
+	Total running time: 30.42
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 28.24
+		Z3 time: 25.06
+	Loading calltrees: 0.00
+	Working time: 29.99
+	Waiting time: 1.39
+	Total running time: 31.38
+8/28/2018 10:00:55 AM                data\cyyport_doublecompletion_0.bpl      25.88s          3 clients         OK
+rse-server-13
+	Total tasks: 9
+	Must Reach Parallel time: 0.11
+		Z3 time: 0.08
+	Loading calltrees: 6.39
+	Working time: 9.52
+	Waiting time: 13.00
+	Total running time: 22.52
+rse-server-14
+	Total tasks: 4
+	Must Reach Parallel time: 7.11
+		Z3 time: 6.05
+	Loading calltrees: 2.84
+	Working time: 12.13
+	Waiting time: 10.31
+	Total running time: 22.44
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 19.80
+		Z3 time: 17.44
+	Loading calltrees: 0.00
+	Working time: 22.02
+	Waiting time: 0.30
+	Total running time: 22.31
+8/28/2018 10:03:41 AM                data\cyyport_doublecompletion_0.bpl     142.96s          1 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 138.17
+		Z3 time: 123.90
+	Loading calltrees: 0.00
+	Working time: 139.84
+	Waiting time: 0.22
+	Total running time: 140.06
+8/28/2018 10:07:17 AM                    data\61883_multremovelock_1.bpl     133.44s          4 clients         RB
+rse-server-13
+	Total tasks: 5
+	Must Reach Parallel time: 106.71
+		Z3 time: 91.73
+	Loading calltrees: 8.92
+	Working time: 118.29
+	Waiting time: 12.08
+	Total running time: 130.37
+rse-server-14
+	Total tasks: 3
+	Must Reach Parallel time: 112.01
+		Z3 time: 97.55
+	Loading calltrees: 3.11
+	Working time: 117.41
+	Waiting time: 12.20
+	Total running time: 129.62
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 109.68
+		Z3 time: 94.54
+	Loading calltrees: 2.33
+	Working time: 114.92
+	Waiting time: 14.17
+	Total running time: 129.09
+rse-server-15
+	Total tasks: 5
+	Must Reach Parallel time: 116.06
+		Z3 time: 100.70
+	Loading calltrees: 3.03
+	Working time: 121.67
+	Waiting time: 8.47
+	Total running time: 130.14
+8/28/2018 10:27:10 AM                    data\61883_multremovelock_1.bpl     204.81s          1 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 199.34
+		Z3 time: 169.83
+	Loading calltrees: 0.00
+	Working time: 201.19
+	Waiting time: 0.33
+	Total running time: 201.52
+8/28/2018 10:31:37 AM                    data\61883_multremovelock_1.bpl     107.64s          2 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 95.62
+		Z3 time: 81.43
+	Loading calltrees: 0.41
+	Working time: 97.88
+	Waiting time: 6.34
+	Total running time: 104.23
+rse-server-14
+	Total tasks: 1
+	Must Reach Parallel time: 101.99
+		Z3 time: 87.27
+	Loading calltrees: 0.00
+	Working time: 103.85
+	Waiting time: 0.31
+	Total running time: 104.17
+8/28/2018 10:40:46 AM                    data\61883_multremovelock_1.bpl     155.40s          4 clients         RB
+rse-server-13
+	Total tasks: 7
+	Must Reach Parallel time: 106.12
+		Z3 time: 90.41
+	Loading calltrees: 20.17
+	Working time: 129.46
+	Waiting time: 23.33
+	Total running time: 152.79
+rse-server-14
+	Total tasks: 4
+	Must Reach Parallel time: 122.29
+		Z3 time: 107.96
+	Loading calltrees: 9.36
+	Working time: 134.01
+	Waiting time: 18.52
+	Total running time: 152.53
+rse-server-12
+	Total tasks: 3
+	Must Reach Parallel time: 116.06
+		Z3 time: 100.13
+	Loading calltrees: 5.49
+	Working time: 124.15
+	Waiting time: 27.63
+	Total running time: 151.78
+rse-server-15
+	Total tasks: 6
+	Must Reach Parallel time: 112.98
+		Z3 time: 97.60
+	Loading calltrees: 10.67
+	Working time: 126.45
+	Waiting time: 25.35
+	Total running time: 151.80
+8/28/2018 10:43:51 AM     data\1394diag_completerequeststatuscheck_0.bpl      99.46s          4 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+rse-server-15
+8/28/2018 10:49:09 AM     data\1394diag_completerequeststatuscheck_0.bpl     268.81s          3 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+8/28/2018 10:59:01 AM     data\1394diag_completerequeststatuscheck_0.bpl     431.12s          1 clients        NOK
+rse-server-13
+8/28/2018 11:06:56 AM     data\1394diag_completerequeststatuscheck_0.bpl     127.90s          3 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+8/28/2018 11:10:41 AM                    data\61883_multremovelock_1.bpl     117.57s          3 clients         RB
+rse-server-13
+	Total tasks: 2
+	Must Reach Parallel time: 104.13
+		Z3 time: 88.68
+	Loading calltrees: 0.86
+	Working time: 107.07
+	Waiting time: 7.22
+	Total running time: 114.29
+rse-server-14
+	Total tasks: 1
+	Must Reach Parallel time: 99.45
+		Z3 time: 84.80
+	Loading calltrees: 0.70
+	Working time: 102.09
+	Waiting time: 12.11
+	Total running time: 114.20
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 98.95
+		Z3 time: 84.07
+	Loading calltrees: 2.48
+	Working time: 104.29
+	Waiting time: 9.34
+	Total running time: 113.63
+8/28/2018 11:14:56 AM                    data\61883_multremovelock_1.bpl     197.21s          4 clients         RB
+rse-server-13
+	Total tasks: 11
+	Must Reach Parallel time: 105.68
+		Z3 time: 90.10
+	Loading calltrees: 49.96
+	Working time: 160.43
+	Waiting time: 35.19
+	Total running time: 195.62
+rse-server-14
+	Total tasks: 10
+	Must Reach Parallel time: 108.40
+		Z3 time: 93.05
+	Loading calltrees: 49.99
+	Working time: 162.64
+	Waiting time: 32.55
+	Total running time: 195.19
+rse-server-12
+	Total tasks: 11
+	Must Reach Parallel time: 105.46
+		Z3 time: 91.41
+	Loading calltrees: 53.77
+	Working time: 163.69
+	Waiting time: 31.46
+	Total running time: 195.14
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 184.54
+		Z3 time: 165.57
+	Loading calltrees: 1.05
+	Working time: 188.09
+	Waiting time: 5.25
+	Total running time: 193.34
+8/28/2018 11:17:52 AM                    data\61883_multremovelock_1.bpl     117.28s          4 clients         RB
+rse-server-13
+	Total tasks: 2
+	Must Reach Parallel time: 104.62
+		Z3 time: 89.43
+	Loading calltrees: 0.86
+	Working time: 107.49
+	Waiting time: 6.53
+	Total running time: 114.02
+rse-server-14
+	Total tasks: 2
+	Must Reach Parallel time: 98.43
+		Z3 time: 83.79
+	Loading calltrees: 2.44
+	Working time: 102.90
+	Waiting time: 11.08
+	Total running time: 113.98
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 95.30
+		Z3 time: 81.91
+	Loading calltrees: 0.83
+	Working time: 98.34
+	Waiting time: 15.08
+	Total running time: 113.42
+rse-server-15
+	Total tasks: 3
+	Must Reach Parallel time: 98.85
+		Z3 time: 84.32
+	Loading calltrees: 0.61
+	Working time: 101.70
+	Waiting time: 12.14
+	Total running time: 113.84
+8/28/2018 11:21:52 AM                    data\61883_multremovelock_1.bpl     181.98s          4 clients         RB
+rse-server-13
+	Total tasks: 10
+	Must Reach Parallel time: 106.66
+		Z3 time: 91.33
+	Loading calltrees: 42.22
+	Working time: 152.79
+	Waiting time: 27.50
+	Total running time: 180.29
+rse-server-14
+	Total tasks: 10
+	Must Reach Parallel time: 105.24
+		Z3 time: 90.88
+	Loading calltrees: 44.52
+	Working time: 153.68
+	Waiting time: 26.55
+	Total running time: 180.23
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 164.39
+		Z3 time: 143.36
+	Loading calltrees: 1.25
+	Working time: 168.14
+	Waiting time: 10.03
+	Total running time: 178.17
+rse-server-15
+	Total tasks: 11
+	Must Reach Parallel time: 115.00
+		Z3 time: 99.51
+	Loading calltrees: 38.58
+	Working time: 157.73
+	Waiting time: 22.30
+	Total running time: 180.03
+8/28/2018 11:37:18 AM                    data\61883_multremovelock_1.bpl     123.66s          4 clients         RB
+rse-server-13
+	Total tasks: 2
+	Must Reach Parallel time: 100.68
+		Z3 time: 85.76
+	Loading calltrees: 2.75
+	Working time: 105.45
+	Waiting time: 14.94
+	Total running time: 120.38
+rse-server-14
+	Total tasks: 2
+	Must Reach Parallel time: 104.26
+		Z3 time: 89.32
+	Loading calltrees: 4.00
+	Working time: 110.46
+	Waiting time: 9.97
+	Total running time: 120.43
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 100.24
+		Z3 time: 85.77
+	Loading calltrees: 1.25
+	Working time: 103.90
+	Waiting time: 15.36
+	Total running time: 119.26
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 109.80
+		Z3 time: 95.19
+	Loading calltrees: 1.39
+	Working time: 113.59
+	Waiting time: 6.13
+	Total running time: 119.71
+8/28/2018 12:44:46 PM                    data\61883_multremovelock_1.bpl     197.73s          4 clients         RB
+rse-server-13
+	Total tasks: 11
+	Must Reach Parallel time: 106.51
+		Z3 time: 91.26
+	Loading calltrees: 49.24
+	Working time: 160.20
+	Waiting time: 36.05
+	Total running time: 196.25
+rse-server-14
+	Total tasks: 11
+	Must Reach Parallel time: 106.27
+		Z3 time: 91.38
+	Loading calltrees: 57.71
+	Working time: 168.62
+	Waiting time: 27.60
+	Total running time: 196.22
+rse-server-12
+	Total tasks: 11
+	Must Reach Parallel time: 106.48
+		Z3 time: 92.74
+	Loading calltrees: 53.54
+	Working time: 164.69
+	Waiting time: 30.94
+	Total running time: 195.63
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 181.34
+		Z3 time: 162.61
+	Loading calltrees: 1.03
+	Working time: 185.06
+	Waiting time: 9.36
+	Total running time: 194.42
+8/28/2018 1:02:02 PM        data\1394vdev_pendedcompletedrequest3_0.bpl     104.73s          4 clients         OK
+rse-server-13
+	Total tasks: 27
+	Must Reach Parallel time: 0.52
+		Z3 time: 0.42
+	Loading calltrees: 30.22
+	Working time: 35.67
+	Waiting time: 67.08
+	Total running time: 102.76
+rse-server-14
+	Total tasks: 11
+	Must Reach Parallel time: 0.11
+		Z3 time: 0.06
+	Loading calltrees: 10.27
+	Working time: 13.19
+	Waiting time: 88.88
+	Total running time: 102.07
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 3.47
+		Z3 time: 3.16
+	Loading calltrees: 0.61
+	Working time: 6.17
+	Waiting time: 94.63
+	Total running time: 100.81
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 99.18
+		Z3 time: 90.48
+	Loading calltrees: 0.00
+	Working time: 100.68
+	Waiting time: 1.00
+	Total running time: 101.68
+8/28/2018 1:04:59 PM        data\1394vdev_pendedcompletedrequest3_0.bpl     111.28s          4 clients         RB
+rse-server-13
+	Total tasks: 18
+	Must Reach Parallel time: 0.88
+		Z3 time: 0.81
+	Loading calltrees: 15.53
+	Working time: 20.16
+	Waiting time: 88.66
+	Total running time: 108.82
+rse-server-14
+	Total tasks: 11
+	Must Reach Parallel time: 0.06
+		Z3 time: 0.05
+	Loading calltrees: 9.70
+	Working time: 12.63
+	Waiting time: 95.43
+	Total running time: 108.05
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 4.27
+		Z3 time: 3.91
+	Loading calltrees: 0.95
+	Working time: 7.28
+	Waiting time: 99.46
+	Total running time: 106.74
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 105.40
+		Z3 time: 96.65
+	Loading calltrees: 0.00
+	Working time: 107.07
+	Waiting time: 0.66
+	Total running time: 107.73
+8/28/2018 1:12:12 PM        data\1394vdev_pendedcompletedrequest3_0.bpl     108.49s          4 clients         RB
+rse-server-13
+	Total tasks: 16
+	Must Reach Parallel time: 0.45
+		Z3 time: 0.42
+	Loading calltrees: 15.75
+	Working time: 19.72
+	Waiting time: 86.88
+	Total running time: 106.60
+rse-server-14
+	Total tasks: 9
+	Must Reach Parallel time: 0.08
+		Z3 time: 0.08
+	Loading calltrees: 8.30
+	Working time: 11.20
+	Waiting time: 94.05
+	Total running time: 105.26
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 4.16
+		Z3 time: 3.81
+	Loading calltrees: 0.69
+	Working time: 7.05
+	Waiting time: 97.45
+	Total running time: 104.49
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 102.85
+		Z3 time: 93.54
+	Loading calltrees: 0.00
+	Working time: 104.56
+	Waiting time: 0.39
+	Total running time: 104.95
+8/28/2018 1:30:03 PM                  data\cyyport_cancelspinlock_0.bpl     773.94s          4 clients         RB
+rse-server-13
+	Total tasks: 11
+	Must Reach Parallel time: 723.70
+		Z3 time: 681.99
+	Loading calltrees: 6.20
+	Working time: 733.48
+	Waiting time: 37.44
+	Total running time: 770.92
+rse-server-14
+	Total tasks: 43
+	Must Reach Parallel time: 581.26
+		Z3 time: 546.37
+	Loading calltrees: 23.55
+	Working time: 614.75
+	Waiting time: 155.75
+	Total running time: 770.49
+rse-server-12
+	Total tasks: 1
+	Must Reach Parallel time: 734.78
+		Z3 time: 698.83
+	Loading calltrees: 0.44
+	Working time: 737.41
+	Waiting time: 32.60
+	Total running time: 770.00
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 768.44
+		Z3 time: 732.95
+	Loading calltrees: 0.00
+	Working time: 770.19
+	Waiting time: 0.30
+	Total running time: 770.49
+8/28/2018 4:02:14 PM                     data\avc_completerequest_0.bpl      23.46s          1 clients        NOK
+rse-server-15
+8/28/2018 4:04:32 PM                     data\avc_completerequest_0.bpl      22.42s          1 clients        NOK
+rse-server-15
+8/28/2018 4:19:59 PM                     data\avc_completerequest_0.bpl      23.65s          1 clients        NOK
+rse-server-15
+8/28/2018 4:22:47 PM                     data\avc_completerequest_0.bpl      24.39s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 5:01:39 PM        data\1394vdev_pendedcompletedrequest2_0.bpl      72.78s          2 clients         RB
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 59.74
+		Z3 time: 52.21
+	Loading calltrees: 0.92
+	Working time: 62.63
+	Waiting time: 5.14
+	Total running time: 67.77
+rse-server-15
+	Total tasks: 10
+	Must Reach Parallel time: 40.17
+		Z3 time: 34.39
+	Loading calltrees: 13.69
+	Working time: 56.50
+	Waiting time: 13.74
+	Total running time: 70.24
+8/28/2018 5:23:25 PM        data\1394vdev_pendedcompletedrequest2_0.bpl      76.06s          2 clients         RB
+rse-server-12
+	Total tasks: 2
+	Must Reach Parallel time: 62.71
+		Z3 time: 55.19
+	Loading calltrees: 0.92
+	Working time: 65.85
+	Waiting time: 5.22
+	Total running time: 71.07
+rse-server-15
+	Total tasks: 11
+	Must Reach Parallel time: 38.55
+		Z3 time: 32.86
+	Loading calltrees: 16.17
+	Working time: 57.50
+	Waiting time: 16.06
+	Total running time: 73.57
+8/28/2018 5:26:36 PM        data\1394vdev_pendedcompletedrequest3_0.bpl      71.98s          2 clients         RB
+rse-server-12
+	Total tasks: 22
+	Must Reach Parallel time: 0.45
+		Z3 time: 0.41
+	Loading calltrees: 17.19
+	Working time: 21.70
+	Waiting time: 46.74
+	Total running time: 68.44
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 66.44
+		Z3 time: 60.40
+	Loading calltrees: 0.00
+	Working time: 68.18
+	Waiting time: 0.78
+	Total running time: 68.96
+8/28/2018 5:32:43 PM        data\1394vdev_pendedcompletedrequest3_0.bpl      68.44s          2 clients         RB
+rse-server-12
+	Total tasks: 22
+	Must Reach Parallel time: 0.47
+		Z3 time: 0.42
+	Loading calltrees: 17.27
+	Working time: 22.35
+	Waiting time: 42.57
+	Total running time: 64.91
+rse-server-15
+	Total tasks: 1
+	Must Reach Parallel time: 63.24
+		Z3 time: 56.68
+	Loading calltrees: 0.00
+	Working time: 65.19
+	Waiting time: 0.19
+	Total running time: 65.38
+8/28/2018 6:44:40 PM        data\1394vdev_pendedcompletedrequest3_0.bpl      24.24s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 6:49:49 PM     data\1394diag_completerequeststatuscheck_0.bpl      65.84s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 6:53:58 PM     data\1394diag_completerequeststatuscheck_0.bpl      66.44s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 6:59:07 PM     data\1394diag_completerequeststatuscheck_0.bpl      61.54s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 7:01:07 PM     data\1394diag_completerequeststatuscheck_0.bpl      68.76s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 7:04:45 PM     data\1394diag_completerequeststatuscheck_0.bpl      67.26s          2 clients        NOK
+rse-server-12
+rse-server-15
+8/28/2018 7:17:40 PM        data\61883_forwardedatbadirqlallocate_1.bpl     241.97s          2 clients         RB
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 223.08
+		Z3 time: 193.92
+	Loading calltrees: 1.98
+	Working time: 227.61
+	Waiting time: 8.94
+	Total running time: 236.55
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 212.47
+		Z3 time: 187.94
+	Loading calltrees: 9.72
+	Working time: 224.61
+	Waiting time: 13.42
+	Total running time: 238.04
+8/28/2018 7:50:50 PM        data\61883_forwardedatbadirqlallocate_1.bpl     256.20s          2 clients         RB
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 240.29
+		Z3 time: 209.11
+	Loading calltrees: 1.92
+	Working time: 244.82
+	Waiting time: 6.53
+	Total running time: 251.35
+rse-server-15
+	Total tasks: 8
+	Must Reach Parallel time: 218.89
+		Z3 time: 194.89
+	Loading calltrees: 23.49
+	Working time: 245.64
+	Waiting time: 6.19
+	Total running time: 251.83
+8/29/2018 9:31:07 AM        data\61883_forwardedatbadirqlallocate_1.bpl     262.56s          2 clients         RB
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 241.16
+		Z3 time: 209.85
+	Loading calltrees: 2.08
+	Working time: 245.79
+	Waiting time: 11.36
+	Total running time: 257.15
+rse-server-15
+	Total tasks: 8
+	Must Reach Parallel time: 226.14
+		Z3 time: 200.13
+	Loading calltrees: 23.24
+	Working time: 252.65
+	Waiting time: 5.97
+	Total running time: 258.62
+8/29/2018 9:46:56 AM        data\61883_forwardedatbadirqlallocate_1.bpl     248.92s          2 clients         RB
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 229.61
+		Z3 time: 199.42
+	Loading calltrees: 2.00
+	Working time: 234.27
+	Waiting time: 9.77
+	Total running time: 244.04
+rse-server-15
+	Total tasks: 9
+	Must Reach Parallel time: 207.97
+		Z3 time: 183.61
+	Loading calltrees: 26.94
+	Working time: 238.40
+	Waiting time: 6.64
+	Total running time: 245.04
+8/29/2018 10:34:30 AM        data\61883_forwardedatbadirqlallocate_1.bpl     254.72s          2 clients         RB
+rse-server-12
+	Total tasks: 4
+	Must Reach Parallel time: 234.79
+		Z3 time: 204.85
+	Loading calltrees: 2.16
+	Working time: 239.45
+	Waiting time: 10.88
+	Total running time: 250.32
+rse-server-15
+	Total tasks: 7
+	Must Reach Parallel time: 216.11
+		Z3 time: 191.84
+	Loading calltrees: 26.46
+	Working time: 245.75
+	Waiting time: 5.08
+	Total running time: 250.83
+8/29/2018 10:40:39 AM        data\61883_forwardedatbadirqlallocate_1.bpl     251.77s          2 clients         RB
+rse-server-12
+	Total tasks: 6
+	Must Reach Parallel time: 226.81
+		Z3 time: 196.16
+	Loading calltrees: 3.23
+	Working time: 233.18
+	Waiting time: 14.20
+	Total running time: 247.39
+rse-server-15
+	Total tasks: 8
+	Must Reach Parallel time: 205.30
+		Z3 time: 182.33
+	Loading calltrees: 31.47
+	Working time: 239.94
+	Waiting time: 8.52
+	Total running time: 248.46
+8/29/2018 11:04:42 AM        data\61883_forwardedatbadirqlallocate_1.bpl     162.51s          2 clients         RB
+rse-server-12
+	Total tasks: 11
+	Must Reach Parallel time: 134.14
+		Z3 time: 111.81
+	Loading calltrees: 7.13
+	Working time: 145.20
+	Waiting time: 12.86
+	Total running time: 158.06
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 138.12
+		Z3 time: 122.95
+	Loading calltrees: 15.41
+	Working time: 155.97
+	Waiting time: 2.78
+	Total running time: 158.75
+8/29/2018 11:13:59 AM        data\61883_forwardedatbadirqlallocate_1.bpl     161.40s          2 clients         RB
+rse-server-12
+	Total tasks: 11
+	Must Reach Parallel time: 134.07
+		Z3 time: 111.24
+	Loading calltrees: 7.47
+	Working time: 145.56
+	Waiting time: 10.83
+	Total running time: 156.39
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 137.04
+		Z3 time: 122.29
+	Loading calltrees: 15.49
+	Working time: 154.94
+	Waiting time: 2.61
+	Total running time: 157.54
+8/29/2018 11:21:20 AM        data\61883_forwardedatbadirqlallocate_1.bpl     170.48s          2 clients         RB
+rse-server-12
+	Total tasks: 11
+	Must Reach Parallel time: 136.01
+		Z3 time: 112.99
+	Loading calltrees: 7.36
+	Working time: 147.42
+	Waiting time: 17.56
+	Total running time: 164.98
+rse-server-15
+	Total tasks: 5
+	Must Reach Parallel time: 139.20
+		Z3 time: 125.00
+	Loading calltrees: 21.36
+	Working time: 163.16
+	Waiting time: 3.41
+	Total running time: 166.56
+8/29/2018 11:28:03 AM        data\61883_forwardedatbadirqlallocate_1.bpl     190.97s          3 clients         RB
+rse-server-13
+	Total tasks: 6
+	Must Reach Parallel time: 112.82
+		Z3 time: 98.76
+	Loading calltrees: 35.35
+	Working time: 151.09
+	Waiting time: 36.46
+	Total running time: 187.55
+rse-server-12
+	Total tasks: 17
+	Must Reach Parallel time: 89.23
+		Z3 time: 78.90
+	Loading calltrees: 42.16
+	Working time: 136.59
+	Waiting time: 49.97
+	Total running time: 186.56
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 103.57
+		Z3 time: 91.21
+	Loading calltrees: 26.38
+	Working time: 132.35
+	Waiting time: 55.54
+	Total running time: 187.89
+8/29/2018 11:39:03 AM        data\61883_forwardedatbadirqlallocate_1.bpl     237.64s          1 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 231.73
+		Z3 time: 202.18
+	Loading calltrees: 0.00
+	Working time: 233.48
+	Waiting time: 0.31
+	Total running time: 233.80
+8/29/2018 11:45:50 AM                    data\61883_multremovelock_1.bpl      45.66s          3 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 33.91
+		Z3 time: 29.33
+	Loading calltrees: 0.42
+	Working time: 36.10
+	Waiting time: 6.59
+	Total running time: 42.69
+rse-server-12
+	Total tasks: 8
+	Must Reach Parallel time: 23.64
+		Z3 time: 20.31
+	Loading calltrees: 4.55
+	Working time: 31.58
+	Waiting time: 8.45
+	Total running time: 40.03
+rse-server-15
+	Total tasks: 4
+	Must Reach Parallel time: 32.03
+		Z3 time: 27.24
+	Loading calltrees: 1.36
+	Working time: 36.02
+	Waiting time: 5.55
+	Total running time: 41.57
+8/29/2018 11:50:30 AM                    data\61883_multremovelock_1.bpl      89.07s          1 clients         RB
+rse-server-13
+	Total tasks: 1
+	Must Reach Parallel time: 83.60
+		Z3 time: 72.41
+	Loading calltrees: 0.00
+	Working time: 85.40
+	Waiting time: 0.19
+	Total running time: 85.58
+8/29/2018 11:52:13 AM                  data\cyyport_cancelspinlock_0.bpl      22.79s          4 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+rse-server-15
+8/29/2018 11:56:51 AM                  data\cyyport_cancelspinlock_0.bpl      21.87s          4 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+rse-server-15
+8/29/2018 12:00:48 PM                  data\cyyport_cancelspinlock_0.bpl      22.93s          4 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+rse-server-15
+8/29/2018 12:03:42 PM                  data\cyyport_cancelspinlock_0.bpl      22.33s          4 clients        NOK
+rse-server-13
+rse-server-14
+rse-server-12
+rse-server-15
+8/29/2018 1:17:50 PM        data\61883_forwardedatbadirqlallocate_1.bpl     172.01s          2 clients         RB
+rse-server-13
+	Total tasks: 11
+	Must Reach Parallel time: 141.09
+		Z3 time: 118.62
+	Loading calltrees: 7.42
+	Working time: 152.48
+	Waiting time: 15.58
+	Total running time: 168.06
+rse-server-14
+	Total tasks: 5
+	Must Reach Parallel time: 139.74
+		Z3 time: 124.13
+	Loading calltrees: 21.13
+	Working time: 163.73
+	Waiting time: 3.86
+	Total running time: 167.59
+8/29/2018 1:26:19 PM        data\61883_forwardedatbadirqlallocate_1.bpl     151.18s          4 clients         RB
+rse-server-13
+	Total tasks: 4
+	Must Reach Parallel time: 105.41
+		Z3 time: 92.34
+	Loading calltrees: 12.86
+	Working time: 120.65
+	Waiting time: 26.78
+	Total running time: 147.43
+rse-server-14
+	Total tasks: 20
+	Must Reach Parallel time: 57.64
+		Z3 time: 50.72
+	Loading calltrees: 56.60
+	Working time: 119.95
+	Waiting time: 27.94
+	Total running time: 147.89
+rse-server-12
+	Total tasks: 12
+	Must Reach Parallel time: 85.94
+		Z3 time: 73.58
+	Loading calltrees: 38.61
+	Working time: 128.70
+	Waiting time: 18.02
+	Total running time: 146.72
+rse-server-15
+	Total tasks: 5
+	Must Reach Parallel time: 99.88
+		Z3 time: 88.49
+	Loading calltrees: 25.85
+	Working time: 128.37
+	Waiting time: 18.75
+	Total running time: 147.12

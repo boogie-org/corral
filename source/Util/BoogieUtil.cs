@@ -103,9 +103,9 @@ namespace cba.Util
                 var ccmd = cmd as CallCmd;
                 foreach (IdentifierExpr v in ccmd.Outs)
                 {
-                    if(v.Decl is GlobalVariable) ret.Add(v.Decl.Name);
+                    if (v.Decl is GlobalVariable) ret.Add(v.Decl.Name);
                 }
-                
+
                 if (procsWithImpl.Contains(ccmd.Proc.Name))
                     return ret;
 
@@ -200,7 +200,7 @@ namespace cba.Util
                 foreach (var blk in impl.Blocks)
                 {
                     blk.Cmds.OfType<CallCmd>()
-                        .Iter(ccmd => edges.InitAndAdd(ccmd.callee, impl.Name)); 
+                        .Iter(ccmd => edges.InitAndAdd(ccmd.callee, impl.Name));
                     blk.Cmds.OfType<ParCallCmd>()
                         .Iter(pcmd => pcmd.CallCmds
                             .Iter(ccmd => edges.InitAndAdd(ccmd.callee, impl.Name)));
@@ -244,7 +244,7 @@ namespace cba.Util
         }
 
         // Return nodes on some cycle
-        public static HashSet<Node> GetCyclicNodes<Node>(Graph<Node> graph) where Node: class
+        public static HashSet<Node> GetCyclicNodes<Node>(Graph<Node> graph) where Node : class
         {
             var ret = new HashSet<Node>();
             var scc = new StronglyConnectedComponents<Node>(graph.Nodes,
@@ -253,7 +253,7 @@ namespace cba.Util
 
             foreach (var s in scc)
             {
-                if(s.Count == 0) continue;
+                if (s.Count == 0) continue;
 
                 if (s.Count > 1 || graph.Successors(s.First()).Contains(s.First()))
                 {
@@ -294,7 +294,7 @@ namespace cba.Util
                 var hcmd = cmd as HavocCmd;
                 foreach (IdentifierExpr v in hcmd.Vars)
                 {
-                        ret.Add(v.Decl.Name);
+                    ret.Add(v.Decl.Name);
                 }
                 return ret;
             }
@@ -303,7 +303,7 @@ namespace cba.Util
                 var ccmd = cmd as CallCmd;
                 foreach (IdentifierExpr v in ccmd.Outs)
                 {
-                    if(v != null) ret.Add(v.Decl.Name);
+                    if (v != null) ret.Add(v.Decl.Name);
                 }
 
                 if (procsWithImpl.Contains(ccmd.Proc.Name))
@@ -311,7 +311,7 @@ namespace cba.Util
 
                 foreach (IdentifierExpr v in ccmd.Proc.Modifies)
                 {
-                        ret.Add(v.Decl.Name);
+                    ret.Add(v.Decl.Name);
                 }
                 return ret;
             }
@@ -393,15 +393,11 @@ namespace cba.Util
 
             try
             {
-                if (Parser.Parse(f, new List<string>(), out p) != 0)
-                {
-                    Console.WriteLine("Failed to read " + f);
-                    return null;
-                }
+                Parser.Parse(f, new List<string>(), out p);
             }
             catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
+            { 
+                throw new Exception(string.Format("Getting exception at ParseProgram: {0}", e.ToString()));
                 return null;
             }
             return p;
@@ -430,16 +426,32 @@ namespace cba.Util
 
         public static Program ReadAndOnlyResolve(string filename)
         {
-            Program p = ParseProgram(filename);
-
-            if (p == null)
+            Program p = null;
+            try
             {
-                throw new InvalidProg("Parse errors in " + filename);
+                p = ParseProgram(filename);
+
+                if (p == null)
+                {
+                    throw new InvalidProg("Parse errors in ReadAndOnlyResolve " + filename);
+                }
+            }
+            catch (Exception e)
+            {
+                throw new Exception(string.Format("Getting exception at ReadAndOnlyResolve: {0}", e.ToString()));
+                return null;
             }
 
-            if (ResolveProgram(p, filename))
+            try
             {
-                throw new InvalidProg("Cannot resolve " + filename);
+                if (ResolveProgram(p, filename))
+                {
+                    throw new InvalidProg("Cannot resolve " + filename);
+                }
+            }
+            catch (Exception e)
+            {
+                throw new Exception(string.Format("Cannot resolve  at ReadAndOnlyResolve: {0}", e.ToString()));
             }
 
             return p;
@@ -461,7 +473,7 @@ namespace cba.Util
                 p.Emit(tt);
                 writer.Flush();
                 st.Flush();
-                
+
                 writer.Seek(0, System.IO.SeekOrigin.Begin);
                 var s = ParserHelper.Fill(writer, new List<string>());
 
@@ -514,7 +526,7 @@ namespace cba.Util
                     {
                         ret.Add(v);
                         seen.Add(v.Name);
-                    } 
+                    }
                 }
             }
             return ret;
@@ -631,10 +643,10 @@ namespace cba.Util
         public static double GetMemUsage()
         {
             var p = System.Diagnostics.Process.GetCurrentProcess();
-            return p.VirtualMemorySize64 / (1024.0 * 1024.0); 
+            return p.VirtualMemorySize64 / (1024.0 * 1024.0);
         }
 
-        
+
         // is this a non-trivial assert? 
         public static bool isAssert(Cmd cmd)
         {
@@ -701,7 +713,7 @@ namespace cba.Util
         public static List<Declaration> newDecls = new List<Declaration>();
 
         static int uniqueInt = 0;
-        public static string uniqueLabel() 
+        public static string uniqueLabel()
         {
             return "L_BAF_" + (uniqueInt++);
         }
@@ -725,7 +737,7 @@ namespace cba.Util
 
             var res = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "c", Microsoft.Boogie.Type.Bool), false);
             var ret = new Function(Token.NoToken, string.Format("Corral_bv_{0}_{1}", op, bits), args, res);
-            
+
             var aval = new List<object>();
             aval.Add(op);
             ret.Attributes = new QKeyValue(Token.NoToken, "bvbuiltin", aval, null);
@@ -739,7 +751,7 @@ namespace cba.Util
         // var := const
         public static AssignCmd MkVarEqConst(Variable v, int c)
         {
-            
+
             AssignLhs lhs = new SimpleAssignLhs(Token.NoToken, new IdentifierExpr(v.tok, v));
             Expr rhs = Expr.Literal(c);
             var temp1 = new List<AssignLhs>();
@@ -985,7 +997,7 @@ namespace cba.Util
         // assume (forall x:int :: map[x] == v)
         public static AssumeCmd MkMapConstant(Variable map, bool v)
         {
-            BoundVariable x = new BoundVariable(Token.NoToken, 
+            BoundVariable x = new BoundVariable(Token.NoToken,
                 new TypedIdent(Token.NoToken, "x", Microsoft.Boogie.Type.Int));
 
             List<Variable> vs = new List<Variable>();
@@ -1062,7 +1074,7 @@ namespace cba.Util
         // map[v] := rhs
         public static AssignCmd MkMapAssign(Variable map, Expr v, Expr rhs)
         {
-            AssignLhs alhs = new SimpleAssignLhs(Token.NoToken, 
+            AssignLhs alhs = new SimpleAssignLhs(Token.NoToken,
                 new IdentifierExpr(Token.NoToken, map));
 
             var indices = new List<Expr>();
@@ -1100,18 +1112,18 @@ namespace cba.Util
         public static Declaration MkProc(string name, List<Variable> ins, List<Variable> outs)
         {
             return new Procedure(
-                Token.NoToken, name, new List<TypeVariable>(), ins, outs, 
+                Token.NoToken, name, new List<TypeVariable>(), ins, outs,
                 new List<Requires>(), new List<IdentifierExpr>(), new List<Ensures>());
         }
-        public static Declaration MkProc(string name, 
+        public static Declaration MkProc(string name,
             IEnumerable<Variable> ins, IEnumerable<Variable> outs)
         {
-            return MkProc(name, 
+            return MkProc(name,
                 new List<Variable>(ins.ToArray()),
                 new List<Variable>(outs.ToArray()));
         }
 
-        public static List<Declaration> MkImpl(string name, List<Variable> ins, List<Variable> outs, 
+        public static List<Declaration> MkImpl(string name, List<Variable> ins, List<Variable> outs,
             List<Variable> locals, IEnumerable<Block> blocks)
         {
             var pr = MkProc(name, ins, outs);
@@ -1226,8 +1238,8 @@ namespace cba.Util
         public static Cmd MkCall(string proc, IEnumerable<Expr> args, IEnumerable<Variable> rets)
         {
             return new CallCmd(Token.NoToken, proc, new List<Expr>(args),
-                new List<Variable>(rets).Map<Variable,IdentifierExpr>(v => 
-                    Expr.Ident(v.Name, v.TypedIdent.Type)),
+                new List<Variable>(rets).Map<Variable, IdentifierExpr>(v =>
+                     Expr.Ident(v.Name, v.TypedIdent.Type)),
                 null);
         }
         public static Cmd MkCall(Procedure p, IEnumerable<Expr> args, IEnumerable<Variable> rets)
@@ -1244,7 +1256,7 @@ namespace cba.Util
             else vs.Add("same");
 
             var attrs = new QKeyValue(Token.NoToken, "level", vs, null);
-            var ret = new CallCmd(Token.NoToken, proc, new List<Expr>(args), 
+            var ret = new CallCmd(Token.NoToken, proc, new List<Expr>(args),
                 new List<IdentifierExpr>(), attrs);
             ret.IsAsync = true;
 
@@ -1261,9 +1273,9 @@ namespace cba.Util
         public static Block MkBlock(IEnumerable<Cmd> cs, IEnumerable<String> tx)
         {
             return MkBlock(
-                new List<Cmd>(cs.ToArray()), 
+                new List<Cmd>(cs.ToArray()),
                 new GotoCmd(Token.NoToken, new List<String>(tx.ToArray())));
-        }        
+        }
         public static Block MkBlock(List<Cmd> cs)
         {
             return MkBlock(cs, new ReturnCmd(Token.NoToken));
@@ -1345,9 +1357,9 @@ namespace cba.Util
         {
             if (bs.Count() < 1 || cs.Count() < 1) return;
 
-            bs.Last().TransferCmd = 
-                new GotoCmd(Token.NoToken, 
-                    new List<String>(new String[]{cs.First().Label}));
+            bs.Last().TransferCmd =
+                new GotoCmd(Token.NoToken,
+                    new List<String>(new String[] { cs.First().Label }));
         }
 
         /**
@@ -1369,7 +1381,7 @@ namespace cba.Util
             var ls = new List<String>();
 
             var ds = new List<Block>();
-            foreach (var cs in css) 
+            foreach (var cs in css)
             {
                 var b = MkBlock(cs, new String[] { tail.Label });
                 ls.Add(b.Label);
@@ -1377,7 +1389,7 @@ namespace cba.Util
             }
 
             var head = MkBlock(new Cmd[] { }, ls);
-            
+
             var bs = new List<Block>();
             bs.Add(head);
             bs.AddRange(ds);
@@ -1456,7 +1468,7 @@ namespace cba.Util
             else if (expr is NAryExpr)
             {
                 NAryExpr nexpr = expr as NAryExpr;
-                for (int i=0;i<nexpr.Args.Count;i++)
+                for (int i = 0; i < nexpr.Args.Count; i++)
                 {
                     ret.AddRange(extractVars(nexpr.Args[i]));
                 }
@@ -1592,7 +1604,7 @@ namespace cba.Util
          * We now perform SSA, and then do the alias analysis
          * This improves the precision of alias analysis, since these cseTmp vars are always non null, and hence, NULL cannot flow through these vars
          */
-        
+
 
         public static Program Compute(Program program, PhiFunctionEncoding encoding, HashSet<string> typesToInstrument)
         {
@@ -1623,7 +1635,7 @@ namespace cba.Util
 
             // Static Single Assignment
             Stats.resume("ssa");
-            var ssa = new SSA(program,encoding, typesToInstrument);
+            var ssa = new SSA(program, encoding, typesToInstrument);
             ssa.Compute(irreducible);
             Stats.stop("ssa");
 
@@ -1651,17 +1663,19 @@ namespace cba.Util
         private void SSARename(Implementation impl)
         {
             // Make a unified exit block
-            
+
             Block exitBlock = null;
             if (impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd).Count() != 1)
             {
                 exitBlock = new Block(Token.NoToken, "exit$block$ssa", new List<Cmd>(), new ReturnCmd(Token.NoToken));
                 foreach (var blk in impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd))
                 {
-                    blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block>{exitBlock});
+                    blk.TransferCmd = new GotoCmd(Token.NoToken, new List<Block> { exitBlock });
                 }
                 impl.Blocks.Add(exitBlock);
-            } else {
+            }
+            else
+            {
                 exitBlock = impl.Blocks.Where(blk => blk.TransferCmd is ReturnCmd).First();
             }
 
@@ -1671,7 +1685,7 @@ namespace cba.Util
             // Live variable analysis
             CbaLiveVariableAnalysis.ClearLiveVariables(impl);
             CbaLiveVariableAnalysis.ComputeLiveVariables(impl, null);
-        
+
             // create CFG graph
             var graph = new Graph<Block>();
 
@@ -1732,7 +1746,7 @@ namespace cba.Util
             var variables = new HashSet<Variable>();
             variables.UnionWith(impl.LocVars);
             variables.UnionWith(impl.OutParams);
-            
+
 
             variables = new HashSet<Variable>(variables.Where(v => instrumentType(v.TypedIdent.Type)));
 
@@ -1779,7 +1793,7 @@ namespace cba.Util
                 {
                     // entry block
                     reachDefIn[blk] = new Dictionary<Variable, int>();
-    
+
                     lvars.OfType<LocalVariable>().Iter(v => reachDefIn[blk].Add(v, 0));
                     lvars.OfType<Formal>().Iter(v => reachDefIn[blk].Add(v, 1));
                 }
@@ -1820,7 +1834,7 @@ namespace cba.Util
                         }
                     }
                 }
-                
+
                 // Now that we have reachDefIn, compute reachDefOut
                 var defsOut = new Dictionary<Variable, int>(reachDefIn[blk]);
 
@@ -1985,9 +1999,9 @@ namespace cba.Util
         private void ProcessCmd(Cmd cmd, Dictionary<Variable, int> defsIn, Dictionary<Variable, int> maxVersion, Func<Variable, int, Variable> varInstances, HashSet<Variable> toInstrument)
         {
             var renamer = new Func<Expr, Dictionary<Variable, int>, Expr>((e, d) =>
-                Substituter.Apply(new Substitution(v => 
+                Substituter.Apply(new Substitution(v =>
                 {
-                    if(!d.ContainsKey(v)) return Expr.Ident(v);
+                    if (!d.ContainsKey(v)) return Expr.Ident(v);
                     else return Expr.Ident(varInstances(v, d[v]));
                 }), e)
                 );
@@ -2037,7 +2051,7 @@ namespace cba.Util
                     }
                 }
 
-                for (int i = 0; i < acmd.Lhss.Count; i++) 
+                for (int i = 0; i < acmd.Lhss.Count; i++)
                 {
                     var lhs = acmd.Lhss[i] as SimpleAssignLhs;
                     if (lhs == null) continue;
@@ -2060,7 +2074,7 @@ namespace cba.Util
                 ccmd.Ins = new List<Expr>(ccmd.Ins.Select(e => renamer(e, defsIn)));
 
                 var outs = new List<IdentifierExpr>();
-                for(int i = 0; i < ccmd.Outs.Count; i++)
+                for (int i = 0; i < ccmd.Outs.Count; i++)
                 {
                     var v = ccmd.Outs[i].Decl;
                     if (toInstrument.Contains(v))
@@ -2095,14 +2109,14 @@ namespace cba.Util
 
         // operator -> (t1, t2) -> t3
         public static Dictionary<string, Dictionary<Terms, Term>> hash_function;
-        
+
         // default variable for a term cseTemp:= expr --> default_var(t_expr) = cseTmp
         // block -> term -> cseTmp variable
         public static Dictionary<string, Dictionary<Term, Variable>> default_var;
 
         // block -> var -> term
         public static Dictionary<string, Dictionary<string, Term>> hash_value;
-        
+
         // current block
         public static string currBlock;
         public static bool dbg = false;
@@ -2139,7 +2153,7 @@ namespace cba.Util
             {
                 return u_id;
             }
-            
+
             public override string ToString()
             {
                 return "Term_" + u_id.ToString();
@@ -2168,7 +2182,7 @@ namespace cba.Util
                     var ts = obj as Terms;
                     if (args.Count == ts.args.Count)
                     {
-                        for (int i = 0 ; i < args.Count ; i++)
+                        for (int i = 0; i < args.Count; i++)
                         {
                             if (!args[i].Equals(ts.args[i])) return false;
                         }
@@ -2719,8 +2733,8 @@ namespace cba.Util
                     var nexpr = expr as NAryExpr;
                     if (nexpr.Fun is BinaryOperator &&
                         (nexpr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Eq &&
-                        checkIfNull(nexpr.Args[1])) 
-                            return true;
+                        checkIfNull(nexpr.Args[1]))
+                        return true;
                 }
             }
             return false;
@@ -2750,8 +2764,8 @@ namespace cba.Util
                 var expr = ac.Expr as NAryExpr;
                 if (expr.Fun is BinaryOperator &&
                     (expr.Fun as BinaryOperator).Op == BinaryOperator.Opcode.Neq &&
-                    checkIfNull(expr.Args[1])) 
-                        return true;
+                    checkIfNull(expr.Args[1]))
+                    return true;
             }
             return false;
         }

@@ -29,14 +29,14 @@ namespace CommonLib
             CheckFileExists(loc, "RunParClient.exe");
 
             // Copy it root\RunParClient
-            Console.WriteLine("Installing Binaries");
-            System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "Binaries"));
-            foreach (var f in System.IO.Directory.GetFiles(loc, "*.exe").Concat(
-                System.IO.Directory.GetFiles(loc, "*.dll")))
-            {
-                //Console.WriteLine("copy {0} {1}", f, System.IO.Path.Combine(root, "Binaries", System.IO.Path.GetFileName(f)));
-                System.IO.File.Copy(f, System.IO.Path.Combine(root, "Binaries", System.IO.Path.GetFileName(f)), true);
-            }
+            //Console.WriteLine("Installing Binaries");
+            //System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "Binaries"));
+            //foreach (var f in System.IO.Directory.GetFiles(loc, "*.exe").Concat(
+            //    System.IO.Directory.GetFiles(loc, "*.dll")))
+            //{
+            //    Console.WriteLine("copy {0} {1}", f, System.IO.Path.Combine(root, "Binaries", System.IO.Path.GetFileName(f)));
+            //    System.IO.File.Copy(f, System.IO.Path.Combine(root, "Binaries", System.IO.Path.GetFileName(f)), true);
+            //}
 
             foreach (var util in config.Utils)
                 CheckFileExists(root, util.value);
@@ -66,7 +66,7 @@ namespace CommonLib
                 CopyFolder(root, remote, "boogie2", force);
             }
 
-            // copy files
+            //copy files
             foreach (var src in files)
             {
                 var dest = src.Replace(root, remote);

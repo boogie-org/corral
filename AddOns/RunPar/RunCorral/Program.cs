@@ -78,7 +78,11 @@ namespace RunCorral
                 }
                 if (flagsToRemove.Any(r => r.IsMatch(arg)))
                     continue;
-                corralflags.Add(arg);
+
+                if (arg.Contains("/recursionBound"))
+                    corralflags.Add("/recursionBound:2");
+                else
+                    corralflags.Add(arg);
             }
             corralflags.AddRange(flagsToAdd);
 

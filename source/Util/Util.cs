@@ -1,9 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Generic; 
 using System.Text;
 using Microsoft.Boogie;
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
+using System.Net.Http;
+using Newtonsoft.Json;
 
 namespace cba.Util
 {
@@ -98,15 +100,75 @@ namespace cba.Util
         }
     }
 
+    public class JsonContent : StringContent
+    {
+        public JsonContent(object obj) :
+            base(JsonConvert.SerializeObject(obj), Encoding.UTF8, "application/json")
+        { }
+    }
+
+    public static class SocketUtil
+    {
+        public static int PortNumber = 12000;
+        public static int MsgSize = 1024;
+        public static string DoneMsg = "DONE";
+        public static string StartMsg = "Start";
+        public static string MsgSuffix = "split.txt";
+        public static string DirSuffix = ".txt";
+        public static string WorkingMsg = "Verifying:";
+        public static string DoingMsg = "Doing";
+        public static string CompletionMsg = "Complete";
+        public static string ErrorMsg = "Error:";
+    }
+
+    public static class HttpUtil
+    {
+        public static bool ActiveServer = true;
+        // communication messages
+
+        public static string DoneMsg = "DONE";
+        public static string FileName = "fn";
+        public static string NewCallTree = "ct";
+        public static string NewCallSite = "cs";
+        public static string NewCallSites = "css";
+        public static string RemoveCallTree = "rm";
+        public static string SplitNodes = "spn";
+        public static string Node = "node";
+        public static string Avail = "avail";
+        public static string AskAvail = "askAvail";
+        public static string Yes = "yes";
+        public static string No = "no";
+        public static string EndMgs = "EndCT";
+        public static string NotAdded = "notadded";
+        public static string FastSplit = "fast";
+        public static string NormalSplit = "normal";
+        public static string SlowSplit = "slow";
+        public static string AskStatus = "status";
+        public static string Redo = "redo";
+
+        public static string InputFile = "file";
+        public static string LoadFile = "loadFl";
+        public static string LoadCallTree = "loadCT";
+        public static string StartVerification = "start";
+        public static string StopVerification = "stop";
+        public static string CancelLoadingCT = "cancelCT";
+        public static string FinishVerification = "finish";
+        public static string Server2ClientInput = "input";
+        public static string VerificationOutcome = "outcome";
+        public static string Restart = "restart";
+        public static string Sender = "sender";
+        public static string Stats = "stats"; 
+    } 
+
     public static class LogWithAddress
     {
         public const int Warning = 4;
         public const int Error = 3;
         public const int Normal = 1;
-        public const int Debug = 2;
+        public const int Debugging = 2;
         public const int Verbose = 5;
 
-        public static bool noDebuggingOutput = true;
+        public static bool noDebuggingOutput = false;
         public static bool printMemUsage = false;
         public static int verbose_level = 0;
 
@@ -131,29 +193,21 @@ namespace cba.Util
             }
         }
 
-        public static TokenTextWriter getWriter(int level)
-        {
-            if (level == Debug)
-            {
-                if (noDebuggingOutput)
-                    return null;
-
-                init();
-                return debugOut;
-            }
-            return new TokenTextWriter(Console.Out);
-        }
-
         public static bool Write(int level, string msg)
         {
-            if (level == Log.Normal)
+            if (noDebuggingOutput)
+                return true;
+            if (level == Normal)
             {
-                Write(Log.Debug, msg);
+                return true;
             }
+
+            if (level == Debugging)
+                level = Normal;
 
             switch (level)
             {
-                case Debug:
+                case Debugging:
                     if (!noDebuggingOutput)
                     {
                         init();
@@ -161,18 +215,18 @@ namespace cba.Util
                     }
                     break;
                 case Warning:
-                    Console.Write("Warning: " + msg);
+                    Debug.Write("Warning: " + msg);
                     break;
                 case Error:
-                    Console.Write("Error: " + msg);
+                    Debug.Write("Error: " + msg);
                     break;
                 case Normal:
-                    Console.Write(msg);
+                    Debug.Write(msg);
                     break;
                 case Verbose:
                     if (verbose_level > 0)
                     {
-                        Console.Write(msg);
+                        Debug.Write(msg);
                     }
                     debugOut.Write(msg);
                     break;
@@ -183,8 +237,6 @@ namespace cba.Util
 
         public static bool Write(string msg)
         {
-            if (noDebuggingOutput)
-                return true;
             return Write(Normal, msg);
         }
 
@@ -196,7 +248,10 @@ namespace cba.Util
         {
             if (noDebuggingOutput)
                 return true;
-            return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            if (file.LastIndexOf("\\") >= 0)
+                return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            else
+                return Write(level, file + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
         }
 
         public static bool WriteLine(string msg,
@@ -206,13 +261,14 @@ namespace cba.Util
         {
             if (noDebuggingOutput)
                 return true;
-            return Write(Normal, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            if (file.LastIndexOf("\\") >= 0)
+                return Write(Normal, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            else
+                return Write(Normal, file + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
         }
 
         public static bool WriteLine()
         {
-            if (noDebuggingOutput)
-                return true;
             return Write(Normal, Environment.NewLine);
         }
 
@@ -318,13 +374,13 @@ namespace cba.Util
                     Console.Write(msg, args);
                     break;
                 case Verbose:
-                    if(verbose_level > 0)
+                    if (verbose_level > 0)
                     {
                         Console.Write(msg, args);
                     }
                     break;
             }
-            
+
             return false;
         }
 
@@ -402,7 +458,8 @@ namespace cba.Util
         {
             System.Diagnostics.Debug.Assert(start >= 0 && start + len - 1 < l.Count);
             var ret = new List<T>();
-            for(int i = start; i < start + len; i++) {
+            for (int i = start; i < start + len; i++)
+            {
                 ret.Add(l[i]);
             }
             return ret;
@@ -489,7 +546,7 @@ namespace cba.Util
 
         public override string ToString()
         {
-            return "(" + fst + ", " + snd + ")"; 
+            return "(" + fst + ", " + snd + ")";
         }
     }
 
@@ -536,7 +593,7 @@ namespace cba.Util
         public HDuple(T1 fst, T1 snd) : base(fst, snd) { }
 
         public static HDuple<T1> OfArray(T1[] a)
-        {   
+        {
             try
             {
                 return new HDuple<T1>(a[0], a[1]);

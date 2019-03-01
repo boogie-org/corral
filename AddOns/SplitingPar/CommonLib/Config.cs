@@ -73,8 +73,11 @@ namespace CommonLib
             outf.WriteLine(@"  <RemoteRoots>");
             outf.WriteLine(@"  </RemoteRoots>");
             outf.WriteLine(@"  <BoogieFiles>");
-            foreach(var file in files)
-                outf.WriteLine(@"    <Files value=""{0}""/>", file.value);
+            foreach (var file in files)
+            {
+                string fileName = System.IO.Path.GetFileName(file.value);
+                outf.WriteLine(@"    <Files value=""{0}""/>", fileName);
+            }
             outf.WriteLine(@"  </BoogieFiles>");
             outf.WriteLine(@"</SplitParConfig>");
 

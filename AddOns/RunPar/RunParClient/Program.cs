@@ -147,6 +147,7 @@ namespace RunParClient
 
             var threads = new List<Thread>();
             var numthreads = config.MaxThreads == 0 ? Environment.ProcessorCount - 1 : config.MaxThreads;
+            //numthreads = 1;
             for (int i = 0; i < numthreads; i++)
             {
                 var worker = new Worker(i);

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<SplitParConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <!--<Root>F:\t-dibuip\SplitPar</Root> -->
+  <Root>C:\Users\t-dibuip\Desktop\CorralPar\corral\AddOns\SplitingPar</Root>
+  <Utils> 
+	  <Util name="SplitParClient" dir="client" exe="SplitParClient.exe" arguments="/useProverEvaluate /di /doNotUseLabels /recursionBound:1 /newStratifiedInlining:splitpar /si /proverLog:proverLog /connectionPort:12000"/> 
+  </Utils>
+  <RemoteRoots> 
+    <RemoteFolder value="\\rse-server-13\f$\tmp\t-dibuip\SplitPar"/> 
+    <RemoteFolder value="\\rse-server-14\f$\tmp\t-dibuip\SplitPar"/>    
+    <RemoteFolder value="\\rse-server-12\f$\t-dibuip\SplitPar"/>
+    <RemoteFolder value="\\rse-server-15\f$\tmp\t-dibuip\SplitPar"/> 
+  </RemoteRoots> 
+  <BoogieFiles>
+  
+    <!-- <Files value="data\cyyport_cancelspinlock_0.bpl"/>  -->
+    <!-- timeout, 1 client, ? -->
+    <!-- timeout, 4 clients, ? -->
+    <!-- Time spent taking decisions: 971.26 s
+SplitSearch: 6395.82    3199.00 2133.52 1661.61 1472.99 1442.16 1182.38 1108.06 1151.77 1115.31 1060.39 1105.85 1048.13 1094.04 1043.43 1018.65
+Time spent inside DI: 0.00 sec
+Return status: ReachedBound
+No bugs found
+Number of procedures inlined: 20199
+Total Time: 6405.47 s
+
+Stopping: Done
+
+F:\t-dibuip\SplitPar\run>..\corral\corral.exe ..\data\cyyport_cancelspinlock_0.bpl /useProverEvaluate /di /doNotUseLabels /recursionBound:1 /newStratifiedInlining:split /si -->
+
+    <!-- <Files value="data\daytona_completerequest_0.bpl"/>  -->
+    <!-- bug -->
+    <!-- <Files value="data\1394vdev_pendedcompletedrequest3_0.bpl"/>  -->
+    <!-- 72, 3 clients, reach bound -->
+    
+    <!-- <Files value="data\1394diag_completerequeststatuscheck_0.bpl"/> -->
+    <!-- 1423s, 1 client, reach bound, NEW 427s, 1 client, bug -->
+    <!-- 709s, 2 clients, reach bound, NEW 131s, 2 clients, bug -->
+    <!-- 485s, 3 clients, reach bound, NEW 127s, 3 clients, bug -->
+    <!-- 44s, 4 clients, bug -->
+
+    <!-- <Files value="data\cyyport_irpcancelfield_0.bpl"/> -->
+    <!-- time out, 3 clients, reach bound -->
+    <!-- 324, 1 clients, recursion bound 1 -->
+
+    <!-- <Files value="data\avc_ioallocateforward_0.bpl"/> -->
+    <!-- <Files value="data\avc_ioallocateforward_1.bpl"/> -->
+    <!-- <Files value="data\daytona_completerequest_2.bpl"/> -->
+
+    <!-- <Files value="data\61883_removelock_1.bpl"/> -->
+    <!-- time out, 3 clients, reach bound, stuck at 128-->
+
+    <!-- <Files value="data\61883_irqlexallocatepool_0.bpl"/> -->
+    <!-- time out, 3 clients, reach bound -->
+
+    <Files value="data\61883_forwardedatbadirqlallocate_1.bpl"/>
+    <!-- 667s, 1 client, reach bound NEW 224-->
+    <!-- 433s, 2 clients, reach bound NEw 158-->
+    <!-- 309s, 3 clients, reach bound NEW 257s-->
+    <!-- 226s, 4 clients, RB -->
+
+    <!-- <Files value="data\1394vdev_pendedcompletedrequest3_0.bpl"/>  -->
+    <!-- 124, 1 client, reach bound -->
+    <!-- 94s, 2 clients, reach bound, NEW 91s -->
+    <!-- 72s, 3 clients, reach bound, NEW 71s -->
+    <!-- 58s, 4 clients, reach bound -->
+
+	  <!-- <Files value="data\61883_multremovelock_1.bpl"/>  -->
+    <!-- 206s, 1 client, reach bound, NEW 205s -->
+    <!-- 116s, 2 clients, reach bound, new 115s -->
+    <!-- 95s, 3 clients, reach bound, new 100s-->
+    <!-- 88s, 4 clients, reach bound, new 88s-->
+
+    <!-- <Files value="data\1394vdev_pendedcompletedrequest2_0.bpl"/>  -->
+    <!-- 70s, 1 client, reach bound -->
+    <!-- 41s, 2 clients, reach bound -->
+    <!-- 40s, 3 clients, reach bound -->
+
+    <!-- <Files value="data\daytona_ioallocate_1.bpl"/>  -->
+    <!-- 40s, 1 client, reach bound -->
+    <!-- 29s, 2 client, reach bound -->
+    <!-- 28s, 3 client, reach bound -->
+
+    <!-- <Files value="data\cyyport_doublecompletion_0.bpl"/>  -->
+    <!-- 138s, 1 client, reach bound, NEW 137s-->
+    <!-- 74s, 2 clients, reach bound, NEW 92s -->
+    <!-- 67s, 3 clients, reach bound, NEW 77s -->
+    <!-- 74s, 4 clients, reach bound -->
+
+    <!-- <Files value="data\61883_completerequest_0.bpl"/> -->
+    <!-- 67s, 1 client, error -->
+    <!-- 31s, 2 clients, error -->
+    <!-- 31s, 3 clients, error -->
+    <!-- 31s, 4 clients, error -->
+
+    <!-- <Files value="data\avc_completerequest_0.bpl"/>   -->
+    <!-- 40s, 1 client, error -->
+    <!-- 41s, 2 clients, error -->
+    <!-- 45s, 4 clients, error -->
+  </BoogieFiles>
+
+</SplitParConfig>
+

@@ -48,13 +48,15 @@ namespace SplitParServer
             {
                 //level = Debug;
             }
-
             switch (level)
             {
                 case Debug:
                     if (!noDebuggingOutput)
-                    { 
-                        debugOut.Write(msg);
+                    {
+                        lock (debugOut)
+                        {
+                            debugOut.Write(msg);
+                        }
                     }
                     break;
                 case Warning:
@@ -65,13 +67,25 @@ namespace SplitParServer
                     break;
                 case Normal:
                     Console.Write(msg);
+
+                    if (!noDebuggingOutput)
+                    {
+                        lock (debugOut)
+                        {
+                            debugOut.Write(msg);
+                        }
+                    }
+
                     break;
                 case Verbose:
                     if (verbose_level > 0)
                     {
                         Console.Write(msg);
                     }
-                    debugOut.Write(msg);
+                    lock (debugOut)
+                    {
+                        debugOut.Write(msg);
+                    }
                     break;
             }
 
@@ -93,7 +107,10 @@ namespace SplitParServer
         {
             if (noDebuggingOutput)
                 return true;
-            return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            if (file.LastIndexOf("\\") >= 0)
+                return Write(level, file.Substring(file.LastIndexOf("\\")) + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
+            else
+                return Write(level, file + "\\" + member + ":" + line + "\t" + msg + Environment.NewLine);
         }
 
         public static bool WriteLine(string msg,

@@ -21,29 +21,43 @@ namespace CommonLib
         public static string OutOfResourceMsg = "OutOfMemory";
         public static string OutOfMemoryMsg = "Inconclusive";
         public static string ReachedBoundMsg = "ReachedBound";
-        public static string CompletionMsg = "Complete";
-        public static string DoingMsg = "Doing";
-        public static string ResultFile = "result.txt";
-        public static int MsgSize = 1024;
-        public static int ServerPort = 11000;
-        public static int CorralPort = 12000;
+        public static string CompletionMsg = "Complete"; 
+        public static string StartMsg = "Start";
+        public static string StartWithCallTreeMsg = "Start:";
+        public static string DoingMsg = "Doing";        
+        public static string DoneMsg = "DONE";        
 
         // paths
         public static string DataDir = "data";
         public static string RunDir = "run";
-        public static string CorralDir = "..\\..\\bin\\Debug";
+        public static string CorralDir = "corral";
         public static string CorralExe = "corral.exe";
-        public static string SplitParClientDir = "SplitParClient\\bin\\Debug";
+        public static string SplitParClientDir = "client";
         public static string SplitParClientExe = "SplitParClient.exe";
         public static string SplitParServerExe = "SplitParServer.exe";
         public static string PsToolsDir = "pstools";
         public static string PsToolsExe = "psexec.exe";
         public static string ClientConfig = "config-client.xml";
+        public static string ResultFile = "result.txt";
+
+        // for testing purposes
+        public static string NoServer = "/noServer";
+        public static string NoCorral = "/noCorral";
+        public static string UseLocal = "/useLocal";
+        public static string SaveResult = "/saveResult";
+        public static string LogResult = "allResults.txt";
+        public static string TableResult = "tableResults.csv";
 
         // other
         public static string ServerLog = "ServerLog.out";
+        public static string ClientStats = "ClientStats.xml";
         public static string ClientLog = "ClientLog.out";
-
+        public static string CallTreeSuffix = "split.txt";
+        public static string Server = "Server";
+        public static int MsgSize = 1024;
+        public static int ServerPort = 11000;
+        public static int CorralPort = 12000;
+        public static int SleepTime = 500;
         public enum CurrentState { AVAIL, BUSY };
 
         public static HashSet<Process> SpawnedProcesses = new HashSet<Process>();
@@ -52,6 +66,12 @@ namespace CommonLib
         public static SplitParConfig LoadConfig(string configFile)
         {
             return SplitParConfig.DeSerialize(configFile);
+        }
+
+        public static string GetArg(string str, int n)
+        {
+            var sp = str.Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+            return sp[n];
         }
 
         public static byte[] EncodeStr(string msg)
@@ -78,6 +98,13 @@ namespace CommonLib
                 }
             }
             return null;
+        }
+
+        public static bool SocketConnected(Socket s)
+        {
+            if (s == null)
+                return false;
+            return !(!s.Connected || (s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)));
         }
 
         public static void runAndSkipOutput(string dir, string cmd, string args)
@@ -199,15 +226,15 @@ namespace CommonLib
 
             var outp = Utils.run(tmp, loc, flags);
 
-            var resultsfile = System.IO.Path.Combine(tmp, Utils.ResultFile);
-            var ex = System.IO.File.Exists(resultsfile);
+            //var resultsfile = System.IO.Path.Combine(tmp, Utils.ResultFile);
+            //var ex = System.IO.File.Exists(resultsfile);
 
-            if (debugOutput)
-            {
-                Console.WriteLine(string.Format("Local client:"));
-                if (!ex)
-                    Console.WriteLine(string.Format("Did not find a {0} file", Utils.ResultFile));
-            }
+            //if (debugOutput)
+            //{
+            //    Console.WriteLine(string.Format("Local client:"));
+            //    if (!ex)
+            //        Console.WriteLine(string.Format("Did not find a {0} file", Utils.ResultFile));
+            //}
         }
 
         public static void SpawnClientRemote(string root, params string[] args)
@@ -223,8 +250,8 @@ namespace CommonLib
 
             // psexec machine -w remoteroot\run remoteroot\Binaries\RunParClient.exe remoteroot args
             var cmd = System.IO.Path.Combine(root, Utils.PsToolsDir, Utils.PsToolsExe);
-            var flags = string.Format("{0} -w {1} {2} {3} {4}",
-                machine, remotetmp, System.IO.Path.Combine(remoteroot, Utils.SplitParClientDir, Utils.SplitParClientExe), remoteroot, args.Aggregate("", (s1, s2) => s1 + " " + s2));
+            var flags = string.Format("{0} -w {1} {2} {3}",
+                machine, remotetmp, System.IO.Path.Combine(remoteroot, Utils.SplitParClientDir, Utils.SplitParClientExe), args.Aggregate("", (s1, s2) => s1 + " " + s2));
 
             if (debugOutput)
             {
@@ -234,15 +261,15 @@ namespace CommonLib
             
             Utils.runAndSkipOutput(root, cmd, flags);
 
-            var resultsfile = System.IO.Path.Combine(tmp, Utils.ResultFile);
-            var ex = System.IO.File.Exists(resultsfile);
+            //var resultsfile = System.IO.Path.Combine(tmp, Utils.ResultFile);
+            //var ex = System.IO.File.Exists(resultsfile);
 
-            if (debugOutput)
-            {
-                Console.WriteLine(string.Format("Remote client {0}:", root));
-                if (!ex)
-                    Console.WriteLine(string.Format("Did not find a {0} file", Utils.ResultFile));
-            }
+            //if (debugOutput)
+            //{
+            //    Console.WriteLine(string.Format("Remote client {0}:", root));
+            //    if (!ex)
+            //        Console.WriteLine(string.Format("Did not find a {0} file", Utils.ResultFile));
+            //}
         }
 
     }
