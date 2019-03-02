@@ -379,7 +379,7 @@ namespace CoreLib
             public DI di;
             public HashSet<StratifiedCallSite> previousSplitSites;
 
-            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, HashSet<StratifiedCallSite> previousSplitSites = null)
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
                 var ret = new SiState();
                 ret.attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(SI.attachedVC);
@@ -387,6 +387,13 @@ namespace CoreLib
                 ret.parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(SI.parent);
                 ret.openCallSites = new HashSet<StratifiedCallSite>(openCallSites);
                 ret.di = SI.di.Copy();
+                return ret;
+            }
+
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, HashSet<StratifiedCallSite> previousSplitSites)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites);
                 ret.previousSplitSites = new HashSet<StratifiedCallSite>(previousSplitSites);
                 return ret;
             }
