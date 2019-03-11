@@ -831,7 +831,7 @@ namespace CoreLib
             return outcome;
         }
 
-        public Outcome UnSatCoreSplitStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main)
+        public Outcome UnSatCoreSplitStyle(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
 
@@ -1004,9 +1004,13 @@ namespace CoreLib
                     continue;
 
                 }
-                reporter.reportTrace = main;
+
                 outcome = CheckVC(reporter);
-                if (outcome != Outcome.Correct) break;
+                if (outcome != Outcome.Correct)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    break; // done (error found)
+                }
                 ucore = prover.UnsatCore();
                 Pop();
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -2003,7 +2007,7 @@ namespace CoreLib
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplit" && !di.disabled)
             {
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
-                outcome = UnSatCoreSplitStyle(openCallSites, reporter, true);
+                outcome = UnSatCoreSplitStyle(openCallSites, reporter);
             }
             else
             {
