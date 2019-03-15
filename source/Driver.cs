@@ -17,6 +17,8 @@ namespace cba
 {
     public class Driver
     {
+        public static Func<string, Program> ReadFromCloud = null;
+
         static Program inputOrg;
         static int Main(string[] args)
         {
@@ -543,7 +545,17 @@ namespace cba
         {
             // This is to check the input program for parsing and resolution
             // errors. We check for type errors later
-            Program init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+            Program init;
+
+            if (config.connectionType == "cloud" && ReadFromCloud != null) 
+            {
+                init = ReadFromCloud(config.inputFile);
+                init.Resolve();
+            }
+            else
+            {
+                init = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+            }
 
             #region Early exit options
             if (config.unfoldRecursion != null)

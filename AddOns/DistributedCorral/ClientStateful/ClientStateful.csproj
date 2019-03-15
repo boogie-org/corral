@@ -277,6 +277,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\boogie\Source\ParserHelper\ParserHelper.csproj">
+      <Project>{fcd3ac7f-9dfd-46c8-ab1e-09f0b0f16dc5}</Project>
+      <Name>ParserHelper</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\VCGeneration\VCGeneration.csproj">
       <Project>{E1F10180-C7B9-4147-B51F-FA1B701966DC}</Project>
       <Name>VCGeneration</Name>

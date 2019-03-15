@@ -4,9 +4,9 @@
     <Parameter Name="ClientStateful_MinReplicaSetSize" DefaultValue="1" />
     <Parameter Name="ClientStateful_PartitionCount" DefaultValue="1" />
     <Parameter Name="ClientStateful_TargetReplicaSetSize" DefaultValue="1" />
-    <Parameter Name="ServerStateful_MinReplicaSetSize" DefaultValue="3" />
+    <Parameter Name="ServerStateful_MinReplicaSetSize" DefaultValue="1" />
     <Parameter Name="ServerStateful_PartitionCount" DefaultValue="1" />
-    <Parameter Name="ServerStateful_TargetReplicaSetSize" DefaultValue="3" />
+    <Parameter Name="ServerStateful_TargetReplicaSetSize" DefaultValue="1" />
     <Parameter Name="FileUploader_InstanceCount" DefaultValue="-1" />
   </Parameters>
   <!-- Import the ServiceManifest from the ServicePackage. The ServiceManifestName and ServiceManifestVersion 

@@ -126,6 +126,24 @@ namespace ClientStateful
             string[] args = { inputFile, "/useProverEvaluate", "/di", "/doNotUseLabels", Config.InliningAlgorithm, "/recursionBound:" + Common.Config.RecursionBound.ToString(), "/si", Config.ConnectionType, "/httpAddress:" + address };
             try
             {
+                cba.Driver.ReadFromCloud = new Func<string, Microsoft.Boogie.Program>(fileName =>
+                {
+                    Microsoft.Boogie.Program program;
+
+                    CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                    var blobClient = csa.CreateCloudBlobClient();
+                    CloudBlobContainer container = blobClient.GetContainerReference("fileuploads");
+                    CloudBlob blobFile = container.GetBlobReference(Path.GetFileName(fileName));
+
+                    var stream = blobFile.OpenRead();
+                    var s = Microsoft.Boogie.ParserHelper.Fill(stream, new List<string>());
+                    var ret = Microsoft.Boogie.Parser.Parse(s, fileName, out program, false);
+                    if (program == null)
+                        throw new Exception(string.Format("Parse errors in cloud {0}", fileName));
+                    stream.Close();
+                    return program;
+                });
+
                 cba.Driver.run(args);
             }
             catch (Exception e)

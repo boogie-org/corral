@@ -5,8 +5,8 @@
     <Parameter Name="ClientStateful_MinReplicaSetSize" Value="1" />
     <Parameter Name="ClientStateful_TargetReplicaSetSize" Value="1" />
     <Parameter Name="ServerStateful_PartitionCount" Value="1" />
-    <Parameter Name="ServerStateful_MinReplicaSetSize" Value="3" />
-    <Parameter Name="ServerStateful_TargetReplicaSetSize" Value="3" />
+    <Parameter Name="ServerStateful_MinReplicaSetSize" Value="1" />
+    <Parameter Name="ServerStateful_TargetReplicaSetSize" Value="1" />
     <Parameter Name="FileUploader_InstanceCount" Value="1" />
   </Parameters>
 </Application>
