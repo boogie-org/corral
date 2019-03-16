@@ -377,7 +377,8 @@ namespace CoreLib
             public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
             public HashSet<StratifiedCallSite> openCallSites;
             public DI di;
-            public HashSet<StratifiedCallSite> previousSplitSites;
+            //public HashSet<StratifiedCallSite> previousSplitSites;
+            public HashSet<string> previousSplitSites;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -390,11 +391,11 @@ namespace CoreLib
                 return ret;
             }
 
-            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, HashSet<StratifiedCallSite> previousSplitSites)
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites, HashSet<string> previousSplitSites)
             {
                 var ret = new SiState();
                 ret = SiState.SaveState(SI, openCallSites);
-                ret.previousSplitSites = new HashSet<StratifiedCallSite>(previousSplitSites);
+                ret.previousSplitSites = new HashSet<string>(previousSplitSites);
                 return ret;
             }
 
@@ -407,7 +408,7 @@ namespace CoreLib
                 openCallSites = this.openCallSites;
             }
 
-            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, ref HashSet<StratifiedCallSite> previousSplitSites)
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, ref HashSet<string> previousSplitSites)
             {               
                 ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
@@ -847,7 +848,7 @@ namespace CoreLib
             var timeGraph = new TimeGraph();
             int numSplits = 0;
             int UCsplit = 0;
-            HashSet<StratifiedCallSite> previousSplitSites = new HashSet<StratifiedCallSite>();
+            HashSet<string> previousSplitSites = new HashSet<string>();
 
             var indent = new Func<int, string>(i =>
             {
@@ -893,7 +894,7 @@ namespace CoreLib
                 {
                     foreach (StratifiedCallSite cs in CallSitesInUCore)
                     {
-                        if (!previousSplitSites.Contains(cs))
+                        if (!previousSplitSites.Contains(GetPersistentID(cs)))
                         {
                             splitFlag = 1;
                             break;
@@ -950,7 +951,7 @@ namespace CoreLib
                         {
                             score = UCoreChildrenCount[cs];
                         } 
-                        if (!previousSplitSites.Contains(cs) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                        if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
                         { 
                                 maxVc = vc;
                                 maxVcScore = score;
@@ -961,7 +962,7 @@ namespace CoreLib
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         UCsplit += 1;
                         StratifiedCallSite scs = attachedVCInv[maxVc];
-                        previousSplitSites.Add(scs);
+                        previousSplitSites.Add(GetPersistentID(scs));
                         Debug.Assert(!openCallSites.Contains(scs));
                         numSplits = numSplits + 1;
                         var desc = sizes[maxVc];
