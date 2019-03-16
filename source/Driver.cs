@@ -204,7 +204,7 @@ namespace cba
             Initialize(config);
 
             var startTime = DateTime.Now;
-
+            CommandLineOptions.Clo.EnableUnSatCoreExtract = config.enableUnSatCoreExtract;
             ////////////////////////////////////
             // Initial program rewriting
             ////////////////////////////////////
