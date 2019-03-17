@@ -1202,7 +1202,7 @@ namespace CoreLib
                         continue;
 
                     }
-                    reporter.reportTrace = true;
+                    //reporter.reportTrace = true;
                     outcome = CheckVC(reporter);
                     if (outcome == Outcome.Errors)
                     {
