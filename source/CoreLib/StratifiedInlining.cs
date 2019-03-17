@@ -1202,7 +1202,7 @@ namespace CoreLib
                         continue;
 
                     }
-                    //reporter.reportTrace = true;
+                    reporter.reportTrace = true;
                     outcome = CheckVC(reporter);
                     if (outcome == Outcome.Errors)
                     {
@@ -1251,15 +1251,16 @@ namespace CoreLib
 
                 else if (outcome == Outcome.Errors)
                 {
-                    foreach (var scs in reporter.callSitesToExpand)
-                    {
-                        openCallSites.Remove(scs);
-                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                        if (svc != null) openCallSites.UnionWith(svc.CallSites);
-                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                    }
+                    
                     if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
                     {
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                        }
                         if (ucore != null || ucore.Count != 0)
                         {
 
@@ -1270,6 +1271,16 @@ namespace CoreLib
                                     CallSitesInUCore.Add(cs);
                                 }
                             }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, null, true, true);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                         }
                     }
                 }
