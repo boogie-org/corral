@@ -657,6 +657,9 @@ namespace CoreLib
             string exportPrefix = "";
             bool withinBound = true;
             double z3LastPhases = 0;
+            List<string> ucore = null;
+            List<StratifiedCallSite> CallSitesInUCore = new List<StratifiedCallSite>();
+            var boundHit = false;
             if (BoogieVerify.options.prevSIState != null)
             {
                 string tmpFileName = Path.GetFileName(BoogieVerify.options.prevSIState.Name);
@@ -745,8 +748,8 @@ namespace CoreLib
             {
                 var size = di.ComputeSize();
                 return ((treesize == 0 && size > BoogieVerify.DistributedConfig.SplitThreshold) ||
-                    (treesize != 0 && size > treesize + BoogieVerify.DistributedConfig.SplitThreshold)) &&
-                    z3LastPhases >= Math.Min(0.2, BoogieVerify.DistributedConfig.TimeThreshold);
+                (treesize != 0 && size > treesize + BoogieVerify.DistributedConfig.SplitThreshold)) &&
+                z3LastPhases >= Math.Min(0.2, BoogieVerify.DistributedConfig.TimeThreshold);
             });
 
             var SendCallTree = new Action(() =>
@@ -880,8 +883,62 @@ namespace CoreLib
 
                 var size = di.ComputeSize();
 
+                int splitFlag = 0;
+                int shouldSplitFlag = 0;
+                Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
+                {
+                    if (CallSitesInUCore.Count != 0)
+                    {
+                        foreach (StratifiedCallSite cs in CallSitesInUCore)
+                        {
+                            if (!usedSplitedNodes.Contains(GetPersistentID(cs)))
+                            {
+                                splitFlag = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (CallSitesInUCore.Count != 0 && splitFlag == 1)
+                    {
+                        foreach (StratifiedCallSite cs in CallSitesInUCore)
+                        {
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                UCoreChildrenCount[cs] = UCoreChildrenCount[cs] + 1;
+                            }
+                            else
+                            {
+                                UCoreChildrenCount.Add(cs, 1);
+                            }
+                            StratifiedCallSite parentOfCs = cs;
+                            while (parent.ContainsKey(parentOfCs))
+                            {
+                                parentOfCs = parent[parentOfCs];
+                                if (UCoreChildrenCount.ContainsKey(parentOfCs))
+                                {
+                                    UCoreChildrenCount[parentOfCs] = UCoreChildrenCount[parentOfCs] + 1;
+                                }
+                                else
+                                {
+                                    UCoreChildrenCount.Add(parentOfCs, 1);
+                                }
+                            }
+                        }
+                    }
+                }
                 // if the tree is big enough to split && some available machines are available
-                if (ShouldSplit()) 
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
+                {
+                    if (ShouldSplit() && splitFlag == 1)
+                        shouldSplitFlag = 1;
+                }
+                else
+                {
+                    if (ShouldSplit())
+                        shouldSplitFlag = 1;
+                }
+                if (shouldSplitFlag == 1) 
                 { 
                     var st = DateTime.Now;
 
@@ -927,9 +984,51 @@ namespace CoreLib
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         return _chosenVc;
                     });
-                    #endregion
 
-                    StratifiedVC chosenVc = ChooseSplittingNode();
+                    var ChooseSplittingNodeUnSatCore = new Func<StratifiedVC>(() =>
+                    {
+                        int _chosenScore = 0;
+                        StratifiedVC _chosenVc = null;
+
+                        var toRemove = new HashSet<StratifiedVC>();
+                        foreach (var vc in attachedVCInv.Keys)
+                        {
+                            if (!di.VcExists(vc))
+                            {
+                                toRemove.Add(vc);
+                                continue;
+                            }
+                            var score = 0;
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                score = UCoreChildrenCount[cs];
+                            }
+                            if (!usedSplitedNodes.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= _chosenScore)
+                            {
+                                var csReachBound = HasExceededRecursionDepth(attachedVCInv[vc], CommandLineOptions.Clo.RecursionBound) ||
+                                                           (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                                           StackDepth(attachedVCInv[vc]) > CommandLineOptions.Clo.StackDepthBound);
+                                if (!csReachBound)
+                                {
+                                    _chosenVc = vc;
+                                    _chosenScore = score;
+                                }
+                            }
+                        }
+                        toRemove.Iter(vc => attachedVCInv.Remove(vc));
+                        return _chosenVc;
+                    });
+                    #endregion
+                    StratifiedVC chosenVc;
+                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
+                    {
+                        chosenVc = ChooseSplittingNodeUnSatCore();
+                    }
+                    else
+                    {
+                        chosenVc = ChooseSplittingNode();
+                    }
 
                     if (chosenVc != null)
                     {
@@ -1076,7 +1175,43 @@ namespace CoreLib
                     if (queueSize <= splitStateQueue.Count)
                         break;
                 }
+                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
+                {
+                    //Fire Underapproximation Query
+                    ucore = null;
+                    boundHit = false;
+                    // underapproximate query
+                    Push();
+                    foreach (StratifiedCallSite cs in openCallSites)
+                    {
 
+                        if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                            (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                            StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                            procsHitRecBound.Add(cs.callSite.calleeName);
+                            boundHit = true;
+                        }
+                        // Non-uniform unfolding
+                        if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                            Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+
+                        continue;
+
+                    }
+                    //reporter.reportTrace = true;
+                    outcome = CheckVC(reporter);
+                    if (outcome == Outcome.Errors)
+                    {
+                        timeGraph.AddEdgeDone(BoogieVerify.decisions.Count == 0 ? "" : BoogieVerify.decisions[BoogieVerify.decisions.Count - 1].decisionType.ToString());
+                        break; // done (error found)
+                    }
+                    ucore = prover.UnsatCore();
+                    Pop();
+                }
                 // Find cex
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
@@ -1116,12 +1251,37 @@ namespace CoreLib
 
                 else if (outcome == Outcome.Errors)
                 {
-                    foreach (var scs in reporter.callSitesToExpand)
+                    
+                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
                     {
-                        openCallSites.Remove(scs);
-                        var svc = Expand(scs, null, true, true);
-                        if (svc != null) openCallSites.UnionWith(svc.CallSites);
-                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                        }
+                        if (ucore != null || ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, null, true, true);
+                            if (svc != null) openCallSites.UnionWith(svc.CallSites);
+                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                        }
                     }
                 }
                 else
@@ -2755,6 +2915,31 @@ namespace CoreLib
                     if (BoogieVerify.options.prevSIState != null)
                         name = BoogieVerify.options.prevSIState.Name;
                     LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Time for MustReachSplitParallelControler {0}:  [{1} s]", name, diff.TotalSeconds.ToString("F2")));
+                }
+                catch (Exception e)
+                {
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("{0}", e.ToString()));
+                }
+
+            }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar" && !di.disabled)
+            {
+                var startTimer = DateTime.Now;
+                outcome = Outcome.Correct;
+                Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
+                try
+                {
+                    CommandLineOptions.Clo.EnableUnSatCoreExtract = 1;
+                    outcome = MustReachSplitParallelStyle(openCallSites, reporter, addingEdges);
+                    if (outcome == Outcome.Correct && reachedBound)
+                        outcome = Outcome.Correct;
+                    var endTimer = DateTime.Now;
+                    TimeSpan diff = endTimer - startTimer;
+
+                    string name = "";
+                    if (BoogieVerify.options.prevSIState != null)
+                        name = BoogieVerify.options.prevSIState.Name;
+                    LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Time for UnSatCoreSplitParallelControler {0}:  [{1} s]", name, diff.TotalSeconds.ToString("F2")));
                 }
                 catch (Exception e)
                 {

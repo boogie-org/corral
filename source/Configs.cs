@@ -53,6 +53,7 @@ namespace cba
 
         public int staticInlining { get; private set; }
         public int recursionBound { get; private set; }
+        public int enableUnSatCoreExtract { get; private set; }
 
         public bool useLocalVariableAbstraction { get; private set; }
 
@@ -288,6 +289,7 @@ namespace cba
             noRaiseException = false;
             memLimit = 0;
             recursionBound = -1;
+            enableUnSatCoreExtract = 0;
             timeout = 0;
             boogieOpts = " ";
             printFinalProg = null;
@@ -474,6 +476,11 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 recursionBound = Int32.Parse(split[1]);
+            }
+            else if (flag.StartsWith("/enableUnSatCoreExtraction:"))
+            {
+                var split = flag.Split(sep);
+                enableUnSatCoreExtract = Int32.Parse(split[1]);
             }
             else if (flag.StartsWith("/timeLimit:"))
             {
