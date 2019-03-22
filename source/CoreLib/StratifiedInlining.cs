@@ -1005,14 +1005,18 @@ namespace CoreLib
                     continue;
 
                 }
-
+                reporter.reportTrace = true;
                 outcome = CheckVC(reporter);
                 if (outcome != Outcome.Correct)
                 {
+                    //Console.WriteLine("EtUC");
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (error found)
                 }
-                ucore = prover.UnsatCore();
+                if (outcome == Outcome.Correct)
+                {
+                    ucore = prover.UnsatCore();
+                }
                 Pop();
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
@@ -1027,6 +1031,7 @@ namespace CoreLib
                     }
                 }
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                reporter.reportTrace = false;
                 outcome = CheckVC(reporter);
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
@@ -1034,11 +1039,11 @@ namespace CoreLib
                     break; // done (T/O)
                 }
 
-                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
                 {
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (error found)
-                }
+                }*/
                 if (outcome == Outcome.Errors)
                 {
                     foreach (var scs in reporter.callSitesToExpand)
