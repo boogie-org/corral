@@ -13,7 +13,8 @@ namespace Common
         public static int CallTreeQueueSize = 100;
         public static int CallTreeQueueRate = 10;
         public static int RecursionBound = 2;
-        public static string InliningAlgorithm = "/newStratifiedInlining:splitpar";
+        public static string InliningAlgorithm = "/newStratifiedInlining:ucsplitpar";
+        public static string enableUnSatCoreExtraction = "/enableUnSatCoreExtraction:1";
         public static string ConnectionType = "/connectionType:cloud";
         public static int OptimizationMode = 2;
         public static int TimeLimit = 1000;
@@ -21,7 +22,8 @@ namespace Common
         public static bool RunningExperiment = true;
         public static bool AutoRerunningExperiment = false;
 
-        public static bool GenGraph = false;
+        public static bool GenGraph = true;
+        public static bool GenResult = true;
         public static bool BackupClient = false;
         public static bool VerifyUnsafe = false;
         public static int DefaultInterval = 50;

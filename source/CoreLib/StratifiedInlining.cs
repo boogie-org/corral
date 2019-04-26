@@ -999,20 +999,23 @@ namespace CoreLib
                                 continue;
                             }
                             var score = 0;
-                            StratifiedCallSite cs = attachedVCInv[vc];
-                            if (UCoreChildrenCount.ContainsKey(cs))
+                            if (parent.ContainsKey(attachedVCInv[vc]))
                             {
-                                score = UCoreChildrenCount[cs];
-                            }
-                            if (!usedSplitedNodes.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= _chosenScore)
-                            {
-                                var csReachBound = HasExceededRecursionDepth(attachedVCInv[vc], CommandLineOptions.Clo.RecursionBound) ||
-                                                           (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                                                           StackDepth(attachedVCInv[vc]) > CommandLineOptions.Clo.StackDepthBound);
-                                if (!csReachBound)
+                                StratifiedCallSite cs = attachedVCInv[vc];
+                                if (UCoreChildrenCount.ContainsKey(cs))
                                 {
-                                    _chosenVc = vc;
-                                    _chosenScore = score;
+                                    score = UCoreChildrenCount[cs];
+                                }
+                                if (!usedSplitedNodes.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= _chosenScore)
+                                {
+                                    var csReachBound = HasExceededRecursionDepth(attachedVCInv[vc], CommandLineOptions.Clo.RecursionBound) ||
+                                                               (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                                               StackDepth(attachedVCInv[vc]) > CommandLineOptions.Clo.StackDepthBound);
+                                    if (!csReachBound)
+                                    {
+                                        _chosenVc = vc;
+                                        _chosenScore = score;
+                                    }
                                 }
                             }
                         }

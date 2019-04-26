@@ -123,7 +123,7 @@ namespace ClientStateful
         {
             inputFile = msgContent[HttpUtil.LoadFile];
             inputFile = GetDir(inputFile); 
-            string[] args = { inputFile, "/useProverEvaluate", "/di", "/doNotUseLabels", Config.InliningAlgorithm, "/recursionBound:" + Common.Config.RecursionBound.ToString(), "/si", Config.ConnectionType, "/httpAddress:" + address };
+            string[] args = { inputFile, "/useProverEvaluate", "/di", "/doNotUseLabels", Config.InliningAlgorithm, Config.enableUnSatCoreExtraction, "/recursionBound:" + Common.Config.RecursionBound.ToString(), "/si", Config.ConnectionType, "/httpAddress:" + address };
             try
             {
                 cba.Driver.ReadFromCloud = new Func<string, Microsoft.Boogie.Program>(fileName =>

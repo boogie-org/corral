@@ -392,7 +392,7 @@ namespace ServerStateful
                         await CleanVerification();
                         await SendStopMsgs(cancellationToken);
                         if (Config.GenGraph)
-                            WriteDotFile();
+                            WriteDotFile();                        
                     }
                 }
             }
@@ -731,6 +731,8 @@ namespace ServerStateful
                                         timeout++;
 
                                     Log.WriteLine(Log.Important, string.Format("Time used: {0} | {1}", timeUsed.ToString("F2"), workingFile));
+                                    if (Config.GenResult)
+                                    WriteResultFile(timeUsed);
                                     Log.WriteLine(Log.Important, string.Format("Stats {0}: {1}", workingFile, stats));
                                     Log.WriteLine(Log.Important, string.Format("Finished: {0} | Timeout: {1} | Total: {2}", finished, timeout, total));
                                     if (Config.EnableFileRemoval)
@@ -1169,6 +1171,31 @@ namespace ServerStateful
                 MemoryStream dataStream = new MemoryStream(byteArray);
 
                 blockBlob.UploadFromStream(dataStream); 
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.ToString());
+            }
+        }
+
+        private void WriteResultFile(double timeUsed)
+        {
+            try
+            {
+                CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
+                var blobName = new FileInfo(tmpName).Name;
+
+                var blobClient = csa.CreateCloudBlobClient();
+                var container = blobClient.GetContainerReference(Common.Utils.ResultFolder);
+                container.CreateIfNotExists();
+                var uploadName = blobName;
+                CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+
+                byte[] byteArray = Encoding.ASCII.GetBytes(timeUsed.ToString("F2"));
+                MemoryStream dataStream = new MemoryStream(byteArray);
+
+                blockBlob.UploadFromStream(dataStream);
             }
             catch (Exception e)
             {
