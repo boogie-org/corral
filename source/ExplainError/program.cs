@@ -54,6 +54,7 @@ namespace ExplainError
         private static bool onlyDisplayAliasingInPre = false;
         private static bool onlyDisplayMapExpressions = false;
         private static bool dontDisplayComparisonsWithConsts = false;
+        private static bool onlyDisplayEqualityWithConsts = false;
         private static bool displayTypeStateVariables = true; //display any atom where some variable is annotated with a {:typestatevar}
         private static bool displayGuardVariables = true; //display any atom where some variable is annotated with a {:guardvar}
         private static bool noFilters = false; //if true, then matches any atom
@@ -511,7 +512,7 @@ namespace ExplainError
                 if (eliminateMapUpdates)
                     nc.Add(FlattenITE(RewriteITEFixPoint(CreateITE(c))));
                 else
-                    nc.Add(c);
+                    nc.Add(FlattenITE(RewriteITEFixPoint(c)));
             t = ExprUtil.ConjoinExprsBalanced(nc); //TODO: perform NNF should just take nc
             if (VCVerifier.CheckIfExprFalse(currImpl, t))
                 throw new Exception("Something wrong in ExplainError as EE thinks the trace looks infeasible");
@@ -1201,6 +1202,7 @@ namespace ExplainError
                 if (CheckBooleanFlag(a, "displayTypeStateVars", ref displayTypeStateVariables)) continue;
                 if (CheckBooleanFlag(a, "onlyDisplayMapExpressions", ref onlyDisplayMapExpressions)) continue;
                 if (CheckBooleanFlag(a, "dontDisplayComparisonsWithConsts", ref dontDisplayComparisonsWithConsts)) continue;
+                if (CheckBooleanFlag(a, "onlyDisplayEqualityWithConsts", ref onlyDisplayEqualityWithConsts)) continue;
                 if (CheckBooleanFlag(a, "noFilters", ref noFilters)) continue;
                 if (CheckBooleanFlag(a, "eliminateMapUpdates", ref eliminateMapUpdates)) continue;
                 //if (CheckBooleanFlag(a, "showPreAtAllCapturedStates", ref showPreAtAllCapturedStates)) continue;
@@ -1228,6 +1230,7 @@ namespace ExplainError
                 Console.WriteLine("  /onlyDisplayAliasingInPre:     Only display aliasing (x == y) constaints where both sides are non constants");
                 Console.WriteLine("  /onlyDisplayMapExpressions:    Only display expressions with at least one map expression (e.g. m[e] <> e'");
                 Console.WriteLine("  /dontDisplayComparisonsWithConsts: Dont display expressions of the form e <> c, where c is const");
+                Console.WriteLine("  /onlyDisplayEqualityWithConsts: Only display expressions of the form e == c, where c is a scalar constant");
                 Console.WriteLine("  /showBoogieExprs:              Displays Boogie exprs along with C exrpr (Cexpr //BoogieExpr)");
                 Console.WriteLine("  /dontUsePruningWhileEliminatingUpdates:  Don't use pruning while eliminating updates (default off)");
                 Console.WriteLine("  /eeCoverOpt:k :                Cover mode k = 0 (monomial only), = 1 (full dnf only), = _ (full-if-no-monomial)");
@@ -1487,6 +1490,16 @@ namespace ExplainError
                 if (arg is LiteralExpr) return true;
             return false;
         }
+
+        private static bool IsEqualityWithConst(Expr c)
+        {
+            var a = c as NAryExpr;
+            if (a == null) return false;
+            if (!ExprUtil.IsEqualityOp(a.Fun)) return false;
+            foreach (var arg in a.Args)
+                if (ExprUtil.isConstant(arg)) return true;
+            return false; 
+        }
         private static bool ContainsGuardVar(Expr c)
         {
             var vu = new VarsUsed();
@@ -1547,6 +1560,7 @@ namespace ExplainError
             if (onlyDisplayAliasingInPre && IsNeqComparison(c) /*!IsAliasingConstraint(c)*/) return false;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return false;
             if (dontDisplayComparisonsWithConsts && IsRelationalExprWithConst(c)) return false;
+            if (onlyDisplayEqualityWithConsts && !IsEqualityWithConst(c)) return false;
             if (!displayGuardVariables && ContainsGuardVar(c)) return false;  //definitely not matches
 
             //Check if it matches any of the positive filters
@@ -1785,6 +1799,46 @@ namespace ExplainError
                     op.Op == BinaryOperator.Opcode.Eq ||
                     op.Op == BinaryOperator.Opcode.Neq);
             }
+
+            public static bool IsEqualityOp(IAppliable o)
+            {
+                if (IsRelationalOp(o))
+                    return (o as BinaryOperator).Op == BinaryOperator.Opcode.Eq;
+                else
+                    return false;
+            }
+
+            public static bool IsArithmeticOp(IAppliable o)
+            {
+                var op = o as BinaryOperator;
+                if (op == null) return false;
+                return
+                    (op.Op == BinaryOperator.Opcode.Add ||
+                    op.Op == BinaryOperator.Opcode.Sub ||
+                    op.Op == BinaryOperator.Opcode.Mul ||
+                    op.Op == BinaryOperator.Opcode.Div);
+            }
+
+            public static bool isConstant(Expr e)
+            {
+                if (e is LiteralExpr)
+                    return true;
+                else if (e is NAryExpr)
+                {
+                    var ne = e as NAryExpr;
+                    var op = ne.Fun as BinaryOperator;
+                    if (op == null) return false;
+                    if (IsArithmeticOp(op))
+                        return isConstant(ne.Args[0]) && isConstant(ne.Args[1]);
+                    else
+                        return false;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
             public static Expr MySubstituteInExpr(Expr p, IList<AssignLhs> lhss, IList<Expr> rhss)
             {
                 var h = new Dictionary<Variable, Expr>();
