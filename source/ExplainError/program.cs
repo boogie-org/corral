@@ -1496,8 +1496,19 @@ namespace ExplainError
             var a = c as NAryExpr;
             if (a == null) return false;
             if (!ExprUtil.IsEqualityOp(a.Fun)) return false;
+            var lhs = a.Args[0];
+            var rhs = a.Args[1];
+            var lc = ExprUtil.isConstant(lhs);
+            var rc = ExprUtil.isConstant(rhs);
+            if (lc || rc) {
+                if (!lc && ExprUtil.isFunctionCall(lhs)) return false;
+                if (!rc && ExprUtil.isFunctionCall(lhs)) return false;
+                return true;
+            }
+            /*
             foreach (var arg in a.Args)
                 if (ExprUtil.isConstant(arg)) return true;
+            */
             return false; 
         }
         private static bool ContainsGuardVar(Expr c)
@@ -1837,6 +1848,16 @@ namespace ExplainError
                 {
                     return false;
                 }
+            }
+
+            public static bool isFunctionCall(Expr e)
+            {
+                if (e is NAryExpr)
+                {
+                    var op = (e as NAryExpr).Fun;
+                    return op is FunctionCall;
+                }
+                else return false;
             }
 
             public static Expr MySubstituteInExpr(Expr p, IList<AssignLhs> lhss, IList<Expr> rhss)
