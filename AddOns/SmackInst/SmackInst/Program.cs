@@ -356,8 +356,8 @@ namespace SmackInst
             ConvertToNull.Convert(program, nil);
 
             // Add NULL axiom here such that ConvertToNULL doesn't lead to dumb axiom
-            var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
-            program.AddTopLevelDeclaration(ax);
+            //var ax = new Axiom(Token.NoToken, Expr.Eq(Expr.Ident(nil), Expr.Literal(0)));
+            //program.AddTopLevelDeclaration(ax);
 
             // Add "assert !aliasQ(e, NULL)" for each expression M[e] appearing in the program
             InstrumentMemoryAccesses.Instrument(program, nil);
@@ -715,7 +715,7 @@ namespace SmackInst
                     var callCmd = cmd as CallCmd;
                     var callee = callCmd.callee;
                     // watch out: varg functions have trailing arg types in function name
-                    //callee = callee.Split('.')[0]; //some functions are called _GLOBAL__sub_I_JavascriptArray.cpp
+                    callee = callee.Split('.')[0]; //some functions are called _GLOBAL__sub_I_JavascriptArray.cpp
                     var aaCmd = MkAssume(Expr.Ident("funcPtr", btype.Int), Expr.Ident(callee, btype.Int));
                     aaCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
                         new QKeyValue(Token.NoToken, "slic", new List<object>(), aaCmd.Attributes));
@@ -942,7 +942,10 @@ namespace SmackInst
 	
 		public void Run(Program prog)
 		{
-			HashSet<string> constNames = new HashSet<string>(prog.TopLevelDeclarations.OfType<Constant>().Where(c => c.Name != "NULL").Select(c => c.Name));
+			HashSet<string> constNames = new HashSet<string>(
+					prog.TopLevelDeclarations.OfType<Constant>().Where(
+						c => c.Name != "NULL").Where(
+							c => c.Name != "$0.ref").Select(c => c.Name));
 			HashSet<Axiom> axiomsToDelete = new HashSet<Axiom>();
 			HashSet<string> constsToDelete = new HashSet<string>();
 			foreach (var ax in prog.TopLevelDeclarations.OfType<Axiom>().Where(axi => axi.Expr is NAryExpr && (axi.Expr as NAryExpr).Fun.FunctionName == "==")) {
@@ -1004,6 +1007,7 @@ namespace SmackInst
             return base.VisitIdentifierExpr(node);
         }
 
+	/*
         public override Expr VisitLiteralExpr(LiteralExpr node)
         {
             if (node.Val is int && (int)node.Val == 0)
@@ -1012,6 +1016,7 @@ namespace SmackInst
                 return nil;
             return base.VisitLiteralExpr(node);
         }
+	*/
     }
 
 
