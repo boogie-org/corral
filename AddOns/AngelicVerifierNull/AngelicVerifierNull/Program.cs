@@ -1491,6 +1491,15 @@ namespace AngelicVerifierNull
                         if (Options.repeatEEWithControlFlow)
                         {
                             RerunEEWithControlFlow(nprog, mainImpl, ref eeStatus, eeflags, ref eeComplexExprs, ref preDisjuncts, skipAssumes, ref tmpEESlicedSourceLines, ref explain);
+                            if (eeStatus == ExplainError.STATUS.SUCCESS)
+                            {
+                                if (!(explain.Count == 1 && explain[0].TrimEnd(new char[] { ' ', '\t' }) == Expr.True.ToString())) {
+                                    var blockExpr = Expr.Not(ExplainError.Toplevel.ExprListSetToDNFExpr(preDisjuncts));
+                                    blockExpr = MkBlockExprFromExplainError(nprog, blockExpr, concretize.allocConstants);
+                                    Utils.Print(String.Format("EXPLAINERROR-BLOCK :: {0}", blockExpr), Utils.PRINT_TAG.AV_OUTPUT);
+                                    status = Tuple.Create(REFINE_ACTIONS.BLOCK_PATH, blockExpr);
+                                }
+                            }
                         }
                     }                       
                     else if (explain.Count > 0)
@@ -1549,9 +1558,12 @@ namespace AngelicVerifierNull
         private static void RerunEEWithControlFlow(Program nprog, Implementation mainImpl, ref ExplainError.STATUS eeStatus, List<string> eeflags, ref Dictionary<string, string> eeComplexExprs, ref HashSet<List<Expr>> preDisjuncts, HashSet<AssumeCmd> skipAssumes, ref List<Tuple<string, int, string>> tmpEESlicedSourceLines, ref List<string> explain)
         {
             //Rerun EE to obtain the control flow condition
-            eeflags.Add("/noFilters+");
+            //eeflags.Add("/noFilters+");
             eeflags.Add("/ignoreAllAssumes-");
-            eeflags.Add("/onlySlicAssumes- ");
+            eeflags.Add("/onlySlicAssumes-");
+	    eeflags.Add("/eliminateMapUpdates-");
+	    eeflags.Add("/onlyDisplayEqualityWithConsts+");
+	    eeflags.Add("/onlyDisplayAliasingInPre-");
 
             explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1,
                 eeflags.Concat(" "),
