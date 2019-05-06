@@ -875,12 +875,12 @@ namespace FastAVN
         class TraceInfo
         {
             public int metric_value;
-            public List<Tuple<string, string>> traces;
+            public List<Tuple<string, string, string>> traces;
 
             public TraceInfo()
             {
                 metric_value = 0;
-                traces = new List<Tuple<string, string>>();
+                traces = new List<Tuple<string, string, string>>();
             }
         }
 
@@ -900,8 +900,8 @@ namespace FastAVN
                 string result_file = Path.Combine(Directory.GetCurrentDirectory(), impl, bugReportFileName);
                 if (dbg) Utils.Print(string.Format("Result File -> {0}", result_file), Utils.PRINT_TAG.AV_DEBUG);
 
-                // (assert, metric, inconsistencySet, trace_file, stack_file)
-                var traces = new List<Tuple<string, int, int, string, string>>();
+                // (assert, metric, inconsistencySet, trace_file, stack_file, entry_point)
+                var traces = new List<Tuple<string, int, int, string, string, string>>();
 
                 try
                 {
@@ -914,7 +914,6 @@ namespace FastAVN
                         // extract line from bug report but ignore the entrypoint info
                         var tokens = line.Split(',');
                         string bug_info = tokens.Where((s, i) => i < tokens.Length - 2).Concat(",");
-                        bug_info += string.Format(",{0}", impl);
 
                         var traceNumTokens = tokens.Last().Split('.');
                         var inconsistencyNum = traceNumTokens.Length == 2 ? Int32.Parse(traceNumTokens[0]) : -1;
@@ -928,7 +927,7 @@ namespace FastAVN
                         if (dbg) Utils.Print(string.Format("Bug File -> {0} {1}", bug_info, trace_file), Utils.PRINT_TAG.AV_DEBUG);
                         if (dbg) Utils.Print(string.Format("Metric -> {0}", metric), Utils.PRINT_TAG.AV_DEBUG);
 
-                        traces.Add(Tuple.Create(bug_info, metric, inconsistencyNum, trace_file, stack_file));
+                        traces.Add(Tuple.Create(bug_info, metric, inconsistencyNum, trace_file, stack_file, impl));
                     }
 
                 }
@@ -957,7 +956,7 @@ namespace FastAVN
                     }
                     inconsistencySetAsserts[tup.Item3].Add(tup.Item1);
                     inconsistencySetTraceInfo[tup.Item3].metric_value += tup.Item2;
-                    inconsistencySetTraceInfo[tup.Item3].traces.Add(Tuple.Create(tup.Item4, tup.Item5));
+                    inconsistencySetTraceInfo[tup.Item3].traces.Add(Tuple.Create(tup.Item4, tup.Item5, tup.Item6));
                 }
                 inconsistencySetAsserts.Iter(tup => tup.Value.Sort());
 
@@ -969,13 +968,13 @@ namespace FastAVN
                     if (!shortest_trace.ContainsKey(tup.Item1))
                     {
                         tinfo.metric_value = tup.Item2;
-                        tinfo.traces.Add(Tuple.Create(tup.Item4, tup.Item5));
+                        tinfo.traces.Add(Tuple.Create(tup.Item4, tup.Item5, tup.Item6));
                         shortest_trace.Add(tup.Item1, tinfo);
                     }
                     else if (shortest_trace[tup.Item1].metric_value > tup.Item2)
                     {
                         shortest_trace[tup.Item1].metric_value = tup.Item2;
-                        shortest_trace[tup.Item1].traces = new List<Tuple<string, string>> { Tuple.Create(tup.Item4, tup.Item5) };
+                        shortest_trace[tup.Item1].traces = new List<Tuple<string, string, string>> { Tuple.Create(tup.Item4, tup.Item5, tup.Item6) };
                     }
                     continue;
                 }
@@ -1076,7 +1075,7 @@ namespace FastAVN
                 foreach (string bug in shortest_trace.Keys)
                 {
                     Stats.count("#Bugs");
-                    var report = bug.Replace(sep, Environment.NewLine);
+                    var report = string.Format("{0},{1}", bug, shortest_trace[bug].traces[0].Item3).Replace(sep, Environment.NewLine);
                     bugReportWriter.WriteLine(report);
                 }
             }
