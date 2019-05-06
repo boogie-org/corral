@@ -914,6 +914,7 @@ namespace FastAVN
                         // extract line from bug report but ignore the entrypoint info
                         var tokens = line.Split(',');
                         string bug_info = tokens.Where((s, i) => i < tokens.Length - 2).Concat(",");
+                        bug_info += string.Format(",{0}", impl);
 
                         var traceNumTokens = tokens.Last().Split('.');
                         var inconsistencyNum = traceNumTokens.Length == 2 ? Int32.Parse(traceNumTokens[0]) : -1;
@@ -1071,7 +1072,7 @@ namespace FastAVN
 
             using (StreamWriter bugReportWriter = new StreamWriter(Path.Combine(Directory.GetCurrentDirectory(), mergedBugReportCSV)))
             {
-                bugReportWriter.WriteLine("Description,Src File,Line,Procedure,Fail Status");
+                bugReportWriter.WriteLine("Description,Src File,Line,Procedure,Fail Status,Entry Point");
                 foreach (string bug in shortest_trace.Keys)
                 {
                     Stats.count("#Bugs");
