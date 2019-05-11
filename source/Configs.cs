@@ -66,7 +66,7 @@ namespace cba
         public bool printProgress { get; private set; }
 
         public string inputFile;
-        
+
         private List<string> includeFiles;
 
         public bool newStratifiedInlining { get; private set; }
@@ -143,7 +143,7 @@ namespace cba
         public bool printAllTraces { get; private set; }
 
         public int maxStaticLoopBound { get; private set; }
-        
+
         public bool disableStaticAnalysis { get; private set; }
         public bool useDuality { get; private set; }
 
@@ -162,7 +162,7 @@ namespace cba
         {
             var inputFlags = FlagReader.read(args);
 
-            // Go through flags and find the bpl file and 
+            // Go through flags and find the bpl file and
             // other flags
 
             string inputFile = null;
@@ -307,7 +307,7 @@ namespace cba
             siOnly = false;
             annotations = new List<string>();
             maxStaticLoopBound = 0;
-            
+
             NonUniformUnfolding = false;
             FwdBckSearch = 0;
             useDI = false;
@@ -693,6 +693,10 @@ namespace cba
             {
                 deepAssertsNoLoop = true;
             }
+            else if (flag.StartsWith("/z3exe:"))
+            {
+                boogieOpts += " " + flag + " ";
+            }
             else if (flag.StartsWith("/z3opt"))
             {
                 boogieOpts += " " + flag + " ";
@@ -762,7 +766,7 @@ namespace cba
                 /**
                  * Normally, the sequentialization adds a context switch before every access to shared variables.
                  * When /cooperative is given, this behaviour is suppressed.
-                 * context switches are only added where explictly specified by a dummy call to corral_yield. 
+                 * context switches are only added where explictly specified by a dummy call to corral_yield.
                  **/
                 cooperativeYield = true;
             }
