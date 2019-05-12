@@ -1193,6 +1193,10 @@ namespace CoreLib
                             StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
                         {
                             prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                            if (cs.callSite.calleeName == null)
+                                Debug.Assert(false);
+                            if (procsHitRecBound == null)
+                                Debug.Assert(false);
                             procsHitRecBound.Add(cs.callSite.calleeName);
                             boundHit = true;
                         }
@@ -2908,6 +2912,7 @@ namespace CoreLib
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 try
                 {
+                    procsHitRecBound = new HashSet<string>();
                     outcome = MustReachSplitParallelStyle(openCallSites, reporter, addingEdges);
                     if (outcome == Outcome.Correct && reachedBound)
                         outcome = Outcome.Correct;
@@ -2932,6 +2937,7 @@ namespace CoreLib
                 Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 try
                 {
+                    procsHitRecBound = new HashSet<string>();
                     CommandLineOptions.Clo.EnableUnSatCoreExtract = 1;
                     outcome = MustReachSplitParallelStyle(openCallSites, reporter, addingEdges);
                     if (outcome == Outcome.Correct && reachedBound)
@@ -2981,7 +2987,7 @@ namespace CoreLib
                 }
             }
 
-            if (BoogieVerify.options.connectionType.Equals("cloud")) {
+            if (BoogieVerify.options.connectionType != null && BoogieVerify.options.connectionType.Equals("cloud")) {
                 LogWithAddress.WriteLine(LogWithAddress.Debugging, string.Format("Quitting"));
                 return outcome;
                 if (!BoogieVerify.DistributedConfig.ContinueSearch)
@@ -3220,7 +3226,6 @@ namespace CoreLib
                 return Outcome.Correct;
 
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
-            BoogieVerify.AccumulatedStats.getOutComeCoreTime += (DateTime.Now - startTime).TotalSeconds;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 

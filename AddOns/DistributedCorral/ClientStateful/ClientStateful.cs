@@ -379,6 +379,10 @@ namespace ClientStateful
             JObject addresses = JObject.Parse(ep.Address);
 
             address = (string)addresses["Endpoints"].First();
+            if (address.Length == 0)
+            {
+                Debug.Assert(false);
+            }
             while (true)
             {
                 if (cancellationToken.IsCancellationRequested)

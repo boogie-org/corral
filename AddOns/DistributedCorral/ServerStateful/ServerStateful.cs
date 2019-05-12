@@ -647,27 +647,7 @@ namespace ServerStateful
             bool isTimedout = false; 
 
             // set  of tests that got running error or took > 500s
-            List<string> errorTests = new List<string>();
-
-            // prepare list inputs: collect all inputs from server
-            if (Config.RunningExperiment)
-            {
-                if (inputQueue.Count == 0)
-                {
-                    var fileList = InitFileList();
-                    foreach (var file in fileList)
-                    { 
-                        {
-                            Debug.WriteLine(file);
-                            using (var tx = this.StateManager.CreateTransaction())
-                            {
-                                await inputQueue.EnqueueAsync(tx, file);
-                                await tx.CommitAsync();
-                            }
-                        }
-                    }
-                }
-            }
+            List<string> errorTests = new List<string>(); 
 
             while (true)
             { 
@@ -676,6 +656,26 @@ namespace ServerStateful
                     if (Config.AutoRerunningExperiment)
                         errorTests.Add(workingFile); 
                     Log.WriteLine(string.Format("Server got restarts"));
+                }
+
+                // prepare list inputs: collect all inputs from server
+                if (Config.RunningExperiment)
+                {
+                    if (inputQueue.Count == 0)
+                    {
+                        var fileList = InitFileList();
+                        foreach (var file in fileList)
+                        {
+                            {
+                                Debug.WriteLine(file);
+                                using (var tx = this.StateManager.CreateTransaction())
+                                {
+                                    await inputQueue.EnqueueAsync(tx, file);
+                                    await tx.CommitAsync();
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (inputQueue.Count == 0 && errorTests.Count > 0 && Config.AutoRerunningExperiment)
@@ -809,6 +809,7 @@ namespace ServerStateful
                                                 if (available)
                                                 {
                                                     calltree = value.Value.Clone();
+                                                    Log.WriteLine(Log.Info, string.Format("CT {0} is available", value.Value.Name));
                                                     reserved = true;
                                                     if (Config.OptimizationMode == 2)
                                                     {
@@ -825,6 +826,9 @@ namespace ServerStateful
                                                             callTreeSupporter = null;
                                                     }
                                                 } 
+                                                else {
+                                                    Log.WriteLine(Log.Info, string.Format("Dequeue CT {0}", value.Value.Name));
+                                                }
                                             }
                                             if (Config.ShortTransaction)
                                                 break;
@@ -968,7 +972,7 @@ namespace ServerStateful
                                                         }
                                                     }
                                                 }
-                                            }
+                                            } 
 
                                             // cancel if not task was found
                                             if (workID.Length == 0)

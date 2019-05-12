@@ -12,11 +12,12 @@ namespace Common
         public static bool PreLoading = true;
         public static int CallTreeQueueSize = 100;
         public static int CallTreeQueueRate = 10;
-        public static int RecursionBound = 2;
+        public static int RecursionBound = 3;
+        //public static string InliningAlgorithm = "/newStratifiedInlining:ucsplitpar";
         public static string InliningAlgorithm = "/newStratifiedInlining:ucsplitpar";
         public static string enableUnSatCoreExtraction = "/enableUnSatCoreExtraction:1";
         public static string ConnectionType = "/connectionType:cloud";
-        public static int OptimizationMode = 2;
+        public static int OptimizationMode = 0;
         public static int TimeLimit = 1000;
         public static bool EnableFileRemoval = false;
         public static bool RunningExperiment = true;
