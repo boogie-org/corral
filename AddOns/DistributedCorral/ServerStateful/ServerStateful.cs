@@ -307,23 +307,26 @@ namespace ServerStateful
                         var isLoading = await clientState.TryGetValueAsync(tx, sender);
                         if (isLoading.HasValue)
                         {
-                            loadOrWork = isLoading.Value.Item1;
+                            loadOrWork = isLoading.Value.Item1; // false means loading calltree, true means verifying calltree
                         }
                         await clientState.AddOrUpdateAsync(tx, sender, new Tuple<bool, string>(false, ""), (key, oldValue) => new Tuple<bool, string>(false, ""));
                         Log.WriteLine(string.Format(">>> {0}: completed {1}", Common.Utils.ShortenStr(sender), inputCallTree));
 
-                        bool hasSupporter = await supporterMap.ContainsKeyAsync(tx, sender);
-                        if (hasSupporter)
+                        if (loadOrWork)
                         {
-                            var supporter = await supporterMap.TryGetValueAsync(tx, sender);
-                            // TODO: send cancelling loading task
-                            if (supporter.HasValue && supporter.Value.Length > 0)
+                            bool hasSupporter = await supporterMap.ContainsKeyAsync(tx, sender);
+                            if (hasSupporter)
                             {
-                                string address = await GetClientAddress(supporter.Value, cancellationToken);
-                                if (address == null)
-                                    Log.WriteLine(Log.Error, string.Format("Address of {0} cannot be null.", sender));
-                                else
-                                    SendRequest(httpClient, address, HttpUtil.CancelLoadingCT);
+                                var supporter = await supporterMap.TryGetValueAsync(tx, sender);
+                                // TODO: send cancelling loading task
+                                if (supporter.HasValue && supporter.Value.Length > 0)
+                                {
+                                    string address = await GetClientAddress(supporter.Value, cancellationToken);
+                                    if (address == null)
+                                        Log.WriteLine(Log.Error, string.Format("Address of {0} cannot be null.", sender));
+                                    else
+                                        SendRequest(httpClient, address, HttpUtil.CancelLoadingCT);
+                                }
                             }
                         }
                         await tx.CommitAsync();
@@ -923,7 +926,7 @@ namespace ServerStateful
                                                         partitionStatus = new Tuple<bool, string>(false, callTree.Value.Name);
                                                         await clientState.AddOrUpdateAsync(tx, partition.Info.Id.ToString(), partitionStatus, (key, oldValue) => partitionStatus);
                                                         clientLoaded = true;
-                                                        SendLoadCallTree(httpClient, address, callTree.Value);
+                                                        await SendLoadCallTree(httpClient, address, callTree.Value);
                                                     }
                                                     break;
                                                 }
@@ -990,7 +993,7 @@ namespace ServerStateful
                                                     tg.AddEdge(callTree.Value.Author, partition.Info.Id.ToString(), "Load " + callTree.Value.Name);
                                                     clientLoaded = true;
                                                     Log.WriteLine(Log.Info, string.Format("{1} loads calltree {0}", callTree.Value.Name, Common.Utils.ShortenStr(partition.Info.Id.ToString())));
-                                                    SendLoadCallTree(httpClient, address, callTree.Value);
+                                                    await SendLoadCallTree(httpClient, address, callTree.Value);
                                                 }
                                                 break;
                                             }
@@ -1796,8 +1799,7 @@ namespace ServerStateful
             UriBuilder primaryReplicaUriBuilder = new UriBuilder(address);
             primaryReplicaUriBuilder.Query = string.Format("{0}={1}", param, msg);
             if (!param.Equals(HttpUtil.StartVerification) && 
-                !param.Equals(HttpUtil.StopVerification) &&
-                !param.Equals(HttpUtil.CancelLoadingCT) &&
+                !param.Equals(HttpUtil.StopVerification) && 
                 !param.Equals(HttpUtil.FastSplit) &&
                 !param.Equals(HttpUtil.FinishVerification) &&
                 !param.Equals(HttpUtil.InputFile) &&

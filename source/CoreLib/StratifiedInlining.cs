@@ -2604,9 +2604,15 @@ namespace CoreLib
                 BoogieVerify.DistributedConfig.MinWorkingTime = 0;
                 //while ((BoogieVerify.options.prevSIState == null || BoogieVerify.options.prevSIState.Name.Equals("waitingCT")) && BoogieVerify.continueSearch) { Thread.Sleep(1000); }
                 //openCallSites = new HashSet<StratifiedCallSite>(mainVC.CallSites);
-                while ((cba.Util.BoogieVerify.options.prevSIState != null && !BoogieVerify.options.prevSIState.Name.Equals(prevSplitState.Name)) ||
-                    BoogieVerify.options.loadOnly)
+                while ((cba.Util.BoogieVerify.options.prevSIState != null && 
+                            !BoogieVerify.options.prevSIState.Name.Equals(prevSplitState.Name)) ||
+                        BoogieVerify.options.loadOnly)
                 {
+                    if (BoogieVerify.options.loadOnly)
+                    {
+                        LogWithAddress.WriteLine(string.Format("Load CT: {0}", BoogieVerify.options.prevSIState.Name));
+                    }
+
                     if (cba.Util.BoogieVerify.options.prevSIState == null ||
                         prevSplitState.Name.Equals(BoogieVerify.options.prevSIState.Name))
                     {
