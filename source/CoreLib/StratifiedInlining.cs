@@ -2511,8 +2511,8 @@ namespace CoreLib
         /* verification */
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
-            startTime = DateTime.UtcNow; 
-            prover.FullReset(prover.VCExprGen);
+            startTime = DateTime.UtcNow;
+            prover.Reset(prover.VCExprGen);
             stats = new Stats();
             attachedVC.Clear();
             attachedVCInv.Clear();
@@ -2710,25 +2710,7 @@ namespace CoreLib
                                 removedCallsitesBak.Add(scs);
                         }
 
-                        int foundCnt = 0;
-
-                        // not efficient, should be a better implementation
-                        //foreach (var scs in toRemove)
-                        //{
-                        //    var nodePersistenID = GetPersistentID(scs);
-
-                        //    bool found = false;
-                        //    // only save callsite if it is one of SplitNodes
-                        //    foreach (var node in splitState.SplitingNodes)
-                        //        if (nodePersistenID.Equals(node.Item1))
-                        //        {
-                        //            removedCallsites.Add(scs);
-                        //            found = true;
-                        //            break;
-                        //        }
-                        //    if (!found)
-                        //        removedCallsitesBak.Add(scs);
-                        //}
+                        int foundCnt = 0; 
 
                         foreach (var node in splitState.SplitingNodes)
                         {
@@ -2740,16 +2722,7 @@ namespace CoreLib
                                 if (nodePersistenID.Equals(node.Item1))
                                 {
                                     found = true;
-                                    foundCnt++;
-                                    //if (prevSplitState != null && prevSplitState.Name.EndsWith("split.txt"))
-                                    //{
-                                    //    bool existing = false;
-                                    //    foreach (var sc in prevSplitState.SplitingNodes)
-                                    //        if (sc.Item1.Equals(node.Item1) && sc.Item2 == node.Item2)
-                                    //            existing = true;
-                                    //    if (existing)
-                                    //        break; ;
-                                    //}
+                                    foundCnt++; 
 
                                     int splitingType = node.Item2;
                                     Push();

@@ -59,7 +59,8 @@ namespace FileUploader
 
             ServiceEventSource.Current.Message("Starting web server on {0}", this.listeningAddress);
 
-            this.webApp = WebApp.Start<Startup>(this.listeningAddress);
+            if (webApp != null)
+                this.webApp = WebApp.Start<Startup>(this.listeningAddress);
 
             return Task.FromResult(this.publishAddress);
         }
