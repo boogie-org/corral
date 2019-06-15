@@ -1,0 +1,107 @@
+//Probe before use property
+//Every pointer use has to be Probed
+//If there is a kernel pointer, we will infer that is is already probed and infer a precondition
+//If it is a userland pointer, then the probe will validate it
+//If the pointer is probed along some path and not along others, we will see a warning
+//due to the angelic assert/allow
+
+GlobalDeclarations
+{
+  var {:propertyMap} validProbe : [int] bool;
+  function {:ReachableStates} atLeastOneUserlandReaches(bool): bool;
+
+function {:ReachableStates} MustReach(x: bool) : bool;
+
+var {:AllocatorVar} userp: int; //aliases every probed pointer
+var userNondet: bool;
+procedure  userNondetFn() returns (r:bool);
+
+function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithUser(p:int, q:int) returns (bool) {true}
+
+procedure aliases(p1:int) {
+    call userNondet := userNondetFn();
+    goto L1, L2;
+L1:
+   assume p1 != NULL;
+   userp := if (userNondet) then p1 else userp;
+   return;
+L2: 
+   return;
+}
+
+}
+
+TemplateVariables
+{
+  var p : int;
+}
+
+CmdRule
+{
+  assume {:nonnull} p != NULL;
+}
+-->
+{
+ assert(!aliasesWithUser(p, userp) || validProbe[p]);
+  #this;
+}
+
+
+ProcedureRule
+{
+  procedure {:#ReplaceImplementation} ProbeForRead( p1 : int, p2 : int, p3 : int);
+}
+-->
+{
+call aliases(p1);
+  //at least one execution where a non-probed pointer reaches here
+   //assume atLeastOneUserlandReaches(!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 18} {:print "Atomic Continuation"} true;
+  assert (!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 19} {:print "Atomic Continuation"} true;
+    validProbe[p1] := true;
+      assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 19} {:print "Return"} true;
+}
+
+ProcedureRule
+{
+  procedure {:#ReplaceImplementation} ProbeForWrite( p1 : int, p2 :int, p3 : int);
+}
+-->
+{
+call aliases(p1);
+  //at least one execution where a non-probed pointer reaches here
+   //assume atLeastOneUserlandReaches(!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 29} {:print "Atomic Continuation"} true;
+  assert (!validProbe[p1]);
+    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 30} {:print "Atomic Continuation"} true;
+  validProbe[p1] := true;
+      assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 30} {:print "Return"} true;
+}
+
+ProcedureRule
+{
+  procedure {:#ReplaceImplementation} RtlCopySid({:scalar} x0: int, {:pointer} {:ptr "Mem_T.VOID"} x1: int, {:pointer} {:ptr "Mem_T.VOID"} x2: int) returns ({:scalar} r: int);
+}
+-->
+{
+   assert(validProbe[x2]); 
+}
+
+
+
+// ------------ Specific to a module 
+
+//
+//ProcedureRule
+//{
+//    procedure {:#ReplaceImplementation} {:origName "KsUpdateCameraStreamingConsent"} KsUpdateCameraStreamingConsent({:pointer} {:ptr "Mem_T._KS_CAMERA_STREAMING_CONSENT_INFO"} x0: int) returns ({:scalar} r: int);
+//}
+//-->
+//{
+//    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 7} {:print "Atomic Continuation"} true;
+//    assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 7} {:print "Return"} true;
+//    assert(validProbe[Mem_T.pSid__KS_CAMERA_STREAMING_CONSENT_INFO[pSid__KS_CAMERA_STREAMING_CONSENT_INFO(x0)]]);
+//    return;
+//}
+
