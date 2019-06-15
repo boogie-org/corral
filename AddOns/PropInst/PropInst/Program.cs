@@ -12,7 +12,6 @@ namespace PropInst
     internal class Driver
     {
         public HashSet<IToken> ProcsThatHaveBeenInstrumented = new HashSet<IToken>();
-
       
         //TODO: collect some stats about the instrumentation, mb some debugging output??
 
@@ -20,12 +19,18 @@ namespace PropInst
         {
             if (args.Length < 3)
             {
-                Console.WriteLine("usage: PropInst.exe propertyFile.avp boogieInputFile.bpl boogieOutputFile.bpl");
+                Console.WriteLine("usage: PropInst.exe propertyFile.avp boogieInputFile.bpl boogieOutputFile.bpl [options]");
+                Console.WriteLine("\t /pruneMethodsWithFilePathPrefix:<absolutePath> Prune implementations whose path has this prefix");
                 return;
             }
 
             if (args.Any(s => s == "/break"))
                 System.Diagnostics.Debugger.Launch();
+
+            var pruneFilePaths = new HashSet<string>();
+            args
+                .Where(s => s.StartsWith("/pruneMethodsWithFilePathPrefix:"))
+                .Iter(s => pruneFilePaths.Add(s.Substring("/pruneMethodsWithFilePathPrefix:".Length)));
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -60,10 +65,46 @@ namespace PropInst
             //augment the CorralExtraInit procedure (perform this after Matching/instrumentation)
             AugmentCorralExtraInit(boogieProgram);
 
+            //prune methods that match PruneFilePaths
+            PruneMethodsWithPaths(boogieProgram, pruneFilePaths);
+
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
             Stats.printStats();
+        }
+
+        private static void PruneMethodsWithPaths(Program boogieProgram, HashSet<string> pruneFilePaths)
+        {
+            var pruneImplCandidates =
+                boogieProgram
+                .Implementations
+                .Where(x => IntersectsFilePath(x, pruneFilePaths));
+            Console.WriteLine($"Pruning methods {string.Join("\t", pruneImplCandidates.Select(x => x.Name))}");
+            boogieProgram.RemoveTopLevelDeclarations(x => x is Implementation && pruneImplCandidates.Contains(x));
+            Console.WriteLine($"Pruning complete...");
+        }
+
+        private static bool IntersectsFilePath(Implementation impl, HashSet<string> pruneFilePaths)
+        {
+            string sourceFile = null;
+            foreach (var blk in impl.Blocks)
+            {
+                foreach (var cmd in blk.Cmds.OfType<AssertCmd>())
+                {
+                    var file = QKeyValue.FindStringAttribute(cmd.Attributes, "sourcefile");
+                    if (file == null) continue;
+                    if (file.Equals("?")) continue;
+                    sourceFile = file;
+                    break;
+                }
+            }
+            return sourceFile != null && pruneFilePaths.Any(x => sourceFile.StartsWith(x));
+        }
+
+        private static string PossibleFilePath(Implementation x)
+        {
+            throw new NotImplementedException();
         }
 
         private static void AugmentCorralExtraInit(Program boogieProgram)
