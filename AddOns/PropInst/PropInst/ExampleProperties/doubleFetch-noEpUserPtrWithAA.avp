@@ -108,3 +108,26 @@ hasBeenRead[f(base)] := true;
 #this;
 }
 
+//reads in conditionals are not captured
+CmdRule
+{
+assume (Mem[f(base)] <= e1);
+assume (Mem[f(base)] > e1);
+assume (Mem[f(base)] >= e1);
+assume (Mem[f(base)] < e1);
+assume (Mem[f(base)] == e1);
+assume (Mem[f(base)] != e1);
+assume (e1 <= Mem[f(base)]);
+assume (e1 > Mem[f(base)]);
+assume (e1 < Mem[f(base)]);
+assume (e1 >= Mem[f(base)]);
+assume (e1 == Mem[f(base)]);
+assume (e1 != Mem[f(base)]);
+}
+-->
+{
+assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+hasBeenRead[f(base)] := true;
+#this;
+}
+
