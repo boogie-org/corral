@@ -52,8 +52,8 @@ CmdRule
 -->
 {
 call aliases(p1);
-assume MustReach(isUserPtr[p1]);
-isUserPtr[p1] := true;
+//assume MustReach(isUserPtr[p1]);
+//isUserPtr[p1] := true;
 #this;
 }
 
@@ -67,7 +67,8 @@ call e1 := prc(Mem[f(g(base))]);
 }
 -->
 {
-assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(g(base))];
+// assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(g(base))];
+assert !aliasesWithUser(base, userp)  || !hasBeenRead[f(g(base))];
 hasBeenRead[f(g(base))] := true;
 #this;
 }
@@ -79,7 +80,8 @@ call e1 := prc(Mem[f(base + off * c1)]);
 }
 -->
 {
-assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base + off * c1)];
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base + off * c1)];
+assert !aliasesWithUser(base, userp) || !hasBeenRead[f(base + off * c1)];
 hasBeenRead[f(base + off * c1)] := true;
 #this;
 }
@@ -91,7 +93,8 @@ call e1 := prc(Mem[f(base + c1)]);
 }
 -->
 {
-assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base + c1)];
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base + c1)];
+assert !aliasesWithUser(base, userp)  || !hasBeenRead[f(base + c1)];
 hasBeenRead[f(base + c1)] := true;
 #this;
 }
@@ -103,12 +106,14 @@ call e1 := prc(Mem[f(base)]);
 }
 -->
 {
-assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+assert !aliasesWithUser(base, userp)  || !hasBeenRead[f(base)];
 hasBeenRead[f(base)] := true;
 #this;
 }
 
 //reads in conditionals are not captured
+//However, each line is only matched once
 CmdRule
 {
 assume (Mem[f(base)] <= e1);
@@ -117,6 +122,19 @@ assume (Mem[f(base)] >= e1);
 assume (Mem[f(base)] < e1);
 assume (Mem[f(base)] == e1);
 assume (Mem[f(base)] != e1);
+}
+-->
+{
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+assert !aliasesWithUser(base, userp)  || !hasBeenRead[f(base)];
+hasBeenRead[f(base)] := true;
+#this;
+}
+
+//reads in conditionals are not captured
+//However, each line is only matched once
+CmdRule
+{
 assume (e1 <= Mem[f(base)]);
 assume (e1 > Mem[f(base)]);
 assume (e1 < Mem[f(base)]);
@@ -126,7 +144,8 @@ assume (e1 != Mem[f(base)]);
 }
 -->
 {
-assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+assert !aliasesWithUser(base, userp)  || !hasBeenRead[f(base)];
 hasBeenRead[f(base)] := true;
 #this;
 }
