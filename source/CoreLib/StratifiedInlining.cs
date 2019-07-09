@@ -819,7 +819,7 @@ namespace CoreLib
                                                 else if (rep.Equals(HttpUtil.FastSplit))
                                                 {
                                                     sentSuccessfully = true;
-                                                    BoogieVerify.DistributedConfig.NormalSplit();
+                                                    BoogieVerify.DistributedConfig.FastSplit();
                                                 }
                                                 else if (rep.Equals(HttpUtil.NormalSplit))
                                                 {
@@ -931,6 +931,7 @@ namespace CoreLib
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitpar")
                 {
                     if (ShouldSplit() && splitFlag == 1)
+                    //if (splitFlag == 1)
                         shouldSplitFlag = 1;
                 }
                 else
@@ -1046,6 +1047,7 @@ namespace CoreLib
                         if (!usedSplitedNodes.Contains(GetPersistentID(scs)))
                         {
                             usedSplitedNodes.Add(GetPersistentID(scs));
+                            //File.AppendAllText("split.txt", "SPLIT\n");
                             var parents = GetParents(scs);
                             foreach (var p in parents)
                                 usedSplitedNodes.Add(GetPersistentID(p));

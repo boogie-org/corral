@@ -34,6 +34,7 @@ namespace ServerStateful
         private CloudStorageAccount csa = null;
         private CloudBlobContainer blobContainer = null;
         private TimeGraph tg = null;
+        private int numSplit = 0;
          
         public ServerStateful(StatefulServiceContext context)
             : base(context)
@@ -123,6 +124,7 @@ namespace ServerStateful
          */
         private async Task AddInputFile(HttpListenerContext context, Dictionary<string, string> msgContent)
         {
+            //numSplit = 0;
             string fileDir = msgContent[HttpUtil.InputFile];
             Log.WriteLine(string.Format("Input file: {0}", fileDir)); 
 
@@ -392,10 +394,12 @@ namespace ServerStateful
                     {
                         verificationFinished = true; 
                         Log.WriteLine(Log.Important, string.Format(">>> Verification: {0}: {1}", inputFile, Common.Utils.DecodeStatus(result)));
+                        WriteOutcome(Common.Utils.DecodeStatus(result));
                         await CleanVerification();
                         await SendStopMsgs(cancellationToken);
                         if (Config.GenGraph)
-                            WriteDotFile();                        
+                            WriteDotFile();
+                        //numSplit = 0;
                     }
                 }
             }
@@ -453,7 +457,7 @@ namespace ServerStateful
             long ctCount = callTreeQueue.Count;
             if (senderAvailable && ctCount < Config.CallTreeQueueSize)
             {
-                
+                numSplit++;
                 IReliableDictionary<string, bool> callTreeDictionary = await StateManager.GetOrAddAsync<IReliableDictionary<string, bool>>(Common.Utils.CallTreeDictionary);
 
                 string callSitesMsg = msgContent[HttpUtil.NewCallSites];
@@ -650,7 +654,27 @@ namespace ServerStateful
             bool isTimedout = false; 
 
             // set  of tests that got running error or took > 500s
-            List<string> errorTests = new List<string>(); 
+            List<string> errorTests = new List<string>();
+
+            // prepare list inputs: collect all inputs from server
+            if (Config.RunningExperiment)
+            {
+                if (inputQueue.Count == 0)
+                {
+                    var fileList = InitFileList();
+                    foreach (var file in fileList)
+                    {
+                        {
+                            Debug.WriteLine(file);
+                            using (var tx = this.StateManager.CreateTransaction())
+                            {
+                                await inputQueue.EnqueueAsync(tx, file);
+                                await tx.CommitAsync();
+                            }
+                        }
+                    }
+                }
+            }
 
             while (true)
             { 
@@ -659,27 +683,7 @@ namespace ServerStateful
                     if (Config.AutoRerunningExperiment)
                         errorTests.Add(workingFile); 
                     Log.WriteLine(string.Format("Server got restarts"));
-                }
-
-                // prepare list inputs: collect all inputs from server
-                if (Config.RunningExperiment)
-                {
-                    if (inputQueue.Count == 0)
-                    {
-                        var fileList = InitFileList();
-                        foreach (var file in fileList)
-                        {
-                            {
-                                Debug.WriteLine(file);
-                                using (var tx = this.StateManager.CreateTransaction())
-                                {
-                                    await inputQueue.EnqueueAsync(tx, file);
-                                    await tx.CommitAsync();
-                                }
-                            }
-                        }
-                    }
-                }
+                }                
 
                 if (inputQueue.Count == 0 && errorTests.Count > 0 && Config.AutoRerunningExperiment)
                 {
@@ -738,6 +742,7 @@ namespace ServerStateful
                                     WriteResultFile(timeUsed);
                                     Log.WriteLine(Log.Important, string.Format("Stats {0}: {1}", workingFile, stats));
                                     Log.WriteLine(Log.Important, string.Format("Finished: {0} | Timeout: {1} | Total: {2}", finished, timeout, total));
+                                    
                                     if (Config.EnableFileRemoval)
                                         DeleteFile(workingFile);
                                     isTimedout = false;
@@ -1007,6 +1012,7 @@ namespace ServerStateful
                                         var input = await inputQueue.TryDequeueAsync(tx, cancellationToken);
                                         
                                         if (input.HasValue)
+                                        //if (total <= inputQueue.Count)
                                         {
                                             Log.WriteLine(Log.Important, string.Format("Solving {0} | Input remaining: {1}", input.Value, inputQueue.Count));
 
@@ -1198,8 +1204,34 @@ namespace ServerStateful
                 container.CreateIfNotExists();
                 var uploadName = blobName;
                 CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+                string str = timeUsed.ToString("F2") + "," + numSplit.ToString();
+                byte[] byteArray = Encoding.ASCII.GetBytes(str);
+                MemoryStream dataStream = new MemoryStream(byteArray);
 
-                byte[] byteArray = Encoding.ASCII.GetBytes(timeUsed.ToString("F2"));
+                blockBlob.UploadFromStream(dataStream);
+                numSplit = 0;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.ToString());
+            }
+        }
+
+        private void WriteOutcome(string Outcome)
+        {
+            try
+            {
+                CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
+                var blobName = new FileInfo(tmpName).Name;
+
+                var blobClient = csa.CreateCloudBlobClient();
+                var container = blobClient.GetContainerReference(Common.Utils.OutcomeFolder);
+                container.CreateIfNotExists();
+                var uploadName = blobName;
+                CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+
+                byte[] byteArray = Encoding.ASCII.GetBytes(Outcome);
                 MemoryStream dataStream = new MemoryStream(byteArray);
 
                 blockBlob.UploadFromStream(dataStream);
