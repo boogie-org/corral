@@ -12,6 +12,8 @@ $numArgs = $#ARGV + 1;
 $dirsGiven = 0;
 $flags = "";
 @dirs = ("");
+$windows=($^O=~/Win/)?1:0;
+$windows=0;
 
 for($cnt = 0; $cnt < $numArgs; $cnt++) {
     #print substr($ARGV[$cnt],0,1);
@@ -65,6 +67,10 @@ foreach $line (@files) {
     close (TMP_HANDLE);
 
     $cmd = "..\\..\\bin\\$BuildConfig\\corral.exe $file /flags:$dir\\config $flags > out";
+    if(not $windows)
+    {
+       $cmd = unix_cmd($cmd);
+    }
     print $cmd; print "\n";
     system($cmd);
 
@@ -99,4 +105,8 @@ foreach $line (@files) {
     }
 }
 
+sub unix_cmd {
+    (my $cmd = shift) =~ tr!\\!/!;
+  return $cmd;
+}
 	
