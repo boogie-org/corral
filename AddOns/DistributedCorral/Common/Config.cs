@@ -10,7 +10,7 @@ namespace Common
     {
         public static bool ShortTransaction = false;
         public static bool PreLoading = true;
-        public static int CallTreeQueueSize = 100;
+        public static int CallTreeQueueSize = 1000;
         public static int CallTreeQueueRate = 10;
         public static int RecursionBound = 3;
         //public static string InliningAlgorithm = "/newStratifiedInlining:splitpar";
@@ -29,5 +29,8 @@ namespace Common
         public static bool VerifyUnsafe = false;
         public static int DefaultInterval = 50;
         public static int FirstSplitDeadline = 20;
+        public static string WriteResultLocally = "Results.csv";
+        public static string WriteOutcomeLocally = "Outcomes.csv";
+        public static string WriteDotFilesLocally = "Dotfiles.csv";
     }
 }

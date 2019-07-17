@@ -1170,20 +1170,29 @@ namespace ServerStateful
         {
             try
             {
-                CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
-                var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".dot";
-                var blobName = new FileInfo(tmpName).Name;
+                if (Config.WriteDotFilesLocally.Length == 0)
+                {
+                    CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".dot";
+                    var blobName = new FileInfo(tmpName).Name;
 
-                var blobClient = csa.CreateCloudBlobClient();
-                var container = blobClient.GetContainerReference(Common.Utils.DotFolder);
-                container.CreateIfNotExists();
-                var uploadName = blobName;
-                CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+                    var blobClient = csa.CreateCloudBlobClient();
+                    var container = blobClient.GetContainerReference(Common.Utils.DotFolder);
+                    container.CreateIfNotExists();
+                    var uploadName = blobName;
+                    CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
 
-                byte[] byteArray = Encoding.ASCII.GetBytes(tg.ToString());
-                MemoryStream dataStream = new MemoryStream(byteArray);
+                    byte[] byteArray = Encoding.ASCII.GetBytes(tg.ToString());
+                    MemoryStream dataStream = new MemoryStream(byteArray);
 
-                blockBlob.UploadFromStream(dataStream); 
+                    blockBlob.UploadFromStream(dataStream);
+                }
+                else
+                {
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1));
+                    string str = tmpName + "\n" + tg.ToString() + "\n" + "TIMEGRAPH END\n";
+                    File.AppendAllText(Config.WriteDotFilesLocally, str);
+                }
             }
             catch (Exception e)
             {
@@ -1195,21 +1204,31 @@ namespace ServerStateful
         {
             try
             {
-                CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
-                var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
-                var blobName = new FileInfo(tmpName).Name;
+                if (Config.WriteResultLocally.Length == 0)
+                {
+                    CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
+                    var blobName = new FileInfo(tmpName).Name;
 
-                var blobClient = csa.CreateCloudBlobClient();
-                var container = blobClient.GetContainerReference(Common.Utils.ResultFolder);
-                container.CreateIfNotExists();
-                var uploadName = blobName;
-                CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
-                string str = timeUsed.ToString("F2") + "," + numSplit.ToString();
-                byte[] byteArray = Encoding.ASCII.GetBytes(str);
-                MemoryStream dataStream = new MemoryStream(byteArray);
+                    var blobClient = csa.CreateCloudBlobClient();
+                    var container = blobClient.GetContainerReference(Common.Utils.ResultFolder);
+                    container.CreateIfNotExists();
+                    var uploadName = blobName;
+                    CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+                    string str = timeUsed.ToString("F2") + "," + numSplit.ToString();
+                    byte[] byteArray = Encoding.ASCII.GetBytes(str);
+                    MemoryStream dataStream = new MemoryStream(byteArray);
 
-                blockBlob.UploadFromStream(dataStream);
-                numSplit = 0;
+                    blockBlob.UploadFromStream(dataStream);
+                    numSplit = 0;
+                }
+                else
+                {
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1));
+                    string str = tmpName + "," + timeUsed.ToString("F2") + "," + numSplit.ToString() + "\n";
+                    File.AppendAllText(Config.WriteResultLocally, str);
+                    numSplit = 0;
+                }
             }
             catch (Exception e)
             {
@@ -1221,20 +1240,29 @@ namespace ServerStateful
         {
             try
             {
-                CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
-                var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
-                var blobName = new FileInfo(tmpName).Name;
+                if (Config.WriteOutcomeLocally.Length == 0)
+                {
+                    CloudStorageAccount csa = CloudStorageAccount.Parse(Common.Utils.BlobAddress);
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1)) + ".txt";
+                    var blobName = new FileInfo(tmpName).Name;
 
-                var blobClient = csa.CreateCloudBlobClient();
-                var container = blobClient.GetContainerReference(Common.Utils.OutcomeFolder);
-                container.CreateIfNotExists();
-                var uploadName = blobName;
-                CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
+                    var blobClient = csa.CreateCloudBlobClient();
+                    var container = blobClient.GetContainerReference(Common.Utils.OutcomeFolder);
+                    container.CreateIfNotExists();
+                    var uploadName = blobName;
+                    CloudBlockBlob blockBlob = container.GetBlockBlobReference(uploadName);
 
-                byte[] byteArray = Encoding.ASCII.GetBytes(Outcome);
-                MemoryStream dataStream = new MemoryStream(byteArray);
+                    byte[] byteArray = Encoding.ASCII.GetBytes(Outcome);
+                    MemoryStream dataStream = new MemoryStream(byteArray);
 
-                blockBlob.UploadFromStream(dataStream);
+                    blockBlob.UploadFromStream(dataStream);
+                }
+                else
+                {
+                    var tmpName = Path.GetFileName(workingFile.Substring(workingFile.LastIndexOf("\\") + 1));
+                    string str = tmpName + "," + Outcome + "\n";
+                    File.AppendAllText(Config.WriteOutcomeLocally, str);
+                }
             }
             catch (Exception e)
             {
