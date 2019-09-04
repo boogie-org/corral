@@ -246,6 +246,7 @@ namespace cba.Util
                         // wipe out any counterexamples
                         timedOut.Add(impl.Name); errors = new List<Counterexample>();
                         break;
+                    case VC.VCGen.Outcome.OutOfResource:
                     case VC.VCGen.Outcome.TimedOut:
                         // wipe out any counterexamples
                         timedOut.Add(impl.Name); errors = new List<Counterexample>();
@@ -581,6 +582,7 @@ namespace cba.Util
                     throw new InternalError("z3 says inconclusive");
                 case VC.VCGen.Outcome.OutOfMemory:
                     throw new InternalError("z3 out of memory");
+                case VC.VCGen.Outcome.OutOfResource:
                 case VC.VCGen.Outcome.TimedOut:
                     throw new InternalError("z3 timed out");
                 default:
