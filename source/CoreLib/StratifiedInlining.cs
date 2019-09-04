@@ -4131,6 +4131,26 @@ namespace CoreLib
             return (Absy)l2a[id];
         }
 
+        public override void OnProverError(string message)
+        {
+            // Panic, shutdown!
+            Console.WriteLine("Corral encountered a prover error. Giving up.");
+            Console.Out.Flush();
+
+            // Give a few seconds to the prover to shutdown
+            var t1 =
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(5 * 1000);
+                Environment.Exit(-1);
+            });
+
+            var t2 =
+                System.Threading.Tasks.Task.Run(() => { si.prover.Close(); });
+
+            System.Threading.Tasks.Task.WaitAll(t1, t2);
+        }
+
         public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome)
         {
             // Timeout?
