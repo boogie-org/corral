@@ -30,6 +30,7 @@
 021\waitlock.bpl c
 022\childtid.bpl c
 023\f.bpl b
+024\f.bpl b
 loop\seq.bpl b
 loop\conc.bpl b
 loop\assert.bpl b
