@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM t1.bpl t2_err.bpl t3_err.bpl t4.bpl t5.bpl t6.bpl t7.bpl t8.bpl t9.bpl pruned.bpl empty_forall.bpl null.bpl generalize.bpl rec.bpl eeSlice3.bpl eeSlice4.bpl eeSlice5.bpl eeSlice6.bpl eeSlice61.bpl
+REM t1.bpl t2_err.bpl t3_err.bpl t4.bpl t5.bpl t6.bpl t7.bpl t8.bpl t9.bpl pruned.bpl empty_forall.bpl null.bpl generalize.bpl rec.bpl eeSlice3.bpl eeSlice4.bpl eeSlice5.bpl eeSlice6.bpl eeSlice61.bpl type_alias.bpl
 
 set HEXE=..\..\AvHarnessInstrumentation\bin\Debug\AvHarnessInstrumentation.exe
 set BGEXE=..\..\AngelicVerifierNull\bin\debug\AngelicVerifierNull.exe
@@ -32,6 +32,7 @@ call:add eeSlice5.bpl "/traceSlicing" ""
 call:add eeSlice6.bpl "/traceSlicing" ""
 call:add eeSlice61.bpl "/traceSlicing" ""
 call:add eeSlice2.bpl "/traceSlicing /repeatEEWithControlFlow" ""
+call:add type_alias.bpl "/traceSlicing" ""
 call:add delayed_initialization.bpl "/traceSlicing" "/unknownType:Ref /delayInitialization"
 
 

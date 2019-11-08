@@ -15,6 +15,7 @@ namespace cba
             //List<GlobalVariable> globalDecls = BoogieUtil.GetGlobalVariables(p);
             var procedures = BoogieUtil.GetProcedures(p);
             var implementations = BoogieUtil.GetImplementations(p);
+            var impls = new HashSet<string>(implementations.Select(impl => impl.Name));
             var allVars = new VarSet();
 
             foreach (var proc in procedures)
@@ -22,7 +23,15 @@ namespace cba
                 var uses = new GlobalVarsUsed();
                 uses.VisitRequiresSeq(proc.Requires);
                 uses.VisitEnsuresSeq(proc.Ensures);
-                // skip visiting modifies clause
+                if (!impls.Contains(proc.Name))
+                {
+                    uses.VisitIdentifierExprSeq(proc.Modifies);
+                }
+                else
+                {
+                    // skip visiting modifies clause
+                }
+
                 allVars.Add(new VarSet(uses.globalsUsed, proc.Name));
             }
 

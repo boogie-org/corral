@@ -288,6 +288,7 @@ namespace cba
             if (GlobalConfig.isSingleThreaded)
             {
                 curr = seqInstr.run(curr);
+
                 // Flag settings for sequential programs
                 config.trackedVars.Add(seqInstr.assertsPassedName);
                 if (config.assertsPassed != "assertsPassed")

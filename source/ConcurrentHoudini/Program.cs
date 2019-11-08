@@ -393,8 +393,7 @@ namespace ConcurrentHoudini
                 throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.checkingContext.ErrorCount, annotatedFileName));
 
             CivlVCGeneration.Transform(linearTypechecker, moverTypeChecker);
-            var eraser = new LinearTypeEraser();
-            eraser.VisitProgram(program);
+            linearTypechecker.EraseLinearAnnotations();
 
             //var stats = new PipelineStatistics();
             //ExecutionEngine.EliminateDeadVariablesAndInline(program);

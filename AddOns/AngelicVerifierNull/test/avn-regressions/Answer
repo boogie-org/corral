@@ -105,5 +105,10 @@
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
 [TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc A with expr b == 1
 
+-------------------- type_alias.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing type_alias_hinst.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> m[x_1] != r1)
+
 -------------------- delayed_initialization.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing delayed_initialization_hinst.bpl ------
+>>>>>>> upstream/master
