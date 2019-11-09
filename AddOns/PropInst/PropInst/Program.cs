@@ -66,7 +66,7 @@ namespace PropInst
             AugmentCorralExtraInit(boogieProgram);
 
             //prune methods that match PruneFilePaths
-            PruneMethodsWithPaths(boogieProgram, pruneFilePaths);
+            if (pruneFilePaths.Count() > 0) PruneMethodsWithPaths(boogieProgram, pruneFilePaths);
 
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
