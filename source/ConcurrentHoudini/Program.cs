@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.Boogie;
 using cba.Util;
+using static Microsoft.Boogie.LinearTypeChecker;
 
 namespace ConcurrentHoudini
 {
