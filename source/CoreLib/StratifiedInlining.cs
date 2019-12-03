@@ -217,7 +217,9 @@ namespace CoreLib
         int numPush;
         public HashSet<string> previousSplitSites;
         string calltreeToSend;
-
+        int parentNodeInTimegraph;
+        int childNodeInTimegraph;
+        Stack<Tuple<int, int>> emulateServerStack;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
 
@@ -458,12 +460,12 @@ namespace CoreLib
             }
         }
 
-        class TimeGraph 
+        public class TimeGraph 
         {
-            Dictionary<int, string> Nodes;
+            public Dictionary<int, string> Nodes;
             Dictionary<int, HashSet<Tuple<int, string, double>>> Edges;
             Stack<int> currNodeStack;
-            DateTime startTime;
+            public DateTime startTime;
             static int dmpCnt = 0;
             public int numPartitions;
 
@@ -474,7 +476,7 @@ namespace CoreLib
                 Edges = new Dictionary<int, HashSet<Tuple<int, string, double>>>();
                 startTime = DateTime.Now;
                 numPartitions = 0;
-                Nodes.Add(0, "main");
+                //Nodes.Add(0, "main");
                 Push(0);
             }
 
@@ -484,9 +486,14 @@ namespace CoreLib
             }
 
 
-            private void AddEdge(int n1, int n2, string label1, double label2)
+            public void AddEdge(int n1, int n2, string label1, double label2)
             {
-                if(!Edges.ContainsKey(n1))
+                Console.WriteLine(string.Format("EDGE : {0} {1} {2}", n1, n2, label2));
+                if (!Nodes.ContainsKey(n1))
+                    Nodes.Add(n1, "");
+                if (!Nodes.ContainsKey(n2))
+                    Nodes.Add(n2, "");
+                if (!Edges.ContainsKey(n1))
                     Edges.Add(n1, new HashSet<Tuple<int, string, double>>());
                 Edges[n1].Add(Tuple.Create(n2, label1, label2));
             }
@@ -571,7 +578,7 @@ namespace CoreLib
 
                 var rand = new Random((int)DateTime.Now.Ticks);
 
-                var root = Edges[0].First().Item1;
+                var root = Edges[1].First().Item1;
                 var isZero = new Func<double, bool>(d => d < 0.00001);
                 var isNull = new Func<Tuple<int, double>, bool>(t => t.Item1 < 0);
 
@@ -1174,7 +1181,7 @@ namespace CoreLib
             return outcome;
         }
 
-        public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter)
+        public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, TimeGraph timeGraph)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
 
@@ -1187,7 +1194,7 @@ namespace CoreLib
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
             List<string> ucore = null;
             List<StratifiedCallSite> CallSitesInUCore = new List<StratifiedCallSite>();
-            var timeGraph = new TimeGraph();
+            //var timeGraph = new TimeGraph();
             int numSplits = 0;
             int UCsplit = 0;
             //bool startFirstJob = false;
@@ -1195,6 +1202,7 @@ namespace CoreLib
             //string calltreeToSend = "";
             numPush = 0;
             bool pauseForDebug = false;
+            bool writeLog = false;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1346,8 +1354,22 @@ namespace CoreLib
                         var cnt = 0;
                         openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
                         // Push & Block
-                        var tgNode = string.Format("{0},{1}", scs.callSite.calleeName, maxVcScore);
-                        timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        //var tgNode = string.Format("{0},{1}", scs.callSite.calleeName, maxVcScore);
+                        //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        parentNodeInTimegraph = childNodeInTimegraph;
+                        childNodeInTimegraph = timeGraph.Count() + 1;
+                        if (!timeGraph.Nodes.ContainsKey(parentNodeInTimegraph))
+                            timeGraph.Nodes.Add(parentNodeInTimegraph, "");
+                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
+                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
+                        Tuple<int, int> saveStateTimegraph = new Tuple<int, int>(parentNodeInTimegraph, childNodeInTimegraph);
+                        Console.WriteLine("SaveState " + parentNodeInTimegraph + " " + childNodeInTimegraph);
+                        emulateServerStack.Push(saveStateTimegraph);
+                        childNodeInTimegraph = childNodeInTimegraph + 1;
+                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
+                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
+                        timeGraph.startTime = DateTime.Now;
                         Push();
                         backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -1358,9 +1380,11 @@ namespace CoreLib
                         tt += (DateTime.Now - st);
 
                         Console.WriteLine("splitting on : " + GetPersistentID(scs));
-                        Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                        if (writeLog)
+                            Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                         replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
-                        Console.WriteLine(replyFromServer);
+                        if (writeLog)
+                            Console.WriteLine(replyFromServer);
                         if (pauseForDebug)
                             Console.ReadLine();
                         calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                        
@@ -1393,24 +1417,31 @@ namespace CoreLib
                 }
                 //Console.WriteLine("Underapprox end");
                 reporter.reportTrace = true;
-                Console.WriteLine("point 0.1");
+                if (writeLog)
+                    Console.WriteLine("point 0.1");
                 outcome = CheckVC(reporter);
-                Console.WriteLine("point 0.2");
+                if (writeLog)
+                    Console.WriteLine("point 0.2");
+
                 if (outcome != Outcome.Correct)
                 {
                     //Console.WriteLine("EtUC");
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     sendRequestToServer("outcome", "NOK");
                     break; // done (error found)
                 }
-                Console.WriteLine("point 1");
+                if (writeLog)
+                    Console.WriteLine("point 1");
                 if (outcome == Outcome.Correct)
                 {
                     ucore = prover.UnsatCore();
                 }
-                Console.WriteLine("point 2");
+                if (writeLog)
+                    Console.WriteLine("point 2");
                 Pop();
-                Console.WriteLine("point 3");
+                if (writeLog)
+                    Console.WriteLine("point 3");
                 //Push();
                 //var softAssumptions = new List<VCExpr>();
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -1427,14 +1458,18 @@ namespace CoreLib
                     //if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                     //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
-                Console.WriteLine("point 4");
+                if (writeLog)
+                    Console.WriteLine("point 4");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 reporter.reportTrace = false;
                 outcome = CheckVC(reporter);
                 //Pop();
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //sendRequestToServer("outcome", "OK");
+                    //timeGraph.AddEdgeDone("split");
+                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     break; // done (T/O)
                 }
 
@@ -1473,6 +1508,9 @@ namespace CoreLib
                 else
                 {
                     Console.WriteLine("block finished");
+                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    //timeGraph.AddEdgeDone("split");
+                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     calltreeToSend = "";
                     return outcome;
                     /*Console.WriteLine("Before reset:");
@@ -1622,10 +1660,10 @@ namespace CoreLib
                 }
             }
             reporter.reportTraceIfNothingToExpand = false;
+            if (writeLog)
+                Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
 
-            Console.WriteLine("Time spent taking decisions: {0} s", tt.TotalSeconds.ToString("F2"));
-
-            Console.Write("SplitSearch: ");
+            /*Console.Write("SplitSearch: ");
             double singleCoreTime = 0;
             double sixteenCoreTime = 0;
             for (int i = 1; i <= 100; i++)
@@ -1641,7 +1679,7 @@ namespace CoreLib
             }
             Console.WriteLine(" :end");
             timeGraph.ToDot();
-            Console.WriteLine("splitInfo: " + UCsplit + "," + timeGraph.numPartitions + " :infoEnd");
+            Console.WriteLine("splitInfo: " + UCsplit + "," + timeGraph.numPartitions + " :infoEnd");*/
 
             if (outcome == Outcome.Correct && reachedBound)
                 sendRequestToServer("outcome", "ReachedBound");
@@ -2382,8 +2420,11 @@ namespace CoreLib
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
         {
             bool startFirstJob = false;
+            bool writeLog = false;
             string replyFromServer;
             string receivedCalltree = null;
+            TimeGraph timeGraph = new TimeGraph();
+            emulateServerStack = new Stack<Tuple<int, int>>();
             Console.WriteLine("Requesting ID");
             replyFromServer = sendRequestToServer("requestID", "What Is My ID");
             clientID = replyFromServer;
@@ -2418,16 +2459,49 @@ namespace CoreLib
             {
                 
                 startTime = DateTime.UtcNow;
+                Outcome outcome = Outcome.Correct;
 
                 if (startFirstJob) //If this is first job, continue but toggle flag so that a new calltree is requested in the next iteration            
+                {
                     startFirstJob = false;
+                    parentNodeInTimegraph = 1;
+                    childNodeInTimegraph = parentNodeInTimegraph + 1;
+                }
                 else
                 {
                     Console.WriteLine("Request Calltree");
                     replyFromServer = sendRequestToServer("requestCalltree", clientID);
-                    receivedCalltree = replyFromServer;
-                    Console.WriteLine("Received Calltree:");
-                    Console.WriteLine(receivedCalltree);
+                    if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
+                    {
+                        CallTree = null;
+                        Console.Write("SplitSearch: ");
+                        double singleCoreTime = 0;
+                        double sixteenCoreTime = 0;
+                        for (int i = 1; i <= 100; i++)
+                        {
+                            var sum = 0.0;
+                            for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
+                            sum = sum / 5;
+                            if (i == 1)
+                                singleCoreTime = sum;
+                            if (i == 16)
+                                sixteenCoreTime = sum;
+                            Console.Write("{0}\t", sum.ToString("F2"));
+                        }
+                        Console.WriteLine(" :end");
+                        Console.ReadLine();
+                        return outcome;
+                        //break;
+                        //timeGraph.ToDot();
+                        //Console.WriteLine("splitInfo: " + UCsplit + "," + timeGraph.numPartitions + " :infoEnd");
+                    }
+                    else
+                    {
+                        receivedCalltree = replyFromServer;                        
+                        Console.WriteLine("Received Calltree:");
+                        if (writeLog)
+                            Console.WriteLine(receivedCalltree);
+                    }
                 }
 
                 attachedVC.Clear();
@@ -2472,7 +2546,7 @@ namespace CoreLib
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
-                Outcome outcome;
+                
                 var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
 
@@ -2577,7 +2651,8 @@ namespace CoreLib
                         //Console.WriteLine(replyFromServer[i]);
                         if (receivedCalltree[i] == ',')
                         {
-                            Console.WriteLine(callsiteToInline);
+                            if (writeLog)
+                                Console.WriteLine(callsiteToInline);
                             if (callsiteToInline.Equals("BLOCK"))
                                 mode = 1;
                             else if (callsiteToInline.Equals("MUSTREACH"))
@@ -2586,7 +2661,8 @@ namespace CoreLib
                             {
                                 if (mode == 0) // inline callsite
                                 {
-                                    Console.WriteLine("inlining " + callsiteToInline);
+                                    if (writeLog)
+                                        Console.WriteLine("inlining " + callsiteToInline);
                                     StratifiedCallSite scs = null;
                                     foreach (StratifiedCallSite cs in openCallSites)
                                     {
@@ -2609,7 +2685,8 @@ namespace CoreLib
                                 }
                                 else if (mode == 1) //BLOCK callsite
                                 {
-                                    Console.WriteLine("BLOCK " + callsiteToInline);
+                                    if (writeLog)
+                                        Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
                                     applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
@@ -2619,7 +2696,8 @@ namespace CoreLib
                                 }
                                 else //MUSTREACH callsite
                                 {
-                                    Console.WriteLine("MUSTREACH " + callsiteToInline);
+                                    if (writeLog)
+                                        Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
                                     applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
@@ -2633,6 +2711,10 @@ namespace CoreLib
                         else
                             callsiteToInline = callsiteToInline + receivedCalltree[i];
                     }
+                    timeGraph.startTime = DateTime.Now;
+                    Tuple<int, int> timeGraphCurrentState = emulateServerStack.Pop();
+                    parentNodeInTimegraph = timeGraphCurrentState.Item1;
+                    childNodeInTimegraph = timeGraphCurrentState.Item2;
                 }
 
                 // Stratified Search
@@ -2658,7 +2740,7 @@ namespace CoreLib
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled)
                 {
                     Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
-                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter);
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph);
                 }
                 else
                 {

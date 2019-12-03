@@ -41,7 +41,7 @@ namespace LocalServerInCsharp
                     // message is large, send reply immediately 
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
                     addCalltree(context, body.Substring(1, body.Length - 2));
-                    //Console.WriteLine(body.Substring(1, body.Length-2));
+                    Console.WriteLine("Adding Calltree");
                     //Console.ReadLine();
                     //msgContent = Common.Utils.ParseMsg(body.Replace("\"", ""));
                     //Log.WriteLine(Log.Info, string.Format("Received Large message"));
@@ -52,7 +52,7 @@ namespace LocalServerInCsharp
                     foreach (var key in allKeys)
                     {
                         msgContent.Add(key, context.Request.QueryString[key].ToString());
-                        //Console.WriteLine(string.Format("Received message: " + context.Request.QueryString[key].ToString()));
+                        Console.WriteLine(string.Format("Received message: " + context.Request.QueryString[key].ToString()));
                     }
                 }
                 // Now, you'll find the request URL in context.Request.Url
@@ -139,10 +139,18 @@ namespace LocalServerInCsharp
             {
                 reply = "YES";
                 startFirstJob = true;
+                ResponseHttp(context, reply);
             }
             else
-                reply = "WaitForCalltree";
-            ResponseHttp(context, reply);
+            {
+                if (callTreeStack.Count == 0)
+                    clientRequestQueue.Enqueue(context);
+                else
+                {
+                    reply = callTreeStack.Pop();
+                    ResponseHttp(context, reply);
+                }
+            }            
         }
 
         static void addCalltree(HttpListenerContext context, string calltree)
@@ -160,11 +168,13 @@ namespace LocalServerInCsharp
         static void sendCalltree(HttpListenerContext context)
         {
             string reply;
+            Console.WriteLine("Stack Count : " + callTreeStack.Count);
             if (callTreeStack.Count == 0)
             {
                 clientRequestQueue.Enqueue(context);
                 if (clientRequestQueue.Count == numClients)
                 {
+                    ResponseHttp(context, "DONE");
                     Console.WriteLine("Verification Finished : Outcome OK");
                     Console.WriteLine("Number of Splits : " + numSplits);
                     Console.WriteLine("Time Taken : " + (DateTime.Now - startTime).TotalSeconds);

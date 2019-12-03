@@ -89,8 +89,8 @@ namespace ClientSource
         static void runClient(string fileName)
         {
             Process p = new Process();
-            p.StartInfo.FileName = @"F:\00ResearchWork\HTTPCorral\Corral\bin\Debug\corral.exe";
-            p.StartInfo.Arguments = "F:\\00ResearchWork\\SdvBenchBpl\\copyFiles\\" + fileName +
+            p.StartInfo.FileName = @"E:\HttpCorral\bin\Debug\corral.exe";
+            p.StartInfo.Arguments = @"E:\copyFiles\" + fileName +
                 " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
                 " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
             p.StartInfo.UseShellExecute = true;
