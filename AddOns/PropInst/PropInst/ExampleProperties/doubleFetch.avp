@@ -14,17 +14,16 @@ var {:propertyMap} isUserPtr : [int] bool;
 function {:ReachableStates} MustReach(x: bool) : bool;
 
 var {:AllocatorVar} userp: int; //aliases every probed pointer
-var userNondet: bool;
-procedure  userNondetFn() returns (r:bool);
+var userNondetInt: int; //only add axioms to int in EE currently
 
 function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithUser(p:int, q:int) returns (bool) {true}
 
 procedure aliases(p1:int) {
-    call userNondet := userNondetFn();
+    havoc userNondetInt;
     goto L1, L2;
 L1:
    assume p1 != NULL;
-   userp := if (userNondet) then p1 else userp;
+   userp := if (userNondetInt > 0) then p1 else userp;
    return;
 L2: 
    return;
@@ -111,6 +110,20 @@ call e1 := prc(Mem[f(base)]);
 //assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
 assert !aliasesWithUser(base, userp)  || base != userp ||!hasBeenRead[f(base)];
 hasBeenRead[f(base)] := true;
+#this;
+}
+
+// handles case for array access (d := Mem_T.INT4[Tmp_2043 + NULL * 4];)
+CmdRule
+{
+e1 := Mem[base + off * c1];
+call e1 := prc(Mem[base + off * cl]);
+}
+-->
+{
+//assert !aliasesWithUser(base, userp) || !isUserPtr[base] || !hasBeenRead[f(base)];
+assert !aliasesWithUser(base, userp)  || base != userp ||!hasBeenRead[base + off * c1];
+hasBeenRead[base + off * c1] := true;
 #this;
 }
 
