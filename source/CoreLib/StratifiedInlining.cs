@@ -13,6 +13,7 @@ using Microsoft.Boogie.GraphUtil;
 using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
+using System.Threading;
 
 namespace CoreLib
 {
@@ -2456,11 +2457,13 @@ namespace CoreLib
             });
 
             while (true)
-            {
-                
+            {                
                 startTime = DateTime.UtcNow;
                 Outcome outcome = Outcome.Correct;
-
+                //sendRequestToServer("outcome", "NOK");
+                //sendRequestToServer("requestCalltree", clientID.ToString());
+                //Console.ReadLine();
+                //return outcome;
                 if (startFirstJob) //If this is first job, continue but toggle flag so that a new calltree is requested in the next iteration            
                 {
                     startFirstJob = false;
@@ -2474,7 +2477,9 @@ namespace CoreLib
                     if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
-                        Console.Write("SplitSearch: ");
+                        string sendTimeGraph = "";
+                        //Console.Write("SplitSearch: ");
+                        sendTimeGraph = sendTimeGraph + "SplitSearch: \n";
                         double singleCoreTime = 0;
                         double sixteenCoreTime = 0;
                         for (int i = 1; i <= 100; i++)
@@ -2486,9 +2491,15 @@ namespace CoreLib
                                 singleCoreTime = sum;
                             if (i == 16)
                                 sixteenCoreTime = sum;
-                            Console.Write("{0}\t", sum.ToString("F2"));
+                            //Console.Write("{0}\t", sum.ToString("F2"));
+                            sendTimeGraph = sendTimeGraph + string.Format("{0}\t", sum.ToString("F2"));
                         }
-                        Console.WriteLine(" :end");
+                        //Console.WriteLine(" :end");
+                        sendTimeGraph = sendTimeGraph + " :end";
+                        Console.WriteLine(sendTimeGraph);
+                        //Console.ReadLine();
+                        sendRequestToServer("TimeGraph", sendTimeGraph);
+                        sendRequestToServer("requestCalltree", clientID.ToString());                        //Since it has received "DONE", on the next calltree request Listener will kill it
                         Console.ReadLine();
                         return outcome;
                         //break;
