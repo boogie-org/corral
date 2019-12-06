@@ -1206,6 +1206,7 @@ namespace CoreLib
             numPush = 0;
             bool pauseForDebug = false;
             bool writeLog = false;
+            bool makeTimeGraph = false;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1359,21 +1360,24 @@ namespace CoreLib
                         // Push & Block
                         //var tgNode = string.Format("{0},{1}", scs.callSite.calleeName, maxVcScore);
                         //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                        parentNodeInTimegraph = childNodeInTimegraph;
-                        childNodeInTimegraph = timeGraph.Count() + 1;
-                        if (!timeGraph.Nodes.ContainsKey(parentNodeInTimegraph))
-                            timeGraph.Nodes.Add(parentNodeInTimegraph, "");
-                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
-                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
-                        Tuple<int, int> saveStateTimegraph = new Tuple<int, int>(parentNodeInTimegraph, childNodeInTimegraph);
-                        if (writeLog)
-                            Console.WriteLine("SaveState " + parentNodeInTimegraph + " " + childNodeInTimegraph);
-                        emulateServerStack.Push(saveStateTimegraph);
-                        childNodeInTimegraph = childNodeInTimegraph + 1;
-                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
-                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
-                        timeGraph.startTime = DateTime.Now;
+                        if (makeTimeGraph)
+                        {
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                            parentNodeInTimegraph = childNodeInTimegraph;
+                            childNodeInTimegraph = timeGraph.Count() + 1;
+                            if (!timeGraph.Nodes.ContainsKey(parentNodeInTimegraph))
+                                timeGraph.Nodes.Add(parentNodeInTimegraph, "");
+                            if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
+                                timeGraph.Nodes.Add(childNodeInTimegraph, "");
+                            Tuple<int, int> saveStateTimegraph = new Tuple<int, int>(parentNodeInTimegraph, childNodeInTimegraph);
+                            if (writeLog)
+                                Console.WriteLine("SaveState " + parentNodeInTimegraph + " " + childNodeInTimegraph);
+                            emulateServerStack.Push(saveStateTimegraph);
+                            childNodeInTimegraph = childNodeInTimegraph + 1;
+                            if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
+                                timeGraph.Nodes.Add(childNodeInTimegraph, "");
+                            timeGraph.startTime = DateTime.Now;
+                        }
                         Push();
                         backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
                         prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -1431,7 +1435,8 @@ namespace CoreLib
                 {
                     //Console.WriteLine("EtUC");
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                    if (makeTimeGraph)
+                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     //sendRequestToServer("outcome", "NOK");
                     break; // done (error found)
                 }
@@ -1473,7 +1478,8 @@ namespace CoreLib
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     //sendRequestToServer("outcome", "OK");
                     //timeGraph.AddEdgeDone("split");
-                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                    if (makeTimeGraph)
+                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     break; // done (T/O)
                 }
 
@@ -1515,7 +1521,8 @@ namespace CoreLib
                         Console.WriteLine("block finished");
                     //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     //timeGraph.AddEdgeDone("split");
-                    timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                    if (makeTimeGraph)
+                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     calltreeToSend = "";
                     break;
                     //return outcome;
@@ -2428,6 +2435,7 @@ namespace CoreLib
             bool startFirstJob = false;
             bool writeLog = false;
             bool continueVerification = true;
+            bool makeTimeGraph = false;
             string replyFromServer;
             string receivedCalltree = null;
             Outcome outcome = Outcome.Correct;
@@ -2486,8 +2494,11 @@ namespace CoreLib
                 if (startFirstJob) //If this is first job, continue but toggle flag so that a new calltree is requested in the next iteration            
                 {
                     startFirstJob = false;
-                    parentNodeInTimegraph = 1;
-                    childNodeInTimegraph = parentNodeInTimegraph + 1;
+                    if (makeTimeGraph)
+                    {
+                        parentNodeInTimegraph = 1;
+                        childNodeInTimegraph = parentNodeInTimegraph + 1;
+                    }
                 }
                 else
                 {
@@ -2753,10 +2764,13 @@ namespace CoreLib
                         else
                             callsiteToInline = callsiteToInline + receivedCalltree[i];
                     }
-                    timeGraph.startTime = DateTime.Now;
-                    Tuple<int, int> timeGraphCurrentState = emulateServerStack.Pop();
-                    parentNodeInTimegraph = timeGraphCurrentState.Item1;
-                    childNodeInTimegraph = timeGraphCurrentState.Item2;
+                    if (makeTimeGraph)
+                    {
+                        timeGraph.startTime = DateTime.Now;
+                        Tuple<int, int> timeGraphCurrentState = emulateServerStack.Pop();
+                        parentNodeInTimegraph = timeGraphCurrentState.Item1;
+                        childNodeInTimegraph = timeGraphCurrentState.Item2;
+                    }
                 }
 
                 // Stratified Search
@@ -2860,28 +2874,31 @@ namespace CoreLib
                 if (replyFromServer.Equals("kill") || replyFromServer.Equals("DONE"))
                     continueVerification = false;
             }
-            string sendTimeGraph = "";
-            //Console.Write("SplitSearch: ");
-            sendTimeGraph = sendTimeGraph + "SplitSearch: \n";
-            double singleCoreTime = 0;
-            double sixteenCoreTime = 0;
-            for (int i = 1; i <= 100; i++)
+            if (makeTimeGraph)
             {
-                var sum = 0.0;
-                for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
-                sum = sum / 5;
-                if (i == 1)
-                    singleCoreTime = sum;
-                if (i == 16)
-                    sixteenCoreTime = sum;
-                //Console.Write("{0}\t", sum.ToString("F2"));
-                sendTimeGraph = sendTimeGraph + string.Format("{0}\t", sum.ToString("F2"));
+                string sendTimeGraph = "";
+                //Console.Write("SplitSearch: ");
+                sendTimeGraph = sendTimeGraph + "SplitSearch: \n";
+                double singleCoreTime = 0;
+                double sixteenCoreTime = 0;
+                for (int i = 1; i <= 100; i++)
+                {
+                    var sum = 0.0;
+                    for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
+                    sum = sum / 5;
+                    if (i == 1)
+                        singleCoreTime = sum;
+                    if (i == 16)
+                        sixteenCoreTime = sum;
+                    //Console.Write("{0}\t", sum.ToString("F2"));
+                    sendTimeGraph = sendTimeGraph + string.Format("{0}\t", sum.ToString("F2"));
+                }
+                //Console.WriteLine(" :end");
+                sendTimeGraph = sendTimeGraph + " :end";
+                Console.WriteLine(sendTimeGraph);
+                //Console.ReadLine();
+                sendRequestToServer("TimeGraph", sendTimeGraph);
             }
-            //Console.WriteLine(" :end");
-            sendTimeGraph = sendTimeGraph + " :end";
-            Console.WriteLine(sendTimeGraph);
-            //Console.ReadLine();
-            sendRequestToServer("TimeGraph", sendTimeGraph);
             Console.ReadLine();
             return outcome;
         }

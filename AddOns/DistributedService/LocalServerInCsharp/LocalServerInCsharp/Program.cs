@@ -31,11 +31,22 @@ namespace LocalServerInCsharp
         public static double totalTime;
         private static bool receivedTimeGraph = false;
         public static DateTime lastClientCallAt;
+        public static string listenerExecutablePath;
+        public static string inputFilesDirectory;
         static void Main(string[] args)
         {
             numClients = 0;
             startFirstJob = false;
-            filePaths = Directory.GetFiles(@"E:\copyFiles\", "*.bpl");
+            listenerExecutablePath = Directory.GetCurrentDirectory();
+            listenerExecutablePath = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 49);
+            listenerExecutablePath = listenerExecutablePath + @"Client\Client\bin\Debug\Client.exe";
+            //Console.WriteLine(listenerExecutablePath);
+            //Console.ReadLine();
+            inputFilesDirectory = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 82);
+            inputFilesDirectory = inputFilesDirectory + @"copyFiles\" ;
+            //Console.WriteLine(inputFilesDirectory);
+            //Console.ReadLine();
+            filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
             outputFolderPath = @"E:\ExperimentOutput\";
             fileQueue = new Queue<string>(filePaths);
             //foreach (string s in filePaths)
@@ -148,13 +159,37 @@ namespace LocalServerInCsharp
                 else
                     lastClientCallAt = DateTime.Now;*/
 
-                if (receivedTimeGraph) 
+                while (clientRequestQueue.Count > 0 && callTreeStack.Count > 0)
+                {
+                    if (writeLog)
+                        Console.WriteLine("Deque and Pop : free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
+                    HttpListenerContext sendToClient = clientRequestQueue.Dequeue();
+                    string calltreeToSend = callTreeStack.Pop();
+                    ResponseHttp(sendToClient, calltreeToSend);
+                    numFreeClients--;
+                }
+
+                if (clientRequestQueue.Count == 6 && callTreeStack.Count == 0)
+                {
+                    //bool err = ResponseHttp(context, "DONE");
+                    /*bool err = ResponseHttp(waitingListener, "RESTART");
+                    if (err)
+                        startListenerService();*/
+                     finalOutcome = "OK";
+                     totalTime = (DateTime.Now - startTime).TotalSeconds;
+                     setKillFlag = true;
+                }
+
+                //if (receivedTimeGraph)
+                if (setKillFlag)
                 {
                     writeOutcome(false);
                     bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
                         startListenerService();
                 }
+
+                
 
                 if ((DateTime.Now - startTime).TotalSeconds > 7200)
                 {
@@ -171,7 +206,7 @@ namespace LocalServerInCsharp
         {
             startTime = DateTime.Now;
             Process p = new Process();
-            p.StartInfo.FileName = @"E:\HttpCorral\AddOns\DistributedService\Client\Client\bin\Debug\Client.exe";
+            p.StartInfo.FileName = listenerExecutablePath;
             //p.StartInfo.Arguments = fileName +
             //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
             //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
@@ -187,7 +222,7 @@ namespace LocalServerInCsharp
         {
             startTime = DateTime.Now;
             numClients = 0;
-            numFreeClients = 0;
+            numFreeClients = 4;
             numSplits = 0;
             startFirstJob = false;
             callTreeStack.Clear();
@@ -216,23 +251,29 @@ namespace LocalServerInCsharp
             numFreeClients++;
             if (outcome.Equals("NOK"))
             {
-                bool err = ResponseHttp(context, "kill");
+                //bool err = ResponseHttp(context, "kill");
+                /*bool err = ResponseHttp(waitingListener, "RESTART");
                 if (err)
-                    handleClientCrash();
+                    startListenerService();*/
                 finalOutcome = "NOK";
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
+                setKillFlag = true;
             }
             else
             {
-                if (numFreeClients == numClients && callTreeStack.Count == 0)
-                {
-                    bool err = ResponseHttp(context, "DONE");
+                //Console.WriteLine("free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
+                //Console.ReadLine();
+                //if (clientRequestQueue.Count == 4 && callTreeStack.Count == 0)
+                //{
+                    //bool err = ResponseHttp(context, "DONE");
+                    /*bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
-                        handleClientCrash();
-                    finalOutcome = "OK";
-                    totalTime = (DateTime.Now - startTime).TotalSeconds;
-                }
-                else
+                        startListenerService();*/
+               //     finalOutcome = "OK";
+               //     totalTime = (DateTime.Now - startTime).TotalSeconds;
+               //     setKillFlag = true;
+                //}
+                //else
                 {
                     bool err = ResponseHttp(context, "CONTINUE");
                     if (err)
@@ -274,15 +315,19 @@ namespace LocalServerInCsharp
             }
             else
             {
-                if (callTreeStack.Count == 0)
-                    clientRequestQueue.Enqueue(context);
-                else
+                reply = "WAITFORCALLTREE";
+                bool err = ResponseHttp(context, reply);
+                if (err)
+                    handleClientCrash();
+                //if (callTreeStack.Count == 0)
+                //clientRequestQueue.Enqueue(context);
+                /*else
                 {
                     reply = callTreeStack.Pop();
                     bool err = ResponseHttp(context, reply);
                     if (err)
                         handleClientCrash();
-                }
+                }*/
             }            
         }
 
@@ -302,57 +347,12 @@ namespace LocalServerInCsharp
 
         static void sendCalltree(HttpListenerContext context)
         {
-            string reply;
+            //string reply;
             if (writeLog)
                 Console.WriteLine("Stack Count : " + callTreeStack.Count);
-
-            /*if (setKillFlag)
-            {
-                ResponseHttp(context, "kill");
-                finalOutcome = "NOK";
-                totalTime = (DateTime.Now - startTime).TotalSeconds;
-                while (!receivedTimeGraph)
-                {//Wait for timeGraph to Arrive
-                }
-                writeOutcome();
-                //Console.WriteLine("Verification Finished : Outcome NOK");
-                //Console.WriteLine("Number of Splits : " + numSplits);
-                //Console.WriteLine("Time Taken : " + (DateTime.Now - startTime).TotalSeconds);
-                ResponseHttp(waitingListener, "RESTART");
-            }*/
-            //else
-            {
-                if (callTreeStack.Count == 0)
-                {
-                    clientRequestQueue.Enqueue(context);
-                    numFreeClients++;
-                    //ResponseHttp(context, "UNAVAILABLE");
-                    /*if (clientRequestQueue.Count == numClients)
-                    {
-                        ResponseHttp(context, "DONE");
-                        finalOutcome = "OK";
-                        totalTime = (DateTime.Now - startTime).TotalSeconds;
-                        while (!receivedTimeGraph)
-                        {//Wait for timeGraph to Arrive
-                        }
-                        writeOutcome();
-                        //Console.WriteLine("Verification Finished : Outcome OK");
-                        //Console.WriteLine("Number of Splits : " + numSplits);
-                        //Console.WriteLine("Time Taken : " + (DateTime.Now - startTime).TotalSeconds);
-                        ResponseHttp(waitingListener, "RESTART");
-                    }*/
-                }
-                else
-                {
-                    numFreeClients--;
-                    reply = callTreeStack.Pop();
-                    if (writeLog)
-                        Console.WriteLine("Removing : calltreeStack count: " + callTreeStack.Count);
-                    bool err = ResponseHttp(context, reply);
-                    if (err)
-                        handleClientCrash();
-                }
-            }
+            clientRequestQueue.Enqueue(context);
+            if (writeLog)
+                Console.WriteLine("Enqueue " + clientRequestQueue.Count);
         }
 
         public static void writeOutcome(bool timedOut)
@@ -360,7 +360,8 @@ namespace LocalServerInCsharp
             string outFile = workingFile + ".txt";
             string toWrite;
             if (!timedOut)
-                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + timeGraph;
+                //toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + timeGraph;
+                toWrite = finalOutcome + "\n" + totalTime.ToString();
             else
                 toWrite = "TIMEDOUT";
             File.WriteAllText(outFile, toWrite);

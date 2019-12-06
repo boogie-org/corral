@@ -1,6 +1,7 @@
 ﻿
 // A C# program for Client 
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.Http;
@@ -17,6 +18,7 @@ namespace ClientSource
     class Program
     {
         public static List<Process> corralProcessList;
+        public static string corralExecutablePath;
 
         // Main Method 
         static void Main(string[] args)
@@ -94,7 +96,7 @@ namespace ClientSource
             //corralProcessList.Clear();
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 6; i++)
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
                 runCorral(fileName);
@@ -103,8 +105,13 @@ namespace ClientSource
 
         static void runCorral(string fileName)
         {
+            corralExecutablePath = Directory.GetCurrentDirectory();
+            corralExecutablePath = corralExecutablePath.Substring(0, corralExecutablePath.Length-75);
+            corralExecutablePath = corralExecutablePath + @"bin\Debug\corral.exe";
+            //Console.WriteLine(corralExecutablePath);
+            //Console.ReadLine();
             Process p = new Process();
-            p.StartInfo.FileName = @"E:\HttpCorral\bin\Debug\corral.exe ";
+            p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName +
                 " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
                 " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
