@@ -16,7 +16,7 @@ while [ -h "$SOURCE" ]; do
 done
 CORRAL_ROOT="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 BUILD_TYPE="Debug"
-CORRAL="$CORRAL_ROOT/$BUILD_TYPE/Corral.exe"
+CORRAL="$CORRAL_ROOT/$BUILD_TYPE/corral.exe"
 
 if [[ ! -x "$MONO" ]]; then
     echo "Error: Corral requires Mono to run on non-Windows systems."
