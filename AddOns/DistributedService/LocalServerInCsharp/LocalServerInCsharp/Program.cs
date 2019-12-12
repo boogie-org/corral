@@ -15,7 +15,7 @@ namespace LocalServerInCsharp
         static HttpListener _httpListener = new HttpListener();
         public static int numClients = 0;
         public static int numFreeClients = 0;
-        public static int maxClients = 4;
+        public static int maxClients;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
@@ -43,6 +43,8 @@ namespace LocalServerInCsharp
 
         static void Main(string[] args)
         {
+            Config configuration = new Config();
+            maxClients = configuration.numMaxClients;
             numClients = 0;
             startFirstJob = false;
             listenerExecutablePath = Directory.GetCurrentDirectory();
@@ -50,7 +52,7 @@ namespace LocalServerInCsharp
             listenerExecutablePath = listenerExecutablePath + @"Client\Client\bin\Debug\Client.exe";
             //Console.WriteLine(listenerExecutablePath);
             //Console.ReadLine();
-            inputFilesDirectory = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 82);
+            inputFilesDirectory = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 89);
             inputFilesDirectory = inputFilesDirectory + @"copyFiles\" ;
             //Console.WriteLine(inputFilesDirectory);
             //Console.ReadLine();
@@ -319,7 +321,12 @@ namespace LocalServerInCsharp
 
         public static int findClientIDOfLargestQueue()
         {
-            int maxQueueSize = 0;
+            int switchForSingleClient;
+            if (maxClients == 1)
+                switchForSingleClient = 0;
+            else
+                switchForSingleClient = 1;
+            int maxQueueSize = switchForSingleClient;
             int clientIDOfLargestQueue = -1;
             for (int i = 0; i < clientCalltreeQueue.Length; i++)
             {
@@ -329,7 +336,7 @@ namespace LocalServerInCsharp
                     clientIDOfLargestQueue = i;
                 }
             }
-            if (maxQueueSize == 0)
+            if (maxQueueSize == switchForSingleClient)
                 return -1;
             else
                 return clientIDOfLargestQueue;

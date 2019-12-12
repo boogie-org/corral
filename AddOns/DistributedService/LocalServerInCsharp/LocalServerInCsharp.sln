@@ -1,7 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Express 2012 for Windows Desktop
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29519.87
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocalServerInCsharp", "LocalServerInCsharp\LocalServerInCsharp.csproj", "{99FAD1C1-4C51-42DA-8A8B-6C7E3B4F4DB3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Client", "..\Client\Client\Client.csproj", "{F2AF6BEB-EBA6-46FE-987A-8438603C4290}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,8 +17,15 @@ Global
 		{99FAD1C1-4C51-42DA-8A8B-6C7E3B4F4DB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{99FAD1C1-4C51-42DA-8A8B-6C7E3B4F4DB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{99FAD1C1-4C51-42DA-8A8B-6C7E3B4F4DB3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2AF6BEB-EBA6-46FE-987A-8438603C4290}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2AF6BEB-EBA6-46FE-987A-8438603C4290}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2AF6BEB-EBA6-46FE-987A-8438603C4290}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2AF6BEB-EBA6-46FE-987A-8438603C4290}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AE77E083-C703-4418-A89F-6B6708F84E7E}
 	EndGlobalSection
 EndGlobal

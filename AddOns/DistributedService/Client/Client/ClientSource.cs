@@ -11,6 +11,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
+using LocalServerInCsharp;
+
 
 namespace ClientSource
 {
@@ -19,7 +21,7 @@ namespace ClientSource
     {
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
-        public static int maxClients = 4;
+        public static int maxClients;
         // Main Method 
         static void Main(string[] args)
         {
@@ -40,7 +42,8 @@ namespace ClientSource
             HttpClient newClient = new HttpClient();
             newClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             UriBuilder serverUri = new UriBuilder("http://localhost:5000/");
-            
+            Config configuration = new Config();
+            maxClients = configuration.numMaxClients;
             //UriBuilder serverUri = new UriBuilder("http://172.27.18.129:5000/");
             Console.WriteLine("Listener Started");
             //string requestKey = Console.ReadLine();

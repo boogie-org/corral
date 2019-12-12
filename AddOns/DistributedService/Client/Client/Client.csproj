@@ -81,5 +81,11 @@
       <Private>True</Private>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\LocalServerInCsharp\LocalServerInCsharp\LocalServerInCsharp.csproj">
+      <Project>{99fad1c1-4c51-42da-8a8b-6c7e3b4f4db3}</Project>
+      <Name>LocalServerInCsharp</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
