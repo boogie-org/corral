@@ -6,6 +6,7 @@ using System.Text;
 using System.Net;
 using System.Threading;
 using System.Diagnostics;
+using DequeNet;
 
 namespace LocalServerInCsharp
 {
@@ -14,11 +15,13 @@ namespace LocalServerInCsharp
         static HttpListener _httpListener = new HttpListener();
         public static int numClients = 0;
         public static int numFreeClients = 0;
+        public static int maxClients = 4;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
         public static DateTime startTime;
-        public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
+        public static Queue<Tuple<int, HttpListenerContext>> clientRequestQueue = new Queue<Tuple<int, HttpListenerContext>>();
+        //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
         public static string[] filePaths;
@@ -29,10 +32,15 @@ namespace LocalServerInCsharp
         public static string timeGraph;
         public static string finalOutcome;
         public static double totalTime;
+        public static double resetTime;
         private static bool receivedTimeGraph = false;
+        public static bool askForResetTime = false;
+        public static int numClientsResetTimeSent = 0;
         public static DateTime lastClientCallAt;
         public static string listenerExecutablePath;
         public static string inputFilesDirectory;
+        public static Deque<string>[] clientCalltreeQueue;
+
         static void Main(string[] args)
         {
             numClients = 0;
@@ -49,6 +57,10 @@ namespace LocalServerInCsharp
             filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
             outputFolderPath = @"E:\ExperimentOutput\";
             fileQueue = new Queue<string>(filePaths);
+            clientCalltreeQueue = new Deque<string>[maxClients];
+            for (int i = 0; i < maxClients; i++)
+                clientCalltreeQueue[i] = new Deque<string>();
+            
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
             Console.WriteLine("Starting server...");
@@ -74,7 +86,14 @@ namespace LocalServerInCsharp
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
-                    addCalltree(context, body.Substring(1, body.Length - 2));
+                    body = body.Substring(1, body.Length - 2);
+                    string[] parseBody = body.Split('=');
+                    int clientID = Int16.Parse(parseBody[0]);
+                    string calltree = parseBody[1];
+                    if (writeLog)
+                        Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
+                    //Console.ReadLine();
+                    addCalltree(context, clientID, calltree);
                     if (writeLog)
                         Console.WriteLine("Adding Calltree");
                     //Console.ReadLine();
@@ -88,8 +107,9 @@ namespace LocalServerInCsharp
                     foreach (var key in allKeys)
                     {
                         msgContent.Add(key, context.Request.QueryString[key].ToString());
-                        if (writeLog)
+                        //if (writeLog)
                             Console.WriteLine(string.Format("Received message: " + context.Request.QueryString[key].ToString()));
+                        //Console.ReadLine();
                     }
                 }
                 // Now, you'll find the request URL in context.Request.Url
@@ -118,11 +138,15 @@ namespace LocalServerInCsharp
                     else if (msgContent.ContainsKey("startFirstJob"))
                         replyStartOrWaitForCalltree(context);
                     else if (msgContent.ContainsKey("requestCalltree"))
-                        sendCalltree(context);
+                        sendCalltree(context, msgContent["requestCalltree"]);
+                    else if (msgContent.ContainsKey("popFromLocalStack"))
+                        popCalltree(context, msgContent["popFromLocalStack"]);
                     else if (msgContent.ContainsKey("outcome"))
                         checkOutcome(context, msgContent["outcome"]);
-                    else if (msgContent.ContainsKey("calltree"))
-                        addCalltree(context, msgContent["calltree"]);
+                    else if (msgContent.ContainsKey("ResetTime"))
+                        addResetTime(context, msgContent["ResetTime"]);
+                    //else if (msgContent.ContainsKey("calltree"))
+                    //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
                     {
                         timeGraph = msgContent["TimeGraph"];
@@ -151,7 +175,7 @@ namespace LocalServerInCsharp
                     context.Response.Close(); // close the connection
                     Console.WriteLine("Respone given to a request.");
                 }*/
-                
+
                 //handling client crash needs BeginGetContext which is asynchronus. Getcontext blocks until receiving a request
                 /*Console.WriteLine("Time since last call : " + (DateTime.Now - lastClientCallAt).TotalSeconds);
                 if ((DateTime.Now - lastClientCallAt).TotalSeconds > 10)
@@ -159,37 +183,62 @@ namespace LocalServerInCsharp
                 else
                     lastClientCallAt = DateTime.Now;*/
 
-                while (clientRequestQueue.Count > 0 && callTreeStack.Count > 0)
+                //if (clientRequestQueue.Count == maxClients && callTreeStack.Count == 0)
+                Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
+                if (clientRequestQueue.Count == maxClients && noJobLeft() && !askForResetTime)   //If all the clients are waiting, then none of them has any job left at queue
                 {
-                    if (writeLog)
-                        Console.WriteLine("Deque and Pop : free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
-                    HttpListenerContext sendToClient = clientRequestQueue.Dequeue();
-                    string calltreeToSend = callTreeStack.Pop();
-                    ResponseHttp(sendToClient, calltreeToSend);
-                    numFreeClients--;
-                }
-
-                if (clientRequestQueue.Count == 6 && callTreeStack.Count == 0)
-                {
+                    Console.WriteLine("all clients waiting and no job left");
                     //bool err = ResponseHttp(context, "DONE");
                     /*bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
                         startListenerService();*/
                      finalOutcome = "OK";
                      totalTime = (DateTime.Now - startTime).TotalSeconds;
-                     setKillFlag = true;
+                    //setKillFlag = true;
+                    askForResetTime = true;
+                    while(clientRequestQueue.Count > 0)
+                    {
+                        Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                        HttpListenerContext sendToClient = t.Item2;
+                        ResponseHttp(sendToClient, "SendResetTime");
+                    }
+                }
+                else
+                {
+                    //Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
+                    while (clientRequestQueue.Count > 0)
+                    {
+                        if (writeLog)
+                            Console.WriteLine("Deque and Pop : free : {0}", clientRequestQueue.Count);                  
+                        int clientIDOfLargestQueue = findClientIDOfLargestQueue();
+                        if (clientIDOfLargestQueue == -1)  // No jobs available at any queue
+                            break;
+                        else
+                        {
+                            Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                            HttpListenerContext sendToClient = t.Item2;
+                            string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
+                            Console.WriteLine("Sending job from client {0} to client {1}", clientIDOfLargestQueue,
+                                t.Item1);
+                            Console.WriteLine(calltreeToSend);
+                            ResponseHttp(sendToClient, calltreeToSend);
+                            numFreeClients--;
+                        }
+                    }
                 }
 
+                if (askForResetTime && numClientsResetTimeSent == maxClients)
+                    setKillFlag = true;
+                //Console.ReadLine();
                 //if (receivedTimeGraph)
                 if (setKillFlag)
                 {
                     writeOutcome(false);
+                    //Console.ReadLine();
                     bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
                         startListenerService();
-                }
-
-                
+                }                
 
                 if ((DateTime.Now - startTime).TotalSeconds > 7200)
                 {
@@ -229,6 +278,8 @@ namespace LocalServerInCsharp
             clientRequestQueue.Clear();
             setKillFlag = false;
             receivedTimeGraph = false;
+            askForResetTime = false;
+            numClientsResetTimeSent = 0;
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
             if (fileQueue.Count == 0)
             {
@@ -244,6 +295,45 @@ namespace LocalServerInCsharp
             }
         }
 
+        public static void addResetTime(HttpListenerContext context, string msg)
+        {
+            double resetTimeByClient = double.Parse(msg);
+            resetTime = resetTime + resetTimeByClient;
+            numClientsResetTimeSent++;
+            ResponseHttp(context, "received");
+        }
+
+        public static bool noJobLeft()
+        {
+            bool isNoJobLeft = true;
+            for (int i = 0; i < maxClients; i++)
+            {
+                if (clientCalltreeQueue[i].Count > 0)
+                {
+                    isNoJobLeft = false;
+                    break;
+                }
+            }
+            return isNoJobLeft;
+        }
+
+        public static int findClientIDOfLargestQueue()
+        {
+            int maxQueueSize = 0;
+            int clientIDOfLargestQueue = -1;
+            for (int i = 0; i < clientCalltreeQueue.Length; i++)
+            {
+                if (clientCalltreeQueue[i].Count > maxQueueSize)
+                {
+                    maxQueueSize = clientCalltreeQueue[i].Count;
+                    clientIDOfLargestQueue = i;
+                }
+            }
+            if (maxQueueSize == 0)
+                return -1;
+            else
+                return clientIDOfLargestQueue;
+        }
         static void checkOutcome(HttpListenerContext context, string outcome)
         {
             if (writeLog)
@@ -309,6 +399,7 @@ namespace LocalServerInCsharp
                 reply = "YES";
                 startFirstJob = true;
                 startTime = DateTime.Now;
+                resetTime = 0;
                 bool err = ResponseHttp(context, reply);
                 if (err)
                     handleClientCrash();
@@ -331,11 +422,12 @@ namespace LocalServerInCsharp
             }            
         }
 
-        static void addCalltree(HttpListenerContext context, string calltree)
+        static void addCalltree(HttpListenerContext context, int clientID, string calltree)
         {
             string reply;
-            
-            callTreeStack.Push(calltree);
+            Console.WriteLine("client {0} adding calltree", clientID - 1);
+            //callTreeStack.Push(calltree);
+            clientCalltreeQueue[clientID-1].PushLeft(calltree);
             numSplits++;
             if (writeLog)
                 Console.WriteLine("Adding : calltreeStack count: " + callTreeStack.Count);
@@ -345,14 +437,38 @@ namespace LocalServerInCsharp
                 handleClientCrash();
         }
 
-        static void sendCalltree(HttpListenerContext context)
+        static void popCalltree(HttpListenerContext context, string idNumber)
         {
             //string reply;
+            int clientID = Int16.Parse(idNumber);
+            Console.WriteLine("pop request from client {0}", clientID-1);
             if (writeLog)
                 Console.WriteLine("Stack Count : " + callTreeStack.Count);
-            clientRequestQueue.Enqueue(context);
-            if (writeLog)
-                Console.WriteLine("Enqueue " + clientRequestQueue.Count);
+            if (clientCalltreeQueue[clientID-1].Count != 0)
+            {
+                //Console.WriteLine("Reply Pop to client " + clientID);
+                string reply = "YES";
+                clientCalltreeQueue[clientID - 1].PopLeft();
+                Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
+                //Console.ReadLine();
+                ResponseHttp(context, reply);
+            }
+            else
+            {
+                string reply = "NO";
+                ResponseHttp(context, reply);
+                
+            }                
+            //if (writeLog)
+            //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
+        }
+
+        static void sendCalltree(HttpListenerContext context, string idNumber)
+        {
+            int clientID = Int16.Parse(idNumber);
+            Tuple<int, HttpListenerContext> t = new Tuple<int, HttpListenerContext>(clientID - 1, context);
+            Console.WriteLine("Enqueued request from {0}", clientID - 1);
+            clientRequestQueue.Enqueue(t);
         }
 
         public static void writeOutcome(bool timedOut)
@@ -361,7 +477,8 @@ namespace LocalServerInCsharp
             string toWrite;
             if (!timedOut)
                 //toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + timeGraph;
-                toWrite = finalOutcome + "\n" + totalTime.ToString();
+                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" +
+                    resetTime.ToString() + "\n" + numSplits.ToString();
             else
                 toWrite = "TIMEDOUT";
             File.WriteAllText(outFile, toWrite);
@@ -374,8 +491,10 @@ namespace LocalServerInCsharp
             {
                 using (HttpListenerResponse response = context.Response)
                 {
+                    Console.WriteLine("Sending : " + msg);
                     byte[] outBytes = Encoding.UTF8.GetBytes(msg);
                     response.OutputStream.Write(outBytes, 0, outBytes.Length);
+                    Console.WriteLine("Sent");
                 }
             }
             catch (HttpListenerException)

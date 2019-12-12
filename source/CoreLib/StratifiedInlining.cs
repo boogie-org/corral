@@ -211,7 +211,7 @@ namespace CoreLib
         public HashSet<string> procsHitRecBound;
 
         /* Variables for distributed service*/
-        private DI di;
+        public DI di;
         public string clientID;
         HttpClient callServer;
         UriBuilder serverUri;
@@ -394,7 +394,7 @@ namespace CoreLib
 
         }
 
-        struct SiState
+        public struct SiState
         {
             public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
             public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
@@ -403,6 +403,7 @@ namespace CoreLib
             public DI di;
             //public HashSet<StratifiedCallSite> previousSplitSites;
             public HashSet<string> previousSplitSites;
+            public string calltreeToSend;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -423,6 +424,16 @@ namespace CoreLib
                 return ret;
             }
 
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
+                HashSet<string> previousSplitSites, string calltree)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites);
+                ret.previousSplitSites = new HashSet<string>(previousSplitSites);
+                ret.calltreeToSend = calltree;
+                return ret;
+            }
+
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites)
             {
                 SI.attachedVC = attachedVC;
@@ -437,10 +448,18 @@ namespace CoreLib
                 ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
             }
+
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites,
+                ref HashSet<string> previousSplitSites, ref string calltreeToSend)
+            {
+                ApplyState(SI, ref openCallSites);
+                previousSplitSites = this.previousSplitSites;
+                calltreeToSend = this.calltreeToSend;
+            }
         }
 
-        enum DecisionType { MUST_REACH, BLOCK };
-        class Decision : Tuple<DecisionType, int, StratifiedCallSite>
+        public enum DecisionType { MUST_REACH, BLOCK };
+        public class Decision : Tuple<DecisionType, int, StratifiedCallSite>
         {
             public Decision(DecisionType dt, int num, StratifiedCallSite cs)
                 : base(dt, num, cs) { }
@@ -1184,7 +1203,8 @@ namespace CoreLib
 
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, TimeGraph timeGraph,
-            Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar)
+            Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar, 
+            Stack<SiState> backtrack, Stack<Decision> dc)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
 
@@ -1192,8 +1212,8 @@ namespace CoreLib
             reporter.reportTraceIfNothingToExpand = true;
             var boundHit = false;
             int treesize = 0;
-            var backtrackingPoints = new Stack<SiState>();
-            var decisions = new Stack<Decision>();
+            Stack<SiState> backtrackingPoints = new Stack<SiState>(backtrack);
+            Stack<Decision> decisions = new Stack<Decision>(dc);
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>(prevMustAssertedSoFar);
             List<string> ucore = null;
             List<StratifiedCallSite> CallSitesInUCore = new List<StratifiedCallSite>();
@@ -1207,6 +1227,8 @@ namespace CoreLib
             bool pauseForDebug = false;
             bool writeLog = false;
             bool makeTimeGraph = false;
+            string lastCalltreeSent = string.Empty;
+            
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1379,18 +1401,23 @@ namespace CoreLib
                             timeGraph.startTime = DateTime.Now;
                         }
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                        decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                        applyDecisionToDI(DecisionType.BLOCK, maxVc);
-                        prover.Assert(scs.callSiteExpr, false);
-                        treesize = di.ComputeSize();
-                        tt += (DateTime.Now - st);
+                        //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                        //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                        //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                        //applyDecisionToDI(DecisionType.BLOCK, maxVc);
+                        
                         if (writeLog)
                             Console.WriteLine("splitting on : " + GetPersistentID(scs));
                         if (writeLog)
                             Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                        lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
                         replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
+                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                        decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                        prover.Assert(scs.callSiteExpr, false);
+                        treesize = di.ComputeSize();
+                        tt += (DateTime.Now - st);
                         if (writeLog)
                             Console.WriteLine(replyFromServer);
                         if (pauseForDebug)
@@ -1517,159 +1544,87 @@ namespace CoreLib
                 }
                 else
                 {
-                    if (writeLog)
-                        Console.WriteLine("block finished");
-                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    //timeGraph.AddEdgeDone("split");
+                    //if (writeLog)
+                        Console.WriteLine("block finished");                    
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                    calltreeToSend = "";
-                    break;
-                    //return outcome;
-                    /*Console.WriteLine("Before reset:");
-                    Console.WriteLine(openCallSites.Count + " " + attachedVC.Count + " " + attachedVCInv.Count + " " + parent.Count + " " + numPush);
-                    Console.WriteLine("After reset:");
-                    openCallSites.Clear();
-                    foreach (StratifiedCallSite cs in initOpenCallSites)
-                        openCallSites.Add(cs);
-                    attachedVC.Clear();
-                    attachedVCInv.Clear();
-                    parent.Clear();
-                    di = initDi.Copy();
-                    previousSplitSites.Clear();
-                    calltreeToSend = "";
-                    //prover = initProver;
-                    while (numPush > 0)
+                    if (writeLog)
                     {
-                        Pop();
+                        Console.WriteLine("Before popping last:");
+                        Console.WriteLine(calltreeToSend);
                     }
-                    //prover.Reset(prover.VCExprGen);
-                    //prover.Assert(VCExpressionGenerator.True, true);
-                    Console.WriteLine(openCallSites.Count + " " + attachedVC.Count + " " + attachedVCInv.Count + " " + parent.Count + " " + numPush);
-                    Console.ReadLine();
-                    Console.WriteLine("requesting calltree: ");
-                    replyFromServer = sendRequestToServer("requestCalltree", clientID);
-                    Console.WriteLine(replyFromServer);
-                    Console.ReadLine();
-                    string callsiteToInline = "";
-                    int mode = 0;
-                    Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
-                    for (int i = 0; i < replyFromServer.Length; i++)
+                    //calltreeToSend = popLastPartitionFromCalltree(calltreeToSend);
+                    if (writeLog)
                     {
-                        //Console.WriteLine(replyFromServer[i]);
-                        if (replyFromServer[i] == ',')
+                        Console.WriteLine("After popping last:");
+                        Console.WriteLine(calltreeToSend);
+                    }
+                    //Console.ReadLine();
+                    replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
+                    if (replyFromServer.Equals("YES"))
+                    //if (false)
+                    {
+                        //calltreeToSend = lastCalltreeSent;
+                        Decision topDecision = null;
+                        SiState topState = SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend);
+                        //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        var doneBT = false;
+                        var npops = 0;
+                        do
                         {
-                            Console.WriteLine(callsiteToInline);
-                            if (callsiteToInline.Equals("BLOCK"))
-                                mode = 1;
-                            else if (callsiteToInline.Equals("MUSTREACH"))
-                                mode = -1;
-                            else
+                            if (decisions.Count == 0)
                             {
-                                if (mode == 0) // inline callsite
-                                {
-                                    Console.WriteLine("inlining " + callsiteToInline);
-                                    StratifiedCallSite scs = null;
-                                    foreach (StratifiedCallSite cs in openCallSites)
-                                    {
-                                        if (GetPersistentID(cs).Equals(callsiteToInline))
-                                        {
-                                            scs = cs;
-                                            break;
-                                        }
-                                    }
-                                    if (scs == null)
-                                        Console.WriteLine("did not find " + callsiteToInline);
-                                    persistentIDToCallsiteMap.Add(callsiteToInline, scs);
-                                    openCallSites.Remove(scs);
-                                    var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                                    if (svc != null)
-                                    {
-                                        openCallSites.UnionWith(svc.CallSites);
-                                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                                    }                                    
-                                }
-                                else if (mode == 1) //BLOCK callsite
-                                {
-                                    Console.WriteLine("BLOCK " + callsiteToInline);
-                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
-                                    Push();
-                                    applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false);
-                                    mode = 0;
-                                    previousSplitSites.Add(callsiteToInline);
-                                }
-                                else //MUSTREACH callsite
-                                {
-                                    Console.WriteLine("MUSTREACH " + callsiteToInline);
-                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
-                                    Push();
-                                    applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
-                                    AssertMustReach(attachedVC[cs], new HashSet<Tuple<StratifiedVC, Block>>());
-                                    mode = 0;
-                                    previousSplitSites.Add(callsiteToInline);
-                                }
+                                doneBT = true;
+                                break;
                             }
-                            callsiteToInline = "";
+
+                            topDecision = decisions.Peek();
+                            topState = backtrackingPoints.Peek();
+
+                            // Pop
+                            Pop();
+                            decisions.Pop();
+                            backtrackingPoints.Pop();
+                            prevMustAsserted.Pop();
+                            npops++;
+
+                        } while (topDecision.num == 1);
+
+                        if (doneBT)
+                            break;
+
+                        topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
+                        //timeGraph.Pop(npops - 1);
+
+                        // flip the decision
+
+                        Push();
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
+
+                        if (topDecision.decisionType == DecisionType.MUST_REACH)
+                        {
+                            // Block
+                            prover.Assert(topDecision.cs.callSiteExpr, false);
+                            decisions.Push(new Decision(DecisionType.BLOCK, 0, topDecision.cs));
+                            //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
+                            prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                            treesize = di.ComputeSize();
                         }
                         else
-                            callsiteToInline = callsiteToInline + replyFromServer[i];
-                    }
-                    Console.ReadLine();*/
-                    /*Decision topDecision = null;
-                    SiState topState = SiState.SaveState(this, openCallSites, previousSplitSites);
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    var doneBT = false;
-                    var npops = 0;
-                    do
-                    {
-                        if (decisions.Count == 0)
                         {
-                            doneBT = true;
-                            break;
+                            // Must Reach
+                            decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
+                            //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
+                            prevMustAsserted.Push(
+                               AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            treesize = di.ComputeSize();
                         }
-
-                        topDecision = decisions.Peek();
-                        topState = backtrackingPoints.Peek();
-
-                        // Pop
-                        Pop();
-                        decisions.Pop();
-                        backtrackingPoints.Pop();
-                        prevMustAsserted.Pop();
-                        npops++;
-
-                    } while (topDecision.num == 1);
-
-                    if (doneBT)
-                        break;
-
-                    topState.ApplyState(this, ref openCallSites, ref previousSplitSites);
-                    timeGraph.Pop(npops - 1);
-
-                    // flip the decision
-
-                    Push();
-                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-
-                    if (topDecision.decisionType == DecisionType.MUST_REACH)
-                    {
-                        // Block
-                        prover.Assert(topDecision.cs.callSiteExpr, false);
-                        decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
-                        prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                        treesize = di.ComputeSize();
                     }
                     else
                     {
-                        // Must Reach
-                        decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
-                        applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
-                        prevMustAsserted.Push(
-                           AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
-                        treesize = di.ComputeSize();
-                    }*/
+                        calltreeToSend = "";
+                        break;
+                    }
                 }
             }
             reporter.reportTraceIfNothingToExpand = false;
@@ -1704,9 +1659,38 @@ namespace CoreLib
             return outcome;
         }
 
+        public string popLastPartitionFromCalltree(string calltree)
+        {
+            string calltreeToSend = "";
+            string[] splitCalltree = calltree.Split(',');
+            int lastDecisionLocation = 0;
+
+            for (int i = splitCalltree.Length-1; i > 0; i--)
+            {
+                if (splitCalltree[i].Equals("BLOCK") || splitCalltree[i].Equals("MUSTREACH"))
+                {
+                    lastDecisionLocation = i;
+                    break;
+                }
+                //Console.WriteLine(splitCalltree[i]);
+            }
+            for (int i = 0; i < lastDecisionLocation; i++)
+                calltreeToSend = calltreeToSend + splitCalltree[i] + ",";
+            //Console.WriteLine(calltreeToSend);
+            if (splitCalltree[lastDecisionLocation].Equals("BLOCK"))
+                calltreeToSend = calltreeToSend + "MUSTREACH," + splitCalltree[lastDecisionLocation + 1] + ",";
+            else if (splitCalltree[lastDecisionLocation].Equals("MUSTREACH"))
+                calltreeToSend = calltreeToSend + "BLOCK," + splitCalltree[lastDecisionLocation + 1] + ",";
+            else
+                Console.WriteLine("Some Error During Popping calltreeToSend");
+            //Console.WriteLine(calltreeToSend);
+            return calltreeToSend;
+        }
+
         public string sendRequestToServer(string request, string requestContent)
         {
             serverUri.Query = string.Format("{0}={1}", request, requestContent);
+            Console.WriteLine(string.Format("{0}={1}", request, requestContent));
             string replyFromServer = callServer.GetStringAsync(serverUri.Uri).Result;
             return replyFromServer;
         }
@@ -1714,7 +1698,7 @@ namespace CoreLib
         public string sendCalltreeToServer(string calltree)
         {
             serverUri.Query = string.Empty;
-            JsonContent tmp = new JsonContent(string.Format(calltree));
+            JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
             var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
             string replyFromServer = rep.Content.ReadAsStringAsync().Result;
             return replyFromServer;
@@ -2440,8 +2424,15 @@ namespace CoreLib
             string receivedCalltree = null;
             Outcome outcome = Outcome.Correct;
             TimeGraph timeGraph = new TimeGraph();
+            double resetTime = 0;
+            DateTime resetStart;
             emulateServerStack = new Stack<Tuple<int, int>>();
+            Stack<SiState> backtrackingPoints = new Stack<SiState>();
+            Stack<Decision> decisions = new Stack<Decision>();
             Stack<List<Tuple<StratifiedVC, Block>>> prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
+            DI initialDI = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
+            DagOracle initialDAG = initialDI.currentDag.Copy();
+            Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
@@ -2502,9 +2493,13 @@ namespace CoreLib
                 }
                 else
                 {
-                    if (writeLog)
-                        Console.WriteLine("Request Calltree");
+                    //if (writeLog)
+                        Console.WriteLine("Request Calltree here from client {0}", clientID);
+                    replyFromServer = null;
+                    receivedCalltree = null;
                     replyFromServer = sendRequestToServer("requestCalltree", clientID);
+                    Console.WriteLine("received reply : " + replyFromServer + " : END");
+                    Console.WriteLine("after reply");
                     if (replyFromServer.Equals("UNAVAILABLE"))
                     {
                         if (writeLog)
@@ -2512,6 +2507,8 @@ namespace CoreLib
                         CallTree = null;
                         continue;
                     }
+                    if (replyFromServer.Equals("SendResetTime"))
+                        sendRequestToServer("ResetTime", resetTime.ToString());
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -2553,12 +2550,15 @@ namespace CoreLib
                             Console.WriteLine(receivedCalltree);
                     }
                 }
-
+                resetStart = DateTime.Now;
                 attachedVC.Clear();
                 attachedVCInv.Clear();
                 parent.Clear();
                 previousSplitSites.Clear();
                 prevMustAsserted.Clear();
+                backtrackingPoints.Clear();
+                decisions.Clear();
+                persistentIDToCallsiteMap.Clear();
                 //prover.Reset(prover.VCExprGen);
                 //prover.FullReset(prover.VCExprGen);
                 while (stats.stacksize > 1)
@@ -2587,8 +2587,9 @@ namespace CoreLib
 
                 MacroSI.PRINT_DEBUG("Starting forward approach...");
 
-                di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
-
+                //di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
+                di = initialDI.Copy();
+                
                 Push();
 
                 StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
@@ -2693,10 +2694,11 @@ namespace CoreLib
                 // Inline receivedCalltree and push split decisions
                 if (receivedCalltree != null)
                 {
+                    //Console.WriteLine(receivedCalltree);
                     calltreeToSend = receivedCalltree;
                     string callsiteToInline = "";
                     int mode = 0;
-                    Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
+                    List<string> inlinedCallsites = new List<string>();
                     for (int i = 0; i < receivedCalltree.Length; i++)
                     {
                         //Console.WriteLine(replyFromServer[i]);
@@ -2712,7 +2714,7 @@ namespace CoreLib
                             {
                                 if (mode == 0) // inline callsite
                                 {
-                                    if (writeLog)
+                                    //if (writeLog)
                                         Console.WriteLine("inlining " + callsiteToInline);
                                     StratifiedCallSite scs = null;
                                     foreach (StratifiedCallSite cs in openCallSites)
@@ -2724,8 +2726,22 @@ namespace CoreLib
                                         }
                                     }
                                     if (scs == null)
+                                    {
                                         Console.WriteLine("did not find " + callsiteToInline);
-                                    persistentIDToCallsiteMap.Add(callsiteToInline, scs);
+                                        Console.ReadLine();
+                                        Console.WriteLine("did not find ");
+                                    }
+                                    if (!inlinedCallsites.Contains(GetPersistentID(scs)))
+                                        inlinedCallsites.Add(GetPersistentID(scs));
+                                    else
+                                        Console.WriteLine("ALREADY INLINED : " + GetPersistentID(scs));
+                                    if (!persistentIDToCallsiteMap.ContainsKey(callsiteToInline))
+                                        persistentIDToCallsiteMap.Add(callsiteToInline, scs);
+                                    else
+                                    {
+                                        Console.WriteLine("ALREADY INLINED 2 : " + callsiteToInline);
+                                        Console.ReadLine();
+                                    }
                                     openCallSites.Remove(scs);
                                     var vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                                     if (vc != null)
@@ -2736,27 +2752,40 @@ namespace CoreLib
                                 }
                                 else if (mode == 1) //BLOCK callsite
                                 {
-                                    if (writeLog)
+                                    //if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
-                                    prover.Assert(cs.callSiteExpr, false);
-                                    applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    mode = 0;
                                     previousSplitSites.Add(callsiteToInline);
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                    decisions.Push(new Decision(DecisionType.BLOCK, 0, cs));
+                                    //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
+                                    prover.Assert(cs.callSiteExpr, false);                                    
+                                    mode = 0;                                    
                                 }
                                 else //MUSTREACH callsite
                                 {
-                                    if (writeLog)
+                                    //if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
-                                    applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
+                                    previousSplitSites.Add(callsiteToInline);
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));                                    
+                                    decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
+                                    //try
+                                    {
+                                        //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
+                                    }
+                                    //catch (KeyNotFoundException e)
+                                    //
+                                    //    Console.WriteLine(e.Message);
+                                    //    Console.ReadLine();
+                                    //}
                                     prevMustAsserted.Push(AssertMustReach(attachedVC[cs], PrevAsserted()));
                                     //AssertMustReach(attachedVC[cs], new HashSet<Tuple<StratifiedVC, Block>>());
                                     mode = 0;
-                                    previousSplitSites.Add(callsiteToInline);
+                                    
                                 }
                             }
                             callsiteToInline = "";
@@ -2772,7 +2801,7 @@ namespace CoreLib
                         childNodeInTimegraph = timeGraphCurrentState.Item2;
                     }
                 }
-
+                resetTime = resetTime + (DateTime.Now - resetStart).TotalSeconds;
                 // Stratified Search
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "nounder")
                 {
@@ -2796,7 +2825,8 @@ namespace CoreLib
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled)
                 {
                     Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
-                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted);
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                        backtrackingPoints, decisions);
                 }
                 else
                 {
@@ -2867,7 +2897,7 @@ namespace CoreLib
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
                 if (writeLog)
                     Console.WriteLine("HERE");
-                if (writeLog)
+                //if (writeLog)
                     Console.WriteLine(replyFromServer);
                 if (writeLog)
                     Console.WriteLine("HERE");
@@ -3308,31 +3338,31 @@ namespace CoreLib
 
     public enum MERGING_STRATEGY { NONE, FIRST, RANDOM_PICK, RANDOM, MAXC, OPT };
 
-    class DI
+    public class DI
     {    
         MERGING_STRATEGY strategy;
 
         public bool disabled { get; private set; }
         public TimeSpan timeTaken { get; private set; }
 
-        StratifiedInlining SI;
+        public StratifiedInlining SI;
 
-        Dictionary<StratifiedCallSite, StratifiedVC> containingVC;
-        Dictionary<StratifiedVC, int[]> vcToRecVector;
+        public Dictionary<StratifiedCallSite, StratifiedVC> containingVC;
+        public Dictionary<StratifiedVC, int[]> vcToRecVector;
 
-        ProgramDisjointness Disj;
+        public ProgramDisjointness Disj;
         IndexComputer IndexC;
 
         // For Merging (computed once)
-        static DagOracle optimalDag = null;
+        public static DagOracle optimalDag = null;
 
-        DagOracle currentDag;
+        public DagOracle currentDag;
         BijectiveDictionary<StratifiedVC, DagOracle.DagNode> vcNodeMap;
         BijectiveDictionary<DagOracle.DagNode, DagOracle.DagNode> currentOptNodeMapping;
 
         Random random;
 
-        private DI()
+        public DI()
         { }
 
         public DI(StratifiedInlining SI, bool disabled)
@@ -3444,7 +3474,22 @@ namespace CoreLib
         {
             var ret = new HashSet<StratifiedVC>();
             var disj = currentDag.AllDisjointNodes();
-            disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
+            var v = vcNodeMap[vc];
+            var disjv = disj[v];
+            foreach (var n in disjv)
+            {
+                try
+                {
+                    ret.Add(vcNodeMap[n]);
+                }
+                catch (KeyNotFoundException e)
+                {
+                    Console.WriteLine(e.Message);
+                    Console.WriteLine(n.ToString());
+                    Console.ReadLine();
+                }
+            }
+            //disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));
             return ret;
         }
 

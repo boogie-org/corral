@@ -19,7 +19,7 @@ namespace ClientSource
     {
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
-
+        public static int maxClients = 4;
         // Main Method 
         static void Main(string[] args)
         {
@@ -96,7 +96,7 @@ namespace ClientSource
             //corralProcessList.Clear();
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < maxClients; i++)
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
                 runCorral(fileName);
