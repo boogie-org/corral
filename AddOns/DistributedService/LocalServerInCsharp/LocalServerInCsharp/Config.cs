@@ -11,7 +11,7 @@ namespace LocalServerInCsharp
         public int numMaxClients;
         public Config()
         {
-            numMaxClients = 4;
+            numMaxClients = 8;
         }
     }
 }

@@ -221,6 +221,7 @@ namespace CoreLib
         int parentNodeInTimegraph;
         int childNodeInTimegraph;
         Stack<Tuple<int, int>> emulateServerStack;
+        public static double communicationTime = 0;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
 
@@ -335,6 +336,7 @@ namespace CoreLib
             serverUri = new UriBuilder("http://localhost:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
+            communicationTime = 0;
         }
 
         /* depth in the call tree */
@@ -1605,7 +1607,7 @@ namespace CoreLib
                         {
                             // Block
                             prover.Assert(topDecision.cs.callSiteExpr, false);
-                            decisions.Push(new Decision(DecisionType.BLOCK, 0, topDecision.cs));
+                            decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             treesize = di.ComputeSize();
@@ -1691,7 +1693,9 @@ namespace CoreLib
         {
             serverUri.Query = string.Format("{0}={1}", request, requestContent);
             Console.WriteLine(string.Format("{0}={1}", request, requestContent));
+            DateTime communicationStartTime = DateTime.Now;
             string replyFromServer = callServer.GetStringAsync(serverUri.Uri).Result;
+            communicationTime =  communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
             return replyFromServer;
         }
 
@@ -1699,8 +1703,10 @@ namespace CoreLib
         {
             serverUri.Query = string.Empty;
             JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
+            DateTime communicationStartTime = DateTime.Now;
             var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
             string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
             return replyFromServer;
         }
 
@@ -2508,7 +2514,7 @@ namespace CoreLib
                         continue;
                     }
                     if (replyFromServer.Equals("SendResetTime"))
-                        sendRequestToServer("ResetTime", resetTime.ToString());
+                        sendRequestToServer("ResetTime", string.Format("{0},{1}", communicationTime, resetTime));
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -2759,7 +2765,7 @@ namespace CoreLib
                                     previousSplitSites.Add(callsiteToInline);
                                     backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    decisions.Push(new Decision(DecisionType.BLOCK, 0, cs));
+                                    decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
                                     prover.Assert(cs.callSiteExpr, false);                                    
                                     mode = 0;                                    

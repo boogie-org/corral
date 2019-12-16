@@ -33,6 +33,7 @@ namespace LocalServerInCsharp
         public static string finalOutcome;
         public static double totalTime;
         public static double resetTime;
+        public static double communicationTime;
         private static bool receivedTimeGraph = false;
         public static bool askForResetTime = false;
         public static int numClientsResetTimeSent = 0;
@@ -242,7 +243,7 @@ namespace LocalServerInCsharp
                         startListenerService();
                 }                
 
-                if ((DateTime.Now - startTime).TotalSeconds > 7200)
+                if ((DateTime.Now - startTime).TotalSeconds > 3600)
                 {
                     writeOutcome(true);
                     //ResponseHttp(waitingListener, "RESTART");
@@ -282,6 +283,9 @@ namespace LocalServerInCsharp
             receivedTimeGraph = false;
             askForResetTime = false;
             numClientsResetTimeSent = 0;
+            clientCalltreeQueue = new Deque<string>[maxClients];
+            for (int i = 0; i < maxClients; i++)
+                clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
             if (fileQueue.Count == 0)
             {
@@ -299,8 +303,11 @@ namespace LocalServerInCsharp
 
         public static void addResetTime(HttpListenerContext context, string msg)
         {
-            double resetTimeByClient = double.Parse(msg);
+            string[] parsedMessage = msg.Split(',');
+            double communicationTimeByClient = double.Parse(parsedMessage[0]);
+            double resetTimeByClient = double.Parse(parsedMessage[1]);
             resetTime = resetTime + resetTimeByClient;
+            communicationTime = communicationTime + communicationTimeByClient; 
             numClientsResetTimeSent++;
             ResponseHttp(context, "received");
         }
@@ -407,6 +414,7 @@ namespace LocalServerInCsharp
                 startFirstJob = true;
                 startTime = DateTime.Now;
                 resetTime = 0;
+                communicationTime = 0;
                 bool err = ResponseHttp(context, reply);
                 if (err)
                     handleClientCrash();
@@ -485,7 +493,8 @@ namespace LocalServerInCsharp
             if (!timedOut)
                 //toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + timeGraph;
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" +
-                    resetTime.ToString() + "\n" + numSplits.ToString();
+                    resetTime.ToString() + "\n" + communicationTime.ToString() +
+                    "\n" + numSplits.ToString();
             else
                 toWrite = "TIMEDOUT";
             File.WriteAllText(outFile, toWrite);
