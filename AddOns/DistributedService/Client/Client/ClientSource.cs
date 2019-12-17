@@ -121,7 +121,9 @@ namespace ClientSource
             p.StartInfo.UseShellExecute = true;
             p.StartInfo.CreateNoWindow = false;
             p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-            
+            //p.StartInfo.CreateNoWindow = true;
+            //p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.RedirectStandardOutput = true;
             p.Start();
             corralProcessList.Add(p);
             //Process.Start(@"F:\00ResearchWork\HTTPCorral\client.exe");

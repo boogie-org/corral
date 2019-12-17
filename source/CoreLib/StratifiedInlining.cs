@@ -1546,7 +1546,7 @@ namespace CoreLib
                 }
                 else
                 {
-                    //if (writeLog)
+                    if (writeLog)
                         Console.WriteLine("block finished");                    
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
@@ -2499,13 +2499,15 @@ namespace CoreLib
                 }
                 else
                 {
-                    //if (writeLog)
+                    if (writeLog)
                         Console.WriteLine("Request Calltree here from client {0}", clientID);
                     replyFromServer = null;
                     receivedCalltree = null;
                     replyFromServer = sendRequestToServer("requestCalltree", clientID);
-                    Console.WriteLine("received reply : " + replyFromServer + " : END");
-                    Console.WriteLine("after reply");
+                    if (writeLog)
+                        Console.WriteLine("received reply : " + replyFromServer + " : END");
+                    if (writeLog)
+                        Console.WriteLine("after reply");
                     if (replyFromServer.Equals("UNAVAILABLE"))
                     {
                         if (writeLog)
@@ -2733,9 +2735,12 @@ namespace CoreLib
                                     }
                                     if (scs == null)
                                     {
-                                        Console.WriteLine("did not find " + callsiteToInline);
-                                        Console.ReadLine();
-                                        Console.WriteLine("did not find ");
+                                        if (writeLog)
+                                        {
+                                            Console.WriteLine("did not find " + callsiteToInline);
+                                            Console.ReadLine();
+                                            Console.WriteLine("did not find ");
+                                        }
                                     }
                                     if (!inlinedCallsites.Contains(GetPersistentID(scs)))
                                         inlinedCallsites.Add(GetPersistentID(scs));
@@ -2746,7 +2751,7 @@ namespace CoreLib
                                     else
                                     {
                                         Console.WriteLine("ALREADY INLINED 2 : " + callsiteToInline);
-                                        Console.ReadLine();
+                                        //Console.ReadLine();
                                     }
                                     openCallSites.Remove(scs);
                                     var vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
@@ -2758,7 +2763,7 @@ namespace CoreLib
                                 }
                                 else if (mode == 1) //BLOCK callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
@@ -2772,7 +2777,7 @@ namespace CoreLib
                                 }
                                 else //MUSTREACH callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
@@ -2903,7 +2908,7 @@ namespace CoreLib
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
                 if (writeLog)
                     Console.WriteLine("HERE");
-                //if (writeLog)
+                if (writeLog)
                     Console.WriteLine(replyFromServer);
                 if (writeLog)
                     Console.WriteLine("HERE");
@@ -2931,7 +2936,8 @@ namespace CoreLib
                 }
                 //Console.WriteLine(" :end");
                 sendTimeGraph = sendTimeGraph + " :end";
-                Console.WriteLine(sendTimeGraph);
+                if (writeLog)
+                    Console.WriteLine(sendTimeGraph);
                 //Console.ReadLine();
                 sendRequestToServer("TimeGraph", sendTimeGraph);
             }

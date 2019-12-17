@@ -243,8 +243,9 @@ namespace LocalServerInCsharp
                         startListenerService();
                 }                
 
-                if ((DateTime.Now - startTime).TotalSeconds > 3600)
+                if ((DateTime.Now - startTime).TotalSeconds > 7200)
                 {
+                    startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     writeOutcome(true);
                     //ResponseHttp(waitingListener, "RESTART");
                     bool err = ResponseHttp(waitingListener, "RESTART");
@@ -456,7 +457,8 @@ namespace LocalServerInCsharp
         {
             //string reply;
             int clientID = Int16.Parse(idNumber);
-            Console.WriteLine("pop request from client {0}", clientID-1);
+            if (writeLog)
+                Console.WriteLine("pop request from client {0}", clientID-1);
             if (writeLog)
                 Console.WriteLine("Stack Count : " + callTreeStack.Count);
             if (clientCalltreeQueue[clientID-1].Count != 0)
@@ -464,7 +466,8 @@ namespace LocalServerInCsharp
                 //Console.WriteLine("Reply Pop to client " + clientID);
                 string reply = "YES";
                 clientCalltreeQueue[clientID - 1].PopLeft();
-                Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
+                if (writeLog)
+                    Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
                 //Console.ReadLine();
                 ResponseHttp(context, reply);
             }
@@ -482,7 +485,8 @@ namespace LocalServerInCsharp
         {
             int clientID = Int16.Parse(idNumber);
             Tuple<int, HttpListenerContext> t = new Tuple<int, HttpListenerContext>(clientID - 1, context);
-            Console.WriteLine("Enqueued request from {0}", clientID - 1);
+            if (writeLog)
+                Console.WriteLine("Enqueued request from {0}", clientID - 1);
             clientRequestQueue.Enqueue(t);
         }
 
@@ -507,10 +511,12 @@ namespace LocalServerInCsharp
             {
                 using (HttpListenerResponse response = context.Response)
                 {
-                    Console.WriteLine("Sending : " + msg);
+                    if (writeLog)
+                        Console.WriteLine("Sending : " + msg);
                     byte[] outBytes = Encoding.UTF8.GetBytes(msg);
                     response.OutputStream.Write(outBytes, 0, outBytes.Length);
-                    Console.WriteLine("Sent");
+                    if (writeLog)
+                        Console.WriteLine("Sent");
                 }
             }
             catch (HttpListenerException)
@@ -522,7 +528,8 @@ namespace LocalServerInCsharp
 
         public static void handleClientCrash()
         {
-            Console.WriteLine("Assuming Client Has Crashed");
+            if (writeLog)
+                Console.WriteLine("Assuming Client Has Crashed");
             fileQueue.Enqueue(workingFile);
             bool err = ResponseHttp(waitingListener, "RESTART");
             if (err)
