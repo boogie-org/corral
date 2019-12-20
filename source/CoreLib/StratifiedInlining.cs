@@ -333,7 +333,7 @@ namespace CoreLib
             }
             callServer = new HttpClient();
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            serverUri = new UriBuilder("http://localhost:5000/");
+            serverUri = new UriBuilder("http://10.0.0.4:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
@@ -1692,7 +1692,7 @@ namespace CoreLib
         public string sendRequestToServer(string request, string requestContent)
         {
             serverUri.Query = string.Format("{0}={1}", request, requestContent);
-            Console.WriteLine(string.Format("{0}={1}", request, requestContent));
+            //Console.WriteLine(string.Format("{0}={1}", request, requestContent));
             DateTime communicationStartTime = DateTime.Now;
             string replyFromServer = callServer.GetStringAsync(serverUri.Uri).Result;
             communicationTime =  communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
@@ -2722,7 +2722,7 @@ namespace CoreLib
                             {
                                 if (mode == 0) // inline callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("inlining " + callsiteToInline);
                                     StratifiedCallSite scs = null;
                                     foreach (StratifiedCallSite cs in openCallSites)

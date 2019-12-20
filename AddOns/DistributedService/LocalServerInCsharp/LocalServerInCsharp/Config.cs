@@ -9,9 +9,13 @@ namespace LocalServerInCsharp
     public class Config
     {
         public int numMaxClients;
+        public int numListeners;
+        public bool startLocalListener;
         public Config()
         {
-            numMaxClients = 8;
+            startLocalListener = false;
+            numMaxClients = 35;
+            numListeners = 1;
         }
     }
 }

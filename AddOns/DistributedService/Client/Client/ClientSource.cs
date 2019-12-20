@@ -41,7 +41,7 @@ namespace ClientSource
         {
             HttpClient newClient = new HttpClient();
             newClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            UriBuilder serverUri = new UriBuilder("http://localhost:5000/");
+            UriBuilder serverUri = new UriBuilder("http://10.0.0.4:5000/");
             Config configuration = new Config();
             maxClients = configuration.numMaxClients;
             //UriBuilder serverUri = new UriBuilder("http://172.27.18.129:5000/");
@@ -118,9 +118,9 @@ namespace ClientSource
             p.StartInfo.Arguments = fileName +
                 " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
                 " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
-            p.StartInfo.UseShellExecute = true;
-            p.StartInfo.CreateNoWindow = false;
-            p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.CreateNoWindow = false;
+            //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;
             //p.StartInfo.RedirectStandardOutput = true;

@@ -16,6 +16,7 @@ namespace LocalServerInCsharp
         public static int numClients = 0;
         public static int numFreeClients = 0;
         public static int maxClients;
+        public static int maxListeners;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
@@ -26,7 +27,8 @@ namespace LocalServerInCsharp
         public static bool writeLog = false;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
-        public static HttpListenerContext waitingListener;
+        public static Queue<HttpListenerContext> waitingListener;
+        public static Queue<HttpListenerContext> initListener;
         public static string outputFolderPath;
         public static string workingFile;
         public static string timeGraph;
@@ -45,7 +47,10 @@ namespace LocalServerInCsharp
         static void Main(string[] args)
         {
             Config configuration = new Config();
-            maxClients = configuration.numMaxClients;
+            maxClients = configuration.numMaxClients * configuration.numListeners;
+            maxListeners = configuration.numListeners;
+            waitingListener = new Queue<HttpListenerContext>();
+            initListener = new Queue<HttpListenerContext>();
             numClients = 0;
             startFirstJob = false;
             listenerExecutablePath = Directory.GetCurrentDirectory();
@@ -67,11 +72,13 @@ namespace LocalServerInCsharp
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
             Console.WriteLine("Starting server...");
-            _httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
+            //_httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
+            _httpListener.Prefixes.Add("http://10.0.0.4:5000/");
             _httpListener.Start(); // start server (Run application as Administrator!)
             Console.WriteLine("Server started.");
-            Console.WriteLine("Starting Listener...");
-            startListenerService();
+            Console.WriteLine("Waiting for Listener...");
+            if (configuration.startLocalListener)
+                startListenerService();
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
         }
@@ -89,6 +96,7 @@ namespace LocalServerInCsharp
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
+                    //Console.WriteLine(body);
                     body = body.Substring(1, body.Length - 2);
                     string[] parseBody = body.Split('=');
                     int clientID = Int16.Parse(parseBody[0]);
@@ -110,7 +118,7 @@ namespace LocalServerInCsharp
                     foreach (var key in allKeys)
                     {
                         msgContent.Add(key, context.Request.QueryString[key].ToString());
-                        //if (writeLog)
+                        if (writeLog)
                             Console.WriteLine(string.Format("Received message: " + context.Request.QueryString[key].ToString()));
                         //Console.ReadLine();
                     }
@@ -135,7 +143,7 @@ namespace LocalServerInCsharp
                     if (msgContent.ContainsKey("start"))
                         startVerification(context);
                     else if (msgContent.ContainsKey("ListenerWaitingForRestart"))
-                        waitingListener = context;
+                        waitingListener.Enqueue(context);
                     else if (msgContent.ContainsKey("requestID"))
                         assignIDtoClient(context);
                     else if (msgContent.ContainsKey("startFirstJob"))
@@ -187,10 +195,12 @@ namespace LocalServerInCsharp
                     lastClientCallAt = DateTime.Now;*/
 
                 //if (clientRequestQueue.Count == maxClients && callTreeStack.Count == 0)
-                Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
+                if (writeLog)
+                    Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
                 if (clientRequestQueue.Count == maxClients && noJobLeft() && !askForResetTime)   //If all the clients are waiting, then none of them has any job left at queue
                 {
-                    Console.WriteLine("all clients waiting and no job left");
+                    if (writeLog)
+                        Console.WriteLine("all clients waiting and no job left");
                     //bool err = ResponseHttp(context, "DONE");
                     /*bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
@@ -221,9 +231,12 @@ namespace LocalServerInCsharp
                             Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
                             HttpListenerContext sendToClient = t.Item2;
                             string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
-                            Console.WriteLine("Sending job from client {0} to client {1}", clientIDOfLargestQueue,
-                                t.Item1);
-                            Console.WriteLine(calltreeToSend);
+                            if (writeLog)
+                            {
+                                Console.WriteLine("Sending job from client {0} to client {1}", clientIDOfLargestQueue,
+                                    t.Item1);
+                                Console.WriteLine(calltreeToSend);
+                            }
                             ResponseHttp(sendToClient, calltreeToSend);
                             numFreeClients--;
                         }
@@ -238,19 +251,19 @@ namespace LocalServerInCsharp
                 {
                     writeOutcome(false);
                     //Console.ReadLine();
-                    bool err = ResponseHttp(waitingListener, "RESTART");
-                    if (err)
-                        startListenerService();
+                    while (waitingListener.Count > 0)
+                        ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    /*if (err)
+                        startListenerService();*/
                 }                
 
-                if ((DateTime.Now - startTime).TotalSeconds > 7200)
+                if ((DateTime.Now - startTime).TotalSeconds > 3600)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     writeOutcome(true);
                     //ResponseHttp(waitingListener, "RESTART");
-                    bool err = ResponseHttp(waitingListener, "RESTART");
-                    if (err)
-                        startListenerService();
+                    while (waitingListener.Count > 0)
+                        ResponseHttp(waitingListener.Dequeue(), "RESTART");
                 }
             }
         }
@@ -273,6 +286,20 @@ namespace LocalServerInCsharp
 
         static void startVerification(HttpListenerContext context)
         {
+            initListener.Enqueue(context);
+            if (initListener.Count < maxListeners)
+            {                
+                Console.WriteLine("{0} out of {1} listeners online", initListener.Count, maxListeners);                
+            }
+            else
+            {
+                initiateAllListeners();
+            }            
+        }
+
+        public static void initiateAllListeners()
+        {
+            Console.WriteLine("starting verification");
             startTime = DateTime.Now;
             numClients = 0;
             numFreeClients = 4;
@@ -296,9 +323,11 @@ namespace LocalServerInCsharp
             else
             {
                 workingFile = fileQueue.Dequeue();
-                bool err = ResponseHttp(context, workingFile);
+                while (initListener.Count > 0)
+                    ResponseHttp(initListener.Dequeue(), workingFile);
+                /*bool err = ResponseHttp(context, workingFile);
                 if (err)
-                    handleClientCrash();
+                    handleClientCrash();*/
             }
         }
 
@@ -441,7 +470,8 @@ namespace LocalServerInCsharp
         static void addCalltree(HttpListenerContext context, int clientID, string calltree)
         {
             string reply;
-            Console.WriteLine("client {0} adding calltree", clientID - 1);
+            if (writeLog)
+                Console.WriteLine("client {0} adding calltree", clientID - 1);
             //callTreeStack.Push(calltree);
             clientCalltreeQueue[clientID-1].PushLeft(calltree);
             numSplits++;
@@ -528,12 +558,14 @@ namespace LocalServerInCsharp
 
         public static void handleClientCrash()
         {
-            if (writeLog)
+            //NOT IMPLEMETED
+
+            /*if (writeLog)
                 Console.WriteLine("Assuming Client Has Crashed");
             fileQueue.Enqueue(workingFile);
             bool err = ResponseHttp(waitingListener, "RESTART");
             if (err)
-                startListenerService();
+                startListenerService();*/
         }
 
     }
