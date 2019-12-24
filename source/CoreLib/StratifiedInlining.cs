@@ -14,6 +14,7 @@ using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Threading;
+//using LocalServerInCsharp;
 
 namespace CoreLib
 {
@@ -177,7 +178,7 @@ namespace CoreLib
         public static readonly string ForceInlineAttr = "ForceInline";
 
         public Stats stats;
-
+        
         /* call-site to VC map -- used for trace construction */
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
@@ -222,6 +223,7 @@ namespace CoreLib
         int childNodeInTimegraph;
         Stack<Tuple<int, int>> emulateServerStack;
         public static double communicationTime = 0;
+        //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
 
@@ -333,7 +335,8 @@ namespace CoreLib
             }
             callServer = new HttpClient();
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            serverUri = new UriBuilder("http://10.0.0.4:5000/");
+            //configuration = new Config();
+            serverUri = new UriBuilder("http://localhost:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;

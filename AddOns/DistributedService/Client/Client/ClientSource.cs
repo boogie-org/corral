@@ -41,9 +41,12 @@ namespace ClientSource
         {
             HttpClient newClient = new HttpClient();
             newClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            UriBuilder serverUri = new UriBuilder("http://10.0.0.4:5000/");
             Config configuration = new Config();
+            //UriBuilder serverUri = new UriBuilder("http://10.0.0.4:5000/");
+            UriBuilder serverUri = new UriBuilder(configuration.serverAddress);
+            
             maxClients = configuration.numMaxClients;
+            corralExecutablePath = configuration.corralExecutablePath;
             //UriBuilder serverUri = new UriBuilder("http://172.27.18.129:5000/");
             Console.WriteLine("Listener Started");
             //string requestKey = Console.ReadLine();
@@ -108,9 +111,9 @@ namespace ClientSource
 
         static void runCorral(string fileName)
         {
-            corralExecutablePath = Directory.GetCurrentDirectory();
-            corralExecutablePath = corralExecutablePath.Substring(0, corralExecutablePath.Length-75);
-            corralExecutablePath = corralExecutablePath + @"bin\Debug\corral.exe";
+            //corralExecutablePath = Directory.GetCurrentDirectory();
+            //corralExecutablePath = corralExecutablePath.Substring(0, corralExecutablePath.Length-75);
+            //corralExecutablePath = corralExecutablePath + @"bin\Debug\corral.exe";
             //Console.WriteLine(corralExecutablePath);
             //Console.ReadLine();
             Process p = new Process();

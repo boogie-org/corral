@@ -17,6 +17,7 @@ namespace LocalServerInCsharp
         public static int numFreeClients = 0;
         public static int maxClients;
         public static int maxListeners;
+        public static int timeout;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
@@ -29,7 +30,7 @@ namespace LocalServerInCsharp
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
         public static Queue<HttpListenerContext> initListener;
-        public static string outputFolderPath;
+        //public static string outputFolderPath;
         public static string workingFile;
         public static string timeGraph;
         public static string finalOutcome;
@@ -49,21 +50,24 @@ namespace LocalServerInCsharp
             Config configuration = new Config();
             maxClients = configuration.numMaxClients * configuration.numListeners;
             maxListeners = configuration.numListeners;
+            timeout = configuration.timeout;
             waitingListener = new Queue<HttpListenerContext>();
             initListener = new Queue<HttpListenerContext>();
             numClients = 0;
             startFirstJob = false;
-            listenerExecutablePath = Directory.GetCurrentDirectory();
-            listenerExecutablePath = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 49);
-            listenerExecutablePath = listenerExecutablePath + @"Client\Client\bin\Debug\Client.exe";
+            listenerExecutablePath = configuration.listenerExecutablePath;
+            //listenerExecutablePath = Directory.GetCurrentDirectory();
+            //listenerExecutablePath = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 49);
+            //listenerExecutablePath = listenerExecutablePath + @"Client\Client\bin\Debug\Client.exe";
             //Console.WriteLine(listenerExecutablePath);
             //Console.ReadLine();
-            inputFilesDirectory = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 89);
-            inputFilesDirectory = inputFilesDirectory + @"copyFiles\" ;
+            inputFilesDirectory = configuration.inputFilesDirectoryPath;
+            //inputFilesDirectory = listenerExecutablePath.Substring(0, listenerExecutablePath.Length - 89);
+            //inputFilesDirectory = inputFilesDirectory + @"copyFiles\" ;
             //Console.WriteLine(inputFilesDirectory);
             //Console.ReadLine();
             filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
-            outputFolderPath = @"E:\ExperimentOutput\";
+            //outputFolderPath = @"E:\ExperimentOutput\";
             fileQueue = new Queue<string>(filePaths);
             clientCalltreeQueue = new Deque<string>[maxClients];
             for (int i = 0; i < maxClients; i++)
@@ -73,7 +77,8 @@ namespace LocalServerInCsharp
             //    Console.WriteLine(s);
             Console.WriteLine("Starting server...");
             //_httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
-            _httpListener.Prefixes.Add("http://10.0.0.4:5000/");
+            //_httpListener.Prefixes.Add("http://10.0.0.4:5000/");
+            _httpListener.Prefixes.Add(configuration.serverAddress);
             _httpListener.Start(); // start server (Run application as Administrator!)
             Console.WriteLine("Server started.");
             Console.WriteLine("Waiting for Listener...");
@@ -257,7 +262,7 @@ namespace LocalServerInCsharp
                         startListenerService();*/
                 }                
 
-                if ((DateTime.Now - startTime).TotalSeconds > 3600)
+                if ((DateTime.Now - startTime).TotalSeconds > timeout)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     writeOutcome(true);
