@@ -441,7 +441,10 @@ namespace cba
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
-            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
+            // XXX: cannot count prover time this way because Boogie deleted this field.
+            // TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
             Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
 
 
@@ -1204,7 +1207,10 @@ namespace cba
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
-            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
+            // XXX: cannot count prover time this way because Boogie deleted this field.
+            // TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
             Console.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds.ToString("F2")));
 
 
