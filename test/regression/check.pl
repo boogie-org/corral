@@ -1,19 +1,27 @@
-$BuildConfig = "debug";
+use strict;
+use warnings;
+
+use Cwd;
+use File::Basename;
+use File::Find;
+use File::Spec;
+
+my $BuildConfig = $ENV{CONFIGURATION} || "Debug";
 
 open (FINAL_OUTPUT, "Files") || die "cannot read Files";
-@files = <FINAL_OUTPUT>;
+my @files = <FINAL_OUTPUT>;
 close (FINAL_OUTPUT);
 
 # One can give the explicit directory name to execute
 # all tests in that directory
 
-$numArgs = $#ARGV + 1;
+my $numArgs = $#ARGV + 1;
 
-$dirsGiven = 0;
-$flags = "";
-@dirs = ("");
+my $dirsGiven = 0;
+my $flags = "";
+my @dirs = ("");
 
-for($cnt = 0; $cnt < $numArgs; $cnt++) {
+for(my $cnt = 0; $cnt < $numArgs; $cnt++) {
     #print substr($ARGV[$cnt],0,1);
     if(substr($ARGV[$cnt],0,1) =~ '/') {
        $flags = "$flags $ARGV[$cnt]";
@@ -23,26 +31,24 @@ for($cnt = 0; $cnt < $numArgs; $cnt++) {
     }
 }
 
-foreach $line (@files) {
+foreach my $line (@files) {
+    chomp $line;
 
     # Spilt into file name and expected output
-    @inp = split( / +/, $line);
-    $file = $inp[0];
+    my ($file, $out) = split(/ +/, $line);
+
+    $file =~ s{\\}{/}g;
+
     # skip empty lines
     if($file eq "") {
 	    next;
     }
 
-    $out = $inp[1];
-    # Remove end of line
-    @tmp = split(/\n/, $out);
-    $out = $tmp[0];
-
     # if target directories have been given, ignore other directories
     if($dirsGiven) {
-	$found = 0;
-	for($cnt = 0; $cnt < $#dirs; $cnt++) {
-	    $dir = $dirs[$cnt];
+	my $found = 0;
+	for(my $cnt = 0; $cnt < $#dirs; $cnt++) {
+	    my $dir = $dirs[$cnt];
 	    #print $dir; print "\n";
 	    #print $file; print "\n";
             if($file =~ m/^$dir/) {
@@ -55,25 +61,48 @@ foreach $line (@files) {
     }
 
     # get directory name from the file name
-    @tmp = split(/\\/, $file);
-    $dir = $tmp[0];
-    
+    my $dir = dirname($file);
     #print "Directory given: $dir";
 
     # check if files exists
     open(TMP_HANDLE, $file) || die "File $file does not exist\n";
     close (TMP_HANDLE);
 
-    $cmd = "..\\..\\bin\\$BuildConfig\\corral.exe $file /flags:$dir\\config $flags > out";
+    my @files;
+    my $buildPath = File::Spec->catfile('..', '..', 'bin', $BuildConfig);
+    find( sub {
+        # Skip any `publish` directories
+        $File::Find::prune = 1 if $File::Find::name =~ m/\bpublish\b/;
+
+        # Only look for corral executables
+        return unless -f && /^corral([.]exe)?$/i;
+
+        push @files, $File::Find::name;
+    }, $buildPath );
+    die "No corral executable found" unless scalar(@files) > 0;
+    warn "Multiple corral executables found: @{[ join(', ', @files) ]}" unless scalar(@files) == 1;
+
+    my $corralPath = File::Spec->abs2rel($files[0], $dir);
+    my $configPath = 'config';
+    my $filePath = basename($file);
+    my $outputPath = File::Spec->catfile(cwd(), 'out');
+    my $cmd = join(' ', $corralPath, $filePath, "/flags:$configPath", $flags, '>', $outputPath);
     print $cmd; print "\n";
-    system($cmd);
+    {
+        my $wd = cwd();
+        chdir $dir;
+        system($cmd);
+        chdir $wd;
+    }
 
     # Check result
-    open(TMP_HANDLE, "out")  || die "Command did not produce an output\n";
-    @res = <TMP_HANDLE>;
+    open(TMP_HANDLE, $outputPath)  || die "Command did not produce an output\n";
+    my @res = <TMP_HANDLE>;
     close(TMP_HANDLE);
 
-    $ok = 1;
+    my @correct;
+    my $ok = 1;
+
     if($out eq "c") {
 	    @correct = grep (/^Program has no bugs/, @res);
 	    if($correct[0] =~ m/^Program has no bugs/) {
@@ -98,5 +127,3 @@ foreach $line (@files) {
 	    print "Test passed\n";
     }
 }
-
-	
