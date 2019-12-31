@@ -223,6 +223,8 @@ namespace CoreLib
         int childNodeInTimegraph;
         Stack<Tuple<int, int>> emulateServerStack;
         public static double communicationTime = 0;
+        public static double proverTime = 0;
+        public DateTime proverStartTime;
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -2519,7 +2521,11 @@ namespace CoreLib
                         continue;
                     }
                     if (replyFromServer.Equals("SendResetTime"))
-                        sendRequestToServer("ResetTime", string.Format("{0},{1}", communicationTime, resetTime));
+                    {
+                        //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
+                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5}", clientID, 
+                            communicationTime, resetTime, stats.numInlined, stats.calls, proverTime));
+                    }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -3096,7 +3102,9 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
+            proverStartTime = DateTime.Now;
             prover.Check();
+            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);

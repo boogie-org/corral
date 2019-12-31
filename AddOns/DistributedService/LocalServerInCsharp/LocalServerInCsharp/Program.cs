@@ -44,6 +44,16 @@ namespace LocalServerInCsharp
         public static string listenerExecutablePath;
         public static string inputFilesDirectory;
         public static Deque<string>[] clientCalltreeQueue;
+        public static double[] clientCommunicationTime;
+        public static double[] clientResetTime;
+        public static double[] clientNumInlinings;
+        public static double[] clientNumZ3Calls;
+        public static double[] clientZ3Time;
+        public static double[] clientIdlingTime;
+        public static double[] clientNumReset;                           //number of times a client has reset, i.e., stolen calltrees from others 
+        public static double[] clientNumForwardPops;                     //number of own calltrees popped
+        public static double[] clientNumBackwardPops;                    //number of stolen calltrees from a client
+        public static DateTime[] clientCalltreeRequestReceiveTime;
 
         static void Main(string[] args)
         {
@@ -70,6 +80,16 @@ namespace LocalServerInCsharp
             //outputFolderPath = @"E:\ExperimentOutput\";
             fileQueue = new Queue<string>(filePaths);
             clientCalltreeQueue = new Deque<string>[maxClients];
+            clientCommunicationTime = new double[maxClients];
+            clientResetTime = new double[maxClients];
+            clientNumInlinings = new double[maxClients];
+            clientNumZ3Calls = new double[maxClients];
+            clientZ3Time = new double[maxClients];
+            clientIdlingTime = new double[maxClients];
+            clientNumReset = new double[maxClients];
+            clientNumForwardPops = new double[maxClients];
+            clientNumBackwardPops = new double[maxClients];
+            clientCalltreeRequestReceiveTime = new DateTime[maxClients];
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             
@@ -98,6 +118,10 @@ namespace LocalServerInCsharp
                 List<string> allKeys = context.Request.QueryString.AllKeys.ToList();
                 if (allKeys.Count == 0)
                 {
+                    if (setKillFlag)
+                    {
+                        continue;            //Do Not accept any calltree from client while listener is set to kill and restart
+                    }
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
@@ -144,6 +168,8 @@ namespace LocalServerInCsharp
                 //}
                 if (msgContent != null)
                 {
+                    if (setKillFlag && !msgContent.ContainsKey("start"))    //Do Not accept any message from any client while listener is set to kill and restart
+                        continue;
                     //Console.ReadLine();
                     if (msgContent.ContainsKey("start"))
                         startVerification(context);
@@ -233,7 +259,9 @@ namespace LocalServerInCsharp
                             break;
                         else
                         {
+                            clientNumBackwardPops[clientIDOfLargestQueue]++;
                             Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                            clientNumReset[t.Item1]++;
                             HttpListenerContext sendToClient = t.Item2;
                             string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
                             if (writeLog)
@@ -243,6 +271,7 @@ namespace LocalServerInCsharp
                                 Console.WriteLine(calltreeToSend);
                             }
                             ResponseHttp(sendToClient, calltreeToSend);
+                            clientIdlingTime[t.Item1] = clientIdlingTime[t.Item1] + (DateTime.Now - clientCalltreeRequestReceiveTime[t.Item1]).TotalSeconds;
                             numFreeClients--;
                         }
                     }
@@ -254,7 +283,7 @@ namespace LocalServerInCsharp
                 //if (receivedTimeGraph)
                 if (setKillFlag)
                 {
-                    writeOutcome(false);
+                    writeDetailedOutcome(false);
                     //Console.ReadLine();
                     while (waitingListener.Count > 0)
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
@@ -265,7 +294,8 @@ namespace LocalServerInCsharp
                 if ((DateTime.Now - startTime).TotalSeconds > timeout)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
-                    writeOutcome(true);
+                    writeDetailedOutcome(true);
+                    setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
                     while (waitingListener.Count > 0)
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
@@ -317,6 +347,16 @@ namespace LocalServerInCsharp
             askForResetTime = false;
             numClientsResetTimeSent = 0;
             clientCalltreeQueue = new Deque<string>[maxClients];
+            Array.Clear(clientCommunicationTime, 0, maxClients);
+            Array.Clear(clientResetTime, 0, maxClients);
+            Array.Clear(clientNumInlinings, 0, maxClients);
+            Array.Clear(clientNumZ3Calls, 0, maxClients);
+            Array.Clear(clientZ3Time, 0, maxClients);
+            Array.Clear(clientIdlingTime, 0, maxClients);
+            Array.Clear(clientNumReset, 0, maxClients);
+            Array.Clear(clientNumForwardPops, 0, maxClients);
+            Array.Clear(clientNumBackwardPops, 0, maxClients);
+            Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
@@ -339,10 +379,16 @@ namespace LocalServerInCsharp
         public static void addResetTime(HttpListenerContext context, string msg)
         {
             string[] parsedMessage = msg.Split(',');
-            double communicationTimeByClient = double.Parse(parsedMessage[0]);
-            double resetTimeByClient = double.Parse(parsedMessage[1]);
-            resetTime = resetTime + resetTimeByClient;
-            communicationTime = communicationTime + communicationTimeByClient; 
+            int id = Int16.Parse(parsedMessage[0]) - 1;
+            clientCommunicationTime[id] = double.Parse(parsedMessage[1]);
+            clientResetTime[id] = double.Parse(parsedMessage[2]);
+            clientNumInlinings[id] = double.Parse(parsedMessage[3]);
+            clientNumZ3Calls[id] = double.Parse(parsedMessage[4]);
+            clientZ3Time[id] = double.Parse(parsedMessage[5]);
+            //double communicationTimeByClient = double.Parse(parsedMessage[0]);
+            //double resetTimeByClient = double.Parse(parsedMessage[1]);
+            resetTime = resetTime + clientResetTime[id];
+            communicationTime = communicationTime + clientCommunicationTime[id]; 
             numClientsResetTimeSent++;
             ResponseHttp(context, "received");
         }
@@ -505,12 +551,13 @@ namespace LocalServerInCsharp
                     Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
                 //Console.ReadLine();
                 ResponseHttp(context, reply);
+                clientNumForwardPops[clientID - 1]++;
             }
             else
             {
                 string reply = "NO";
                 ResponseHttp(context, reply);
-                
+                //clientNumReset[clientID - 1]++;
             }                
             //if (writeLog)
             //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
@@ -519,6 +566,7 @@ namespace LocalServerInCsharp
         static void sendCalltree(HttpListenerContext context, string idNumber)
         {
             int clientID = Int16.Parse(idNumber);
+            clientCalltreeRequestReceiveTime[clientID - 1] = DateTime.Now;
             Tuple<int, HttpListenerContext> t = new Tuple<int, HttpListenerContext>(clientID - 1, context);
             if (writeLog)
                 Console.WriteLine("Enqueued request from {0}", clientID - 1);
@@ -537,6 +585,36 @@ namespace LocalServerInCsharp
             else
                 toWrite = "TIMEDOUT";
             File.WriteAllText(outFile, toWrite);
+        }
+
+        public static void writeDetailedOutcome(bool timedOut)
+        {
+            string outFile = workingFile + ".txt";
+            string toWrite;
+            if (!timedOut)
+            {
+                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n";
+                File.AppendAllText(outFile, toWrite);
+                for (int i = 0; i < maxClients; i++)
+                {
+                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n",
+                        clientCommunicationTime[i], clientResetTime[i], clientNumInlinings[i], clientNumZ3Calls[i],
+                        clientZ3Time[i], clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i]);
+                    File.AppendAllText(outFile, statsPerClient);
+                }
+            }
+            else
+            {
+                toWrite = "TIMEDOUT" + "\n" + "3600" + "\n" + numSplits + "\n";
+                File.AppendAllText(outFile, toWrite);
+                for (int i = 0; i < maxClients; i++)
+                {
+                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n",
+                        clientCommunicationTime[i], clientResetTime[i], clientNumInlinings[i], clientNumZ3Calls[i],
+                        clientZ3Time[i], clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i]);
+                    File.AppendAllText(outFile, statsPerClient);
+                }
+            }
         }
 
         public static bool ResponseHttp(HttpListenerContext context, string msg)

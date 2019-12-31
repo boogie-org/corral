@@ -16,16 +16,18 @@ namespace LocalServerInCsharp
         public string corralExecutablePath;
         public string inputFilesDirectoryPath;
         public string serverAddress;
+        public bool writeDetailPerClient;
         public Config()
         {
             startLocalListener = true;
-            numMaxClients = 1;
+            numMaxClients = 8;
             numListeners = 1;
             timeout = 3600;
-            listenerExecutablePath = @"E:\HttpCorralMultiCLientDEQueue\AddOns\DistributedService\Client\Client\bin\Debug\Client.exe";
-            corralExecutablePath = @"E:\HttpCorralMultiCLientDEQueue\bin\Debug\corral.exe";
-            inputFilesDirectoryPath = @"E:\copyFiles\";
+            listenerExecutablePath = @"C:\HttpCorralMultiCLient\AddOns\DistributedService\Client\Client\bin\Debug\Client.exe";
+            corralExecutablePath = @"C:\HttpCorralMultiCLient\bin\Debug\corral.exe";
+            inputFilesDirectoryPath = @"C:\copyFiles\";
             serverAddress = "http://localhost:5000/";
+            writeDetailPerClient = true;
         }
     }
 }

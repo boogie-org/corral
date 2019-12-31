@@ -150,8 +150,14 @@ namespace ClientSource
                 //p.Close();
                 //p.CloseMainWindow();
                 //p.StandardInput.Close();
-                p.Kill();
+                if (!p.HasExited)
+                    p.Kill();
             }
+            Process killAllZ3Instances = new Process();
+            killAllZ3Instances.StartInfo.FileName = "taskkill.exe";
+            killAllZ3Instances.StartInfo.Arguments = "/F /IM z3.exe /T";
+            killAllZ3Instances.Start();
+            killAllZ3Instances.WaitForExit();
         }
 
     }
