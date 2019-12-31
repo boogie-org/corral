@@ -78,6 +78,12 @@ namespace cba
             }
 
         }
+        public static string VersionInfo()
+        {
+            var fileName = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(fileName).FileVersion;
+            return version;
+        }
 
         public static void Initialize(Configs config)
         {
@@ -184,6 +190,8 @@ namespace cba
             ////////////////////////////////////
             // Input and initialization phase
             ////////////////////////////////////
+
+            Console.WriteLine("Corral program verifier version {0}", VersionInfo());
 
             Configs config = Configs.parseCommandLine(args);
             CommandLineOptions.Install(new CommandLineOptions());
@@ -441,7 +449,10 @@ namespace cba
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
-            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
+            // XXX: cannot count prover time this way because Boogie deleted this field.
+            // TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
             Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
 
 
@@ -1204,7 +1215,10 @@ namespace cba
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
             Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
-            TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
+            // XXX: cannot count prover time this way because Boogie deleted this field.
+            // TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
+
             Console.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds.ToString("F2")));
 
 
