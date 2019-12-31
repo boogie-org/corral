@@ -35,7 +35,7 @@ deploy:
   # Publish dotnet global tool on nuget.org
   - provider: script
     script: dotnet nuget push bin/${CONFIGURATION}/Corral*.nupkg -k ${NUGET_API_KEY} -s https://api.nuget.org/v3/index.json
-    cleanup: false
+    skip_cleanup: true
     on:
       all_branches: true
       condition: $CONFIGURATION = Release && $TRAVIS_TAG =~ ^v.*$
@@ -47,7 +47,7 @@ deploy:
       secure: Rvs8L97ieP/jpN//dX7iy8xATxtfm0Amjtu3LGUuYFnKx/tuxed3UdGZoXjnIoEiFTHPbxTScaIL2VM19hIvpWZAAu5eJrByw/+EMkj3nKhWtnr37QplhINB9HBKEokzeUn8gizyXOj3BuhdKfOxvO07oss9LLK9JDlbjlR+jgjin2ftBL8swzJZhzQ/ko+Xd5rIYbB5gTS3Utlq1HdjTrURhbQWb+WcY5CEN0E1OfgSZpCl09n6JWcKkhLo3tzcvQp7D3OYtWYvTHaHENc7klYsr7JRq/FnCy40ze29ZZ6a/n/hHhlXZKsBpMxMVAW61yiFPhJCht5rzSXjEX1kA3tpVbA4kzMN4MvgGcB4+gE8ucu5JQkvbvL0/9SQ08QPS9tmbNtfX92gh7sXEcljR1Anh1k36TLONZr4ZwwEqS2GIF0pbDz7ALJyYgou8NbykkzdIj34FquoxW2w0/Uf2/o62oXg+brftDJs0zbsKiFsP/2rrmadnMw4/Pzsza5GOt4hWsTw4YfEV/AebHSIM/lP2snycGn62OZyHdllzVmXwlrwOEbCCeiOwzQ85xnG4MLo/jwlCThF31W9fR6zHanxsETPenXZ+OCbhsGpQUtAaukvpYFXzi7h4Z5+bg09Yh6RF1psn3HdG5BrZLYRJsPFiRswzZlWupHGcAKxaNM=
     file_glob: true
     file: bin/${CONFIGURATION}/Corral*.nupkg
-    cleanup: false
+    skip_cleanup: true
     on:
       all_branches: true
       condition: $CONFIGURATION = Release && $TRAVIS_TAG =~ ^v.*$
