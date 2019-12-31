@@ -28,7 +28,7 @@ script:
   - dotnet build -c ${CONFIGURATION} ${SOLUTION}
 
   # Run regression tests
-  - cd test/regression && perl check.pl
+  - (cd test/regression && perl check.pl)
 
 deploy:
 
