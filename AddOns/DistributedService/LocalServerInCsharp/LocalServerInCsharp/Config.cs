@@ -17,6 +17,8 @@ namespace LocalServerInCsharp
         public string inputFilesDirectoryPath;
         public string serverAddress;
         public bool writeDetailPerClient;
+        public bool controlSplitRate;
+        public double splitInterval;
         public Config()
         {
             startLocalListener = true;
@@ -28,6 +30,8 @@ namespace LocalServerInCsharp
             inputFilesDirectoryPath = @"C:\copyFiles\";
             serverAddress = "http://localhost:5000/";
             writeDetailPerClient = true;
+            controlSplitRate = true;
+            splitInterval = 0.5;
         }
     }
 }
