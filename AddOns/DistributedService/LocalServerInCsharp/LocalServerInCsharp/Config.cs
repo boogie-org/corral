@@ -22,7 +22,7 @@ namespace LocalServerInCsharp
         public Config()
         {
             startLocalListener = true;
-            numMaxClients = 8;
+            numMaxClients = 32;
             numListeners = 1;
             timeout = 3600;
             listenerExecutablePath = @"C:\HttpCorralMultiCLient\AddOns\DistributedService\Client\Client\bin\Debug\Client.exe";

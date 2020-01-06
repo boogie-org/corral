@@ -345,6 +345,7 @@ namespace CoreLib
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             //configuration = new Config();
             serverUri = new UriBuilder("http://localhost:5000/");
+            //serverUri = new UriBuilder("http://52.187.21.181:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
@@ -1372,20 +1373,47 @@ namespace CoreLib
                             toRemove.Add(vc);
                             continue;
                         }
-                        var score = 0;
-                        StratifiedCallSite cs = attachedVCInv[vc];
-                        if (UCoreChildrenCount.ContainsKey(cs))
+                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel")
                         {
-                            score = UCoreChildrenCount[cs];
+                            var score = 0;
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                score = UCoreChildrenCount[cs];
+                            }
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
                         }
-                        if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                        else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                         {
-                            maxVc = vc;
-                            maxVcScore = score;
+                            double score = 0;
+                            double numUnsatNodesInOwnSubtree = 0;
+                            double numUnsatNodesInSiblingSubtree = 0;
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                numUnsatNodesInOwnSubtree = UCoreChildrenCount[cs];
+                            }
+                            var disjointNodes = di.DisjointNodes(vc);
+                            foreach (StratifiedVC v in disjointNodes)
+                            {
+                                if (CallSitesInUCore.Contains(attachedVCInv[v]))
+                                    numUnsatNodesInSiblingSubtree++;
+                            }
+                            score = Math.Min(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree) / Math.Max(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree);
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
                         }
                     }
                     if (maxVc != null)
                     {
+                        //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         UCsplit += 1;
                         StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -2855,6 +2883,12 @@ namespace CoreLib
                     outcome = UnSatCoreSplitStyle(openCallSites, reporter);
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled)
+                {
+                    Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                        backtrackingPoints, decisions);
+                }
+                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled)
                 {
                     Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,

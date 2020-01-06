@@ -120,9 +120,9 @@ namespace ClientSource
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName +
                 " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
-                " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
-            p.StartInfo.UseShellExecute = false;
-            //p.StartInfo.CreateNoWindow = false;
+                " /newStratifiedInlining:ucsplitparallel2 /enableUnSatCoreExtraction:1";
+            //p.StartInfo.UseShellExecute = true;
+            p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;
