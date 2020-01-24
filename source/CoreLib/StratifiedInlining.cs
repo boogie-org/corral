@@ -225,12 +225,17 @@ namespace CoreLib
         public static double communicationTime = 0;
         public static double inliningTime = 0;
         public static double proverTime = 0;
+        public static double underApproxTime = 0;
+        public static double overApproxTime = 0;
         public static double splittingTime = 0;
         public DateTime proverStartTime;
+        public DateTime underApproxStartTime;
+        public DateTime overApproxStartTime;
         public DateTime inliningStartTime;
         public DateTime splittingStartTime;
         public DateTime lastSplitAt;
         public double nextSplitInterval = 0;
+        public HashSet<string> inlinedUniqueCallsites;
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -350,6 +355,7 @@ namespace CoreLib
             calltreeToSend = "";
             communicationTime = 0;
             lastSplitAt = DateTime.Now;
+            inlinedUniqueCallsites = new HashSet<string>();
         }
 
         /* depth in the call tree */
@@ -1308,7 +1314,7 @@ namespace CoreLib
                 Console.WriteLine("Request Calltree");
                 replyFromServer = sendRequestToServer("Calltree", clientID);
             }*/
-
+            Random rand = new Random();
             while (true)
             {
                 // Lets split when the tree has become big enough
@@ -1316,6 +1322,10 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
+
+                double v1 = rand.NextDouble();
+                double v2 = rand.NextDouble();
+
                 if (CallSitesInUCore.Count != 0)
                 {
                     foreach (StratifiedCallSite cs in CallSitesInUCore)
@@ -1354,10 +1364,11 @@ namespace CoreLib
                         }
                     }
                 }
-                if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
-                    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
-                //if (splitFlag == 1)
+                //if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
+                //    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
+                if (v1 <= v2)
                 {
+                    Console.WriteLine(v1 + "," + v2);
                     var st = DateTime.Now;
 
                     // find a node to split on
@@ -1375,13 +1386,14 @@ namespace CoreLib
                         }
                         if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel")
                         {
-                            var score = 0;
+                            var score = rand.NextDouble();
                             StratifiedCallSite cs = attachedVCInv[vc];
-                            if (UCoreChildrenCount.ContainsKey(cs))
+                            /*if (UCoreChildrenCount.ContainsKey(cs))
                             {
                                 score = UCoreChildrenCount[cs];
-                            }
-                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            }*/
+                            //if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && score >= maxVcScore)
                             {
                                 maxVc = vc;
                                 maxVcScore = score;
@@ -1413,7 +1425,7 @@ namespace CoreLib
                     }
                     if (maxVc != null)
                     {
-                        //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
+                        Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         UCsplit += 1;
                         StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -1449,7 +1461,7 @@ namespace CoreLib
                         //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         //applyDecisionToDI(DecisionType.BLOCK, maxVc);
-                        
+                        splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                         if (writeLog)
                             Console.WriteLine("splitting on : " + GetPersistentID(scs));
                         if (writeLog)
@@ -1467,9 +1479,10 @@ namespace CoreLib
                         if (pauseForDebug)
                             Console.ReadLine();
                         calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                        
-                    }
+                    }                    
                 }
-                splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
+                proverStartTime = DateTime.Now;
+                underApproxStartTime = DateTime.Now;
                 ucore = null;
                 boundHit = false;
                 // underapproximate query
@@ -1521,10 +1534,12 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine("point 2");
                 Pop();
+                underApproxTime = underApproxTime + (DateTime.Now - underApproxStartTime).TotalSeconds;
                 if (writeLog)
                     Console.WriteLine("point 3");
                 //Push();
                 //var softAssumptions = new List<VCExpr>();
+                overApproxStartTime = DateTime.Now;
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     // Stop if we've reached the recursion bound or
@@ -1560,8 +1575,11 @@ namespace CoreLib
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (error found)
                 }*/
+                overApproxTime = overApproxTime + (DateTime.Now - overApproxStartTime).TotalSeconds;
+                proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
                 if (outcome == Outcome.Errors)
                 {
+                    inliningStartTime = DateTime.Now;
                     foreach (var scs in reporter.callSitesToExpand)
                     {
                         calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1585,7 +1603,7 @@ namespace CoreLib
                             }
                         }
                     }
-
+                    inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
                 }
                 else
                 {
@@ -2563,8 +2581,9 @@ namespace CoreLib
                     if (replyFromServer.Equals("SendResetTime"))
                     {
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
-                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
-                            communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
+                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", clientID, 
+                            communicationTime, resetTime, stats.numInlined, inlinedUniqueCallsites.Count,
+                            stats.calls, underApproxTime, overApproxTime, inliningTime, splittingTime));
                     }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
@@ -3010,7 +3029,8 @@ namespace CoreLib
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
         {
-            inliningStartTime = DateTime.Now;
+            //inliningStartTime = DateTime.Now;
+            
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
@@ -3018,6 +3038,8 @@ namespace CoreLib
 
             if (candidate == null)
             {
+                if (!inlinedUniqueCallsites.Contains(GetPersistentID(scs)))
+                    inlinedUniqueCallsites.Add(GetPersistentID(scs));
                 stats.numInlined++;
                 var svc = new StratifiedVC(implName2StratifiedInliningInfo[scs.callSite.calleeName], implementations);
 
@@ -3064,7 +3086,7 @@ namespace CoreLib
                 Merge(scs, candidate);
                 ret = null;
             }
-            inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
+            //inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
             return ret;
         }
 
@@ -3150,9 +3172,9 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            proverStartTime = DateTime.Now;
+            //proverStartTime = DateTime.Now;
             prover.Check();
-            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
+            //proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
@@ -3164,10 +3186,10 @@ namespace CoreLib
 
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            proverStartTime = DateTime.Now;
+            //proverStartTime = DateTime.Now;
             ProverInterface.Outcome outcome = 
                 prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
-            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
+            //proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }

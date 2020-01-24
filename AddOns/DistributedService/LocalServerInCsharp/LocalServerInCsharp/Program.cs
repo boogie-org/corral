@@ -49,9 +49,12 @@ namespace LocalServerInCsharp
         public static double[] clientInliningTime;
         public static double[] clientSplittingTime;
         public static double[] clientNumInlinings;
+        public static double[] clientNumUniqueInlinings;
         public static double[] clientNumZ3Calls;
         public static double[] clientZ3Time;
-        public static double[] clientIdlingTime;
+        public static double[] clientUnderApproxTime;
+        public static double[] clientOverApproxTime;
+        public static double[] clientIdlingTime;        
         public static double[] clientNumReset;                           //number of times a client has reset, i.e., stolen calltrees from others 
         public static double[] clientNumForwardPops;                     //number of own calltrees popped
         public static double[] clientNumBackwardPops;                    //number of stolen calltrees from a client
@@ -92,8 +95,11 @@ namespace LocalServerInCsharp
             clientInliningTime = new double[maxClients];
             clientSplittingTime = new double[maxClients];
             clientNumInlinings = new double[maxClients];
+            clientNumUniqueInlinings = new double[maxClients];
             clientNumZ3Calls = new double[maxClients];
             clientZ3Time = new double[maxClients];
+            clientUnderApproxTime = new double[maxClients];
+            clientOverApproxTime = new double[maxClients];
             clientIdlingTime = new double[maxClients];
             clientNumReset = new double[maxClients];
             clientNumForwardPops = new double[maxClients];
@@ -304,6 +310,8 @@ namespace LocalServerInCsharp
                 if ((DateTime.Now - startTime).TotalSeconds > timeout)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
+                    finalOutcome = "TIMEDOUT";
+                    totalTime = timeout;
                     writeDetailedOutcome(true);
                     setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
@@ -367,8 +375,11 @@ namespace LocalServerInCsharp
             Array.Clear(clientInliningTime, 0, maxClients);
             Array.Clear(clientSplittingTime, 0, maxClients);
             Array.Clear(clientNumInlinings, 0, maxClients);
+            Array.Clear(clientNumUniqueInlinings, 0, maxClients);
             Array.Clear(clientNumZ3Calls, 0, maxClients);
             Array.Clear(clientZ3Time, 0, maxClients);
+            Array.Clear(clientUnderApproxTime, 0, maxClients);
+            Array.Clear(clientOverApproxTime, 0, maxClients);
             Array.Clear(clientIdlingTime, 0, maxClients);
             Array.Clear(clientNumReset, 0, maxClients);
             Array.Clear(clientNumForwardPops, 0, maxClients);
@@ -400,10 +411,12 @@ namespace LocalServerInCsharp
             clientCommunicationTime[id] = double.Parse(parsedMessage[1]);
             clientResetTime[id] = double.Parse(parsedMessage[2]);
             clientNumInlinings[id] = double.Parse(parsedMessage[3]);
-            clientNumZ3Calls[id] = double.Parse(parsedMessage[4]);
-            clientZ3Time[id] = double.Parse(parsedMessage[5]);
-            clientInliningTime[id] = double.Parse(parsedMessage[6]);
-            clientSplittingTime[id] = double.Parse(parsedMessage[7]);
+            clientNumUniqueInlinings[id] = double.Parse(parsedMessage[4]);
+            clientNumZ3Calls[id] = double.Parse(parsedMessage[5]);
+            clientUnderApproxTime[id] = double.Parse(parsedMessage[6]);
+            clientOverApproxTime[id] = double.Parse(parsedMessage[7]);
+            clientInliningTime[id] = double.Parse(parsedMessage[8]);
+            clientSplittingTime[id] = double.Parse(parsedMessage[9]);
             //double communicationTimeByClient = double.Parse(parsedMessage[0]);
             //double resetTimeByClient = double.Parse(parsedMessage[1]);
             resetTime = resetTime + clientResetTime[id];
@@ -558,12 +571,12 @@ namespace LocalServerInCsharp
             if (configuration.controlSplitRate)
             {
                 if (clientRequestQueue.Count == 0)
-                    splitRate = 5.0d;
+                    splitRate = 20.0d;
                 else
                     splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
             }
             reply = (splitRate * configuration.splitInterval).ToString();
-            //Console.WriteLine("{0} {1} {2} {3}",clientCalltreeQueue[clientID - 1].Count, clientRequestQueue.Count, splitRate, (splitRate * configuration.splitInterval));
+            Console.WriteLine("{0} {1} {2} {3}",clientCalltreeQueue[clientID - 1].Count, clientRequestQueue.Count, splitRate, (splitRate * configuration.splitInterval));
             bool err = ResponseHttp(context, reply);
             if (err)
                 handleClientCrash();
@@ -573,6 +586,11 @@ namespace LocalServerInCsharp
         static void popCalltree(HttpListenerContext context, string idNumber)
         {
             //string reply;
+            if (!configuration.allowPopFromLocalStack)
+            {
+                string reply = "NO";
+                ResponseHttp(context, reply);
+            }
             int clientID = Int16.Parse(idNumber);
             if (writeLog)
                 Console.WriteLine("pop request from client {0}", clientID-1);
@@ -628,29 +646,52 @@ namespace LocalServerInCsharp
             string outFile = workingFile + ".txt";
             string toWrite;
             if (!timedOut)
-            {
+            {                
+                double totalInlinings = 0;
+                double totalUniqueInlinings = 0;
+                for (int i = 0; i < maxClients; i++)
+                {
+                    totalInlinings = totalInlinings + clientNumInlinings[i];
+                    totalUniqueInlinings = totalUniqueInlinings + clientNumUniqueInlinings[i];
+                }
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n"
-                    + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
+                    + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval / (double)numSplits) + "\n"
+                    + totalInlinings + "\n" + totalUniqueInlinings + "\n";
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
-                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
+                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}\n",
                         clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i], 
-                        clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
-                        clientNumForwardPops[i], clientNumBackwardPops[i]);
+                        clientNumInlinings[i], (clientNumInlinings[i]/totalInlinings), clientNumUniqueInlinings[i],
+                        (clientNumUniqueInlinings[i]/totalUniqueInlinings), (clientNumUniqueInlinings[i]/clientNumInlinings[i]),
+                        clientNumZ3Calls[i], clientUnderApproxTime[i], clientOverApproxTime[i],
+                        clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i],
+                        (clientCalltreeRequestReceiveTime[i] - startTime).TotalSeconds);
                     File.AppendAllText(outFile, statsPerClient);
                 }
             }
             else
             {
-                toWrite = "TIMEDOUT" + "\n" + "3600" + "\n" + numSplits + "\n";
+                double totalInlinings = 0;
+                double totalUniqueInlinings = 0;
+                for (int i = 0; i < maxClients; i++)
+                {
+                    totalInlinings = totalInlinings + clientNumInlinings[i];
+                    totalUniqueInlinings = totalUniqueInlinings + clientNumUniqueInlinings[i];
+                }
+                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n"
+                    + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval / (double)numSplits) + "\n"
+                    + totalInlinings + "\n" + totalUniqueInlinings + "\n";
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
-                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
+                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16}\n",
                         clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i],
-                        clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
-                        clientNumForwardPops[i], clientNumBackwardPops[i]);
+                        clientNumInlinings[i], (clientNumInlinings[i] / totalInlinings), clientNumUniqueInlinings[i],
+                        (clientNumUniqueInlinings[i] / totalUniqueInlinings), (clientNumUniqueInlinings[i] / clientNumInlinings[i]),
+                        clientNumZ3Calls[i], clientUnderApproxTime[i], clientOverApproxTime[i],
+                        clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i],
+                        (clientCalltreeRequestReceiveTime[i] - startTime).TotalSeconds);
                     File.AppendAllText(outFile, statsPerClient);
                 }
             }
