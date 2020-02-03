@@ -106,7 +106,7 @@ namespace LocalServerInCsharp
             //    Console.WriteLine(s);
             Console.WriteLine("Starting server...");
             //_httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
-            //_httpListener.Prefixes.Add("http://10.0.0.4:5000/");
+            //_httpListener.Prefixes.Add("http://10.0.0.7:5000/");
             _httpListener.Prefixes.Add(configuration.serverAddress);
             _httpListener.Start(); // start server (Run application as Administrator!)
             Console.WriteLine("Server started.");
@@ -304,6 +304,8 @@ namespace LocalServerInCsharp
                 if ((DateTime.Now - startTime).TotalSeconds > timeout)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
+                    finalOutcome = "TIMEDOUT";
+                    totalTime = timeout;
                     writeDetailedOutcome(true);
                     setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
@@ -558,7 +560,7 @@ namespace LocalServerInCsharp
             if (configuration.controlSplitRate)
             {
                 if (clientRequestQueue.Count == 0)
-                    splitRate = 5.0d;
+                    splitRate = 20.0d;
                 else
                     splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
             }

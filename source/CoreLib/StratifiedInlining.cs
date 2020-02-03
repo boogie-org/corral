@@ -344,8 +344,8 @@ namespace CoreLib
             callServer = new HttpClient();
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             //configuration = new Config();
-            serverUri = new UriBuilder("http://localhost:5000/");
-            //serverUri = new UriBuilder("http://52.187.21.181:5000/");
+            //serverUri = new UriBuilder("http://localhost:5000/");
+            serverUri = new UriBuilder("http://10.0.0.7:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
