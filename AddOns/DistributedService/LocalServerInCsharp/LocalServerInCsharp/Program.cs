@@ -222,6 +222,13 @@ namespace LocalServerInCsharp
                         checkOutcome(context, msgContent["outcome"]);
                     else if (msgContent.ContainsKey("ResetTime"))
                         addResetTime(context, msgContent["ResetTime"]);
+                    else if (msgContent.ContainsKey("SplitNow"))
+                    {
+                        if (clientRequestQueue.Count > 0)
+                            ResponseHttp(context, "YES");
+                        else
+                            ResponseHttp(context, "NO");
+                    }
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -748,7 +755,7 @@ namespace LocalServerInCsharp
             {
                 string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n",
                     clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i], 
-                    clientNumInlinings[i], clientNumUniqueInlinings[i], clientUniqueInlinings[i], clientOnlyInlinings[i],
+                    clientNumInlinings[i], clientNumUniqueInlinings[i], clientUniqueInlinings[i].Count, clientOnlyInlinings[i].Count,
                     clientNumZ3Calls[i], clientUnderApproxTime[i], clientOverApproxTime[i],
                     clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i]);
                 File.AppendAllText(outFileDetails, statsPerClient);
