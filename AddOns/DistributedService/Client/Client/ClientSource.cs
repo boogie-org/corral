@@ -22,6 +22,7 @@ namespace ClientSource
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
         public static int maxClients;
+        public static Config configuration = new Config();
         // Main Method 
         static void Main(string[] args)
         {
@@ -41,7 +42,7 @@ namespace ClientSource
         {
             HttpClient newClient = new HttpClient();
             newClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            Config configuration = new Config();
+            //Config configuration = new Config();
             //UriBuilder serverUri = new UriBuilder("http://10.0.0.4:5000/");
             UriBuilder serverUri = new UriBuilder(configuration.serverAddress);
             
@@ -120,17 +121,17 @@ namespace ClientSource
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName +
                 " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
-                " /newStratifiedInlining:ucsplitparallel2 /enableUnSatCoreExtraction:1";
-            //p.StartInfo.UseShellExecute = true;
-            p.StartInfo.CreateNoWindow = false;
-            //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-            //p.StartInfo.CreateNoWindow = true;
-            //p.StartInfo.UseShellExecute = false;
-            //p.StartInfo.RedirectStandardOutput = true;
+                " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
+            if (configuration.spawnCorralWindows)
+            {
+                p.StartInfo.UseShellExecute = true;
+                p.StartInfo.CreateNoWindow = false;
+                p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            }
+            else
+                p.StartInfo.UseShellExecute = false;            
             p.Start();
             corralProcessList.Add(p);
-            //Process.Start(@"F:\00ResearchWork\HTTPCorral\client.exe");
-
         }
 
         static void continueVerification()
@@ -141,7 +142,7 @@ namespace ClientSource
         static void RestartVerification()
         {
             Console.WriteLine("Kill All Clients And Restart Verification");
-            //Thread.Sleep(1000);
+            //Thread.Sleep(3600000);
             //Process.GetCurrentProcess().Kill();
             Console.WriteLine(corralProcessList.Count);
             foreach (Process p in corralProcessList)

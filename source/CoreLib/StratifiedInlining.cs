@@ -225,12 +225,19 @@ namespace CoreLib
         public static double communicationTime = 0;
         public static double inliningTime = 0;
         public static double proverTime = 0;
+        public static double underApproxTime = 0;
+        public static double overApproxTime = 0;
         public static double splittingTime = 0;
         public DateTime proverStartTime;
+        public DateTime underApproxStartTime;
+        public DateTime overApproxStartTime;
         public DateTime inliningStartTime;
         public DateTime splittingStartTime;
         public DateTime lastSplitAt;
         public double nextSplitInterval = 0;
+        public HashSet<string> inlinedUniqueCallsites;
+        public HashSet<string> sentUniqueCallsites;
+        public static double resetTime = 0;
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -344,12 +351,15 @@ namespace CoreLib
             callServer = new HttpClient();
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             //configuration = new Config();
-            serverUri = new UriBuilder("http://localhost:5000/");
+            serverUri = new UriBuilder("http://10.0.0.9:5000/");
             //serverUri = new UriBuilder("http://52.187.21.181:5000/");
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
+            resetTime = 0;
             lastSplitAt = DateTime.Now;
+            inlinedUniqueCallsites = new HashSet<string>();
+            sentUniqueCallsites = new HashSet<string>();
         }
 
         /* depth in the call tree */
@@ -1449,7 +1459,7 @@ namespace CoreLib
                         //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                         //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         //applyDecisionToDI(DecisionType.BLOCK, maxVc);
-                        
+                        splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                         if (writeLog)
                             Console.WriteLine("splitting on : " + GetPersistentID(scs));
                         if (writeLog)
@@ -1467,9 +1477,10 @@ namespace CoreLib
                         if (pauseForDebug)
                             Console.ReadLine();
                         calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                        
-                    }
+                    }                    
                 }
-                splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
+                proverStartTime = DateTime.Now;
+                underApproxStartTime = DateTime.Now;
                 ucore = null;
                 boundHit = false;
                 // underapproximate query
@@ -1521,10 +1532,12 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine("point 2");
                 Pop();
+                underApproxTime = underApproxTime + (DateTime.Now - underApproxStartTime).TotalSeconds;
                 if (writeLog)
                     Console.WriteLine("point 3");
                 //Push();
                 //var softAssumptions = new List<VCExpr>();
+                overApproxStartTime = DateTime.Now;
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     // Stop if we've reached the recursion bound or
@@ -1560,8 +1573,11 @@ namespace CoreLib
                     timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                     break; // done (error found)
                 }*/
+                overApproxTime = overApproxTime + (DateTime.Now - overApproxStartTime).TotalSeconds;
+                proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
                 if (outcome == Outcome.Errors)
                 {
+                    inliningStartTime = DateTime.Now;
                     foreach (var scs in reporter.callSitesToExpand)
                     {
                         calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1585,7 +1601,7 @@ namespace CoreLib
                             }
                         }
                     }
-
+                    inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
                 }
                 else
                 {
@@ -1606,6 +1622,7 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
+                    sendResetTime();
                     if (replyFromServer.Equals("YES"))
                     //if (false)
                     {
@@ -1668,6 +1685,7 @@ namespace CoreLib
                     else
                     {
                         calltreeToSend = "";
+                        sendResetTime();
                         break;
                     }
                 }
@@ -1702,6 +1720,33 @@ namespace CoreLib
             if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
             //Console.ReadLine();
             return outcome;
+        }
+
+        public void sendInlinings()
+        {
+            string msgToSend = "";
+            foreach (string s in sentUniqueCallsites)
+            {
+                msgToSend = msgToSend + s + ",";
+            }
+            msgToSend.Substring(0, (msgToSend.Length - 1));
+            //Console.WriteLine("Sending Inlinings : " + msgToSend);
+            serverUri.Query = string.Empty;
+            JsonContent tmp = new JsonContent(string.Format("Inlinings={0}={1}", clientID, msgToSend));
+            DateTime communicationStartTime = DateTime.Now;
+            var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
+            string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
+            sentUniqueCallsites.Clear();            
+        }
+
+        public void sendResetTime()
+        {
+            if (sentUniqueCallsites.Count > 0)
+                sendInlinings();
+            sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", clientID,
+                            communicationTime, resetTime, stats.numInlined, inlinedUniqueCallsites.Count,
+                            stats.calls, underApproxTime, overApproxTime, inliningTime, splittingTime));
         }
 
         public string popLastPartitionFromCalltree(string calltree)
@@ -1752,6 +1797,7 @@ namespace CoreLib
             lastSplitAt = DateTime.Now;
             nextSplitInterval = double.Parse(replyFromServer);
             communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
+            sendResetTime();
             return replyFromServer;
         }
 
@@ -2475,7 +2521,7 @@ namespace CoreLib
             string receivedCalltree = null;
             Outcome outcome = Outcome.Correct;
             TimeGraph timeGraph = new TimeGraph();
-            double resetTime = 0;
+            //double resetTime = 0;
             DateTime resetStart;
             emulateServerStack = new Stack<Tuple<int, int>>();
             Stack<SiState> backtrackingPoints = new Stack<SiState>();
@@ -2563,8 +2609,10 @@ namespace CoreLib
                     if (replyFromServer.Equals("SendResetTime"))
                     {
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
-                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
-                            communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
+                        /*sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}", clientID, 
+                            communicationTime, resetTime, stats.numInlined, inlinedUniqueCallsites.Count,
+                            stats.calls, underApproxTime, overApproxTime, inliningTime, splittingTime));*/
+                        sendResetTime();
                     }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
@@ -3010,7 +3058,13 @@ namespace CoreLib
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
         {
-            inliningStartTime = DateTime.Now;
+            //inliningStartTime = DateTime.Now;
+            if (!inlinedUniqueCallsites.Contains(GetPersistentID(scs)))
+            {
+                inlinedUniqueCallsites.Add(GetPersistentID(scs));
+                sentUniqueCallsites.Add(GetPersistentID(scs));
+                //Console.WriteLine(GetPersistentID(scs));
+            }
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
@@ -3064,7 +3118,7 @@ namespace CoreLib
                 Merge(scs, candidate);
                 ret = null;
             }
-            inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
+            //inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
             return ret;
         }
 
@@ -3150,9 +3204,9 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            proverStartTime = DateTime.Now;
+            //proverStartTime = DateTime.Now;
             prover.Check();
-            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
+            //proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
@@ -3164,10 +3218,10 @@ namespace CoreLib
 
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            proverStartTime = DateTime.Now;
+            //proverStartTime = DateTime.Now;
             ProverInterface.Outcome outcome = 
                 prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
-            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
+            //proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }

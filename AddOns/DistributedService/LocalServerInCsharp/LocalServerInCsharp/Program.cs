@@ -49,12 +49,17 @@ namespace LocalServerInCsharp
         public static double[] clientInliningTime;
         public static double[] clientSplittingTime;
         public static double[] clientNumInlinings;
+        public static double[] clientNumUniqueInlinings;
         public static double[] clientNumZ3Calls;
         public static double[] clientZ3Time;
-        public static double[] clientIdlingTime;
+        public static double[] clientUnderApproxTime;
+        public static double[] clientOverApproxTime;
+        public static double[] clientIdlingTime;        
         public static double[] clientNumReset;                           //number of times a client has reset, i.e., stolen calltrees from others 
         public static double[] clientNumForwardPops;                     //number of own calltrees popped
         public static double[] clientNumBackwardPops;                    //number of stolen calltrees from a client
+        public static HashSet<string>[] clientUniqueInlinings;
+        public static HashSet<string>[] clientOnlyInlinings;
         public static DateTime[] clientCalltreeRequestReceiveTime;
         public static double smallestSplitInterval = 0;
         public static double largestSplitInterval = 0;
@@ -92,15 +97,26 @@ namespace LocalServerInCsharp
             clientInliningTime = new double[maxClients];
             clientSplittingTime = new double[maxClients];
             clientNumInlinings = new double[maxClients];
+            clientNumUniqueInlinings = new double[maxClients];
             clientNumZ3Calls = new double[maxClients];
             clientZ3Time = new double[maxClients];
+            clientUnderApproxTime = new double[maxClients];
+            clientOverApproxTime = new double[maxClients];
             clientIdlingTime = new double[maxClients];
             clientNumReset = new double[maxClients];
             clientNumForwardPops = new double[maxClients];
             clientNumBackwardPops = new double[maxClients];
+            clientUniqueInlinings = new HashSet<string>[maxClients];
+            clientOnlyInlinings = new HashSet<string>[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
             for (int i = 0; i < maxClients; i++)
+            {
                 clientCalltreeQueue[i] = new Deque<string>();
+                //Console.WriteLine(i);
+                clientUniqueInlinings[i] = new HashSet<string>();
+                clientOnlyInlinings[i] = new HashSet<string>();
+                //Console.ReadLine();
+            }
             
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
@@ -137,17 +153,27 @@ namespace LocalServerInCsharp
                     //Console.WriteLine(body);
                     body = body.Substring(1, body.Length - 2);
                     string[] parseBody = body.Split('=');
-                    int clientID = Int16.Parse(parseBody[0]);
-                    string calltree = parseBody[1];
-                    if (writeLog)
-                        Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
-                    //Console.ReadLine();
-                    addCalltree(context, clientID, calltree);
-                    if (writeLog)
-                        Console.WriteLine("Adding Calltree");
-                    //Console.ReadLine();
-                    //msgContent = Common.Utils.ParseMsg(body.Replace("\"", ""));
-                    //Log.WriteLine(Log.Info, string.Format("Received Large message"));
+                    if (!parseBody[0].Equals("Inlinings"))
+                    {
+                        int clientID = Int16.Parse(parseBody[0]);
+                        string calltree = parseBody[1];
+                        if (writeLog)
+                            Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
+                        //Console.ReadLine();
+                        addCalltree(context, clientID, calltree);
+                        if (writeLog)
+                            Console.WriteLine("Adding Calltree");
+                        //Console.ReadLine();
+                        //msgContent = Common.Utils.ParseMsg(body.Replace("\"", ""));
+                        //Log.WriteLine(Log.Info, string.Format("Received Large message"));
+                    }
+                    else
+                    {                        
+                        int clientID = Int16.Parse(parseBody[1]);
+                        string inlinings = parseBody[2];
+                        //Console.WriteLine("Received Inlinings : " + inlinings);
+                        collectUniqueInlinings(context, clientID, inlinings);
+                    }
                 }
                 else
                 {
@@ -249,6 +275,7 @@ namespace LocalServerInCsharp
                      totalTime = (DateTime.Now - startTime).TotalSeconds;
                     //setKillFlag = true;
                     askForResetTime = true;
+                    numClientsResetTimeSent = 0;
                     while(clientRequestQueue.Count > 0)
                     {
                         Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
@@ -303,6 +330,8 @@ namespace LocalServerInCsharp
 
                 if ((DateTime.Now - startTime).TotalSeconds > timeout)
                 {
+                    finalOutcome = "TIMEDOUT";
+                    totalTime = (DateTime.Now - startTime).TotalSeconds;
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     writeDetailedOutcome(true);
                     setKillFlag = true;
@@ -367,15 +396,23 @@ namespace LocalServerInCsharp
             Array.Clear(clientInliningTime, 0, maxClients);
             Array.Clear(clientSplittingTime, 0, maxClients);
             Array.Clear(clientNumInlinings, 0, maxClients);
+            Array.Clear(clientNumUniqueInlinings, 0, maxClients);
             Array.Clear(clientNumZ3Calls, 0, maxClients);
             Array.Clear(clientZ3Time, 0, maxClients);
+            Array.Clear(clientUnderApproxTime, 0, maxClients);
+            Array.Clear(clientOverApproxTime, 0, maxClients);
             Array.Clear(clientIdlingTime, 0, maxClients);
             Array.Clear(clientNumReset, 0, maxClients);
             Array.Clear(clientNumForwardPops, 0, maxClients);
             Array.Clear(clientNumBackwardPops, 0, maxClients);
             Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
+            //Array.Clear(clientUniqueInlinings, 0, maxClients);
             for (int i = 0; i < maxClients; i++)
+            {
                 clientCalltreeQueue[i] = new Deque<string>();
+                clientUniqueInlinings[i] = new HashSet<string>();
+                clientOnlyInlinings[i] = new HashSet<string>();
+            }
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
             if (fileQueue.Count == 0)
             {
@@ -393,6 +430,17 @@ namespace LocalServerInCsharp
             }
         }
 
+        public static void collectUniqueInlinings(HttpListenerContext context, int clientID, string inlinings)
+        {
+            string[] parseBody = inlinings.Split(',');
+            foreach (string s in parseBody)
+            {
+                if (!clientUniqueInlinings[clientID - 1].Contains(s))
+                    clientUniqueInlinings[clientID - 1].Add(s);
+            }
+            ResponseHttp(context, "collected");
+        }
+
         public static void addResetTime(HttpListenerContext context, string msg)
         {
             string[] parsedMessage = msg.Split(',');
@@ -400,10 +448,12 @@ namespace LocalServerInCsharp
             clientCommunicationTime[id] = double.Parse(parsedMessage[1]);
             clientResetTime[id] = double.Parse(parsedMessage[2]);
             clientNumInlinings[id] = double.Parse(parsedMessage[3]);
-            clientNumZ3Calls[id] = double.Parse(parsedMessage[4]);
-            clientZ3Time[id] = double.Parse(parsedMessage[5]);
-            clientInliningTime[id] = double.Parse(parsedMessage[6]);
-            clientSplittingTime[id] = double.Parse(parsedMessage[7]);
+            clientNumUniqueInlinings[id] = double.Parse(parsedMessage[4]);
+            clientNumZ3Calls[id] = double.Parse(parsedMessage[5]);
+            clientUnderApproxTime[id] = double.Parse(parsedMessage[6]);
+            clientOverApproxTime[id] = double.Parse(parsedMessage[7]);
+            clientInliningTime[id] = double.Parse(parsedMessage[8]);
+            clientSplittingTime[id] = double.Parse(parsedMessage[9]);
             //double communicationTimeByClient = double.Parse(parsedMessage[0]);
             //double resetTimeByClient = double.Parse(parsedMessage[1]);
             resetTime = resetTime + clientResetTime[id];
@@ -558,7 +608,7 @@ namespace LocalServerInCsharp
             if (configuration.controlSplitRate)
             {
                 if (clientRequestQueue.Count == 0)
-                    splitRate = 5.0d;
+                    splitRate = 20.0d;
                 else
                     splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
             }
@@ -573,30 +623,38 @@ namespace LocalServerInCsharp
         static void popCalltree(HttpListenerContext context, string idNumber)
         {
             //string reply;
-            int clientID = Int16.Parse(idNumber);
-            if (writeLog)
-                Console.WriteLine("pop request from client {0}", clientID-1);
-            if (writeLog)
-                Console.WriteLine("Stack Count : " + callTreeStack.Count);
-            if (clientCalltreeQueue[clientID-1].Count != 0)
-            {
-                //Console.WriteLine("Reply Pop to client " + clientID);
-                string reply = "YES";
-                clientCalltreeQueue[clientID - 1].PopLeft();
-                if (writeLog)
-                    Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
-                //Console.ReadLine();
-                ResponseHttp(context, reply);
-                clientNumForwardPops[clientID - 1]++;
-            }
-            else
+            if (!configuration.allowPopFromLocalStack)
             {
                 string reply = "NO";
                 ResponseHttp(context, reply);
-                //clientNumReset[clientID - 1]++;
-            }                
-            //if (writeLog)
-            //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
+            }
+            else
+            {
+                int clientID = Int16.Parse(idNumber);
+                if (writeLog)
+                    Console.WriteLine("pop request from client {0}", clientID - 1);
+                if (writeLog)
+                    Console.WriteLine("Stack Count : " + callTreeStack.Count);
+                if (clientCalltreeQueue[clientID - 1].Count != 0)
+                {
+                    //Console.WriteLine("Reply Pop to client " + clientID);
+                    string reply = "YES";
+                    clientCalltreeQueue[clientID - 1].PopLeft();
+                    if (writeLog)
+                        Console.WriteLine("Count of {0} is {1}", clientID - 1, clientCalltreeQueue[clientID - 1].Count);
+                    //Console.ReadLine();
+                    ResponseHttp(context, reply);
+                    clientNumForwardPops[clientID - 1]++;
+                }
+                else
+                {
+                    string reply = "NO";
+                    ResponseHttp(context, reply);
+                    //clientNumReset[clientID - 1]++;
+                }
+                //if (writeLog)
+                //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
+            }
         }
 
         static void sendCalltree(HttpListenerContext context, string idNumber)
@@ -626,36 +684,90 @@ namespace LocalServerInCsharp
         public static void writeDetailedOutcome(bool timedOut)
         {
             string outFile = workingFile + ".txt";
+            string outFileDetails = workingFile + ".csv";
+            string outFileInlinings = workingFile + ".inlinings";
+            string outFileSimilarity = workingFile + ".similarity";
             string toWrite;
-            if (!timedOut)
+            double[,] similarity = new double[maxClients, maxClients];
+            HashSet<string> uniqueInlinings = new HashSet<string>();            
+            for (int i = 0; i < maxClients; i++)
             {
-                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n"
-                    + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
-                File.AppendAllText(outFile, toWrite);
-                for (int i = 0; i < maxClients; i++)
-                {
-                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
-                        clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i], 
-                        clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
-                        clientNumForwardPops[i], clientNumBackwardPops[i]);
-                    File.AppendAllText(outFile, statsPerClient);
-                }
+                uniqueInlinings.UnionWith(clientUniqueInlinings[i]);
             }
-            else
+            HashSet<string> allClientInlinings = new HashSet<string>(uniqueInlinings);
+            for (int i = 0; i < maxClients; i++)
             {
-                toWrite = "TIMEDOUT" + "\n" + "3600" + "\n" + numSplits + "\n";
-                File.AppendAllText(outFile, toWrite);
-                for (int i = 0; i < maxClients; i++)
+                allClientInlinings.IntersectWith(clientUniqueInlinings[i]);
+            }
+            double totalInlinings = 0;
+            double totalUniqueInlinings = uniqueInlinings.Count;
+            //Console.WriteLine(totalUniqueInlinings + "," + allClientInlinings.Count);
+            for (int i = 0; i < maxClients; i++)
+            {
+                clientOnlyInlinings[i] = new HashSet<string>(clientUniqueInlinings[i]);
+                for (int j = 0; j < maxClients; j++)
                 {
-                    string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
-                        clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i],
-                        clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
-                        clientNumForwardPops[i], clientNumBackwardPops[i]);
-                    File.AppendAllText(outFile, statsPerClient);
+                    if (i != j)
+                        clientOnlyInlinings[i].ExceptWith(clientUniqueInlinings[j]);
                 }
+                //Console.WriteLine(clientOnlyInlinings[i].Count);
+            }
+            for (int i = 0; i < maxClients; i++)
+            {
+                totalInlinings = totalInlinings + clientNumInlinings[i];
+                //totalUniqueInlinings = totalUniqueInlinings + clientNumUniqueInlinings[i];
+            }
+            for (int i = 0; i < maxClients; i++)
+            {
+                string s = "";
+                for (int j = 0; j < maxClients; j++)
+                {
+                    if ((i == j) || (clientUniqueInlinings[i].Count - allClientInlinings.Count == 0))
+                        similarity[i, j] = 0;
+                    else
+                    {
+                        HashSet<string> numerator = new HashSet<string>(clientUniqueInlinings[i]);
+                        numerator.ExceptWith(clientUniqueInlinings[j]);
+                        //numerator.ExceptWith(allClientInlinings);
+                        similarity[i, j] = (double)(numerator.Count) /
+                            (double)(clientUniqueInlinings[i].Count - allClientInlinings.Count);
+                    }
+                    s = s + string.Format("{0},", similarity[i, j]);
+                }
+                Console.WriteLine(s + " " + s.Length);
+                s = s.Substring(0, s.Length - 1);
+                Console.WriteLine(s);
+                s = s + "\n";
+                File.AppendAllText(outFileSimilarity, s);
+            }
+            toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n"
+                + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval / (double)numSplits) + "\n"
+                + totalInlinings + "\n" + totalUniqueInlinings + "\n" + allClientInlinings.Count + "\n";
+            File.AppendAllText(outFile, toWrite);
+            for (int i = 0; i < maxClients; i++)
+            {
+                string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n",
+                    clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i], 
+                    clientNumInlinings[i], clientNumUniqueInlinings[i], clientUniqueInlinings[i], clientOnlyInlinings[i],
+                    clientNumZ3Calls[i], clientUnderApproxTime[i], clientOverApproxTime[i],
+                    clientIdlingTime[i], clientNumReset[i], clientNumForwardPops[i], clientNumBackwardPops[i]);
+                File.AppendAllText(outFileDetails, statsPerClient);
+                string inlinings = "";
+                if (clientUniqueInlinings[i].Count > 0)
+                {
+                    inlinings = "";
+                    foreach (string s in clientUniqueInlinings[i])
+                    {
+                        inlinings = inlinings + s + ",";
+                    }
+                    inlinings = inlinings.Substring(0, inlinings.Length - 1);
+                }
+                else
+                    inlinings = "NONE";
+                inlinings = inlinings + "\n";
+                File.AppendAllText(outFileInlinings, inlinings);
             }
         }
-
         public static bool ResponseHttp(HttpListenerContext context, string msg)
         {
             bool err = false;
