@@ -1253,7 +1253,7 @@ namespace CoreLib
             bool writeLog = false;
             bool makeTimeGraph = false;
             string lastCalltreeSent = string.Empty;
-            
+            bool splitOnDemand = true;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1335,9 +1335,12 @@ namespace CoreLib
                             splitFlag = 1;
                             break;
                         }
-                        string reply = sendRequestToServer("SplitNow","IsThereAnyWaitingClient");
-                        if (reply.Equals("NO"))
-                            splitFlag = 0;
+                        if (splitOnDemand)
+                        {
+                            string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                            if (reply.Equals("NO"))
+                                splitFlag = 0;
+                        }
                     }
                 }
                 if (CallSitesInUCore.Count != 0 && splitFlag == 1)
