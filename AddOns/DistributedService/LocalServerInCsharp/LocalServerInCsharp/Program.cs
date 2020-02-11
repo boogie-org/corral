@@ -225,9 +225,15 @@ namespace LocalServerInCsharp
                     else if (msgContent.ContainsKey("SplitNow"))
                     {
                         if (clientRequestQueue.Count > 0)
+                        {
+                            //Console.WriteLine("Count : " + clientRequestQueue.Count);
                             ResponseHttp(context, "YES");
+                        }
                         else
+                        {
+                            //Console.WriteLine("NO");
                             ResponseHttp(context, "NO");
+                        }
                     }
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);

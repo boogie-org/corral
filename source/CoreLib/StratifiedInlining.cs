@@ -1334,13 +1334,13 @@ namespace CoreLib
                         {
                             splitFlag = 1;
                             break;
-                        }
-                        if (splitOnDemand)
-                        {
-                            string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
-                            if (reply.Equals("NO"))
-                                splitFlag = 0;
-                        }
+                        }                        
+                    }
+                    if (splitOnDemand)
+                    {
+                        string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
                     }
                 }
                 if (CallSitesInUCore.Count != 0 && splitFlag == 1)
