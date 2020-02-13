@@ -78,6 +78,12 @@ namespace cba
             }
 
         }
+        public static string VersionInfo()
+        {
+            var fileName = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(fileName).FileVersion;
+            return version;
+        }
 
         public static void Initialize(Configs config)
         {
@@ -184,6 +190,8 @@ namespace cba
             ////////////////////////////////////
             // Input and initialization phase
             ////////////////////////////////////
+
+            Console.WriteLine("Corral program verifier version {0}", VersionInfo());
 
             Configs config = Configs.parseCommandLine(args);
             CommandLineOptions.Install(new CommandLineOptions());

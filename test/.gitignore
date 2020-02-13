@@ -1,0 +1,5 @@
+out
+corral_out*.bpl
+corral_out*_trace.txt
+CorralTmpConcatFile.bpl
+next.bpl

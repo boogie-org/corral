@@ -369,7 +369,7 @@ namespace ExplainError
                     var a = (cmd as AssignCmd).AsSimpleAssignCmd;
                     //pre = ExprUtil.MySubstituteInExpr(pre, a.Lhss, a.Rhss);
                     //compare the old and substituted expr to see if we can skip this assignment
-                    var oldPreL = new List<Expr>(preL);
+                    var oldPreL = new List<Expr>(preL).AsQueryable();
                     preL = preL.ConvertAll((x => ExprUtil.MySubstituteInExpr(x, a.Lhss, a.Rhss)));
                     numAssigns++;
                     supportVarsInPre.Clear(); //we will compute it fresh from preL
