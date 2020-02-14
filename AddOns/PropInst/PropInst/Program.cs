@@ -21,6 +21,8 @@ namespace PropInst
             {
                 Console.WriteLine("usage: PropInst.exe propertyFile.avp boogieInputFile.bpl boogieOutputFile.bpl [options]");
                 Console.WriteLine("\t /pruneMethodsWithFilePathPrefix:<absolutePath> Prune implementations whose path has this prefix");
+                Console.WriteLine("\t /removeAssertsIfNoCallWithPrefix:<prefixString> Cleanup asserts if no methods prefixed with <prefixString> (e.g. ProbeFor) are present in the module");
+
                 return;
             }
 
@@ -31,6 +33,19 @@ namespace PropInst
             args
                 .Where(s => s.StartsWith("/pruneMethodsWithFilePathPrefix:"))
                 .Iter(s => pruneFilePaths.Add(s.Substring("/pruneMethodsWithFilePathPrefix:".Length)));
+
+
+            string cleanupPrefixString = null;
+            var removeAssertConditions = args.Where(x => x.StartsWith("/removeAssertsIfNoCallWithPrefix:"));
+            if (removeAssertConditions.Count() == 1)
+            {
+                cleanupPrefixString = removeAssertConditions.First().Substring("/removeAssertsIfNoCallWithPrefix:".Length);
+            }
+            else if (removeAssertConditions.Count() > 1)
+            {
+                Console.WriteLine("Expecting exactly one \"/removeAssertsIfNoCallWithPrefix:\" flag");
+                return;
+            }
 
             // initialize Boogie
             CommandLineOptions.Install(new CommandLineOptions());
@@ -65,13 +80,63 @@ namespace PropInst
             //augment the CorralExtraInit procedure (perform this after Matching/instrumentation)
             AugmentCorralExtraInit(boogieProgram);
 
-            //prune methods that match PruneFilePaths
+            // prune methods that match PruneFilePaths
             if (pruneFilePaths.Count() > 0) PruneMethodsWithPaths(boogieProgram, pruneFilePaths);
+
+            // cleanup asserts if no method with prefix is present
+            if (cleanupPrefixString != null)
+                PerformCleanupIfNoCallWithPrefix(boogieProgram, cleanupPrefixString);
+
 
             string outputFile = args[2];
             BoogieUtil.PrintProgram(boogieProgram, outputFile);
 
             Stats.printStats();
+        }
+
+        private static void PerformCleanupIfNoCallWithPrefix(Program boogieProgram, string prefix)
+        {
+            // check if there are any prefix* methods
+            foreach (var impl in boogieProgram.Implementations)
+            {
+                foreach (var block in impl.Blocks)
+                {
+                    foreach (var cmd in block.cmds)
+                    {
+                        if (cmd is CallCmd callCmd)
+                        {
+                            if (callCmd.callee.StartsWith(prefix))
+                            {
+                                Console.WriteLine($"Found a callee with prefix {callCmd.callee}");
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine($"WARNING!! Removing all asserts since no calls found with the precondition string {prefix} supplied as argument to /removeAssertsIfNoCallWithPrefix:");
+
+            // no ProbeFor found, we will erase any assert
+            foreach (var impl in boogieProgram.Implementations)
+            {
+                foreach (var block in impl.Blocks)
+                {
+                    foreach (var cmd in block.cmds)
+                    {
+                        if (cmd is AssertCmd assertCmd)
+                        {
+                            assertCmd.Expr = Expr.True;
+                            var newAttr = new QKeyValue(Token.NoToken, "removedAssertDueToPrecondition", new List<object>(), null);
+                            if (assertCmd.Attributes != null)
+                                assertCmd.Attributes.AddLast(newAttr);
+                            else
+                                assertCmd.Attributes = newAttr;
+                        }
+                    }
+                }
+            }
+
         }
 
         private static void PruneMethodsWithPaths(Program boogieProgram, HashSet<string> pruneFilePaths)
