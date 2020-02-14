@@ -107,7 +107,7 @@ namespace PropInst
                         {
                             if (callCmd.callee.StartsWith(prefix))
                             {
-                                Console.WriteLine($"Found a callee with prefix {callCmd.callee}");
+                                Console.WriteLine($"Found a callee {callCmd.callee} with the precondition string {prefix} supplied as argument to /removeAssertsIfNoCallWithPrefix:");
                                 return;
                             }
                         }
