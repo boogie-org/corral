@@ -234,7 +234,7 @@ namespace CoreLib
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
-
+        public HashSet<string> proofSites;
         // verification start time
         DateTime startTime;
 
@@ -350,6 +350,7 @@ namespace CoreLib
             calltreeToSend = "";
             communicationTime = 0;
             lastSplitAt = DateTime.Now;
+            proofSites = new HashSet<string>();
         }
 
         /* depth in the call tree */
@@ -1243,7 +1244,8 @@ namespace CoreLib
             bool writeLog = false;
             bool makeTimeGraph = false;
             string lastCalltreeSent = string.Empty;
-            
+            bool splitOnDemand = true;
+            bool learnProofs = true;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1311,6 +1313,28 @@ namespace CoreLib
 
             while (true)
             {
+                //Pre-inline proofSites
+                if (learnProofs)
+                {
+                    if (proofSites.Count != 0)
+                    {
+                        foreach (var scs in openCallSites)
+                        {
+                            if (proofSites.Contains(GetPersistentID(scs)))
+                            {
+                                calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                                openCallSites.Remove(scs);
+                                var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                if (svc != null)
+                                {
+                                    openCallSites.UnionWith(svc.CallSites);
+                                    Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                }
+                            }
+                        }
+                    }
+                }
                 // Lets split when the tree has become big enough
                 splittingStartTime = DateTime.Now;
                 var size = di.ComputeSize();
@@ -1325,6 +1349,12 @@ namespace CoreLib
                             splitFlag = 1;
                             break;
                         }
+                    }
+                    if (splitOnDemand)
+                    {
+                        string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
                     }
                 }
                 if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1589,6 +1619,24 @@ namespace CoreLib
                 }
                 else
                 {
+                    if (learnProofs)
+                    {
+                        if (outcome == Outcome.Correct)
+                        {
+                            var proofCore = prover.UnsatCore();
+                            if (proofCore != null || proofCore.Count != 0)
+                            {
+                                foreach (StratifiedCallSite cs in attachedVC.Keys)
+                                {
+                                    if (proofCore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                    {
+                                        if (!proofSites.Contains(GetPersistentID(cs)))
+                                            proofSites.Add(GetPersistentID(cs));
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (writeLog)
                         Console.WriteLine("block finished");                    
                     if (makeTimeGraph)

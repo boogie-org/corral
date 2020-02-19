@@ -196,6 +196,19 @@ namespace LocalServerInCsharp
                         checkOutcome(context, msgContent["outcome"]);
                     else if (msgContent.ContainsKey("ResetTime"))
                         addResetTime(context, msgContent["ResetTime"]);
+                    else if (msgContent.ContainsKey("SplitNow"))
+                    {
+                        if (clientRequestQueue.Count > 0)
+                        {
+                            //Console.WriteLine("Count : " + clientRequestQueue.Count);
+                            ResponseHttp(context, "YES");
+                        }
+                        else
+                        {
+                            //Console.WriteLine("NO");
+                            ResponseHttp(context, "NO");
+                        }
+                    }
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -434,7 +447,7 @@ namespace LocalServerInCsharp
             if (maxClients == 1)
                 switchForSingleClient = 0;
             else
-                switchForSingleClient = 1;
+                switchForSingleClient = 0;
             int maxQueueSize = switchForSingleClient;
             int clientIDOfLargestQueue = -1;
             for (int i = 0; i < clientCalltreeQueue.Length; i++)
