@@ -163,23 +163,22 @@ namespace cba.Util
             VC.VCGen vcgen = null;
             try
             {
-                Debug.Assert(CommandLineOptions.Clo.vcVariety != CommandLineOptions.VCVariety.Doomed);
                 Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
                 if (options.newStratifiedInlining) {
                   if(options.newStratifiedInliningAlgo.ToLower() == "duality") Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
-                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
+                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
                 }
                 else
-                   // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                   // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
 
 
                     if (!useDuality || !isCBA || !needErrorTraces || options.StratifiedInlining > 1 || mains.Count > 1)
-                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>()); 
+                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>()); 
                     else
                     {
                         CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
                         CommandLineOptions.Clo.FixedPointEngine = "duality";
-                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>(), options.extraRecBound);
+                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>(), options.extraRecBound);
                     }
             }
             catch (ProverException e)
@@ -518,9 +517,9 @@ namespace cba.Util
             try
             {
                 if(options.newStratifiedInlining) 
-                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, null);
+                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
                 else
-                    vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
+                    vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
             }
             catch (ProverException)
             {

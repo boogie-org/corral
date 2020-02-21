@@ -150,7 +150,7 @@ namespace CoreLib
             HoudiniStats.Start("VCGen");
 
             // VC Gen
-            var hi = new HoudiniInlining(program, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, RewriteAssumedToAssertedAction);
+            var hi = new HoudiniInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, RewriteAssumedToAssertedAction);
 
             HoudiniStats.Stop("VCGen");
 
