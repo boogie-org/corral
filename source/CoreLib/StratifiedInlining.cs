@@ -1318,7 +1318,8 @@ namespace CoreLib
                 {
                     if (proofSites.Count != 0)
                     {
-                        foreach (var scs in openCallSites)
+                        HashSet<StratifiedCallSite> temp = new HashSet<StratifiedCallSite>(openCallSites);
+                        foreach (var scs in temp)
                         {
                             if (proofSites.Contains(GetPersistentID(scs)))
                             {
@@ -1624,7 +1625,7 @@ namespace CoreLib
                         if (outcome == Outcome.Correct)
                         {
                             var proofCore = prover.UnsatCore();
-                            if (proofCore != null || proofCore.Count != 0)
+                            if (proofCore != null)
                             {
                                 foreach (StratifiedCallSite cs in attachedVC.Keys)
                                 {
