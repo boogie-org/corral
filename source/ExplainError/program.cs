@@ -1272,7 +1272,7 @@ namespace ExplainError
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
-            if (CommandLineOptions.Clo.ProcsToCheck != null && !CommandLineOptions.Clo.ProcsToCheck.Any(x => impl.Name.StartsWith(x)))
+            if (!CommandLineOptions.Clo.UserWantsToCheckRoutine(impl.Name))
             {
                 returnStatus = STATUS.ILLEGAL; return false;
             }
