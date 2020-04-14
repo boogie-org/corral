@@ -185,7 +185,6 @@ namespace cba
                 boogieOptions += " /useArrayTheory";
             else if (GlobalConfig.useArrayTheory == ArrayTheoryOptions.WEAK)
             {
-//                boogieOptions += " /useArrayTheory /weakArrayTheory ";
                 boogieOptions += " /useArrayTheory ";
                 boogieOptions += "/proverOpt:O:smt.array.weak=true ";
                 boogieOptions += "/proverOpt:O:smt.array.extensional=false";
