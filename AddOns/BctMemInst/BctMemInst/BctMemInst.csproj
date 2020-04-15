@@ -54,10 +54,6 @@
       <Project>{0efa3e43-690b-48dc-a72c-384a3ea7f31f}</Project>
       <Name>AbsInt</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\boogie\Source\AIFramework\AIFramework.csproj">
-      <Project>{39b0658d-c955-41c5-9a43-48c97a1ef5fd}</Project>
-      <Name>AIFramework</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\..\boogie\Source\Basetypes\Basetypes.csproj">
       <Project>{43dfad18-3e35-4558-9be2-caff6b5ba8a0}</Project>
       <Name>Basetypes</Name>
