@@ -48,6 +48,7 @@ namespace cba
         public HashSet<string> trackedVars { get; private set; }
         public HashSet<string> trackedVarsSecondary { get; private set; }
         public bool trackAllVars { get; private set; }
+        public bool oldCorralFlags { get; private set; }
 
         public HashSet<string> ignoreAssertMethods { get; private set; }
 
@@ -258,6 +259,7 @@ namespace cba
             contextBound = 2;
             mainProcName = null;
             trackAllVars = false;
+            oldCorralFlags = false;
 
             staticInlining = 0;
 
@@ -370,6 +372,10 @@ namespace cba
             else if (flag == "/trackAllVars")
             {
                 trackAllVars = true;
+            }
+            else if (flag == "/oldCorralFlags")
+            {
+                oldCorralFlags = true;
             }
             else if (flag.StartsWith("/track:"))
             {
