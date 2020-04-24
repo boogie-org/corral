@@ -653,10 +653,6 @@ namespace cba
                 var split = flag.Split(sep);
                 houdiniQuery = split[1];
             }
-            else if (flag == "/doNotUseLabels")
-            {
-                boogieOpts += " " + flag + " ";
-            }
             else if (flag.StartsWith("/v:"))
             {
                 var split = flag.Split(sep);
