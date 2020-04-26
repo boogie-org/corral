@@ -1272,7 +1272,7 @@ namespace ExplainError
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
-            if (CommandLineOptions.Clo.ProcsToCheck != null && !CommandLineOptions.Clo.ProcsToCheck.Any(x => impl.Name.StartsWith(x)))
+            if (!CommandLineOptions.Clo.UserWantsToCheckRoutine(impl.Name))
             {
                 returnStatus = STATUS.ILLEGAL; return false;
             }
@@ -1304,8 +1304,8 @@ namespace ExplainError
         private static void CreateProver()
         {
             //create vcgen/proverInterface
-            vcgen = new VCGen(prog, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, new List<Checker>());
-            proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, CommandLineOptions.Clo.ProverKillTime);
+            vcgen = new VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
+            proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.ProverKillTime);
             translator = proverInterface.Context.BoogieExprTranslator;
             exprGen = proverInterface.Context.ExprGen;
             collector = new ConditionGeneration.CounterexampleCollector();
@@ -1353,7 +1353,7 @@ namespace ExplainError
             {
                 //this creates a z3 process per vcgen
                 var checkers = new List<Checker>();
-                VC.VCGen vcgen = new VC.VCGen(prog, CommandLineOptions.Clo.SimplifyLogFilePath, CommandLineOptions.Clo.SimplifyLogFileAppend, checkers);
+                VC.VCGen vcgen = new VC.VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, checkers);
                 //make deep copy of the blocks
                 var tmpBlocks = new List<Block>();
                 foreach (Block b in i.Blocks)

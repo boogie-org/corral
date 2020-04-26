@@ -1660,12 +1660,10 @@ namespace CoreLib
             }
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreach")
             {
-                Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 outcome = MustReachStyle(openCallSites, reporter);
             }
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "split" && !di.disabled)
             {
-                Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                 outcome = MustReachSplitStyle(openCallSites, reporter);
             }
             else
@@ -4101,7 +4099,6 @@ namespace CoreLib
         public VerifierCallback callback;
         StratifiedVC mainVC;
         public static TimeSpan ttime = TimeSpan.Zero;
-        IList<string> GlobalLabels;
 
         public bool reportTrace;
         public bool reportTraceIfNothingToExpand;
@@ -4116,7 +4113,6 @@ namespace CoreLib
             this.mainVC = mainVC;
             this.reportTrace = false;
             this.reportTraceIfNothingToExpand = false;
-            this.GlobalLabels = null;
         }
 
         public override int StartingProcId()
@@ -4157,9 +4153,6 @@ namespace CoreLib
             if (proverOutcome != ProverInterface.Outcome.Invalid)
                 return;
 
-            if (CommandLineOptions.Clo.UseLabels)
-                GlobalLabels = labels;
-
             var start = DateTime.Now;
             List<Absy> absyList = GetAbsyTrace(mainVC, labels);
             orderedStateIds = new List<Tuple<int, int>>();
@@ -4184,47 +4177,8 @@ namespace CoreLib
         {
             if (CommandLineOptions.Clo.SIBoolControlVC)
                 return GetAbsyTraceBoolControlVC(svc);
-            else if (CommandLineOptions.Clo.UseLabels)
-                return GetAbsyTraceLabels(svc, GlobalLabels);
             else
                 return GetAbsyTraceControlFlowVariable(svc, labels);
-        }
-
-        private List<Absy> GetAbsyTraceLabels(StratifiedVC svc, IList<string> labels)
-        {
-            var ret = new List<Absy>();
-            var impl = svc.info.impl;
-            var block = impl.Blocks[0];
-
-            while (true)
-            {
-                ret.Add(block);
-                var gc = block.TransferCmd as GotoCmd;
-                if (gc == null) break;
-                Block next = null;
-                foreach (var succ in gc.labelTargets)
-                {
-                    if (!svc.block2label.ContainsKey(succ))
-                        continue;
-
-                    if (labels.Contains(svc.block2label[succ]))
-                    {
-                        next = succ;
-                        break;
-                    }
-                }
-                if (next == null)
-                    throw new InsufficientDetailsToConstructCexPath("StratifiedInliningErrorReporter: Must find a successor");
-
-                Debug.Assert(next != null, "Must find a successor");
-                Debug.Assert(!ret.Contains(next), "CFG cannot be cyclic");
-                block = next;
-            }
-
-            // fake assert
-            ret.Add(new AssertCmd(Token.NoToken, Expr.True));
-
-            return ret;
         }
 
         private List<Absy> GetAbsyTraceControlFlowVariable(StratifiedVC svc, IList<string> labels)

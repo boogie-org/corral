@@ -156,22 +156,41 @@ namespace cba
 
             // /noRemoveEmptyBlocks is needed for field refinement. It ensures that
             // we get an actual path in the program (so that we can concretize it)
-            // noinfer: The inference algorithm of Boogie is slow and should be avoided.
             boogieOptions +=
-                "/removeEmptyBlocks:0 /coalesceBlocks:0 /noinfer " +
-                //"/z3opt:RELEVANCY=0  " +                
+                "/removeEmptyBlocks:0 /coalesceBlocks:0 " +
                 "/typeEncoding:m " +
-                "/vc:i " +
                 "/subsumption:0 ";
 
             InstrumentationConfig.UseOldInstrumentation = false;
             VariableSlicing.UseSimpleSlicing = false;
             InstrumentationConfig.raiseExceptionBeforeAllProcedures = false;
 
+            if (config.oldCorralFlags)
+            {
+                // Adding back old Boogie Z3 options
+                boogieOptions += "/proverOpt:O:AUTO_CONFIG=false ";
+                boogieOptions += "/proverOpt:O:pp.bv_literals=false ";
+                boogieOptions += "/proverOpt:O:smt.PHASE_SELECTION=0 ";
+                boogieOptions += "/proverOpt:O:smt.RESTART_STRATEGY=0 ";
+                boogieOptions += "/proverOpt:O:smt.RESTART_FACTOR=|1.5| ";
+                boogieOptions += "/proverOpt:O:smt.ARITH.RANDOM_INITIAL_VALUE=true ";
+                boogieOptions += "/proverOpt:O:smt.CASE_SPLIT=3 ";
+                boogieOptions += "/proverOpt:O:smt.DELAY_UNITS=true ";
+                boogieOptions += "/proverOpt:O:NNF.SK_HACK=true ";
+                boogieOptions += "/proverOpt:O:smt.QI.EAGER_THRESHOLD=100 ";
+                boogieOptions += "/proverOpt:O:TYPE_CHECK=true ";
+                boogieOptions += "/proverOpt:O:smt.BV.REFLECT=true";
+            }
+
             if (GlobalConfig.useArrayTheory == ArrayTheoryOptions.STRONG)
                 boogieOptions += " /useArrayTheory";
             else if (GlobalConfig.useArrayTheory == ArrayTheoryOptions.WEAK)
-                boogieOptions += " /useArrayTheory /weakArrayTheory ";
+            {
+                boogieOptions += " /useArrayTheory";
+                boogieOptions += " /proverOpt:O:smt.array.extensional=false";
+                if (config.oldCorralFlags)
+                    boogieOptions += " /proverOpt:O:smt.array.weak=true";
+            }
 
             if (config.printBoogieFlags)
                 Console.WriteLine("Using Boogie flags: {0}", boogieOptions);
