@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.Boogie;
 using cba.Util;
+using System.Diagnostics;
 
 namespace ConcurrentHoudini
 {
@@ -385,15 +386,12 @@ namespace ConcurrentHoudini
             if (dbg)
                 Console.WriteLine("Running OG: {0}", expandedFileName);
 
-            LinearTypeChecker linearTypechecker;
             CivlTypeChecker moverTypeChecker;
-            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out linearTypechecker, out moverTypeChecker);
+            var oc = ExecutionEngine.ResolveAndTypecheck(program, annotatedFileName, out moverTypeChecker);
 
-            if (oc != PipelineOutcome.ResolvedAndTypeChecked)
-                throw new Exception(string.Format("{0} type checking errors detected in {1}", linearTypechecker.checkingContext.ErrorCount, annotatedFileName));
+            Debug.Assert(oc == PipelineOutcome.ResolvedAndTypeChecked);
 
-            CivlVCGeneration.Transform(linearTypechecker, moverTypeChecker);
-            linearTypechecker.EraseLinearAnnotations();
+            CivlVCGeneration.Transform(moverTypeChecker);
 
             //var stats = new PipelineStatistics();
             //ExecutionEngine.EliminateDeadVariablesAndInline(program);
