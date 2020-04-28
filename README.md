@@ -1,15 +1,20 @@
 # Corral
 
+[![License][license-badge]](LICENSE.txt)
+[![NuGet package][nuget-badge]][nuget]
+[![Travis build status][travis-badge]][travis]
+
+
 Corral is a solver for the reachability modulo theories problem. Learn more here: http://research.microsoft.com/en-us/projects/verifierq
 
 ## Dependency on Boogie
+
 Corral has a dependency on [Boogie](https://github.com/boogie-org/boogie), which is provided as a git submodule. To download the specific revision of Boogie that Corral depends on:
 
 ```
 cd ${CORRAL_DIR}
 git submodule init
 git submodule update
-cd boogie
 ```
 
 ## Building and running Corral on Windows
@@ -45,6 +50,10 @@ $ dotnet build cba-NetCore.sln
 $ bin/Debug/netcoreapp3.1/corral ...
 ```
 
+> :warning: There is currently a know build problem with .NET Core and
+> GitVersionTask. The workaround is to set the environment variable
+> `MSBUILDSINGLELOADCONTEXT=1` and run `dotnet build-server shutdown`.
+
 Alternatively, Corral can be installed as a [.NET Core Global Tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools):
 ```console
 $ dotnet tool install --global Corral
@@ -52,7 +61,7 @@ $ dotnet tool install --global Corral
 
 ## Versioning and Release Automation
 
-The https://github.com/boogie-org/corral/blob/master/.github/workflows/main.yml workflow will create and push a new tag each time commits are pushed to the master branch (including PR merges). By default, the created tag increments the patch version number from the previous tag. For example, if the last tagged commit were `v2.4.3`, then pushing to master would tag the latest commit with `v2.4.4`. If incrementing minor or major number is desired instead of patch, simply add `#minor` or `#major` to the first line of the commit message. For instance:
+The [main.yml](https://github.com/boogie-org/corral/blob/master/.github/workflows/main.yml) workflow will create and push a new tag each time commits are pushed to the master branch (including PR merges). By default, the created tag increments the patch version number from the previous tag. For example, if the last tagged commit were `v2.4.3`, then pushing to master would tag the latest commit with `v2.4.4`. If incrementing minor or major number is desired instead of patch, simply add `#minor` or `#major` to the first line of the commit message. For instance:
 > Adding the next greatest feature. #minor
 
 If the last tagged commit were `v2.4.3`, then pushing this commit would generate the tag `v2.5.0`.
@@ -64,3 +73,10 @@ Note that on each push to `master`, the following will happen:
 * The GitHub workflow is also triggered.
 * Once the workflow pushes a new tag `vX.Y.Z`, another travis build for `vX.Y.Z` is triggered.
 * The travis build for `vX.Y.Z` in Release configuration publishes releases to GitHub and [NuGet.org](https://www.nuget.org/packages/Corral/).
+
+[license-badge]: https://img.shields.io/github/license/boogie-org/corral?color=blue
+[nuget]:         https://www.nuget.org/packages/Corral
+[nuget-badge]:   https://img.shields.io/nuget/v/Corral
+[travis]:        https://travis-ci.com/boogie-org/corral
+[travis-badge]:  https://travis-ci.com/boogie-org/corral.svg?branch=master
+
