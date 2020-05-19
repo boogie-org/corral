@@ -29,6 +29,8 @@
 020\f2.bpl b
 021\waitlock.bpl c
 022\childtid.bpl c
+022\childtid2.bpl c
+022\childtid3.bpl b
 023\f.bpl b
 024\f.bpl b
 loop\seq.bpl b

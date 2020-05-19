@@ -227,7 +227,8 @@ namespace cba
             //node.InParams = this.VisitVariableSeq(node.InParams);
             //node.OutParams = this.VisitVariableSeq(node.OutParams);
 
-            if (node.Name == LanguageSemantics.getThreadIDName())
+            if (node.Name == LanguageSemantics.getThreadIDName()
+                || node.Name == LanguageSemantics.getChildThreadIDName())
             {
                 Debug.Assert(node.OutParams.Count == 1);
                 if (node.OutParams[0].TypedIdent.Type.IsBv)
