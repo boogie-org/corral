@@ -214,7 +214,6 @@ namespace ConcurrentHoudini
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.StratifiedInliningVerbose = 2;
             CommandLineOptions.Clo.UseArrayTheory = true;
-            CommandLineOptions.Clo.TypeEncodingMethod = CommandLineOptions.TypeEncoding.Monomorphic;
 
             Program program;
             program = BoogieUtil.ReadAndOnlyResolve(inFileName);

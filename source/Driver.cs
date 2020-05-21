@@ -158,7 +158,6 @@ namespace cba
             // we get an actual path in the program (so that we can concretize it)
             boogieOptions +=
                 "/removeEmptyBlocks:0 /coalesceBlocks:0 " +
-                "/typeEncoding:m " +
                 "/subsumption:0 ";
 
             InstrumentationConfig.UseOldInstrumentation = false;
