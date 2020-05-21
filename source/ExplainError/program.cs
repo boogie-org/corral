@@ -1157,6 +1157,7 @@ namespace ExplainError
             var help = ParseArgs(oldArgs, out args);
             CommandLineOptions.Install(new CommandLineOptions());
             CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
+            CommandLineOptions.Clo.TypeEncodingMethod = CommandLineOptions.TypeEncoding.Monomorphic;
             CommandLineOptions.Clo.Parse(args);
             return !help;
         }
