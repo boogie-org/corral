@@ -17,22 +17,32 @@ namespace LocalServerInCsharp
         public string corralExecutablePath;
         public string inputFilesDirectoryPath;
         public string serverAddress;
+        public string corralArguments;
         public bool writeDetailPerClient;
         public bool controlSplitRate;
         public double splitInterval;
         public Config()
         {
+            numListeners = 1;
+            numMaxClients = 3;            
+            timeout = 600;            
+            inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\test\";
+            serverAddress = "http://localhost:5000/";
+            corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3";
             startLocalListener = true;
-            numMaxClients = 32;
-            numListeners = 4;
-            timeout = 3600;
-            listenerExecutablePath = @"C:\HttpCorralMultiCLient\AddOns\DistributedService\Client\Client\bin\Debug\Client.exe";
-            corralExecutablePath = @"C:\HttpCorralMultiCLient\bin\Debug\corral.exe";
-            inputFilesDirectoryPath = @"C:\copyFiles\";
-            serverAddress = "http://10.0.0.7:5000/";
+
+            //Modify The Following Flags Only If Necessary 
+
+            // /newStratifiedInlining:ucsplitparallel runs the original heuristic
+            // /newStratifiedInlining:ucsplitparallel2 enables the balanced heuristic
+            corralArguments = corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + serverAddress;
+                       
+            listenerExecutablePath = @"..\..\..\..\Client\Client\bin\Debug\Client.exe";
+            corralExecutablePath = @"..\..\..\..\..\..\bin\Debug\corral.exe";
             writeDetailPerClient = true;
             controlSplitRate = true;
             splitInterval = 0.5;
+
             //string hostName = Dns.GetHostName(); // Retrive the Name of HOST  
             //Console.WriteLine(hostName);
             // Get the IP  

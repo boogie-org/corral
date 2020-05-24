@@ -111,6 +111,8 @@ namespace cba
         public int verboseMode { get; private set; }
         public string houdiniQuery { get; private set; }
 
+        public string hydraServerURI { get; private set; }
+
         public bool useInitialPruning { get; private set; }
         public bool checkStaticAnalysis { get; private set; }
         public bool siOnly { get; private set; }
@@ -539,6 +541,11 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 printFinalProg = split[1];
+            }
+            else if (flag.StartsWith("/hydraServerURI:"))
+            {
+                var split = flag.Split(sep);
+                hydraServerURI = split[1] + ":" + split[2] + ":" + split[3];                
             }
             else if (flag == "/printVerify")
             {

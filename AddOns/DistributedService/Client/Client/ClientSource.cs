@@ -116,11 +116,10 @@ namespace ClientSource
             //corralExecutablePath = corralExecutablePath + @"bin\Debug\corral.exe";
             //Console.WriteLine(corralExecutablePath);
             //Console.ReadLine();
+            Config configuration = new Config();
             Process p = new Process();
             p.StartInfo.FileName = corralExecutablePath;
-            p.StartInfo.Arguments = fileName +
-                " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
-                " /newStratifiedInlining:ucsplitparallel2 /enableUnSatCoreExtraction:1";
+            p.StartInfo.Arguments = fileName + configuration.corralArguments;
             p.StartInfo.UseShellExecute = false;
             //p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;

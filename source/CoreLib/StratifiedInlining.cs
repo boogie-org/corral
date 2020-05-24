@@ -345,7 +345,8 @@ namespace CoreLib
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
             //configuration = new Config();
             //serverUri = new UriBuilder("http://localhost:5000/");
-            serverUri = new UriBuilder("http://10.0.0.7:5000/");
+            //serverUri = new UriBuilder("http://10.0.0.7:5000/");
+            serverUri = new UriBuilder(BoogieVerify.options.hydraServerURI);
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
@@ -1244,8 +1245,8 @@ namespace CoreLib
             bool writeLog = false;
             bool makeTimeGraph = false;
             string lastCalltreeSent = string.Empty;
-            bool splitOnDemand = true;
-            bool learnProofs = true;
+            bool splitOnDemand = false;
+            bool learnProofs = false;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();

@@ -809,7 +809,7 @@ namespace cba.Util
 
         public bool newStratifiedInlining;
         public string newStratifiedInliningAlgo;
-
+        public string hydraServerURI;
         public bool NonUniformUnfolding;
 
         public HashSet<string> CallTree;
@@ -838,6 +838,7 @@ namespace cba.Util
             StratifiedInlining = 1;
             newStratifiedInlining = false;
             newStratifiedInliningAlgo = null;
+            hydraServerURI = null;
             NonUniformUnfolding = false;
             CallTree = null;
             StratifiedInliningWithoutModels = false;
