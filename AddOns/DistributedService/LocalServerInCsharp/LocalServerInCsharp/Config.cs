@@ -23,6 +23,8 @@ namespace LocalServerInCsharp
         public double splitInterval;
         public Config()
         {
+            //The following values are set by default if the corresponding flag is not present in the configuration file
+
             numListeners = 1;
             numMaxClients = 3;            
             timeout = 3600;            

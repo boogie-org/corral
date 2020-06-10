@@ -22,10 +22,80 @@ namespace ClientSource
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
         public static int maxClients;
+        public static Config configuration = new Config();
         // Main Method 
         static void Main(string[] args)
         {
+            setupConfig(args[0]);
             ExecuteClient();
+        }
+
+        static void setupConfig(string configPath)
+        {
+            StreamReader reading = File.OpenText(configPath);
+            string str;
+            while ((str = reading.ReadLine()) != null)
+            {
+                string[] configKey = str.Split('=');
+                
+                switch (configKey[0])
+                {
+                    case "numListeners":
+                        configuration.numListeners = Int32.Parse(configKey[1]);                        
+                        break;
+                    case "numMaxClients":
+                        configuration.numMaxClients = Int32.Parse(configKey[1]);                        
+                        break;
+                    case "timeout":
+                        configuration.timeout = Int32.Parse(configKey[1]);                        
+                        break;
+                    case "inputFilesDirectoryPath":
+                        configuration.inputFilesDirectoryPath = configKey[1];                        
+                        break;
+                    case "serverAddress":
+                        configuration.serverAddress = configKey[1];                        
+                        break;
+                    case "corralArguments":
+                        configuration.corralArguments = configKey[1];
+                        if (configKey.Length > 2)
+                        {
+                            for (int i = 2; i < configKey.Length; i++)
+                                configuration.corralArguments = configuration.corralArguments + "=" + configKey[i];
+                        }
+                        break;
+                    case "startLocalListener":
+                        if (configKey[1] == "true")
+                            configuration.startLocalListener = true;
+                        else
+                            configuration.startLocalListener = false;
+                        break;
+                    case "listenerExecutablePath":
+                        configuration.listenerExecutablePath = configKey[1];
+                        break;
+                    case "corralExecutablePath":
+                        configuration.corralExecutablePath = configKey[1];
+                        break;
+                    case "writeDetailPerClient":
+                        if (configKey[1] == "true")
+                            configuration.writeDetailPerClient = true;
+                        else
+                            configuration.writeDetailPerClient = false;
+                        break;
+                    case "controlSplitRate":
+                        if (configKey[1] == "true")
+                            configuration.controlSplitRate = true;
+                        else
+                            configuration.controlSplitRate = false;
+                        break;
+                    case "splitInterval":
+                        configuration.splitInterval = double.Parse(configKey[1]);
+                        break;
+                    default:
+                        Console.WriteLine("Invalid Option");
+                        break;
+                }
+            }
+            configuration.corralArguments = " " + configuration.corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
         }
 
         // ExecuteClient() Method 
@@ -41,7 +111,7 @@ namespace ClientSource
         {
             HttpClient newClient = new HttpClient();
             newClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            Config configuration = new Config();
+            //Config configuration = new Config();
             //UriBuilder serverUri = new UriBuilder("http://10.0.0.4:5000/");
             UriBuilder serverUri = new UriBuilder(configuration.serverAddress);
             
@@ -116,7 +186,7 @@ namespace ClientSource
             //corralExecutablePath = corralExecutablePath + @"bin\Debug\corral.exe";
             //Console.WriteLine(corralExecutablePath);
             //Console.ReadLine();
-            Config configuration = new Config();
+            //Config configuration = new Config();
             Process p = new Process();
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName + configuration.corralArguments;

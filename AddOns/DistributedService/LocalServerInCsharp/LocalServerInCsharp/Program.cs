@@ -65,6 +65,7 @@ namespace LocalServerInCsharp
         static void Main(string[] args)
         {
             //Config configuration = new Config();
+            setupConfig(args[0]);
             maxClients = configuration.numMaxClients * configuration.numListeners;
             maxListeners = configuration.numListeners;
             timeout = configuration.timeout;
@@ -112,7 +113,7 @@ namespace LocalServerInCsharp
             Console.WriteLine("Server started.");
             Console.WriteLine("Waiting for Listener...");
             if (configuration.startLocalListener)
-                startListenerService();
+                startListenerService(args[0]);
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
         }
@@ -328,12 +329,80 @@ namespace LocalServerInCsharp
             }
         }
 
-        static void startListenerService()
+        static void setupConfig(string configPath)
+        {
+            StreamReader reading = File.OpenText(configPath);
+            string str;
+            while ((str = reading.ReadLine()) != null)
+            {
+                string[] configKey = str.Split('=');
+                
+                switch(configKey[0])
+                {
+                    case "numListeners":
+                        configuration.numListeners = Int32.Parse(configKey[1]);
+                        break;
+                    case "numMaxClients":
+                        configuration.numMaxClients = Int32.Parse(configKey[1]);
+                        break;
+                    case "timeout":
+                        configuration.timeout = Int32.Parse(configKey[1]);
+                        break;
+                    case "inputFilesDirectoryPath":
+                        configuration.inputFilesDirectoryPath = configKey[1];
+                        break;
+                    case "serverAddress":
+                        configuration.serverAddress = configKey[1];
+                        break;
+                    case "corralArguments":
+                        configuration.corralArguments = configKey[1];
+                        if (configKey.Length > 2)
+                        {
+                            for (int i = 2; i < configKey.Length; i++)
+                                configuration.corralArguments = configuration.corralArguments + "=" + configKey[i];                            
+                        }
+                        break;
+                    case "startLocalListener":
+                        if (configKey[1] == "true")
+                            configuration.startLocalListener = true;
+                        else
+                            configuration.startLocalListener = false;
+                        break;
+                    case "listenerExecutablePath":
+                        configuration.listenerExecutablePath = configKey[1];
+                        break;
+                    case "corralExecutablePath":
+                        configuration.corralExecutablePath = configKey[1];
+                        break;
+                    case "writeDetailPerClient":
+                        if (configKey[1] == "true")
+                            configuration.writeDetailPerClient = true;
+                        else
+                            configuration.writeDetailPerClient = false;
+                        break;
+                    case "controlSplitRate":
+                        if (configKey[1] == "true")
+                            configuration.controlSplitRate = true;
+                        else
+                            configuration.controlSplitRate = false;
+                        break;
+                    case "splitInterval":
+                        configuration.splitInterval = double.Parse(configKey[1]);
+                        break;
+                    default:
+                        Console.WriteLine("Invalid Option");
+                        break;
+                }
+            }
+            configuration.corralArguments = " " + configuration.corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+        }
+
+        static void startListenerService(string configPath)
         {
             startTime = DateTime.Now;
             Process p = new Process();
             p.StartInfo.FileName = listenerExecutablePath;
-            //p.StartInfo.Arguments = fileName +
+            p.StartInfo.Arguments = configPath;
             //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
             //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
             p.StartInfo.UseShellExecute = true;
@@ -658,7 +727,7 @@ namespace LocalServerInCsharp
             }
             else
             {
-                toWrite = "TIMEDOUT" + "\n" + "3600" + "\n" + numSplits + "\n";
+                toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n";
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
