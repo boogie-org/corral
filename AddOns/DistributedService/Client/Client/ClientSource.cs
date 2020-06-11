@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
-using LocalServerInCsharp;
 
 
 namespace ClientSource
@@ -21,7 +20,7 @@ namespace ClientSource
     {
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
-        public static int maxClients;
+        public static int maxClients;        
         public static Config configuration = new Config();
         // Main Method 
         static void Main(string[] args)

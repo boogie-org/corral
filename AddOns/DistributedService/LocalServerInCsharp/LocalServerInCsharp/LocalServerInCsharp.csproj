@@ -116,6 +116,10 @@
       <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
       <Name>CorralUtil</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\Client\Client\Client.csproj">
+      <Project>{f2af6beb-eba6-46fe-987a-8438603c4290}</Project>
+      <Name>Client</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
