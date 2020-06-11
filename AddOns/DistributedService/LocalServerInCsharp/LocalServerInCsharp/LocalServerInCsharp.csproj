@@ -59,6 +59,64 @@
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\boogie\Source\AbsInt\AbsInt.csproj">
+      <Project>{0efa3e43-690b-48dc-a72c-384a3ea7f31f}</Project>
+      <Name>AbsInt</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Basetypes\Basetypes.csproj">
+      <Project>{43dfad18-3e35-4558-9be2-caff6b5ba8a0}</Project>
+      <Name>Basetypes</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\CodeContractsExtender\CodeContractsExtender.csproj">
+      <Project>{accc0156-0921-43ed-8f67-ad8bdc8cde31}</Project>
+      <Name>CodeContractsExtender</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Concurrency\Concurrency.csproj">
+      <Project>{d07b8e38-e172-47f4-ad02-0373014a46d3}</Project>
+      <Name>Concurrency</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Core\Core.csproj">
+      <Project>{b230a69c-c466-4065-b9c1-84d80e76d802}</Project>
+      <Name>Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Doomed\Doomed.csproj">
+      <Project>{884386a3-58e9-40bb-a273-b24976775553}</Project>
+      <Name>Doomed</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\ExecutionEngine\ExecutionEngine.csproj">
+      <Project>{eaa5eb79-d475-4601-a59b-825c191cd25f}</Project>
+      <Name>ExecutionEngine</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Graph\Graph.csproj">
+      <Project>{69a2b0b8-bcac-4101-ae7a-556fcc58c06e}</Project>
+      <Name>Graph</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Houdini\Houdini.csproj">
+      <Project>{cf41e903-78eb-43ba-a355-e5feb5ececd4}</Project>
+      <Name>Houdini</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\boogie\Source\Model\Model.csproj">
+      <Project>{acef88d5-dadd-46da-bae1-2144d63f4c83}</Project>
+      <Name>Model</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\cba.csproj">
+      <Project>{b05d046d-a620-4233-9d52-0255c7a69760}</Project>
+      <Name>cba</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\source\CoreLib\CoreLib.csproj">
+      <Project>{437b3c57-a7e7-4d99-a027-4bb4e5105e7a}</Project>
+      <Name>CoreLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\source\ExplainError\ExplainError.csproj">
+      <Project>{2417259e-803f-4017-a3b4-5f3c87470d2e}</Project>
+      <Name>ExplainError</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\source\Util\CorralUtil.csproj">
+      <Project>{186de4bd-014d-47c7-a914-831ea98116a9}</Project>
+      <Name>CorralUtil</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

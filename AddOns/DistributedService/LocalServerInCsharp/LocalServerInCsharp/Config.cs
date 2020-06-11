@@ -40,7 +40,7 @@ namespace LocalServerInCsharp
             corralArguments = corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + serverAddress;
                        
             listenerExecutablePath = @"..\..\..\..\Client\Client\bin\Debug\Client.exe";
-            corralExecutablePath = @"..\..\..\..\..\..\bin\Debug\corral.exe";
+            corralExecutablePath = "corral.exe";
             writeDetailPerClient = true;
             controlSplitRate = true;
             splitInterval = 0.5;
