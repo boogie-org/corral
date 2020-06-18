@@ -1,7 +1,9 @@
 numListeners=1
 numMaxClients=3            
-timeout=60            
-inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test3\
+timeout=180            
+inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test4\
+corralDumpBoogie=F:\00ResearchWork\SVCOMP\corralDumpBoogie\bin\Debug\corral.exe
 serverAddress=http://localhost:5000/
-corralArguments=/useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100
+corralArguments=/tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:65536 /irreducibleLoopUnroll:12 /trackAllVars /killAfter:180
+hydraArguments=/tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:65536 /irreducibleLoopUnroll:12 /trackAllVars /si /doNotUseLabels
 startLocalListener=true

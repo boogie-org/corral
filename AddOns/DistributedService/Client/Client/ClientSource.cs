@@ -61,6 +61,16 @@ namespace ClientSource
                             for (int i = 2; i < configKey.Length; i++)
                                 configuration.corralArguments = configuration.corralArguments + "=" + configKey[i];
                         }
+                        configuration.rawArguments = configuration.corralArguments;
+                        configuration.corralDumpArguments = configuration.corralArguments;
+                        break;
+                    case "hydraArguments":
+                        configuration.hydraArguments = configKey[1];
+                        if (configKey.Length > 2)
+                        {
+                            for (int i = 2; i < configKey.Length; i++)
+                                configuration.hydraArguments = configuration.hydraArguments + "=" + configKey[i];
+                        }
                         break;
                     case "startLocalListener":
                         if (configKey[1] == "true")
@@ -89,12 +99,17 @@ namespace ClientSource
                     case "splitInterval":
                         configuration.splitInterval = double.Parse(configKey[1]);
                         break;
+                    case "corralDumpBoogie":
+                        configuration.corralDumpBoogiePath = configKey[1];
+                        break;
                     default:
                         Console.WriteLine("Invalid Option");
                         break;
                 }
             }
-            configuration.corralArguments = " " + configuration.corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /printFinalProgOnly /printFinalProg:";
+            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
         }
 
         // ExecuteClient() Method 
@@ -171,10 +186,29 @@ namespace ClientSource
             //corralProcessList.Clear();
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
+            Process p = new Process();
+            p.StartInfo.FileName = configuration.corralDumpBoogiePath;
+            //Console.WriteLine(configuration.corralDumpBoogiePath);
+            string origFilename =  fileName.Substring(fileName.LastIndexOf('\\')+1);
+            string siFilename = origFilename + ".bpl";
+            p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
+            //Console.WriteLine(origFilename);
+            //Console.WriteLine(p.StartInfo.Arguments);
+            //Console.ReadLine();
+            p.StartInfo.UseShellExecute = false;
+            p.Start();
+            p.WaitForExit();
+            Console.WriteLine("SI Boogie File Dumped");
+            string siFilePath = configuration.inputFilesDirectoryPath + @"\" + siFilename;
+            if (File.Exists(siFilePath))
+                File.Delete(siFilePath);
+            File.Move(siFilename, siFilePath);
+            //Console.WriteLine(siFilePath);
+            //Console.ReadLine();
             for (int i = 0; i < maxClients; i++)
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
-                runCorral(fileName);
+                runCorral(siFilePath);
             }
         }
 
@@ -188,7 +222,7 @@ namespace ClientSource
             //Config configuration = new Config();
             Process p = new Process();
             p.StartInfo.FileName = corralExecutablePath;
-            p.StartInfo.Arguments = fileName + configuration.corralArguments;
+            p.StartInfo.Arguments = fileName + configuration.hydraArguments;
             p.StartInfo.UseShellExecute = false;
             //p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;

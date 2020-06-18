@@ -17,7 +17,11 @@ namespace ClientSource
         public string corralExecutablePath;
         public string inputFilesDirectoryPath;
         public string serverAddress;
+        public string rawArguments;
         public string corralArguments;
+        public string hydraArguments;
+        public string corralDumpArguments;
+        public string corralDumpBoogiePath;
         public bool writeDetailPerClient;
         public bool controlSplitRate;
         public double splitInterval;
@@ -31,6 +35,9 @@ namespace ClientSource
             inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\timeoutSICorrected\";
             serverAddress = "http://localhost:5000/";
             corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            corralDumpArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            rawArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            hydraArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             startLocalListener = true;
 
             //Modify The Following Flags Only If Necessary 
@@ -41,6 +48,7 @@ namespace ClientSource
 
             listenerExecutablePath = "Client.exe";
             corralExecutablePath = "corral.exe";
+            corralDumpBoogiePath = "corral.exe";
             writeDetailPerClient = true;
             controlSplitRate = true;
             splitInterval = 0.5;
