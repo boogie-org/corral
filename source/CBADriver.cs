@@ -376,8 +376,8 @@ namespace cba
             
             if (GlobalConfig.explainQuantifiers != null)
             {
-                old_logfile = CommandLineOptions.Clo.SimplifyLogFilePath;
-                CommandLineOptions.Clo.SimplifyLogFilePath = GlobalConfig.explainQuantifiers;
+                old_logfile = CommandLineOptions.Clo.ProverLogFilePath;
+                CommandLineOptions.Clo.ProverLogFilePath = GlobalConfig.explainQuantifiers;
             }
 
             startTime = DateTime.Now;
@@ -394,7 +394,7 @@ namespace cba
 
             if (GlobalConfig.explainQuantifiers != null)
             {
-                CommandLineOptions.Clo.SimplifyLogFilePath = old_logfile;
+                CommandLineOptions.Clo.ProverLogFilePath = old_logfile;
             }
 
             Stats.pathVerificationTime += (DateTime.Now - startTime);
@@ -413,7 +413,7 @@ namespace cba
             BoogieVerify.options = progVerifyOptions;
 
             // AL: adding logging
-            //CommandLineOptions.Clo.SimplifyLogFilePath = "logProg";
+            //CommandLineOptions.Clo.ProverLogFilePath = "logProg";
             startTime = DateTime.Now;
         }
 
@@ -431,7 +431,7 @@ namespace cba
             refinement = true;
 
             // AL: adding logging
-            //CommandLineOptions.Clo.SimplifyLogFilePath = "logRefine";
+            //CommandLineOptions.Clo.ProverLogFilePath = "logRefine";
 
         }
 

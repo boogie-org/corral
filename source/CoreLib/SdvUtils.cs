@@ -268,7 +268,7 @@ namespace CoreLib
                 return new CallCmd(Token.NoToken, recordProcNameBool, ins, new List<IdentifierExpr>());
             else if (v.Type.IsCtor)
             {
-                var t = (v.Type as CtorType).Decl.Name;
+                var t = v.Type.AsCtor.Decl.Name;
                 if (!typeToRecordProc.ContainsKey(t))
                 {
                     var inpVar = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "x", v.Type), true);

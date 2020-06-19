@@ -103,7 +103,7 @@ namespace ClientSource
                         configuration.corralDumpBoogiePath = configKey[1];
                         break;
                     default:
-                        Console.WriteLine("Invalid Option");
+                        Console.WriteLine("Invalid Option: " + configKey[0]);
                         break;
                 }
             }

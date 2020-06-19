@@ -18,6 +18,8 @@ namespace cba
         private Dictionary<string, Implementation> nameToImpl;
         // A mapping: name -> procedure for inp
         private Dictionary<string, Procedure> nameToProc;
+        // procedures without an implementation for inp
+        private HashSet<string> procsWithoutImpl;
         // The set of procedures (without implementation) that are called by some trace
         private HashSet<string> calledProcsNoImpl;
         // The output program
@@ -47,6 +49,10 @@ namespace cba
             usedNames = new Dictionary<string, int>();
             nameToImpl = BoogieUtil.nameImplMapping(inp);
             nameToProc = BoogieUtil.nameProcMapping(inp);
+
+            procsWithoutImpl = new HashSet<string>(nameToProc.Keys);
+            procsWithoutImpl.ExceptWith(nameToImpl.Keys);
+
             calledProcsNoImpl = new HashSet<string>();
             output = new Program();
             tinfo = t;
@@ -421,8 +427,11 @@ namespace cba
                     continue;
                 output.AddTopLevelDeclaration(decl);
             }
-            
+
             // Add procedure declarations (ones without an implementation), as required
+            calledProcsNoImpl.UnionWith(
+                ProcsCalledVisitor.GetProceduresCalled(output).Intersection(procsWithoutImpl));
+
             foreach (string str in calledProcsNoImpl)
             {
                 newProcsToAdd.Remove(str);

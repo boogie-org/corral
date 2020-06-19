@@ -1,0 +1,46 @@
+////////////
+// Prepare a BPL file for doublefetch by removing some statements
+////////////
+
+GlobalDeclarations
+{
+var tmpDoubleFetch: int;
+}
+
+TemplateVariables
+{
+var {:#IdentifierExpr} base : int;
+var e1, off, c1 : int;
+procedure {:#AnyArguments} prc(a : int) returns (r : int);
+var Mem : [int] int;
+function f(int) : int;
+function g(int) : int;
+
+var p1, p2, p3 : int;
+}
+
+//////////
+// CmdRules for different memory access patterns
+//////////
+
+CmdRule
+{
+call boogie_si_record_li2bpl_int(e1);
+}
+-->
+{
+//skip boogie_si_record_li2bpl_int
+}
+
+
+// Remove assume false for CPP
+
+CmdRule
+{
+   assume {:nocpp} false;
+}
+-->
+{
+  //assume {:nocpp} false; //allow CPP analysis
+}
+

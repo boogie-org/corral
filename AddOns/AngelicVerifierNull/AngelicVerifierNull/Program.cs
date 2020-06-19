@@ -981,7 +981,7 @@ namespace AngelicVerifierNull
         {
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
-            CommandLineOptions.Clo.SimplifyLogFilePath = null;
+            CommandLineOptions.Clo.ProverLogFilePath = null;
 
             var trackedVars = new HashSet<string>(corralConfig.trackedVars);
             if (assertsPassedName != null) trackedVars.Add(assertsPassedName);

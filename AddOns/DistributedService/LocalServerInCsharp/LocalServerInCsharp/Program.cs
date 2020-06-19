@@ -336,8 +336,8 @@ namespace LocalServerInCsharp
             while ((str = reading.ReadLine()) != null)
             {
                 string[] configKey = str.Split('=');
-                
-                switch(configKey[0])
+
+                switch (configKey[0])
                 {
                     case "numListeners":
                         configuration.numListeners = Int32.Parse(configKey[1]);
@@ -359,7 +359,17 @@ namespace LocalServerInCsharp
                         if (configKey.Length > 2)
                         {
                             for (int i = 2; i < configKey.Length; i++)
-                                configuration.corralArguments = configuration.corralArguments + "=" + configKey[i];                            
+                                configuration.corralArguments = configuration.corralArguments + "=" + configKey[i];
+                        }
+                        configuration.rawArguments = configuration.corralArguments;
+                        configuration.corralDumpArguments = configuration.corralArguments;
+                        break;
+                    case "hydraArguments":
+                        configuration.hydraArguments = configKey[1];
+                        if (configKey.Length > 2)
+                        {
+                            for (int i = 2; i < configKey.Length; i++)
+                                configuration.hydraArguments = configuration.hydraArguments + "=" + configKey[i];
                         }
                         break;
                     case "startLocalListener":
@@ -389,12 +399,17 @@ namespace LocalServerInCsharp
                     case "splitInterval":
                         configuration.splitInterval = double.Parse(configKey[1]);
                         break;
+                    case "corralDumpBoogie":
+                        configuration.corralDumpBoogiePath = configKey[1];
+                        break;
                     default:
-                        Console.WriteLine("Invalid Option");
+                        Console.WriteLine("Invalid Option: " + configKey[0]);
                         break;
                 }
             }
-            configuration.corralArguments = " " + configuration.corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /printFinalProgOnly /printFinalProg:";
+            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
         }
 
         static void startListenerService(string configPath)
