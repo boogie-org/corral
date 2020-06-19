@@ -92,7 +92,7 @@ namespace cba
         public int timeout { get; private set; }
 
         public string printFinalProg { get; private set; }
-
+        public bool printFinalProgOnly { get; private set; }
         public string boogieOpts;
         public bool cadeTiming { get; private set; }
 
@@ -285,6 +285,7 @@ namespace cba
             timeout = 0;
             boogieOpts = " ";
             printFinalProg = null;
+            printFinalProgOnly = false;
             refinementAlgo = "tttt";
             noCallTreeReuse = false;
             cadeTiming = false;
@@ -538,6 +539,10 @@ namespace cba
             {
                 var split = flag.Split(sep);
                 printFinalProg = split[1];
+            }
+            else if (flag.StartsWith("/printFinalProgOnly"))
+            {
+                printFinalProgOnly = true;
             }
             else if (flag == "/printVerify")
             {

@@ -223,7 +223,7 @@ namespace cba
             Initialize(config);
 
             var startTime = DateTime.Now;
-
+            Program progForPrint = null;
             ////////////////////////////////////
             // Initial program rewriting
             ////////////////////////////////////
@@ -370,7 +370,23 @@ namespace cba
                 });
 
             var cex = config.NumCex;
+            if (config.printFinalProgOnly)
+            {
+                if (progForPrint == null)
+                    progForPrint = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+                var mains = new List<Implementation>(
+                progForPrint.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")));
 
+                if (mains.Count == 1 && mains.First().Name == "main")
+                {
+                    BoogieUtil.PrintProgram(curr.getProgram(), BoogieVerify.options.progFileName);
+                    Log.WriteLine("Printed Program. Shutting Down.");
+                    Log.Close();
+                    return 0;
+                }
+            }
             do
             {
                 ////////////////////////////////////
