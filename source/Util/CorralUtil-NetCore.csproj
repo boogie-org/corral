@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>CorralUtil</AssemblyName>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\boogie\Source\AbsInt\AbsInt-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Basetypes\Basetypes-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\CodeContractsExtender\CodeContractsExtender-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Concurrency\Concurrency-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Core\Core-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\ExecutionEngine\ExecutionEngine-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Graph\Graph-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Houdini\Houdini-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Model\Model-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\ParserHelper\ParserHelper-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\Provers\SMTLib\SMTLib-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\VCExpr\VCExpr-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\VCGeneration\VCGeneration-NetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersionTask" Version="5.1.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

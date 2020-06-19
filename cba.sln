@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.29519.87
+VisualStudioVersion = 16.0.30011.19
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cba", "cba.csproj", "{B05D046D-A620-4233-9D52-0255C7A69760}"
 EndProject
@@ -1244,14 +1244,14 @@ Global
 		{9B163AA3-36BC-4AFB-88AB-79BC9E97E401}.z3apidebug|Mixed Platforms.Build.0 = Release|Any CPU
 		{9B163AA3-36BC-4AFB-88AB-79BC9E97E401}.z3apidebug|x86.ActiveCfg = Release|Any CPU
 		{9B163AA3-36BC-4AFB-88AB-79BC9E97E401}.z3apidebug|x86.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|.NET.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|.NET.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Any CPU.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Any CPU.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Mixed Platforms.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|x86.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.Checked|x86.Build.0 = Release|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|.NET.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|.NET.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Any CPU.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Any CPU.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Mixed Platforms.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|Mixed Platforms.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|x86.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.Checked|x86.Build.0 = QED|Any CPU
 		{884386A3-58E9-40BB-A273-B24976775553}.Debug|.NET.ActiveCfg = Debug|Any CPU
 		{884386A3-58E9-40BB-A273-B24976775553}.Debug|.NET.Build.0 = Debug|Any CPU
 		{884386A3-58E9-40BB-A273-B24976775553}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -1292,14 +1292,14 @@ Global
 		{884386A3-58E9-40BB-A273-B24976775553}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{884386A3-58E9-40BB-A273-B24976775553}.Release|x86.ActiveCfg = Release|Any CPU
 		{884386A3-58E9-40BB-A273-B24976775553}.Release|x86.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|.NET.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|.NET.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Any CPU.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Any CPU.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Mixed Platforms.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Mixed Platforms.Build.0 = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|x86.ActiveCfg = Release|Any CPU
-		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|x86.Build.0 = Release|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|.NET.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|.NET.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Any CPU.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Any CPU.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Mixed Platforms.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|Mixed Platforms.Build.0 = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|x86.ActiveCfg = QED|Any CPU
+		{884386A3-58E9-40BB-A273-B24976775553}.z3apidebug|x86.Build.0 = QED|Any CPU
 		{AFAA5CE1-C41B-44F0-88F8-FD8A43826D44}.Checked|.NET.ActiveCfg = Release|Any CPU
 		{AFAA5CE1-C41B-44F0-88F8-FD8A43826D44}.Checked|.NET.Build.0 = Release|Any CPU
 		{AFAA5CE1-C41B-44F0-88F8-FD8A43826D44}.Checked|Any CPU.ActiveCfg = Release|Any CPU
@@ -1378,6 +1378,6 @@ Global
 		{AFAA5CE1-C41B-44F0-88F8-FD8A43826D44} = {247E7FAB-27D9-4AE7-9240-C421725A9B8A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {64A86D29-7D19-4FF4-8924-EA1B668EBCD6}
+		SolutionGuid = {803550B0-B389-4CC2-A9A2-21009C44E0C5}
 	EndGlobalSection
 EndGlobal

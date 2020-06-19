@@ -260,10 +260,10 @@ namespace System.Collections.Generic
 {
     public abstract class List<T> : IEnumerable<T>
     {
-	struct ListEnumerator : IEnumerator<T> {
+	struct Enumerator : IEnumerator<T> {
 	      List<T> parent;
 	      int iter;
-	      public ListEnumerator(List<T> l) { 
+	      public Enumerator(List<T> l) {
 	          parent = l; 
 		  iter = -1; 
 	      }
@@ -278,7 +278,7 @@ namespace System.Collections.Generic
 	}
 
         private List(bool dontCallMe) { }
-        public IEnumerator<T> GetEnumerator() { return new ListEnumerator(this); }
+        public IEnumerator<T> GetEnumerator() { return new Enumerator(this); }
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return this.GetEnumerator(); }
 	public abstract T this[int index] { get; set; }
 	public abstract int Count { get; }

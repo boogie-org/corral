@@ -9,6 +9,26 @@ GlobalDeclarations
 {
   var {:propertyMap} validProbe : [int] bool;
   function {:ReachableStates} atLeastOneUserlandReaches(bool): bool;
+
+function {:ReachableStates} MustReach(x: bool) : bool;
+
+var {:AllocatorVar} userp: int; //aliases every probed pointer
+var userNondet: bool;
+procedure  userNondetFn() returns (r:bool);
+
+function {:inline} {:aliasingQuery} {:mkUniqueFn} aliasesWithUser(p:int, q:int) returns (bool) {true}
+
+procedure aliases(p1:int) {
+    call userNondet := userNondetFn();
+    goto L1, L2;
+L1:
+   assume p1 != NULL;
+   userp := if (userNondet) then p1 else userp;
+   return;
+L2: 
+   return;
+}
+
 }
 
 TemplateVariables
@@ -22,7 +42,7 @@ CmdRule
 }
 -->
 {
-  assert(validProbe[p]);
+ assert(!aliasesWithUser(p, userp) || validProbe[p]);
   #this;
 }
 
@@ -33,6 +53,7 @@ ProcedureRule
 }
 -->
 {
+call aliases(p1);
   //at least one execution where a non-probed pointer reaches here
    //assume atLeastOneUserlandReaches(!validProbe[p1]);
     assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 18} {:print "Atomic Continuation"} true;
@@ -48,6 +69,7 @@ ProcedureRule
 }
 -->
 {
+call aliases(p1);
   //at least one execution where a non-probed pointer reaches here
    //assume atLeastOneUserlandReaches(!validProbe[p1]);
     assert {:sourcefile "d:\corral\addons\PropInst\PropInst\ExampleProperties\probeBeforeUse-onlyProbed.prop"} {:sourceline 29} {:print "Atomic Continuation"} true;
