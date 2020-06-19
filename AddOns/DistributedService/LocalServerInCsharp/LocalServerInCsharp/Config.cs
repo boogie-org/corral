@@ -17,7 +17,11 @@ namespace LocalServerInCsharp
         public string corralExecutablePath;
         public string inputFilesDirectoryPath;
         public string serverAddress;
+        public string rawArguments;
         public string corralArguments;
+        public string hydraArguments;
+        public string corralDumpArguments;
+        public string corralDumpBoogiePath;
         public bool writeDetailPerClient;
         public bool controlSplitRate;
         public double splitInterval;
@@ -26,11 +30,14 @@ namespace LocalServerInCsharp
             //The following values are set by default if the corresponding flag is not present in the configuration file
 
             numListeners = 1;
-            numMaxClients = 3;            
-            timeout = 3600;            
+            numMaxClients = 3;
+            timeout = 3600;
             inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\timeoutSICorrected\";
             serverAddress = "http://localhost:5000/";
             corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            corralDumpArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            rawArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
+            hydraArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             startLocalListener = true;
 
             //Modify The Following Flags Only If Necessary 
@@ -38,9 +45,10 @@ namespace LocalServerInCsharp
             // /newStratifiedInlining:ucsplitparallel runs the original heuristic
             // /newStratifiedInlining:ucsplitparallel2 enables the balanced heuristic
             corralArguments = corralArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + serverAddress;
-                       
+
             listenerExecutablePath = "Client.exe";
             corralExecutablePath = "corral.exe";
+            corralDumpBoogiePath = "corral.exe";
             writeDetailPerClient = true;
             controlSplitRate = true;
             splitInterval = 0.5;
