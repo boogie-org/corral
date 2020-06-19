@@ -12,6 +12,7 @@ using System.IO;
 
 namespace cba
 {
+    
     public class Driver
     {
 
@@ -214,7 +215,7 @@ namespace cba
 
             Configs config = Configs.parseCommandLine(args);
             CommandLineOptions.Install(new CommandLineOptions());
-
+            
             if (!System.IO.File.Exists(config.inputFile))
             {
                 throw new UsageError(string.Format("Input file {0} does not exist", config.inputFile));
@@ -602,6 +603,7 @@ namespace cba
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
                 BoogieVerify.options.newStratifiedInlining = config.newStratifiedInlining;
                 BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
+                BoogieVerify.options.hydraServerURI = config.hydraServerURI;
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;

@@ -14,6 +14,7 @@ using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Threading;
+//using LocalServerInCsharp;
 
 namespace CoreLib
 {
@@ -177,7 +178,7 @@ namespace CoreLib
         public static readonly string ForceInlineAttr = "ForceInline";
 
         public Stats stats;
-
+        
         /* call-site to VC map -- used for trace construction */
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
@@ -221,9 +222,19 @@ namespace CoreLib
         int parentNodeInTimegraph;
         int childNodeInTimegraph;
         Stack<Tuple<int, int>> emulateServerStack;
+        public static double communicationTime = 0;
+        public static double inliningTime = 0;
+        public static double proverTime = 0;
+        public static double splittingTime = 0;
+        public DateTime proverStartTime;
+        public DateTime inliningStartTime;
+        public DateTime splittingStartTime;
+        public DateTime lastSplitAt;
+        public double nextSplitInterval = 0;
+        //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
-
+        public HashSet<string> proofSites;
         // verification start time
         DateTime startTime;
 
@@ -332,9 +343,15 @@ namespace CoreLib
             }
             callServer = new HttpClient();
             callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-            serverUri = new UriBuilder("http://localhost:5000/");
+            //configuration = new Config();
+            //serverUri = new UriBuilder("http://localhost:5000/");
+            //serverUri = new UriBuilder("http://10.0.0.7:5000/");
+            serverUri = new UriBuilder(BoogieVerify.options.hydraServerURI);
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
+            communicationTime = 0;
+            lastSplitAt = DateTime.Now;
+            proofSites = new HashSet<string>();
         }
 
         /* depth in the call tree */
@@ -1228,7 +1245,8 @@ namespace CoreLib
             bool writeLog = false;
             bool makeTimeGraph = false;
             string lastCalltreeSent = string.Empty;
-            
+            bool splitOnDemand = false;
+            bool learnProofs = false;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1296,7 +1314,31 @@ namespace CoreLib
 
             while (true)
             {
+                //Pre-inline proofSites
+                if (learnProofs)
+                {
+                    if (proofSites.Count != 0)
+                    {
+                        HashSet<StratifiedCallSite> temp = new HashSet<StratifiedCallSite>(openCallSites);
+                        foreach (var scs in temp)
+                        {
+                            if (proofSites.Contains(GetPersistentID(scs)))
+                            {
+                                calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                                openCallSites.Remove(scs);
+                                var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                if (svc != null)
+                                {
+                                    openCallSites.UnionWith(svc.CallSites);
+                                    Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                }
+                            }
+                        }
+                    }
+                }
                 // Lets split when the tree has become big enough
+                splittingStartTime = DateTime.Now;
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
@@ -1309,6 +1351,12 @@ namespace CoreLib
                             splitFlag = 1;
                             break;
                         }
+                    }
+                    if (splitOnDemand)
+                    {
+                        string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
                     }
                 }
                 if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1338,7 +1386,8 @@ namespace CoreLib
                         }
                     }
                 }
-                if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1)
+                if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
+                    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
                 //if (splitFlag == 1)
                 {
                     var st = DateTime.Now;
@@ -1356,20 +1405,47 @@ namespace CoreLib
                             toRemove.Add(vc);
                             continue;
                         }
-                        var score = 0;
-                        StratifiedCallSite cs = attachedVCInv[vc];
-                        if (UCoreChildrenCount.ContainsKey(cs))
+                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel")
                         {
-                            score = UCoreChildrenCount[cs];
+                            var score = 0;
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                score = UCoreChildrenCount[cs];
+                            }
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
                         }
-                        if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                        else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                         {
-                            maxVc = vc;
-                            maxVcScore = score;
+                            double score = 0;
+                            double numUnsatNodesInOwnSubtree = 0;
+                            double numUnsatNodesInSiblingSubtree = 0;
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (UCoreChildrenCount.ContainsKey(cs))
+                            {
+                                numUnsatNodesInOwnSubtree = UCoreChildrenCount[cs];
+                            }
+                            var disjointNodes = di.DisjointNodes(vc);
+                            foreach (StratifiedVC v in disjointNodes)
+                            {
+                                if (CallSitesInUCore.Contains(attachedVCInv[v]))
+                                    numUnsatNodesInSiblingSubtree++;
+                            }
+                            score = Math.Min(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree) / Math.Max(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree);
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
                         }
                     }
                     if (maxVc != null)
                     {
+                        //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
                         toRemove.Iter(vc => attachedVCInv.Remove(vc));
                         UCsplit += 1;
                         StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -1425,6 +1501,7 @@ namespace CoreLib
                         calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                        
                     }
                 }
+                splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
                 boundHit = false;
                 // underapproximate query
@@ -1544,7 +1621,25 @@ namespace CoreLib
                 }
                 else
                 {
-                    //if (writeLog)
+                    if (learnProofs)
+                    {
+                        if (outcome == Outcome.Correct)
+                        {
+                            var proofCore = prover.UnsatCore();
+                            if (proofCore != null)
+                            {
+                                foreach (StratifiedCallSite cs in attachedVC.Keys)
+                                {
+                                    if (proofCore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                    {
+                                        if (!proofSites.Contains(GetPersistentID(cs)))
+                                            proofSites.Add(GetPersistentID(cs));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (writeLog)
                         Console.WriteLine("block finished");                    
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
@@ -1605,7 +1700,7 @@ namespace CoreLib
                         {
                             // Block
                             prover.Assert(topDecision.cs.callSiteExpr, false);
-                            decisions.Push(new Decision(DecisionType.BLOCK, 0, topDecision.cs));
+                            decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             treesize = di.ComputeSize();
@@ -1690,8 +1785,10 @@ namespace CoreLib
         public string sendRequestToServer(string request, string requestContent)
         {
             serverUri.Query = string.Format("{0}={1}", request, requestContent);
-            Console.WriteLine(string.Format("{0}={1}", request, requestContent));
+            //Console.WriteLine(string.Format("{0}={1}", request, requestContent));
+            DateTime communicationStartTime = DateTime.Now;
             string replyFromServer = callServer.GetStringAsync(serverUri.Uri).Result;
+            communicationTime =  communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
             return replyFromServer;
         }
 
@@ -1699,8 +1796,12 @@ namespace CoreLib
         {
             serverUri.Query = string.Empty;
             JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
+            DateTime communicationStartTime = DateTime.Now;
             var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
             string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            lastSplitAt = DateTime.Now;
+            nextSplitInterval = double.Parse(replyFromServer);
+            communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
             return replyFromServer;
         }
 
@@ -2493,13 +2594,15 @@ namespace CoreLib
                 }
                 else
                 {
-                    //if (writeLog)
+                    if (writeLog)
                         Console.WriteLine("Request Calltree here from client {0}", clientID);
                     replyFromServer = null;
                     receivedCalltree = null;
                     replyFromServer = sendRequestToServer("requestCalltree", clientID);
-                    Console.WriteLine("received reply : " + replyFromServer + " : END");
-                    Console.WriteLine("after reply");
+                    if (writeLog)
+                        Console.WriteLine("received reply : " + replyFromServer + " : END");
+                    if (writeLog)
+                        Console.WriteLine("after reply");
                     if (replyFromServer.Equals("UNAVAILABLE"))
                     {
                         if (writeLog)
@@ -2508,7 +2611,11 @@ namespace CoreLib
                         continue;
                     }
                     if (replyFromServer.Equals("SendResetTime"))
-                        sendRequestToServer("ResetTime", resetTime.ToString());
+                    {
+                        //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
+                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
+                            communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
+                    }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -2714,7 +2821,7 @@ namespace CoreLib
                             {
                                 if (mode == 0) // inline callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("inlining " + callsiteToInline);
                                     StratifiedCallSite scs = null;
                                     foreach (StratifiedCallSite cs in openCallSites)
@@ -2727,9 +2834,12 @@ namespace CoreLib
                                     }
                                     if (scs == null)
                                     {
-                                        Console.WriteLine("did not find " + callsiteToInline);
-                                        Console.ReadLine();
-                                        Console.WriteLine("did not find ");
+                                        if (writeLog)
+                                        {
+                                            Console.WriteLine("did not find " + callsiteToInline);
+                                            Console.ReadLine();
+                                            Console.WriteLine("did not find ");
+                                        }
                                     }
                                     if (!inlinedCallsites.Contains(GetPersistentID(scs)))
                                         inlinedCallsites.Add(GetPersistentID(scs));
@@ -2740,7 +2850,7 @@ namespace CoreLib
                                     else
                                     {
                                         Console.WriteLine("ALREADY INLINED 2 : " + callsiteToInline);
-                                        Console.ReadLine();
+                                        //Console.ReadLine();
                                     }
                                     openCallSites.Remove(scs);
                                     var vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
@@ -2752,21 +2862,21 @@ namespace CoreLib
                                 }
                                 else if (mode == 1) //BLOCK callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
                                     backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    decisions.Push(new Decision(DecisionType.BLOCK, 0, cs));
+                                    decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
                                     prover.Assert(cs.callSiteExpr, false);                                    
                                     mode = 0;                                    
                                 }
                                 else //MUSTREACH callsite
                                 {
-                                    //if (writeLog)
+                                    if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
@@ -2821,6 +2931,12 @@ namespace CoreLib
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled)
                 {
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                        backtrackingPoints, decisions);
+                }
+                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled)
+                {
+                    Debug.Assert(CommandLineOptions.Clo.UseLabels == false);
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }
@@ -2893,7 +3009,7 @@ namespace CoreLib
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
                 if (writeLog)
                     Console.WriteLine("HERE");
-                //if (writeLog)
+                if (writeLog)
                     Console.WriteLine(replyFromServer);
                 if (writeLog)
                     Console.WriteLine("HERE");
@@ -2921,7 +3037,8 @@ namespace CoreLib
                 }
                 //Console.WriteLine(" :end");
                 sendTimeGraph = sendTimeGraph + " :end";
-                Console.WriteLine(sendTimeGraph);
+                if (writeLog)
+                    Console.WriteLine(sendTimeGraph);
                 //Console.ReadLine();
                 sendRequestToServer("TimeGraph", sendTimeGraph);
             }
@@ -2939,6 +3056,7 @@ namespace CoreLib
 
         private StratifiedVC Expand(StratifiedCallSite scs, string name, bool DoSubst, bool dontMerge)
         {
+            inliningStartTime = DateTime.Now;
             MacroSI.PRINT_DEBUG("    ~ extend callsite " + scs.callSite.calleeName);
             Debug.Assert(DoSubst || di.disabled);
             var candidate = dontMerge ? null : di.FindMergeCandidate(scs);
@@ -2992,6 +3110,7 @@ namespace CoreLib
                 Merge(scs, candidate);
                 ret = null;
             }
+            inliningTime = inliningTime + (DateTime.Now - inliningStartTime).TotalSeconds;
             return ret;
         }
 
@@ -3077,7 +3196,9 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
+            proverStartTime = DateTime.Now;
             prover.Check();
+            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
@@ -3089,8 +3210,10 @@ namespace CoreLib
 
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
+            proverStartTime = DateTime.Now;
             ProverInterface.Outcome outcome = 
                 prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
+            proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
