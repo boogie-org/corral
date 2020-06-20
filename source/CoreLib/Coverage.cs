@@ -30,7 +30,7 @@ namespace cba
             // Run verification, gather traces
             var verifier = getVerifier();
             verifier.run(input);
-
+            
             // Set verification result
             success = verifier.success;
             traces = verifier.traces;

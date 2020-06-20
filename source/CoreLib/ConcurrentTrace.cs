@@ -35,6 +35,7 @@ namespace cba
         // Printing on console or for concurrency explorer
         private static bool printConsole = true;
 
+        public static string cexTrace = "";
 
         // Print an interleaved trace, using the execution context information present
         // in trace
@@ -348,6 +349,7 @@ namespace cba
                     if (str != prev)
                     {
                         Console.WriteLine(str);
+                        cexTrace += str + "\n";
                     }
                     prev = str;
                     extra = "";

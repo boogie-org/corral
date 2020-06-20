@@ -108,7 +108,7 @@ namespace ClientSource
                 }
             }
             configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
-            configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /printFinalProgOnly /printFinalProg:";
+            configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /hydraServerURI:" + configuration.serverAddress + " /killAfter:" + configuration.timeout + " /printFinalProgOnly /printFinalProg:";
             configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
         }
 
@@ -209,6 +209,7 @@ namespace ClientSource
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
                 runCorral(siFilePath);
+                //runCorral(fileName);
             }
         }
 
@@ -223,6 +224,7 @@ namespace ClientSource
             Process p = new Process();
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName + configuration.hydraArguments;
+            Console.WriteLine(p.StartInfo.Arguments);
             p.StartInfo.UseShellExecute = false;
             //p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
@@ -260,6 +262,7 @@ namespace ClientSource
             killAllZ3Instances.StartInfo.Arguments = "/F /IM z3.exe /T";
             killAllZ3Instances.Start();
             killAllZ3Instances.WaitForExit();
+            //Console.ReadLine();
         }
 
     }

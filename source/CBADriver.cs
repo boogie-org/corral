@@ -30,7 +30,7 @@ namespace cba
             pout = null;
             cex = null;
             tinfo = null;
-
+            
             //////
             // These are the compilation phases         
             //////
@@ -78,11 +78,11 @@ namespace cba
                 recordK.UnionWith(GlobalConfig.varsToRecord);
                 recordK.IntersectWith(trackedVars.Variables);
             }
-
+            
             // Now verify  
             VerificationPass cp4 = new VerificationPass(true, recordK);
             curr = cp4.run(curr);
-
+            
             reachedBound = cp4.reachedBound;
 
             if (cp4.success)
@@ -101,7 +101,7 @@ namespace cba
                 // Concretization: map back the trace to the original program
                 var trace4 = cp4.trace;
                 //PrintProgramPath.print(cp4.input as PersistentCBAProgram, trace4, "temp4");
-
+                
                 if (ciPass != null) trace4 = ciPass.mapBackTrace(trace4);
                 var trace3 = trace4;
                 

@@ -12,6 +12,12 @@ using cba.Util;
 
 namespace cba.Util
 {
+    public static class HydraConfig
+    {
+        public static string hydraServerURI = null;
+        public static bool startHydra = false;
+    }
+
     public static class BoogieVerify
     {
         public enum ReturnStatus { OK, NOK, ReachedBound };
@@ -58,7 +64,7 @@ namespace cba.Util
             var to = new List<string>();
 
             ReturnStatus ret = BoogieVerify.Verify(program, true, out allErrors, out to, isCBA);
-
+            
             if (to.Count != 0)
                 throw new InternalError("Z3 ran out of resources");
 
@@ -70,7 +76,7 @@ namespace cba.Util
             var ls = new List<BoogieErrorTrace>();
             var to = new List<string>();
 
-            ReturnStatus ret = BoogieVerify.Verify(program, false, out ls, out to);
+            ReturnStatus ret = BoogieVerify.Verify(program, false, out ls, out to);            
             if (to.Count != 0)
                 throw new InternalError("Z3 ran out of resources");
 
@@ -207,7 +213,7 @@ namespace cba.Util
                     var start = DateTime.Now;
 
                     outcome = vcgen.VerifyImplementation(impl, out errors);
-
+                    
                     var end = DateTime.Now;
 
                     TimeSpan elapsed = end - start;
@@ -1096,6 +1102,7 @@ namespace cba.Util
 
             var errors = new List<BoogieErrorTrace>();
             var ret = BoogieVerify.Verify(newProgCopy, out errors);
+            
             if (ret != BoogieVerify.ReturnStatus.NOK)
             {
                 return false;

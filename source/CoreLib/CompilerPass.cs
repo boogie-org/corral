@@ -59,7 +59,9 @@ namespace cba
         public PersistentCBAProgram run(PersistentCBAProgram inp)
         {
             var time1 = DateTime.Now;
+            
             ProgTransformation.PersistentProgram outp = run(inp as ProgTransformation.PersistentProgram);
+            
             var ret = outp as PersistentCBAProgram;
             var time2 = DateTime.Now;
 
@@ -74,7 +76,7 @@ namespace cba
             Debug.Assert(ap != null);
 
             CBAProgram ret = runCBAPass(ap);
-
+            
             return ret as Program;
         }
 
@@ -184,6 +186,7 @@ namespace cba
             // Query
             var allErrors = new List<BoogieErrorTrace>();
             BoogieVerify.Verify(query, out allErrors);
+            
             foreach (var trace in allErrors)
             {
                 var loopName = QKeyValue.FindStringAttribute(trace.impl.Attributes, "LB_Mapping");
