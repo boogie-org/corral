@@ -346,7 +346,8 @@ namespace CoreLib
             //configuration = new Config();
             //serverUri = new UriBuilder("http://localhost:5000/");
             //serverUri = new UriBuilder("http://10.0.0.7:5000/");
-            serverUri = new UriBuilder(BoogieVerify.options.hydraServerURI);
+            //serverUri = new UriBuilder(BoogieVerify.options.hydraServerURI);
+            serverUri = new UriBuilder(cba.Util.HydraConfig.hydraServerURI);
             previousSplitSites = new HashSet<string>();
             calltreeToSend = "";
             communicationTime = 0;
@@ -1482,7 +1483,7 @@ namespace CoreLib
                         //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                         //applyDecisionToDI(DecisionType.BLOCK, maxVc);
                         
-                        if (writeLog)
+                        //if (writeLog)
                             Console.WriteLine("splitting on : " + GetPersistentID(scs));
                         if (writeLog)
                             Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
@@ -1576,6 +1577,7 @@ namespace CoreLib
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 reporter.reportTrace = false;
                 outcome = CheckVC(reporter);
+                Console.WriteLine(outcome.ToString());
                 //Pop();
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
@@ -2515,7 +2517,226 @@ namespace CoreLib
 
 
         /* verification */
+
         public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
+        {
+            Outcome outcome;
+            if (cba.Util.HydraConfig.startHydra)
+                outcome = VerifyImplementationHydra(impl, callback);
+            else
+                outcome = VerifyImplementationCorral(impl, callback);
+            return outcome;
+        }
+
+        public Outcome VerifyImplementationCorral(Implementation impl, VerifierCallback callback)
+        {
+            startTime = DateTime.UtcNow;
+
+            procsHitRecBound = new HashSet<string>();
+
+            // Find all procedures that are "forced inline"
+            forceInlineProcs.UnionWith(program.TopLevelDeclarations.OfType<Implementation>()
+                .Where(p => BoogieUtil.checkAttrExists(ForceInlineAttr, p.Attributes) || BoogieUtil.checkAttrExists(ForceInlineAttr, p.Proc.Attributes))
+                .Select(p => p.Name));
+
+            // assert true to flush all one-time axioms, decls, etc
+            prover.Assert(VCExpressionGenerator.True, true);
+
+            /* the forward/backward approach can only be applied for programs with asserts in calls
+            * and single-threaded (multi-threaded programs contain a final assert in the main).
+            * Otherwise, use forward approach */
+            if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
+            {
+                return FwdBckVerify(impl, callback);
+            }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "duality")
+            {
+                return DepthFirstStyle(impl, callback);
+            }
+
+            MacroSI.PRINT_DEBUG("Starting forward approach...");
+
+            di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
+
+            Push();
+
+            StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
+            mainVC = svc;
+            di.RegisterMain(svc);
+            HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
+            prover.Assert(svc.vcexpr, true);
+
+            Outcome outcome;
+            var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
+
+
+            #region Eager inlining
+            // Eager inlining 
+            for (int i = 1; i < cba.Util.BoogieVerify.options.StratifiedInlining && openCallSites.Count > 0; i++)
+            {
+                var nextOpenCallSites = new HashSet<StratifiedCallSite>();
+                foreach (StratifiedCallSite scs in openCallSites)
+                {
+                    if (HasExceededRecursionDepth(scs, CommandLineOptions.Clo.RecursionBound)) continue;
+
+                    var ss = Expand(scs);
+                    if (ss != null) nextOpenCallSites.UnionWith(ss.CallSites);
+                }
+                openCallSites = nextOpenCallSites;
+            }
+            #endregion
+
+            #region Repopulate Call Tree
+            if (cba.Util.BoogieVerify.options.CallTree != null && di.disabled)
+            {
+                while (true)
+                {
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    foreach (StratifiedCallSite scs in openCallSites)
+                    {
+                        if (!cba.Util.BoogieVerify.options.CallTree.Contains(GetPersistentID(scs))) continue;
+                        toRemove.Add(scs);
+                        var ss = Expand(scs);
+                        if (ss != null) toAdd.UnionWith(ss.CallSites);
+                        MacroSI.PRINT_DETAIL(string.Format("Eagerly inlining: {0}", scs.callSite.calleeName), 2);
+                    }
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+                    if (toRemove.Count == 0) break;
+                }
+            }
+
+            // Repopulate the dag
+            if (!di.disabled && prevDag != null && prevMain != null && prevMain == impl.Name)
+            {
+                var vcNodeMap = new BijectiveDictionary<StratifiedVC, DagOracle.DagNode>();
+                vcNodeMap.Add(svc, prevDag.GetRoot());
+
+                var stack = new Queue<DagOracle.DagNode>();
+                var expanded = new HashSet<DagOracle.DagNode>();
+
+                stack.Enqueue(prevDag.GetRoot());
+                expanded.Add(prevDag.GetRoot());
+
+                while (stack.Any())
+                {
+                    var n1 = stack.Dequeue();
+                    Debug.Assert(expanded.Contains(n1));
+
+                    foreach (var e in prevDag.Children[n1])
+                    {
+                        var n2 = e.Target;
+
+                        // Find call site
+                        var vc1 = vcNodeMap[n1];
+                        var cs =
+                            vc1.CallSites.FirstOrDefault(s =>
+                                GetSiCallId(s) == e.CallSite && s.callSite.calleeName == n2.ImplName);
+                        Debug.Assert(cs != null);
+                        openCallSites.Remove(cs);
+
+                        if (expanded.Contains(n2))
+                        {
+                            // Merge
+                            var vc2 = vcNodeMap[n2];
+                            Merge(cs, vc2);
+                        }
+                        else
+                        {
+                            // Expand
+                            var vc2 = Expand(cs, null, true, true);
+                            openCallSites.UnionWith(vc2.CallSites);
+                            vcNodeMap.Add(vc2, n2);
+                            expanded.Add(n2);
+                            stack.Enqueue(n2);
+                        }
+
+                    }
+
+                }
+            }
+
+            #endregion
+
+            // Stratified Search
+            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "nounder")
+            {
+                outcome = FwdNoUnder(openCallSites, reporter);
+            }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "mustreach")
+            {
+                outcome = MustReachStyle(openCallSites, reporter);
+            }
+            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "split" && !di.disabled)
+            {
+                outcome = MustReachSplitStyle(openCallSites, reporter);
+            }
+            else
+            {
+                int currRecursionBound = (BoogieVerify.options.extraFlags.Contains("MaxRec") || BoogieVerify.options.NonUniformUnfolding) ? CommandLineOptions.Clo.RecursionBound :
+                    1;
+                while (true)
+                {
+                    procsHitRecBound = new HashSet<string>();
+
+                    outcome = Fwd(openCallSites, reporter, true, currRecursionBound);
+
+                    // timeout?
+                    if (outcome == Outcome.Inconclusive || outcome == Outcome.OutOfMemory || outcome == Outcome.TimedOut)
+                        break;
+
+                    // reached bound?
+                    if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
+                    {
+                        if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                            Console.WriteLine("SI: Exhausted recursion bound of {0}", currRecursionBound);
+                        currRecursionBound++;
+                        continue;
+                    }
+
+                    //Console.WriteLine("Concluding verdict at rec bound {0}", currRecursionBound);
+
+                    // outcome is either ReachedBound with currRecBound == Max or
+                    // Errors or Correct
+                    break;
+                }
+            }
+
+            Pop();
+
+            if (BoogieVerify.options.extraFlags.Contains("DiCheckSanity"))
+                di.CheckSanity();
+
+            if (!di.disabled)
+                Console.WriteLine("Time spent inside DI: {0} sec", di.timeTaken.TotalSeconds.ToString("F2"));
+
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 ||
+                BoogieVerify.options.extraFlags.Contains("DumpDag"))
+                di.Dump("ct" + (dumpCnt++) + ".dot");
+
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
+                stats.print();
+
+            #region Stash call tree
+            if (cba.Util.BoogieVerify.options.CallTree != null)
+            {
+                CallTree = new HashSet<string>();
+                var callsites = new HashSet<StratifiedCallSite>();
+                callsites.UnionWith(parent.Keys);
+                callsites.UnionWith(parent.Values);
+                callsites.ExceptWith(openCallSites);
+                callsites.Iter(scs => CallTree.Add(GetPersistentID(scs)));
+
+                prevMain = impl.Name;
+                prevDag = di.GetDag();
+            }
+            #endregion
+
+            return outcome;
+        }
+
+        public Outcome VerifyImplementationHydra(Implementation impl, VerifierCallback callback)
         {
             bool startFirstJob = false;
             bool writeLog = false;
@@ -2929,18 +3150,20 @@ namespace CoreLib
                 {
                     outcome = UnSatCoreSplitStyle(openCallSites, reporter);
                 }
-                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled)
+                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
+                    Console.WriteLine("running Hydra");
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
+                    Console.WriteLine("Hydra Outcome: " + outcome.ToString());
                 }
-                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled)
+                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }
                 else
-                {
+                {                    
                     int currRecursionBound = (BoogieVerify.options.extraFlags.Contains("MaxRec") || BoogieVerify.options.NonUniformUnfolding) ? CommandLineOptions.Clo.RecursionBound :
                         1;
                     while (true)
@@ -2999,19 +3222,24 @@ namespace CoreLib
                     prevDag = di.GetDag();
                 }
                 #endregion
-                
+                if (writeLog)
+                Console.WriteLine("HERE1");
                 if (outcome == Outcome.Correct)
                     replyFromServer = sendRequestToServer("outcome", "OK");
                 else if (outcome == Outcome.Errors)
+                {
+                    cba.Util.HydraConfig.startHydra = false;                    
                     replyFromServer = sendRequestToServer("outcome", "NOK");
+                    return outcome;
+                }
                 else
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
                 if (writeLog)
-                    Console.WriteLine("HERE");
+                    Console.WriteLine("HERE2");
                 if (writeLog)
                     Console.WriteLine(replyFromServer);
                 if (writeLog)
-                    Console.WriteLine("HERE");
+                    Console.WriteLine("HERE4");
                 if (replyFromServer.Equals("kill") || replyFromServer.Equals("DONE"))
                     continueVerification = false;
             }
@@ -3041,7 +3269,7 @@ namespace CoreLib
                 //Console.ReadLine();
                 sendRequestToServer("TimeGraph", sendTimeGraph);
             }
-            Console.ReadLine();
+            //Console.ReadLine();
             return outcome;
         }
 

@@ -445,7 +445,7 @@ namespace cba
             CommandLineOptions.Clo.ProverKillTime = 5;
 
             // verify
-            BoogieVerify.Verify(outProg, true, out allErrors, out timeOuts);
+            BoogieVerify.Verify(outProg, true, out allErrors, out timeOuts);            
 
             // Find all those impls that verified
             candidates.Iter(impl => ret.Add(impl.Name));

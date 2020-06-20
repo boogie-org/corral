@@ -224,6 +224,9 @@ namespace cba
             Initialize(config);
 
             var startTime = DateTime.Now;
+
+            Program progForPrint = null;            
+
             CommandLineOptions.Clo.EnableUnSatCoreExtract = config.enableUnSatCoreExtract;
             ////////////////////////////////////
             // Initial program rewriting
@@ -372,6 +375,29 @@ namespace cba
 
             var cex = config.NumCex;
 
+            if (config.runFullHydra || config.printFinalProgOnly)
+            {
+                if (progForPrint == null)
+                    progForPrint = BoogieUtil.ReadAndOnlyResolve(config.inputFile);
+                var mains = new List<Implementation>(
+                progForPrint.TopLevelDeclarations
+                .OfType<Implementation>()
+                .Where(impl => QKeyValue.FindBoolAttribute(impl.Attributes, "entrypoint")));
+
+                if (mains.Count == 1 && mains.First().Name == "main")
+                {                    
+                    if (config.runFullHydra)
+                        cba.Util.HydraConfig.startHydra = true;
+                    else if (config.printFinalProgOnly)
+                    {
+                        BoogieUtil.PrintProgram(curr.getProgram(), BoogieVerify.options.progFileName);
+                        Log.WriteLine("Printed Program. Shutting Down.");
+                        Log.Close();
+                        return 0;
+                    }
+                }
+            }            
+
             do
             {
                 ////////////////////////////////////
@@ -384,6 +410,8 @@ namespace cba
 
                 ErrorTrace cexTrace = null;
                 checkAndRefine(curr, refinementState, printTrace, out cexTrace);
+                TokenTextWriter writer = new TokenTextWriter("something.txt");
+                cexTrace.printTrace(writer);
 
                 ////////////////////////////////////
                 // Output Phase
@@ -407,7 +435,7 @@ namespace cba
                         traceName += (config.NumCex - cex);
 
                     if (config.traceProgram != null && !config.noTraceOnDisk)
-                    {
+                    {                        
                         // dump out the trace
                         var tinfo = new cba.InsertionTrans();
                         var traceProg = new cba.RestrictToTrace(inputProg.getProgram(), tinfo);
@@ -420,6 +448,7 @@ namespace cba
                     {
                         PrintConcurrentProgramPath.traceFormat = GlobalConfig.genCTrace.Value;
                         PrintConcurrentProgramPath.printCTrace(inputProg, cexTrace, config.noTraceOnDisk ? null : traceName);
+                        File.AppendAllText("errorTrace.txt", PrintConcurrentProgramPath.cexTrace);
                     }
                     else
                     {
@@ -595,6 +624,8 @@ namespace cba
 
             if (config.siOnly)
             {
+                cba.Util.HydraConfig.startHydra = true;
+                
                 BoogieVerify.removeAsserts = false;
                 var err = new List<BoogieErrorTrace>();
                 init.Typecheck();
@@ -602,8 +633,7 @@ namespace cba
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
                 BoogieVerify.options.newStratifiedInlining = config.newStratifiedInlining;
-                BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
-                BoogieVerify.options.hydraServerURI = config.hydraServerURI;
+                BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;                
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
@@ -626,8 +656,17 @@ namespace cba
                 Console.WriteLine(string.Format("Total Time: {0} s", BoogieVerify.verificationTime.TotalSeconds.ToString("F2")));
 
                 throw new NormalExit("Done");
-            }
+            }            
             #endregion
+
+            /*if (config.hydraServerURI != null)
+            {
+                if (BoogieVerify.options == null)
+                {
+                    BoogieVerify.options = new BoogieVerifyOptions();                    
+                }
+                BoogieVerify.options.hydraServerURI = config.hydraServerURI;
+            }*/
 
             ////////////////////////////////
             // Gather templates for Houdini

@@ -99,7 +99,7 @@ namespace cba
         }
 
         public override CBAProgram runCBAPass(CBAProgram prog)
-        {
+        {            
             if (usePruning)
             {
                 return runVerificationPass(input as PersistentCBAProgram);
@@ -113,7 +113,6 @@ namespace cba
             prune = new PruneProgramPass();
             var pruned = prune.run(prog) as PersistentCBAProgram;
             CBAProgram p = pruned.getCBAProgram();
-
             return feedToBoogie(p);
         }
 
@@ -124,27 +123,25 @@ namespace cba
                 BoogieUtil.PrintProgram(p, "error.bpl");
                 throw new InvalidProg("Cannot typecheck");
             }
-
             BoogieVerify.options.Set();
 
             // An important pass for recording the value of int variables
             Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
             if(WillGetModel)
               recordVarsTransformation(p, p.mainProcName);
-
-            //System.Diagnostics.Debugger.Break();
             
+            //System.Diagnostics.Debugger.Break();
+
             var counterexamples = new List<BoogieErrorTrace>();
             BoogieVerify.ReturnStatus ret;
             if (needErrorTraces)
             {
-                ret = BoogieVerify.Verify(p as Program, out counterexamples, true /* isCBA */);
+                ret = BoogieVerify.Verify(p as Program, out counterexamples, true /* isCBA */);                
             }
             else
             {
                 ret = BoogieVerify.Verify(p as Program);
             }
-
             success = (ret != BoogieVerify.ReturnStatus.NOK);
             reachedBound = (ret == BoogieVerify.ReturnStatus.ReachedBound);
 
@@ -156,7 +153,7 @@ namespace cba
             if (varsToRecord.Count != 0 && !WillGetModel)
                 Debug.Assert(false, "Model generation is turned off -- cannot record values");
 
-            // Currently, we're only concerned with one counterexample.
+            // Currently, we're only concerned with one counterexample.            
             foreach (var et in counterexamples)
             {
                 Debug.Assert(et is BoogieAssertErrorTrace);
@@ -169,7 +166,6 @@ namespace cba
 
                 //PrintProgramPath.print(input, etrace, "tt");
             }
-
             return null;
         }
 
@@ -2370,7 +2366,6 @@ namespace cba
         {
             // Do Inlining
             var prog = inliningPass.run(input);
-            
             runVerificationPass(prog as PersistentCBAProgram);
 
             if (needErrorTraces)
@@ -2824,7 +2819,7 @@ namespace cba
                 // need to get loops out of main
                 program = new CBAProgram(BoogieUtil.ReResolve(program), program.mainProcName, program.contextBound);
                 var ex = new ExtractLoopsPass(true);
-                program = ex.runCBAPass(program);
+                program = ex.runCBAPass(program);                
                 // redo IDs
                 (new AddUniqueCallIds()).VisitProgram(program);
                 return program;

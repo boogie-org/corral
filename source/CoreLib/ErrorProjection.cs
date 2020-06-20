@@ -51,7 +51,7 @@ namespace cba
 
             // Run verification, gather traces
             verifier.run(input);
-
+            
             // Set verification result
             success = verifier.success;
             traces = verifier.traces;
