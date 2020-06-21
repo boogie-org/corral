@@ -11,10 +11,12 @@ Tutorial : How to deploy Hydra
     c. timeout: How long should verification run before timing out (in seconds)            
     d. inputFilesDirectoryPath: Path to the input directory. Hydra will verify each boogie file in the directory. For each boogie file <filename.bpl>, Hydra will write the result (putcome, total time etc.) in <filename.bpl.txt> in the same directory.
     e. corralDumpBoogie: Set this to corral.exe
-    f. serverAddress: ip address and port of the Hydra server. You may need to set custom in/out tcp and udp rules in order to enable the server to listen the specified port
-    g. corralArguments: set of arguments which corralDumpBoogie will use to dump intermediate SI boogie files
-    h. hydraArguments: set of arguments which Hydra will use to verify the intermediate SI boogie files
-    i. startLocalListener: setting this to true will let Hydra run clients on the Server machine as well 
+    f. dumpSIBoogieFiles: Set this to false if you are feeding SI boogie files as input to Hydra. Set this to true if you want to dump SI boogie files from input boogie files and then run verification on SI boogie files.
+    g. boogieDumpDirectory: Path to the directory where Hydra will dump SI boogie files if you set dumpSIBoogieFiles to true. 
+    h. serverAddress: ip address and port of the Hydra server. You may need to set custom in/out tcp and udp rules in order to enable the server to listen the specified port
+    i. corralArguments: set of arguments which Hydra will use to dump intermediate SI boogie files if you set dumpSIBoogieFiles to true
+    j. hydraArguments: set of arguments which Hydra will use to verify the intermediate SI boogie files
+    k. startLocalListener: setting this to true will let Hydra run clients on the Server machine as well 
 
 3. Run AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug\LocalServerInCsharp.exe <path-to-config.txt> on the server machine
 If you are using multiple listener nodes,

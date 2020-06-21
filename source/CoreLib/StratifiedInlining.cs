@@ -1387,6 +1387,15 @@ namespace CoreLib
                         }
                     }
                 }
+                Console.WriteLine(treesize + " " + size);
+                if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                    Console.WriteLine("Split COndition 1 is TRUE");
+                Console.WriteLine("UCore Count : " + CallSitesInUCore.Count);
+                if (splitFlag == 1)
+                    Console.WriteLine("Split COndition 2 is TRUE");
+                Console.WriteLine((DateTime.Now - lastSplitAt).TotalSeconds + " " + nextSplitInterval);
+                if ((DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
+                    Console.WriteLine("Split COndition 3 is TRUE");
                 if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
                     && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
                 //if (splitFlag == 1)
@@ -1532,7 +1541,9 @@ namespace CoreLib
                 reporter.reportTrace = true;
                 if (writeLog)
                     Console.WriteLine("point 0.1");
+                DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
+                Console.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
                 if (writeLog)
                     Console.WriteLine("point 0.2");
 
@@ -1576,7 +1587,9 @@ namespace CoreLib
                     Console.WriteLine("point 4");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 reporter.reportTrace = false;
+                DateTime oqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
+                Console.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                 Console.WriteLine(outcome.ToString());
                 //Pop();
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)

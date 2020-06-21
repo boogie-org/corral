@@ -62,10 +62,17 @@ namespace LocalServerInCsharp
         public static DateTime lastSplitArrival;
         public static double splitRate = 0;
         public static Config configuration = new Config();
+        public static double boogieDumpTime = 0;
+        public static DateTime boogieDumpStart;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
             setupConfig(args[0]);
+            if (configuration.dumpSIBoogieFiles)
+            {
+                if (!Directory.Exists(configuration.boogieDumpDirectory))
+                    Directory.CreateDirectory(configuration.boogieDumpDirectory);
+            }
             maxClients = configuration.numMaxClients * configuration.numListeners;
             maxListeners = configuration.numListeners;
             timeout = configuration.timeout;
@@ -315,11 +322,11 @@ namespace LocalServerInCsharp
                         startListenerService();*/
                 }                
 
-                if ((DateTime.Now - startTime).TotalSeconds > timeout)
+                if ((DateTime.Now - startTime).TotalSeconds > timeout && !setKillFlag)
                 {
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     finalOutcome = "TIMEDOUT";
-                    totalTime = timeout;
+                    totalTime = (DateTime.Now - startTime).TotalSeconds;
                     writeDetailedOutcome(true);
                     setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
@@ -401,6 +408,15 @@ namespace LocalServerInCsharp
                         break;
                     case "corralDumpBoogie":
                         configuration.corralDumpBoogiePath = configKey[1];
+                        break;
+                    case "dumpSIBoogieFiles":
+                        if (configKey[1] == "true")
+                            configuration.dumpSIBoogieFiles = true;
+                        else
+                            configuration.dumpSIBoogieFiles = false;
+                        break;
+                    case "boogieDumpDirectory":
+                        configuration.boogieDumpDirectory = configKey[1];
                         break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);
@@ -484,6 +500,7 @@ namespace LocalServerInCsharp
             else
             {
                 workingFile = fileQueue.Dequeue();
+                boogieDumpStart = DateTime.Now;
                 while (initListener.Count > 0)
                     ResponseHttp(initListener.Dequeue(), workingFile);
                 /*bool err = ResponseHttp(context, workingFile);
@@ -598,6 +615,8 @@ namespace LocalServerInCsharp
         static void assignIDtoClient(HttpListenerContext context)
         {
             numClients = numClients + 1;
+            if (numClients == 1)
+                boogieDumpTime = (DateTime.Now - boogieDumpStart).TotalSeconds;
             string reply = numClients.ToString();
             bool err = ResponseHttp(context, reply);
             if (err)
@@ -728,7 +747,7 @@ namespace LocalServerInCsharp
             string toWrite;
             if (!timedOut)
             {
-                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n"
+                toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
@@ -742,7 +761,7 @@ namespace LocalServerInCsharp
             }
             else
             {
-                toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n";
+                toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n";
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {

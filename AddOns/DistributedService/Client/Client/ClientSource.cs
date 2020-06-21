@@ -102,6 +102,15 @@ namespace ClientSource
                     case "corralDumpBoogie":
                         configuration.corralDumpBoogiePath = configKey[1];
                         break;
+                    case "dumpSIBoogieFiles":
+                        if (configKey[1] == "true")
+                            configuration.dumpSIBoogieFiles = true;
+                        else
+                            configuration.dumpSIBoogieFiles = false;
+                        break;
+                    case "boogieDumpDirectory":
+                        configuration.boogieDumpDirectory = configKey[1];
+                        break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);
                         break;
@@ -186,29 +195,36 @@ namespace ClientSource
             //corralProcessList.Clear();
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
-            Process p = new Process();
-            p.StartInfo.FileName = configuration.corralDumpBoogiePath;
-            //Console.WriteLine(configuration.corralDumpBoogiePath);
-            string origFilename =  fileName.Substring(fileName.LastIndexOf('\\')+1);
-            string siFilename = origFilename + ".bpl";
-            p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
-            //Console.WriteLine(origFilename);
-            //Console.WriteLine(p.StartInfo.Arguments);
-            //Console.ReadLine();
-            p.StartInfo.UseShellExecute = false;
-            p.Start();
-            p.WaitForExit();
-            Console.WriteLine("SI Boogie File Dumped");
-            string siFilePath = configuration.inputFilesDirectoryPath + @"\" + siFilename;
-            if (File.Exists(siFilePath))
-                File.Delete(siFilePath);
-            File.Move(siFilename, siFilePath);
+            string fileToRun;
+            if (configuration.dumpSIBoogieFiles)
+            {
+                Process p = new Process();
+                p.StartInfo.FileName = configuration.corralDumpBoogiePath;
+                //Console.WriteLine(configuration.corralDumpBoogiePath);
+                string origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                string siFilename = origFilename + ".bpl";
+                p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
+                //Console.WriteLine(origFilename);
+                //Console.WriteLine(p.StartInfo.Arguments);
+                //Console.ReadLine();
+                p.StartInfo.UseShellExecute = false;
+                p.Start();
+                p.WaitForExit();
+                Console.WriteLine("SI Boogie File Dumped");
+                string siFilePath = configuration.boogieDumpDirectory + siFilename;
+                if (File.Exists(siFilePath))
+                    File.Delete(siFilePath);
+                File.Move(siFilename, siFilePath);
+                fileToRun = siFilePath;
+            }
+            else
+                fileToRun = fileName;
             //Console.WriteLine(siFilePath);
             //Console.ReadLine();
             for (int i = 0; i < maxClients; i++)
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
-                runCorral(siFilePath);
+                runCorral(fileToRun);
                 //runCorral(fileName);
             }
         }
@@ -225,8 +241,8 @@ namespace ClientSource
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName + configuration.hydraArguments;
             Console.WriteLine(p.StartInfo.Arguments);
-            p.StartInfo.UseShellExecute = false;
-            //p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.UseShellExecute = true;
+            p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;

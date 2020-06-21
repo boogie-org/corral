@@ -22,6 +22,8 @@ namespace LocalServerInCsharp
         public string hydraArguments;
         public string corralDumpArguments;
         public string corralDumpBoogiePath;
+        public string boogieDumpDirectory;
+        public bool dumpSIBoogieFiles;
         public bool writeDetailPerClient;
         public bool controlSplitRate;
         public double splitInterval;
@@ -39,7 +41,7 @@ namespace LocalServerInCsharp
             rawArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             hydraArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             startLocalListener = true;
-
+            dumpSIBoogieFiles = false;
             //Modify The Following Flags Only If Necessary 
 
             // /newStratifiedInlining:ucsplitparallel runs the original heuristic
@@ -49,6 +51,7 @@ namespace LocalServerInCsharp
             listenerExecutablePath = "Client.exe";
             corralExecutablePath = "corral.exe";
             corralDumpBoogiePath = "corral.exe";
+            boogieDumpDirectory = inputFilesDirectoryPath + @"\boogieDump\";
             writeDetailPerClient = true;
             controlSplitRate = true;
             splitInterval = 0.5;
