@@ -477,6 +477,7 @@ namespace LocalServerInCsharp
             numClientsResetTimeSent = 0;
             clientCalltreeQueue = new Deque<string>[maxClients];
             splitRate = 0;
+            boogieDumpTime = 0;
             Array.Clear(clientCommunicationTime, 0, maxClients);
             Array.Clear(clientResetTime, 0, maxClients);
             Array.Clear(clientInliningTime, 0, maxClients);
@@ -630,7 +631,7 @@ namespace LocalServerInCsharp
             {
                 reply = "YES";
                 startFirstJob = true;
-                startTime = DateTime.Now;
+                //startTime = DateTime.Now;
                 lastSplitArrival = DateTime.Now;
                 resetTime = 0;
                 communicationTime = 0;
