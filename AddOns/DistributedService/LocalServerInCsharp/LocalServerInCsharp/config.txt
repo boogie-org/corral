@@ -1,11 +1,11 @@
 numListeners=1
-numMaxClients=3          
-timeout=180         
-inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test7\
+numMaxClients=1          
+timeout=900        
+inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test9\
 corralDumpBoogie=corral.exe
 dumpSIBoogieFiles=true
-boogieDumpDirectory=F:\00ResearchWork\SVCOMP\test7\boogieDump\
+boogieDumpDirectory=F:\00ResearchWork\SVCOMP\test9\boogieDump\
 serverAddress=http://localhost:5000/
-corralArguments=/oldCorralFlags /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:65536 /irreducibleLoopUnroll:12 /trackAllVars
-hydraArguments=/oldCorralFlags /si /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:65536 /irreducibleLoopUnroll:12 /trackAllVars
+corralArguments=/oldCorralFlags /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:10 /irreducibleLoopUnroll:12 /trackAllVars
+hydraArguments=/oldCorralFlags /si /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:10 /irreducibleLoopUnroll:12 /trackAllVars
 startLocalListener=true

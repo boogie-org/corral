@@ -1219,6 +1219,29 @@ namespace CoreLib
             return outcome;
         }
 
+        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand)
+        {
+            int splitFlag = 0;
+            if (CallSitesInUCore.Count != 0)
+            {
+                foreach (StratifiedCallSite cs in CallSitesInUCore)
+                {
+                    if (!previousSplitSites.Contains(GetPersistentID(cs)))
+                    {
+                        splitFlag = 1;
+                        break;
+                    }
+                }
+                if (splitOnDemand)
+                {
+                    string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                    if (reply.Equals("NO"))
+                        splitFlag = 0;
+                }
+            }
+            return splitFlag;
+        }
+
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, TimeGraph timeGraph,
             Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar, 
@@ -1248,6 +1271,8 @@ namespace CoreLib
             string lastCalltreeSent = string.Empty;
             bool splitOnDemand = false;
             bool learnProofs = false;
+            int maxSplitPerIteration = 2;
+            int numSplitThisIteration = 0;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1343,23 +1368,8 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (CallSitesInUCore.Count != 0)
-                {
-                    foreach (StratifiedCallSite cs in CallSitesInUCore)
-                    {
-                        if (!previousSplitSites.Contains(GetPersistentID(cs)))
-                        {
-                            splitFlag = 1;
-                            break;
-                        }
-                    }
-                    if (splitOnDemand)
-                    {
-                        string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
-                        if (reply.Equals("NO"))
-                            splitFlag = 0;
-                    }
-                }
+                splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
+                
                 if (CallSitesInUCore.Count != 0 && splitFlag == 1)
                 {
                     foreach (StratifiedCallSite cs in CallSitesInUCore)
@@ -1396,9 +1406,10 @@ namespace CoreLib
                 Console.WriteLine((DateTime.Now - lastSplitAt).TotalSeconds + " " + nextSplitInterval);
                 if ((DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
                     Console.WriteLine("Split COndition 3 is TRUE");
-                if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
-                    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
-                //if (splitFlag == 1)
+                //if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
+                //    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
+                //while (splitFlag == 1 && numSplitThisIteration <= maxSplitPerIteration)
+                while (numSplitThisIteration <= maxSplitPerIteration)
                 {
                     var st = DateTime.Now;
 
@@ -1408,6 +1419,10 @@ namespace CoreLib
                     var toRemove = new HashSet<StratifiedVC>();
                     var sizes = di.ComputeSubtrees();
                     var disj = di.ComputeNumDisjoint();
+                    if (splitFlag == 1)
+                        Console.WriteLine("Splitting On UNSATCORE");
+                    else
+                        Console.WriteLine("Splitting On MUSTREACH");
                     foreach (var vc in attachedVCInv.Keys)
                     {
                         if (!di.VcExists(vc))
@@ -1415,7 +1430,7 @@ namespace CoreLib
                             toRemove.Add(vc);
                             continue;
                         }
-                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel")
+                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && splitFlag == 1)
                         {
                             var score = 0;
                             StratifiedCallSite cs = attachedVCInv[vc];
@@ -1429,7 +1444,7 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
-                        else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
+                        else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && splitFlag == 1)
                         {
                             double score = 0;
                             double numUnsatNodesInOwnSubtree = 0;
@@ -1452,6 +1467,17 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
+                        else
+                        {
+                            var score = Math.Min(sizes[vc].Count, disj[vc]);
+                            StratifiedCallSite cs = attachedVCInv[vc];
+                            if (!previousSplitSites.Contains(GetPersistentID(cs)) && score >= maxVcScore)
+                            {
+                                maxVc = vc;
+                                maxVcScore = score;
+                            }
+                        }
+
                     }
                     if (maxVc != null)
                     {
@@ -1510,7 +1536,10 @@ namespace CoreLib
                             Console.ReadLine();
                         calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                        
                     }
+                    numSplitThisIteration++;
+                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                 }
+                numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
                 boundHit = false;
@@ -3171,6 +3200,11 @@ namespace CoreLib
                     Console.WriteLine("Hydra Outcome: " + outcome.ToString());
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
+                {
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                        backtrackingPoints, decisions);
+                }
+                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);

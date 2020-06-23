@@ -118,6 +118,7 @@ namespace ClientSource
             }
             configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
             configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /hydraServerURI:" + configuration.serverAddress + " /killAfter:" + configuration.timeout + " /printFinalProgOnly /printFinalProg:";
+            //configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /killAfter:180 /printFinalProg:";
             configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
         }
 
