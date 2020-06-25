@@ -1271,7 +1271,7 @@ namespace CoreLib
             string lastCalltreeSent = string.Empty;
             bool splitOnDemand = false;
             bool learnProofs = false;
-            int maxSplitPerIteration = 2;
+            int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
@@ -1397,7 +1397,7 @@ namespace CoreLib
                         }
                     }
                 }
-                Console.WriteLine(treesize + " " + size);
+                /*Console.WriteLine(treesize + " " + size);
                 if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                     Console.WriteLine("Split COndition 1 is TRUE");
                 Console.WriteLine("UCore Count : " + CallSitesInUCore.Count);
@@ -1405,7 +1405,7 @@ namespace CoreLib
                     Console.WriteLine("Split COndition 2 is TRUE");
                 Console.WriteLine((DateTime.Now - lastSplitAt).TotalSeconds + " " + nextSplitInterval);
                 if ((DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
-                    Console.WriteLine("Split COndition 3 is TRUE");
+                    Console.WriteLine("Split COndition 3 is TRUE");*/
                 //if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1 
                 //    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
                 //while (splitFlag == 1 && numSplitThisIteration <= maxSplitPerIteration)
@@ -1419,10 +1419,10 @@ namespace CoreLib
                     var toRemove = new HashSet<StratifiedVC>();
                     var sizes = di.ComputeSubtrees();
                     var disj = di.ComputeNumDisjoint();
-                    if (splitFlag == 1)
+                    /*if (splitFlag == 1)
                         Console.WriteLine("Splitting On UNSATCORE");
                     else
-                        Console.WriteLine("Splitting On MUSTREACH");
+                        Console.WriteLine("Splitting On MUSTREACH");*/
                     foreach (var vc in attachedVCInv.Keys)
                     {
                         if (!di.VcExists(vc))
@@ -1430,8 +1430,9 @@ namespace CoreLib
                             toRemove.Add(vc);
                             continue;
                         }
-                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && splitFlag == 1)
+                        if ((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3") && splitFlag == 1)
                         {
+                            //Console.WriteLine("SPLITTING ON UNSAT CORE");
                             var score = 0;
                             StratifiedCallSite cs = attachedVCInv[vc];
                             if (UCoreChildrenCount.ContainsKey(cs))
@@ -1467,8 +1468,9 @@ namespace CoreLib
                                 maxVcScore = score;
                             }
                         }
-                        else
+                        else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3")
                         {
+                            //Console.WriteLine("SPLITTING ON MUSTREACH");
                             var score = Math.Min(sizes[vc].Count, disj[vc]);
                             StratifiedCallSite cs = attachedVCInv[vc];
                             if (!previousSplitSites.Contains(GetPersistentID(cs)) && score >= maxVcScore)
