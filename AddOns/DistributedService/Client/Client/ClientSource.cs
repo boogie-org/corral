@@ -22,6 +22,7 @@ namespace ClientSource
         public static string corralExecutablePath;
         public static int maxClients;        
         public static Config configuration = new Config();
+        public static double boogieDumpTime;
         // Main Method 
         static void Main(string[] args)
         {
@@ -162,13 +163,19 @@ namespace ClientSource
                 RestartVerification();
             else if (replyFromServer.Equals("returned"))
                 Console.WriteLine(replyFromServer);
+            else if (replyFromServer.Equals("Finished"))
+                Process.GetCurrentProcess().Kill();
             else
                 Console.WriteLine("No Action Taken");
-
-            requestKey = "ListenerWaitingForRestart";
-            requestKeyValue = "WaitForReply";                                            //Value is placeholder. Not used anywhere
-            serverUri.Query = string.Format("{0}={1}", requestKey, requestKeyValue);
-            replyFromServer = newClient.GetStringAsync(serverUri.Uri).Result;
+            while (true)
+            {
+                requestKey = "ListenerWaitingForRestart";
+                requestKeyValue = "WaitForReply";                                            //Value is placeholder. Not used anywhere
+                serverUri.Query = string.Format("{0}={1}", requestKey, requestKeyValue);
+                replyFromServer = newClient.GetStringAsync(serverUri.Uri).Result;
+                if (replyFromServer.Equals("RESTART"))
+                    break;
+            }
             if (replyFromServer.Equals("RESTART"))
             {
                 RestartVerification();
@@ -194,11 +201,14 @@ namespace ClientSource
         static void startVerification(string fileName)
         {
             //corralProcessList.Clear();
+            boogieDumpTime = 0;
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
             string fileToRun;
+            
             if (configuration.dumpSIBoogieFiles)
             {
+                DateTime boogieDumpStart = DateTime.Now;
                 Process p = new Process();
                 p.StartInfo.FileName = configuration.corralDumpBoogiePath;
                 //Console.WriteLine(configuration.corralDumpBoogiePath);
@@ -217,9 +227,15 @@ namespace ClientSource
                     File.Delete(siFilePath);
                 File.Move(siFilename, siFilePath);
                 fileToRun = siFilePath;
+                boogieDumpTime = (DateTime.Now - boogieDumpStart).TotalSeconds;
             }
             else
                 fileToRun = fileName;
+            /*if ((configuration.timeout - boogieDumpTime) < 10)
+                configuration.timeout = 10;
+            else
+                configuration.timeout = (configuration.timeout - boogieDumpTime);
+            configuration.hydraArguments = configuration.hydraArguments + " /killAfter:" + (int)Math.Round(configuration.timeout);*/
             //Console.WriteLine(siFilePath);
             //Console.ReadLine();
             for (int i = 0; i < maxClients; i++)
@@ -242,8 +258,8 @@ namespace ClientSource
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName + configuration.hydraArguments;
             Console.WriteLine(p.StartInfo.Arguments);
-            p.StartInfo.UseShellExecute = false;
-            //p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.UseShellExecute = true;
+            p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;

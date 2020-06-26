@@ -17,7 +17,7 @@ namespace LocalServerInCsharp
         public static int numFreeClients = 0;
         public static int maxClients;
         public static int maxListeners;
-        public static int timeout;
+        public static double timeout;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
@@ -67,7 +67,7 @@ namespace LocalServerInCsharp
         static void Main(string[] args)
         {
             //Config configuration = new Config();
-            setupConfig(args[0]);
+            setupConfig(args);
             if (configuration.dumpSIBoogieFiles)
             {
                 if (!Directory.Exists(configuration.boogieDumpDirectory))
@@ -91,9 +91,18 @@ namespace LocalServerInCsharp
             //inputFilesDirectory = inputFilesDirectory + @"copyFiles\" ;
             //Console.WriteLine(inputFilesDirectory);
             //Console.ReadLine();
-            filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
-            //outputFolderPath = @"E:\ExperimentOutput\";
-            fileQueue = new Queue<string>(filePaths);
+            if (configuration.inputFile == null)
+            {
+                filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
+                //outputFolderPath = @"E:\ExperimentOutput\";
+                fileQueue = new Queue<string>(filePaths);
+            }
+            else
+            {
+                filePaths = null;
+                fileQueue = new Queue<string>();
+                fileQueue.Enqueue(configuration.inputFile);
+            }
             clientCalltreeQueue = new Deque<string>[maxClients];
             clientCommunicationTime = new double[maxClients];
             clientResetTime = new double[maxClients];
@@ -120,7 +129,12 @@ namespace LocalServerInCsharp
             Console.WriteLine("Server started.");
             Console.WriteLine("Waiting for Listener...");
             if (configuration.startLocalListener)
-                startListenerService(args[0]);
+            {
+                if (args.Length == 2)
+                    startListenerService(args[1]);
+                else
+                    startListenerService(args[0]);
+            }
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
         }
@@ -185,13 +199,18 @@ namespace LocalServerInCsharp
                 //}
                 if (msgContent != null)
                 {
-                    if (setKillFlag && !msgContent.ContainsKey("start"))    //Do Not accept any message from any client while listener is set to kill and restart
+                    if (setKillFlag && !msgContent.ContainsKey("start") && !msgContent.ContainsKey("ListenerWaitingForRestart"))    //Do Not accept any message from any client while listener is set to kill and restart
                         continue;
                     //Console.ReadLine();
                     if (msgContent.ContainsKey("start"))
                         startVerification(context);
                     else if (msgContent.ContainsKey("ListenerWaitingForRestart"))
-                        waitingListener.Enqueue(context);
+                    {
+                        if ((DateTime.Now - startTime).TotalSeconds > timeout || setKillFlag)
+                            waitingListener.Enqueue(context);
+                        else
+                            ResponseHttp(context, "continue");
+                    }
                     else if (msgContent.ContainsKey("requestID"))
                         assignIDtoClient(context);
                     else if (msgContent.ContainsKey("startFirstJob"))
@@ -312,7 +331,8 @@ namespace LocalServerInCsharp
                     setKillFlag = true;
                 //Console.ReadLine();
                 //if (receivedTimeGraph)
-                if (setKillFlag)
+                //Console.WriteLine(setKillFlag + " " + waitingListener.Count);
+                if (setKillFlag && waitingListener.Count == maxListeners)
                 {
                     writeDetailedOutcome(false);
                     //Console.ReadLine();
@@ -320,10 +340,11 @@ namespace LocalServerInCsharp
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
                     /*if (err)
                         startListenerService();*/
-                }                
-
-                if ((DateTime.Now - startTime).TotalSeconds > timeout && !setKillFlag)
+                }
+                //Console.WriteLine("TIME TAKEN : " + (DateTime.Now - startTime).TotalSeconds);
+                if ((DateTime.Now - startTime).TotalSeconds > timeout && !setKillFlag && waitingListener.Count == maxListeners)
                 {
+                    //Console.WriteLine("TIMEOUT START");
                     startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
                     finalOutcome = "TIMEDOUT";
                     totalTime = (DateTime.Now - startTime).TotalSeconds;
@@ -332,12 +353,21 @@ namespace LocalServerInCsharp
                     //ResponseHttp(waitingListener, "RESTART");
                     while (waitingListener.Count > 0)
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    //Console.WriteLine("TIMEOUT END");
                 }
             }
         }
 
-        static void setupConfig(string configPath)
+        static void setupConfig(string[] args)
         {
+            String configPath;
+            if (args.Length == 2)
+            {
+                configuration.inputFile = args[0];
+                configPath = args[1];
+            }
+            else
+                configPath = args[0];
             StreamReader reading = File.OpenText(configPath);
             string str;
             while ((str = reading.ReadLine()) != null)
@@ -425,7 +455,7 @@ namespace LocalServerInCsharp
             }
             configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
             configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /printFinalProgOnly /printFinalProg:";
-            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;                       
         }
 
         static void startListenerService(string configPath)
@@ -496,7 +526,10 @@ namespace LocalServerInCsharp
             if (fileQueue.Count == 0)
             {
                 Console.WriteLine("All Finished");
-                Console.ReadLine();
+                while (initListener.Count > 0)
+                    ResponseHttp(initListener.Dequeue(), "Finished");
+                //Console.ReadLine();
+                Process.GetCurrentProcess().Kill();
             }
             else
             {

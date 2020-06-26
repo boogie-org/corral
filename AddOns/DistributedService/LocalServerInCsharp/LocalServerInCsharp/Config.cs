@@ -12,9 +12,10 @@ namespace LocalServerInCsharp
         public int numMaxClients;
         public int numListeners;
         public bool startLocalListener;
-        public int timeout;
+        public double timeout;
         public string listenerExecutablePath;
         public string corralExecutablePath;
+        public string inputFile;
         public string inputFilesDirectoryPath;
         public string serverAddress;
         public string rawArguments;
@@ -34,6 +35,7 @@ namespace LocalServerInCsharp
             numListeners = 1;
             numMaxClients = 3;
             timeout = 3600;
+            inputFile = null;
             inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\timeoutSICorrected\";
             serverAddress = "http://localhost:5000/";
             corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
