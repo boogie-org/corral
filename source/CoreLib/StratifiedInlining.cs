@@ -1271,7 +1271,7 @@ namespace CoreLib
             string lastCalltreeSent = string.Empty;
             bool splitOnDemand = false;
             bool learnProofs = false;
-            int maxSplitPerIteration = 5;
+            int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
