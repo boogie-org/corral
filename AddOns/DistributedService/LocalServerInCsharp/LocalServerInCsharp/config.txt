@@ -1,6 +1,6 @@
 numListeners=1
-numMaxClients=2        
-timeout=60        
+numMaxClients=3        
+timeout=900        
 inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test12\
 corralDumpBoogie=corral.exe
 dumpSIBoogieFiles=true

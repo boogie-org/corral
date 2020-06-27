@@ -258,8 +258,8 @@ namespace ClientSource
             p.StartInfo.FileName = corralExecutablePath;
             p.StartInfo.Arguments = fileName + configuration.hydraArguments;
             Console.WriteLine(p.StartInfo.Arguments);
-            p.StartInfo.UseShellExecute = true;
-            p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;

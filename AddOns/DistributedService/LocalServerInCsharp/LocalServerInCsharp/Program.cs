@@ -466,8 +466,8 @@ namespace LocalServerInCsharp
             p.StartInfo.Arguments = configPath;
             //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
             //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
-            p.StartInfo.UseShellExecute = true;
-            p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.CreateNoWindow = false;
             p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
 
             p.Start();
