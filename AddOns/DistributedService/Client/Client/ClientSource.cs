@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Runtime.InteropServices;
 
 namespace ClientSource
 {
@@ -206,30 +206,58 @@ namespace ClientSource
             corralProcessList = new List<Process>();
             Console.WriteLine("Starting Verification of : " + fileName);
             string fileToRun;
+            string siFilename = null;
             
             if (configuration.dumpSIBoogieFiles)
             {
                 DateTime boogieDumpStart = DateTime.Now;
                 Process p = new Process();
-                p.StartInfo.FileName = configuration.corralDumpBoogiePath;
-                //Console.WriteLine(configuration.corralDumpBoogiePath);
-                string origFilename;
-                if (fileName.Contains('\\'))
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                    p.StartInfo.FileName = configuration.corralDumpBoogiePath;
+                    //Console.WriteLine(configuration.corralDumpBoogiePath);
+                    string origFilename;
+                    if (fileName.Contains('\\'))
+                    {
+                        origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                    }
+                    else if (fileName.Contains('/'))
+                    {
+                        origFilename = fileName.Substring(fileName.LastIndexOf('/') + 1);
+                    }
+                    else
+                        origFilename = fileName;
+                    siFilename = origFilename + ".bpl";
+                    p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
+                    //Console.WriteLine(origFilename);
+                    //Console.WriteLine(p.StartInfo.Arguments);
+                    //Console.ReadLine();
+                    p.StartInfo.UseShellExecute = false;
                 }
-                else if (fileName.Contains('/'))
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    origFilename = fileName.Substring(fileName.LastIndexOf('/') + 1);
+                    p.StartInfo.FileName = "mono";
+                    //Console.WriteLine(configuration.corralDumpBoogiePath);
+                    string origFilename;
+                    if (fileName.Contains('\\'))
+                    {
+                        origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                    }
+                    else if (fileName.Contains('/'))
+                    {
+                        origFilename = fileName.Substring(fileName.LastIndexOf('/') + 1);
+                    }
+                    else
+                        origFilename = fileName;
+                    siFilename = origFilename + ".bpl";
+                    p.StartInfo.Arguments = configuration.corralDumpBoogiePath + " " + fileName + configuration.corralDumpArguments + origFilename + ".bpl";
+                    //Console.WriteLine(origFilename);
+                    //Console.WriteLine(p.StartInfo.Arguments);
+                    //Console.ReadLine();
+                    p.StartInfo.UseShellExecute = false;
                 }
                 else
-                    origFilename = fileName;
-                string siFilename = origFilename + ".bpl";
-                p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
-                //Console.WriteLine(origFilename);
-                //Console.WriteLine(p.StartInfo.Arguments);
-                //Console.ReadLine();
-                p.StartInfo.UseShellExecute = false;
+                    Console.WriteLine("Cannot Run On This Operating System");
                 p.Start();
                 p.WaitForExit();
                 Console.WriteLine("SI Boogie File Dumped");
@@ -266,10 +294,20 @@ namespace ClientSource
             //Console.ReadLine();
             //Config configuration = new Config();
             Process p = new Process();
-            p.StartInfo.FileName = corralExecutablePath;
-            p.StartInfo.Arguments = fileName + configuration.hydraArguments;
-            Console.WriteLine(p.StartInfo.Arguments);
-            p.StartInfo.UseShellExecute = false;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                p.StartInfo.FileName = corralExecutablePath;
+                p.StartInfo.Arguments = fileName + configuration.hydraArguments;
+                Console.WriteLine(p.StartInfo.Arguments);
+                p.StartInfo.UseShellExecute = false;
+            }
+            else if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                p.StartInfo.FileName = "mono"; 
+                p.StartInfo.Arguments = corralExecutablePath + " " + fileName + configuration.hydraArguments;
+                Console.WriteLine(p.StartInfo.Arguments);
+                p.StartInfo.UseShellExecute = false;
+            }
             //p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;

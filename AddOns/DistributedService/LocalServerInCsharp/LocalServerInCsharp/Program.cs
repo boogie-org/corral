@@ -7,6 +7,7 @@ using System.Net;
 using System.Threading;
 using System.Diagnostics;
 using DequeNet;
+using System.Runtime.InteropServices;
 
 namespace LocalServerInCsharp
 {
@@ -460,17 +461,30 @@ namespace LocalServerInCsharp
 
         static void startListenerService(string configPath)
         {
-            startTime = DateTime.Now;
+            startTime = DateTime.Now;            
             Process p = new Process();
-            p.StartInfo.FileName = listenerExecutablePath;
-            p.StartInfo.Arguments = configPath;
-            //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
-            //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
-            p.StartInfo.UseShellExecute = false;
-            //p.StartInfo.CreateNoWindow = false;
-            p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-
-            p.Start();
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                p.StartInfo.FileName = "mono";
+                p.StartInfo.Arguments = listenerExecutablePath + " " + configPath;
+                p.StartInfo.UseShellExecute = false;
+                //p.StartInfo.CreateNoWindow = false;
+                p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+                p.Start();
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                p.StartInfo.FileName = listenerExecutablePath;
+                p.StartInfo.Arguments = configPath;
+                //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
+                //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
+                p.StartInfo.UseShellExecute = false;
+                //p.StartInfo.CreateNoWindow = false;
+                p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+                p.Start();
+            }
+            else
+                Console.WriteLine("Cannot Run On This Operating System");
             //corralProcessList.Add(p);
         }
 

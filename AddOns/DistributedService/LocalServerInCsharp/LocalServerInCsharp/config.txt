@@ -1,11 +1,11 @@
 numListeners=1
 numMaxClients=3        
-timeout=900        
+timeout=150        
 inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test12\
 corralDumpBoogie=corral.exe
 dumpSIBoogieFiles=true
 boogieDumpDirectory=F:\00ResearchWork\SVCOMP\test12\boogieDump\
 serverAddress=http://localhost:5000/
 corralArguments=/oldCorralFlags /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:10 /irreducibleLoopUnroll:12 /trackAllVars
-hydraArguments=/newStratifiedInlining:ucsplitparallel /maxSplitPerIteration:5 /oldCorralFlags /si /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:10 /irreducibleLoopUnroll:12 /trackAllVars
+hydraArguments=/newStratifiedInlining:ucsplitparallel /maxSplitPerIteration:1 /oldCorralFlags /si /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:10 /irreducibleLoopUnroll:12 /trackAllVars
 startLocalListener=true
