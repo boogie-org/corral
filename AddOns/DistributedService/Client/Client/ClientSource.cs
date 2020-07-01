@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Linq;
 
 
 namespace ClientSource
@@ -212,7 +213,17 @@ namespace ClientSource
                 Process p = new Process();
                 p.StartInfo.FileName = configuration.corralDumpBoogiePath;
                 //Console.WriteLine(configuration.corralDumpBoogiePath);
-                string origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                string origFilename;
+                if (fileName.Contains('\\'))
+                {
+                    origFilename = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                }
+                else if (fileName.Contains('/'))
+                {
+                    origFilename = fileName.Substring(fileName.LastIndexOf('/') + 1);
+                }
+                else
+                    origFilename = fileName;
                 string siFilename = origFilename + ".bpl";
                 p.StartInfo.Arguments = fileName + configuration.corralDumpArguments + origFilename + ".bpl";
                 //Console.WriteLine(origFilename);
@@ -290,11 +301,15 @@ namespace ClientSource
                 if (!p.HasExited)
                     p.Kill();
             }
-            Process killAllZ3Instances = new Process();
+            /*Process killAllZ3Instances = new Process();
             killAllZ3Instances.StartInfo.FileName = "taskkill.exe";
             killAllZ3Instances.StartInfo.Arguments = "/F /IM z3.exe /T";
             killAllZ3Instances.Start();
-            killAllZ3Instances.WaitForExit();
+            killAllZ3Instances.WaitForExit();*/
+            foreach (var process in Process.GetProcessesByName("z3"))
+            {
+                process.Kill();
+            }
             //Console.ReadLine();
         }
 
