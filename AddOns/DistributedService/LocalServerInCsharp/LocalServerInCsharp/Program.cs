@@ -136,9 +136,34 @@ namespace LocalServerInCsharp
                 else
                     startListenerService(args[0]);
             }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                if (configuration.listenerAddress.Length > 0)
+                {
+                    //executeLinuxTerminal("tar -zcvf ");
+                    for (int i = 0; i < configuration.listenerAddress.Length; i++)
+                    {
+
+                    }
+                }
+            }
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
         }
+
+        static void executeLinuxTerminal(string cmd, bool wait)
+        {
+            Process p = new Process();
+            p.StartInfo.FileName = "/bin/bash";
+            p.StartInfo.Arguments = cmd;
+            //p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.CreateNoWindow = false;
+            //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            p.Start();
+            if (wait)
+                p.WaitForExit();
+        }
+        
         static void ResponseThread()
         {
             
@@ -362,6 +387,8 @@ namespace LocalServerInCsharp
         static void setupConfig(string[] args)
         {
             String configPath;
+            int listenerAddressCount = 0;
+            int listenerPathCount = 0;
             if (args.Length == 2)
             {
                 configuration.inputFile = args[0];
@@ -448,6 +475,14 @@ namespace LocalServerInCsharp
                         break;
                     case "boogieDumpDirectory":
                         configuration.boogieDumpDirectory = configKey[1];
+                        break;
+                    case "ListenerAddress":
+                        configuration.listenerAddress[listenerAddressCount] = configKey[1];
+                        listenerAddressCount++;
+                        break;
+                    case "ListenerExecutablesPath":
+                        configuration.listenerExecutablesLocation[listenerPathCount] = configKey[1];
+                        listenerPathCount++;
                         break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);

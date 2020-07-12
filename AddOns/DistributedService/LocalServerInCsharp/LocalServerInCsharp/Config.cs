@@ -28,11 +28,14 @@ namespace LocalServerInCsharp
         public bool writeDetailPerClient;
         public bool controlSplitRate;
         public double splitInterval;
+        public string[] listenerAddress;
+        public string[] listenerExecutablesLocation;
         public Config()
         {
             //The following values are set by default if the corresponding flag is not present in the configuration file
-
-            numListeners = 1;
+            listenerAddress = new string[100];
+            listenerExecutablesLocation = new string[100];
+            numListeners = 2;
             numMaxClients = 3;
             timeout = 3600;
             inputFile = null;
