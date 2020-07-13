@@ -2,9 +2,9 @@
   <MonoDevelop.Ide.ItemProperties.LocalServerInCsharp PreferredExecutionTarget="MonoDevelop.Default" />
   <MonoDevelop.Ide.Workbench ActiveDocument="../Client/Client/ClientSource.cs">
     <Files>
-      <File FileName="LocalServerInCsharp/Program.cs" Line="153" Column="176" />
-      <File FileName="LocalServerInCsharp/Config.cs" Line="43" Column="29" />
-      <File FileName="../Client/Client/ClientSource.cs" Line="1" Column="1" />
+      <File FileName="LocalServerInCsharp/Program.cs" Line="629" Column="1" />
+      <File FileName="LocalServerInCsharp/Config.cs" Line="1" Column="1" />
+      <File FileName="../Client/Client/ClientSource.cs" Line="35" Column="71" />
     </Files>
     <Pads>
       <Pad Id="ProjectPad">
