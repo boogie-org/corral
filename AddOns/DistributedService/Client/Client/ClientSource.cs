@@ -21,13 +21,23 @@ namespace ClientSource
     {
         public static List<Process> corralProcessList;
         public static string corralExecutablePath;
+        public static string hydraBin;
         public static int maxClients;        
         public static Config configuration = new Config();
         public static double boogieDumpTime;
         // Main Method 
         static void Main(string[] args)
         {
+            hydraBin = args[1];
             setupConfig(args[0]);
+            configuration.corralExecutablePath = hydraBin + "/corral.exe";
+            configuration.corralDumpBoogiePath = hydraBin + "/corral.exe";
+            configuration.listenerExecutablePath = hydraBin + "/Client.exe";
+            if (configuration.dumpSIBoogieFiles)
+            {
+                if (!Directory.Exists(configuration.boogieDumpDirectory))
+                    Directory.CreateDirectory(configuration.boogieDumpDirectory);
+            }
             ExecuteClient();
         }
 
@@ -114,7 +124,7 @@ namespace ClientSource
                         configuration.boogieDumpDirectory = configKey[1];
                         break;
                     default:
-                        Console.WriteLine("Invalid Option: " + configKey[0]);
+                        Console.WriteLine("Not Necessary For Listener: " + configKey[0]);
                         break;
                 }
             }

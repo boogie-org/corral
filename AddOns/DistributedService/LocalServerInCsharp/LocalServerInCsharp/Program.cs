@@ -18,6 +18,7 @@ namespace LocalServerInCsharp
         public static int numFreeClients = 0;
         public static int maxClients;
         public static int maxListeners;
+        public static int numRemoteListeners = 0;
         public static double timeout;
         public static int numSplits = 0;
         public static bool startFirstJob = false;
@@ -129,16 +130,56 @@ namespace LocalServerInCsharp
             _httpListener.Start(); // start server (Run application as Administrator!)
             Console.WriteLine("Server started.");
             Console.WriteLine("Waiting for Listener...");
+
+            string configFilePath = null;
+            if (args.Length == 2)
+                configFilePath = args[1];
+            else
+                configFilePath = args[0];
+
             if (configuration.startLocalListener)
+                startListenerService(configFilePath);
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                if (args.Length == 2)
-                    startListenerService(args[1]);
-                else
-                    startListenerService(args[0]);
+                if (numRemoteListeners > 0)
+                {
+                    executeLinuxTerminal("tar", ("-C " + configuration.hydraBin + " -zcvf hydraExecutables.tar.gz ."), true);
+                    //executeLinuxTerminal("cd", (configuration.hydraBin + " | -zcvf hydraExecutables.tar.gz *"), true);
+                    Console.WriteLine("Executables Zipped");
+                    for (int i = 0; i < numRemoteListeners; i++)
+                    {
+                        executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mkdir -p " + configuration.listenerExecutablesLocation[i] + "'"), true);
+                        //executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mkdir -p " + configuration.listenerExecutablesLocation[i] + "inputProgram'"), true);
+                        executeLinuxTerminal("scp", ("hydraExecutables.tar.gz " + configuration.listenerAddress[i] + ":" + configuration.listenerExecutablesLocation[i]), true);
+                        executeLinuxTerminal("scp", (configFilePath + " " + configuration.listenerAddress[i] + ":" + configuration.listenerExecutablesLocation[i] + "/config.txt"), true);
+                        //if (configuration.inputFile != null)
+                        //    executeLinuxTerminal("scp", (configuration.inputFile + " " + configuration.listenerAddress[i] + ":" + configuration.listenerExecutablesLocation[i] + "/inputProgram/"), true);
+                        executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'tar -C " + configuration.listenerExecutablesLocation[i] + " -xvzf " + configuration.listenerExecutablesLocation[i] + "hydraExecutables.tar.gz'"), true);
+                        executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'chmod 700 " + configuration.listenerExecutablesLocation[i] + "'"), true);
+                        executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mono " + configuration.listenerExecutablesLocation[i] + "/Client.exe " + configuration.listenerExecutablesLocation[i] + "/config.txt " + configuration.listenerExecutablesLocation[i] + "'"), false);
+                    }
+                }
+                //Console.ReadLine();
             }
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
         }
+
+        static void executeLinuxTerminal(string cmd, string arguments, bool wait)
+        {
+            Console.WriteLine("Running Command : " + cmd + " " + arguments);
+            Process p = new Process();
+            p.StartInfo.FileName = cmd;
+            p.StartInfo.Arguments = arguments;
+            p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.CreateNoWindow = false;
+            //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            p.Start();
+            if (wait)
+                p.WaitForExit();
+        }
+        
         static void ResponseThread()
         {
             
@@ -362,6 +403,9 @@ namespace LocalServerInCsharp
         static void setupConfig(string[] args)
         {
             String configPath;
+            int listenerAddressCount = 0;
+            int listenerPathCount = 0;
+            numRemoteListeners = 0;
             if (args.Length == 2)
             {
                 configuration.inputFile = args[0];
@@ -449,14 +493,30 @@ namespace LocalServerInCsharp
                     case "boogieDumpDirectory":
                         configuration.boogieDumpDirectory = configKey[1];
                         break;
+                    case "ListenerAddress":
+                        configuration.listenerAddress[listenerAddressCount] = configKey[1];
+                        listenerAddressCount++;
+                        break;
+                    case "ListenerExecutablesPath":
+                        configuration.listenerExecutablesLocation[listenerPathCount] = configKey[1];
+                        listenerPathCount++;
+                        break;
+                    case "hydraBin":
+                        configuration.hydraBin = configKey[1];
+                        break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);
                         break;
                 }
             }
+            numRemoteListeners = listenerAddressCount;
             configuration.corralArguments = " " + configuration.corralArguments + " /si /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
             configuration.corralDumpArguments = " " + configuration.corralDumpArguments + " /printFinalProgOnly /printFinalProg:";
-            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;                       
+            configuration.hydraArguments = " " + configuration.hydraArguments + " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1 /hydraServerURI:" + configuration.serverAddress;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                configuration.listenerExecutablePath = configuration.hydraBin + "/Client.exe";
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                configuration.listenerExecutablePath = configuration.hydraBin + "\\Client.exe";
         }
 
         static void startListenerService(string configPath)
@@ -466,7 +526,7 @@ namespace LocalServerInCsharp
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 p.StartInfo.FileName = "mono";
-                p.StartInfo.Arguments = listenerExecutablePath + " " + configPath;
+                p.StartInfo.Arguments = listenerExecutablePath + " " + configPath + " " + configuration.hydraBin;
                 p.StartInfo.UseShellExecute = false;
                 //p.StartInfo.CreateNoWindow = false;
                 p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
@@ -548,6 +608,26 @@ namespace LocalServerInCsharp
             else
             {
                 workingFile = fileQueue.Dequeue();
+                string workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('/')+1);
+                //Console.WriteLine(workingFilePath);
+                //Console.ReadLine();
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    if (numRemoteListeners > 0)
+                    {
+                        for (int i = 0; i < numRemoteListeners; i++)
+                        {
+                            executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mkdir -p " + workingFilePath + "'"), true);
+                            //executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mkdir -p " + configuration.listenerExecutablesLocation[i] + "inputProgram'"), true);
+                            executeLinuxTerminal("scp", (workingFile + " " + configuration.listenerAddress[i] + ":" + workingFilePath), true);
+                            //if (configuration.inputFile != null)
+                            //    executeLinuxTerminal("scp", (configuration.inputFile + " " + configuration.listenerAddress[i] + ":" + configuration.listenerExecutablesLocation[i] + "/inputProgram/"), true);
+                            //executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'tar -C " + configuration.listenerExecutablesLocation[i] + " -xvzf " + configuration.listenerExecutablesLocation[i] + "hydraExecutables.tar.gz'"), true);
+                            //executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'chmod 700 " + configuration.listenerExecutablesLocation[i] + "'"), true);
+                        }
+                    }
+
+                }
                 boogieDumpStart = DateTime.Now;
                 while (initListener.Count > 0)
                     ResponseHttp(initListener.Dequeue(), workingFile);
