@@ -1,0 +1,108 @@
+\documentclass{article}
+%\usepackage{hyperref}
+\usepackage[obeyspaces,spaces]{url}
+\begin{document}
+\section{How To Deploy \textsc{Hydra}}
+\subsection{Dependencies}
+All projects in \textsc{Hydra} target \textbf{dot-net} framework version $4.5$. You will also need \textbf{Z3} version $4.6.0$ from here :
+\par
+\noindent
+\url{https://github.com/Z3Prover/z3/releases/tag/z3-4.6.0}.
+\subsubsection{For Windows Platform}
+\begin{enumerate}
+  \item Install \textbf{dot-net} framework from here :
+  \par
+  \noindent
+ \url{https://dotnet.microsoft.com/download}.
+  \item \textbf{Optional:} Get \textbf{Visual Studio} if you are interested in making changes.
+\end{enumerate}
+\subsubsection{For Linux Platform}
+\begin{enumerate}
+  \item Install \textbf{dot-net} framework from here :
+  \par
+  \noindent
+  \url{https://docs.microsoft.com/en-us/dotnet/core/install/linux-ubuntu}.
+  \item Get \textbf{Mono} from here :
+  \par
+  \noindent
+   \url{https://www.monodevelop.com/download/#fndtn-download-lin}.
+\end{enumerate}
+\subsection{Building \textsc{Hydra}}
+\begin{enumerate}
+  \item Pull the \textit{hydra} branch from this repository :
+  \par
+  \noindent
+  \url{https://github.com/boogie-org/corral}.
+  \item Navigate to \path{<path-where-you-pulled-hydra>} and update the \textsc{Boogie} submodule by doing:
+        \par
+        \noindent
+        \textit{git submodule init}
+        \par
+        \noindent
+        \textit{git submodule update}
+  \item Build \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp.sln}.
+        \par
+        \noindent
+   You can use \textbf{Visual Studio} or, \textbf{MonoDevelop} or,
+        \par
+        \noindent
+   \textit{msbuild LocalServerInCsharp.sln} from terminal or,
+        \par
+        \noindent
+   \textit{xbuild LocalServerInCsharp.sln} from terminal to build \textsc{Hydra}.
+        \par
+        \noindent
+   This will build all the required binaries in
+        \par
+        \noindent
+   \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/}.
+   \item Copy the \textbf{Z3} binary from where you downloaded \textbf{Z3} version $4.6.0$ to
+        \par
+        \noindent
+   \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/}
+\end{enumerate}
+\subsection{Running \textsc{Hydra}}
+\subsubsection{For Windows Platform}
+Run \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/LocalServerInCsharp.exe} with the following arguments:
+\begin{enumerate}
+  \item Path of the program to verify
+  \item Path to the \textbf{Configuration} file which defines the settings for \textsc{Hydra}. A sample \textbf{Configuration} file os provided in:
+  \par
+  \noindent
+  \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/config.txt}
+\end{enumerate}
+\subsubsection{For Linux Platform}
+Run \textbf{mono} from the terminal with the following arguments:
+\begin{enumerate}
+  \item \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/LocalServerInCsharp.exe}
+  \item Path of the program to verify
+  \item Path to the \textbf{Configuration} file which defines the settings for \textsc{Hydra}. A sample \textbf{Configuration} file os provided in:
+  \par
+  \noindent
+  \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/config.txt}
+\end{enumerate}
+\subsection{Explanation Of the \textsc{Hydra} Configuration}
+The configuration file accepts the following settings:
+\begin{enumerate}
+  \item \textbf{numListeners:} Set the value to the number of machines on which you want to run \textsc{Hydra} clients.
+  \item \textbf{numMaxClients:} Set the value to the number of clients you want to run per machine.
+  \item \textbf{timeout:} How long should verification run before timing out (in seconds).
+  \item \textbf{hydraBin:} Path where you have built the \textsc{Hydra} binaries. It should be :
+  \par
+  \noindent
+  \path{<Path-where-you-pulled-the-hydra-repository>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug}
+  \item \textbf{inputFilesDirectoryPath:} If you are invoking \textsc{Hydra} with a single program (the second argument while running \textbf{LocalServerInCsharp.exe}), this setting is irrelevant. If you invoke \textsc{Hydra} without specifying an input program, \textsc{Hydra} will verify each program in this directory. For each program  $\langle$filename.bpl$\rangle$, \textsc{Hydra} will write the result (outcome, total time etc.) in $\langle$filename.bpl.txt$\rangle$ in the same
+      directory.
+  \item \textbf{dumpSIBoogieFiles:} Set this to false in case you are feeding a SI boogie file to \textsc{Hydra}. Note that, if your SI boogie file was not generated using \textsc{Corral} $1.0.12$, \textsc{Hydra} may crash as \textsc{Hydra} uses \textsc{Corral} $1.0.12$ for verification. Otherwise, if your input is an original boogie program, set this to $true$. \textsc{Hydra} will then dump the SI boogie file and verify that.
+  \item \textbf{boogieDumpDirectory:} Path to the directory where \textsc{Hydra} will dump SI boogie files if you set \textbf{dumpSIBoogieFiles} to $true$. If the directory does not exist, it will be created, but this location should be writable.
+  \item \textbf{serverAddress:} ip address and port of the \textsc{Hydra} server. You may need to set custom in/out tcp and udp rules (in Linux, use \textit{ufw allow $\langle$port-number$\rangle$}) in order to enable the server to listen the specified port. If you are running server and clients on the same machine, you can set it to \path{http://localhost:<port-number>}
+  \item \textbf{corralArguments:} set of arguments which \textsc{Hydra} will use to dump intermediate SI boogie files if you set \textbf{dumpSIBoogieFiles} to $true$.
+  \item \textbf{hydraArguments:} set of arguments which \textsc{Hydra} will use to verify the intermediate SI boogie files.
+  \item \textbf{startLocalListener:} setting this to $true$ will let \textsc{Hydra} run clients on the Server machine as well.
+  \item \textbf{ListenerAddress:} $user-name$ and $ip-address$ of a remote machine where you want to run \textsc{Hydra} clients. If you do not want to use remote machines, you can remove this. If you want to use remote machines, make sure that the server can $ssh$ to the remote machines without password and they have \textbf{dot-net} libraries and \textbf{mono} installed. If you have multiple remote machines, specify each one in a separate line with this flag. (\textbf{This is only for Linux})
+  \item \textbf{ListenerExecutablesPath:} You need to specify a path for each remote machine where the server will automatically set up \textsc{Hydra} binaries. This location should be writable in the remote machine. If you do not want to use remote machines, you can remove this. If you have multiple remote machines, specify the path for each one in a separate line with this flag. (\textbf{This is only for Linux})
+\end{enumerate}
+\par
+\noindent
+Note that, if you want to distribute verification over multiple \textbf{Linux} machines, you can do so by specifying \textbf{ListenerAddress} and \textbf{ListenerExecutablesPath} for each one. \textsc{Hydra} will automatically setup the remote machines and distribute verification tasks. However, if you are using multiple \textbf{Windows} machines, then you will need to setup \textsc{Hydra} and start the \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/Client.exe} on each one manually.
+\end{document} 
