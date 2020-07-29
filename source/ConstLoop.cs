@@ -437,9 +437,7 @@ namespace cba
 
             // set strong array theory
             var ua_old = CommandLineOptions.Clo.UseArrayTheory;
-            var wa_old = CommandLineOptions.Clo.WeakArrayTheory;
             CommandLineOptions.Clo.UseArrayTheory = true;
-            CommandLineOptions.Clo.WeakArrayTheory = false; 
 
             var to = CommandLineOptions.Clo.ProverKillTime;
             CommandLineOptions.Clo.ProverKillTime = 5;
@@ -476,7 +474,6 @@ namespace cba
 
             // Reset options
             CommandLineOptions.Clo.UseArrayTheory = ua_old;
-            CommandLineOptions.Clo.WeakArrayTheory = wa_old; 
 
             CommandLineOptions.Clo.ProverKillTime = to;
 
