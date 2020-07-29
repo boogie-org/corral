@@ -535,7 +535,7 @@ namespace LocalServerInCsharp
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 p.StartInfo.FileName = listenerExecutablePath;
-                p.StartInfo.Arguments = configPath;
+                p.StartInfo.Arguments = configPath + " " + configuration.hydraBin;
                 //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
                 //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
                 p.StartInfo.UseShellExecute = false;

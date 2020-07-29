@@ -390,7 +390,7 @@ namespace cba
                         cba.Util.HydraConfig.startHydra = true;
                     else if (config.printFinalProgOnly)
                     {
-                        BoogieUtil.PrintProgram(curr.getProgram(), BoogieVerify.options.progFileName);
+                        BoogieUtil.PrintProgram(curr.getProgram(), config.printFinalProg);
                         Log.WriteLine("Printed Program. Shutting Down.");
                         Log.Close();
                         return 0;
