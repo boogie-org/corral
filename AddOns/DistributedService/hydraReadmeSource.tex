@@ -87,10 +87,11 @@ The configuration file accepts the following settings:
   \item \textbf{numListeners:} Set the value to the number of machines on which you want to run \textsc{Hydra} clients.
   \item \textbf{numMaxClients:} Set the value to the number of clients you want to run per machine.
   \item \textbf{timeout:} How long should verification run before timing out (in seconds).
-  \item \textbf{hydraBin:} Path where you have built the \textsc{Hydra} binaries. It should be :
+  \item \textbf{hydraBin:} Path where you have built the \textsc{Hydra} binaries. It should be
   \par
   \noindent
   \path{<Path-where-you-pulled-the-hydra-repository>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug}
+  \item \textbf{smackBin:} Path where you have built the \textsc{Smack} binaries. If the input program is not a \textbf{boogie} program, \textsc{Hydra} will use \textsc{Smack} to compile the given \textbf{C} program to \textbf{boogie} and dump it in the location specified by \textbf{boogieDumpDirectory}. This compiled \textbf{boogie} will then be verified by \textsc{Hydra}. If \textsc{Smack} is already added to path, then this flag is not required.  
   \item \textbf{inputFilesDirectoryPath:} If you are invoking \textsc{Hydra} with a single program (the second argument while running \textbf{LocalServerInCsharp.exe}), this setting is irrelevant. If you invoke \textsc{Hydra} without specifying an input program, \textsc{Hydra} will verify each program in this directory. For each program  $\langle$filename.bpl$\rangle$, \textsc{Hydra} will write the result (outcome, total time etc.) in $\langle$filename.bpl.txt$\rangle$ in the same
       directory.
   \item \textbf{dumpSIBoogieFiles:} Set this to false in case you are feeding a SI boogie file to \textsc{Hydra}. Note that, if your SI boogie file was not generated using \textsc{Corral} $1.0.12$, \textsc{Hydra} may crash as \textsc{Hydra} uses \textsc{Corral} $1.0.12$ for verification. Otherwise, if your input is an original boogie program, set this to $true$. \textsc{Hydra} will then dump the SI boogie file and verify that.

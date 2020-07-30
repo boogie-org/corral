@@ -504,6 +504,9 @@ namespace LocalServerInCsharp
                     case "hydraBin":
                         configuration.hydraBin = configKey[1];
                         break;
+                    case "smackBin":
+                        configuration.smackBin = configKey[1];
+                        break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);
                         break;
@@ -608,9 +611,41 @@ namespace LocalServerInCsharp
             else
             {
                 workingFile = fileQueue.Dequeue();
-                string workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('/')+1);
+                string workingFilePath = null;
+                string workingFileName = null;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('/') + 1);
+                    workingFileName = workingFile.Substring(workingFile.LastIndexOf('/') + 1);
+                }
+                else if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('\\') + 1);
+                    workingFileName = workingFile.Substring(workingFile.LastIndexOf('\\') + 1);
+                }
                 //Console.WriteLine(workingFilePath);
                 //Console.ReadLine();
+                string inputFileExtension = workingFile.Substring(workingFile.Length - 3);
+                if (!(inputFileExtension.ToLower() == "bpl")) //Invoke SMACK to convert given C program to Boogie
+                {
+                    Process p = new Process();
+                    if (configuration.smackBin == null)
+                        p.StartInfo.FileName = "smack";
+                    else
+                        p.StartInfo.FileName = configuration.smackBin;
+                    string arguments = "-x svcomp -t " + workingFile + " -bpl " + configuration.boogieDumpDirectory + workingFileName + ".bpl";
+                    p.StartInfo.Arguments = arguments;
+                    Console.WriteLine(workingFileName);
+                    Console.WriteLine(workingFilePath);
+                    Console.WriteLine(arguments);
+                    Console.ReadLine();
+                    p.StartInfo.UseShellExecute = false;
+                    p.Start();
+                    p.WaitForExit();
+                    workingFile = configuration.boogieDumpDirectory + workingFileName + ".bpl";
+                    Console.WriteLine(workingFile);
+                    Console.ReadLine();
+                }
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     if (numRemoteListeners > 0)

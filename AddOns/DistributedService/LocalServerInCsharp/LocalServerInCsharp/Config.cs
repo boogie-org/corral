@@ -25,6 +25,7 @@ namespace LocalServerInCsharp
         public string corralDumpBoogiePath;
         public string boogieDumpDirectory;
         public string hydraBin;
+        public string smackBin;
         public bool dumpSIBoogieFiles;
         public bool writeDetailPerClient;
         public bool controlSplitRate;
@@ -41,6 +42,7 @@ namespace LocalServerInCsharp
             timeout = 3600;
             inputFile = null;
             hydraBin = null;
+            smackBin = null;
             inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\timeoutSICorrected\";
             serverAddress = "http://localhost:5000/";
             corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
