@@ -2,7 +2,7 @@
   <MonoDevelop.Ide.ItemProperties.LocalServerInCsharp PreferredExecutionTarget="MonoDevelop.Default" />
   <MonoDevelop.Ide.Workbench ActiveDocument="LocalServerInCsharp/Program.cs">
     <Files>
-      <File FileName="LocalServerInCsharp/Program.cs" Line="647" Column="23" />
+      <File FileName="LocalServerInCsharp/Program.cs" Line="635" Column="71" />
       <File FileName="../Client/Client/ClientSource.cs" Line="267" Column="57" />
       <File FileName="LocalServerInCsharp/Config.cs" Line="45" Column="29" />
     </Files>

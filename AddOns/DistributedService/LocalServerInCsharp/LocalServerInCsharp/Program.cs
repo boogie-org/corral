@@ -638,13 +638,13 @@ namespace LocalServerInCsharp
                     Console.WriteLine(workingFileName);
                     Console.WriteLine(workingFilePath);
                     Console.WriteLine(arguments);
-                    //Console.ReadLine();
+                    Console.ReadLine();
                     p.StartInfo.UseShellExecute = false;
                     p.Start();
                     p.WaitForExit();
                     workingFile = configuration.boogieDumpDirectory + workingFileName + ".bpl";
                     Console.WriteLine(workingFile);
-                    //Console.ReadLine();
+                    Console.ReadLine();
                 }
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
