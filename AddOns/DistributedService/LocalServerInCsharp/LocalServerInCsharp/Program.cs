@@ -123,13 +123,13 @@ namespace LocalServerInCsharp
             
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
-            Console.WriteLine("Starting server...");
+            //Console.WriteLine("Starting server...");
             //_httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
             //_httpListener.Prefixes.Add("http://10.0.0.7:5000/");
             _httpListener.Prefixes.Add(configuration.serverAddress);
             _httpListener.Start(); // start server (Run application as Administrator!)
-            Console.WriteLine("Server started.");
-            Console.WriteLine("Waiting for Listener...");
+            //Console.WriteLine("Server started.");
+            //Console.WriteLine("Waiting for Listener...");
 
             string configFilePath = null;
             if (args.Length == 2)
@@ -146,7 +146,7 @@ namespace LocalServerInCsharp
                 {
                     executeLinuxTerminal("tar", ("-C " + configuration.hydraBin + " -zcvf hydraExecutables.tar.gz ."), true);
                     //executeLinuxTerminal("cd", (configuration.hydraBin + " | -zcvf hydraExecutables.tar.gz *"), true);
-                    Console.WriteLine("Executables Zipped");
+                    //Console.WriteLine("Executables Zipped");
                     for (int i = 0; i < numRemoteListeners; i++)
                     {
                         executeLinuxTerminal("ssh", (configuration.listenerAddress[i] + " 'mkdir -p " + configuration.listenerExecutablesLocation[i] + "'"), true);
@@ -168,7 +168,7 @@ namespace LocalServerInCsharp
 
         static void executeLinuxTerminal(string cmd, string arguments, bool wait)
         {
-            Console.WriteLine("Running Command : " + cmd + " " + arguments);
+            //Console.WriteLine("Running Command : " + cmd + " " + arguments);
             Process p = new Process();
             p.StartInfo.FileName = cmd;
             p.StartInfo.Arguments = arguments;
@@ -566,7 +566,7 @@ namespace LocalServerInCsharp
 
         public static void initiateAllListeners()
         {
-            Console.WriteLine("starting verification");
+            //Console.WriteLine("starting verification");
             startTime = DateTime.Now;
             lastSplitArrival = DateTime.Now;
             smallestSplitInterval = 9999;
@@ -602,7 +602,7 @@ namespace LocalServerInCsharp
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
             if (fileQueue.Count == 0)
             {
-                Console.WriteLine("All Finished");
+                //Console.WriteLine("All Finished");
                 while (initListener.Count > 0)
                     ResponseHttp(initListener.Dequeue(), "Finished");
                 //Console.ReadLine();
@@ -635,16 +635,16 @@ namespace LocalServerInCsharp
                         p.StartInfo.FileName = configuration.smackBin;
                     string arguments = "-x svcomp -t " + workingFile + " -bpl " + configuration.boogieDumpDirectory + workingFileName + ".bpl";
                     p.StartInfo.Arguments = arguments;
-                    Console.WriteLine(workingFileName);
-                    Console.WriteLine(workingFilePath);
-                    Console.WriteLine(arguments);
-                    Console.ReadLine();
+                    //Console.WriteLine(workingFileName);
+                    //Console.WriteLine(workingFilePath);
+                    //Console.WriteLine(arguments);
+                    //Console.ReadLine();
                     p.StartInfo.UseShellExecute = false;
                     p.Start();
                     p.WaitForExit();
                     workingFile = configuration.boogieDumpDirectory + workingFileName + ".bpl";
-                    Console.WriteLine(workingFile);
-                    Console.ReadLine();
+                    //Console.WriteLine(workingFile);
+                    //Console.ReadLine();
                 }
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
@@ -912,7 +912,9 @@ namespace LocalServerInCsharp
             {
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
-                File.AppendAllText(outFile, toWrite);
+                Console.WriteLine("Verification Outcome : " + finalOutcome);
+                Console.WriteLine("Time Taken : " + totalTime.ToString());
+                File.WriteAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
                     string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
@@ -925,6 +927,8 @@ namespace LocalServerInCsharp
             else
             {
                 toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n";
+                Console.WriteLine("Verification Outcome : TIMEDOUT");
+                Console.WriteLine("Time Taken : " + totalTime.ToString());
                 File.AppendAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
@@ -932,7 +936,7 @@ namespace LocalServerInCsharp
                         clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i],
                         clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
                         clientNumForwardPops[i], clientNumBackwardPops[i]);
-                    File.AppendAllText(outFile, statsPerClient);
+                    File.WriteAllText(outFile, statsPerClient);
                 }
             }
         }

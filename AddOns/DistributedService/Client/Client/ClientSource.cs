@@ -124,7 +124,7 @@ namespace ClientSource
                         configuration.boogieDumpDirectory = configKey[1];
                         break;
                     default:
-                        Console.WriteLine("Not Necessary For Listener: " + configKey[0]);
+                        Debug.WriteLine("Not Necessary For Listener: " + configKey[0]);
                         break;
                 }
             }
@@ -154,7 +154,7 @@ namespace ClientSource
             maxClients = configuration.numMaxClients;
             corralExecutablePath = configuration.corralExecutablePath;
             //UriBuilder serverUri = new UriBuilder("http://172.27.18.129:5000/");
-            Console.WriteLine("Listener Started");
+            //Console.WriteLine("Listener Started");
             //string requestKey = Console.ReadLine();
             //string requestKeyValue = Console.ReadLine();
             string requestKey = "start";
@@ -165,7 +165,7 @@ namespace ClientSource
             //JsonContent tmp = new JsonContent(string.Format(requestKeyValue));
             //var rep = newClient.PostAsync(serverUri.Uri, tmp).Result;
             //string replyFromServer = rep.Content.ReadAsStringAsync().Result;
-            Console.WriteLine(replyFromServer);
+            //Console.WriteLine(replyFromServer);
             if (replyFromServer.EndsWith(".bpl"))
                 startVerification(replyFromServer);
             else if (replyFromServer.Equals("continue"))
@@ -173,11 +173,11 @@ namespace ClientSource
             else if (replyFromServer.Equals("kill"))
                 RestartVerification();
             else if (replyFromServer.Equals("returned"))
-                Console.WriteLine(replyFromServer);
+                Debug.WriteLine(replyFromServer);
             else if (replyFromServer.Equals("Finished"))
                 Process.GetCurrentProcess().Kill();
             else
-                Console.WriteLine("No Action Taken");
+                Debug.WriteLine("No Action Taken");
             while (true)
             {
                 requestKey = "ListenerWaitingForRestart";
@@ -214,7 +214,7 @@ namespace ClientSource
             //corralProcessList.Clear();
             boogieDumpTime = 0;
             corralProcessList = new List<Process>();
-            Console.WriteLine("Starting Verification of : " + fileName);
+            //Console.WriteLine("Starting Verification of : " + fileName);
             string fileToRun;
             string siFilename = null;
             
@@ -270,7 +270,7 @@ namespace ClientSource
                     Console.WriteLine("Cannot Run On This Operating System");
                 p.Start();
                 p.WaitForExit();
-                Console.WriteLine("SI Boogie File Dumped");
+                //Console.WriteLine("SI Boogie File Dumped");
                 string siFilePath = configuration.boogieDumpDirectory + siFilename;
                 if (File.Exists(siFilePath))
                     File.Delete(siFilePath);
@@ -308,14 +308,14 @@ namespace ClientSource
             {
                 p.StartInfo.FileName = corralExecutablePath;
                 p.StartInfo.Arguments = fileName + configuration.hydraArguments;
-                Console.WriteLine(p.StartInfo.Arguments);
+                //Console.WriteLine(p.StartInfo.Arguments);
                 p.StartInfo.UseShellExecute = false;
             }
             else if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 p.StartInfo.FileName = "mono"; 
                 p.StartInfo.Arguments = corralExecutablePath + " " + fileName + configuration.hydraArguments;
-                Console.WriteLine(p.StartInfo.Arguments);
+                //Console.WriteLine(p.StartInfo.Arguments);
                 p.StartInfo.UseShellExecute = false;
             }
             //p.StartInfo.CreateNoWindow = false;
@@ -331,15 +331,15 @@ namespace ClientSource
 
         static void continueVerification()
         {
-            Console.WriteLine("Continuing Verification ");
+            Debug.WriteLine("Continuing Verification ");
         }
 
         static void RestartVerification()
         {
-            Console.WriteLine("Kill All Clients And Restart Verification");
+            //Console.WriteLine("Kill All Clients And Restart Verification");
             //Thread.Sleep(1000);
             //Process.GetCurrentProcess().Kill();
-            Console.WriteLine(corralProcessList.Count);
+            //Console.WriteLine(corralProcessList.Count);
             foreach (Process p in corralProcessList)
             {
                 //p.CancelOutputRead();

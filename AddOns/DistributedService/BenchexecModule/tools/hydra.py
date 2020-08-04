@@ -82,22 +82,14 @@ class Tool(benchexec.tools.template.BaseTool):
         )
     def determine_result(self, returncode, returnsignal, output, isTimeout):
         """
-        Parse the output of the tool and extract the verification result.
-        If the tool gave a result, this method needs to return one of the
-        benchexec.result.RESULT_* strings.
-        Otherwise an arbitrary string can be returned that will be shown to the user
-        and should give some indication of the failure reason
-        (e.g., "CRASH", "OUT_OF_MEMORY", etc.).
-        For tools that do not output some true/false result, benchexec.result.RESULT_DONE
-        can be returned (this is also the default implementation).
-        BenchExec will then automatically add some more information
-        if the tool was killed due to a timeout, segmentation fault, etc.
-        @param returncode: the exit code of the program, 0 if the program was killed
-        @param returnsignal: the signal that killed the program, 0 if program exited itself
-        @param output: a list of strings of output lines of the tool (both stdout and stderr)
-        @param isTimeout: whether the result is a timeout
-        (useful to distinguish between program killed because of error and timeout)
-        @return a non-empty string, usually one of the benchexec.result.RESULT_* constants
+        Returns a BenchExec result status based on the output of SMACK
         """
-        return result.RESULT_DONE
-
+        outcome = "\n".join(output)
+        if "Verification Outcome : OK" in outcome:
+            return result.RESULT_TRUE_PROP
+        elif "Verification Outcome : NOK" in outcome:
+            return result.RESULT_FALSE_PROP
+        elif "Verification Outcome : TIMEDOUT" in outcome:
+            return result.RESULT_DONE
+        else:
+            return result.RESULT_UNKNOWN        

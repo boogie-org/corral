@@ -1501,7 +1501,7 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                             //if (writeLog)
-                            Console.WriteLine("splitting on : " + GetPersistentID(scs));
+                            //Console.WriteLine("splitting on : " + GetPersistentID(scs));
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
@@ -1529,8 +1529,8 @@ namespace CoreLib
                     int numAggressiveSplitQueries = 0;
                     while (true)
                     {
-                        Console.WriteLine("CANDIDATES : " + candidates.Count);
-                        Console.WriteLine("CHECKED CANDIDATES : " + checkedCandidates.Count);
+                        //Console.WriteLine("CANDIDATES : " + candidates.Count);
+                        //Console.WriteLine("CHECKED CANDIDATES : " + checkedCandidates.Count);
 
                         StratifiedCallSite toRemoveCs = null;
                         // find a node to split on
@@ -1576,7 +1576,7 @@ namespace CoreLib
                         reporter.reportTrace = true;
                         DateTime uqStartTimein = DateTime.Now;
                         outcome = CheckVC(reporter);
-                        Console.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTimein).TotalSeconds);
+                        Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTimein).TotalSeconds);
                         /*if (outcome == Outcome.Errors)
                         {
                             //Console.WriteLine("EtUC");
@@ -1592,7 +1592,7 @@ namespace CoreLib
                         {
                             ucore = prover.UnsatCore();
                             if (ucore != null)
-                                Console.WriteLine("UCORE COUNT : " + ucore.Count);
+                                Debug.WriteLine("UCORE COUNT : " + ucore.Count);
                         }
                         Pop();
                         if (ucore != null && ucore.Count != 0)
@@ -1645,7 +1645,7 @@ namespace CoreLib
                     //Console.ReadLine();
                     foreach (StratifiedCallSite cs in candidates)
                     {
-                        Console.WriteLine(GetPersistentID(cs) + " " + attachedVC.ContainsKey(cs));
+                        Debug.WriteLine(GetPersistentID(cs) + " " + attachedVC.ContainsKey(cs));
                     }
                     //Console.ReadLine();
                     while (candidates.Count != 0)
@@ -1697,7 +1697,7 @@ namespace CoreLib
                         }
                         if (maxNonInlinedCallsiteScore > maxVcScore)
                         {
-                            Console.WriteLine("SPLITTING ON NON-INLINED CALLSITE");
+                            //Console.WriteLine("SPLITTING ON NON-INLINED CALLSITE");
                             //Console.ReadLine();
                             StratifiedCallSite scs = maxNonInlinedCallsite;
                             calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1717,7 +1717,7 @@ namespace CoreLib
                         {
                             StratifiedCallSite cs = attachedVCInv[maxVc];
                             //StratifiedVC maxVc = vc;
-                            Console.WriteLine("IN SPLIT : " + GetPersistentID(cs) + " " + candidates.Contains(cs) + " " + previousSplitSites.Count);
+                            //Console.WriteLine("IN SPLIT : " + GetPersistentID(cs) + " " + candidates.Contains(cs) + " " + previousSplitSites.Count);
                             //if (candidates.Contains(cs))
                             {
                                 candidates.Remove(cs);
@@ -1760,7 +1760,7 @@ namespace CoreLib
                                     //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                                     //if (writeLog)
-                                    Console.WriteLine("splitting on : " + GetPersistentID(scs));
+                                    //Console.WriteLine("splitting on : " + GetPersistentID(scs));
                                     if (writeLog)
                                         Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                                     lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
@@ -1818,7 +1818,7 @@ namespace CoreLib
                     Console.WriteLine("point 0.1");
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
-                Console.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
                 if (writeLog)
                     Console.WriteLine("point 0.2");
 
@@ -1864,8 +1864,8 @@ namespace CoreLib
                 reporter.reportTrace = false;
                 DateTime oqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
-                Console.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
-                Console.WriteLine(outcome.ToString());
+                Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
+                Debug.WriteLine(outcome.ToString());
                 //Pop();
                 if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                 {
@@ -3441,10 +3441,10 @@ namespace CoreLib
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
-                    Console.WriteLine("running Hydra");
+                    //Console.WriteLine("running Hydra");
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
-                    Console.WriteLine("Hydra Outcome: " + outcome.ToString());
+                    //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
