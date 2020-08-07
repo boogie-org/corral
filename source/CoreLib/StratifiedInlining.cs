@@ -23,6 +23,9 @@ namespace CoreLib
     ****************************************/
 
     // TODO: replace this with conventional functions
+
+    using Bpl = Microsoft.Boogie;
+
     public class MacroSI
     {
         public static void PRINT(int lvl, string s, params object[] args)
@@ -1274,6 +1277,7 @@ namespace CoreLib
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
+            string verificationAlgorithm = cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower();
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1369,7 +1373,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1421,7 +1425,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel")
+                            if (verificationAlgorithm == "ucsplitparallel")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1436,7 +1440,7 @@ namespace CoreLib
                                     maxVcScore = score;
                                 }
                             }
-                            else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
+                            else if (verificationAlgorithm == "ucsplitparallel2")
                             {
                                 double score = 0;
                                 double numUnsatNodesInOwnSubtree = 0;
@@ -1509,7 +1513,7 @@ namespace CoreLib
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            prover.Assert(scs.callSiteExpr, false);
+                            prover.Assert(scs.callSiteExpr, false, name: "block_" + GetPersistentID(scs));
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
                             if (writeLog)
@@ -1521,7 +1525,7 @@ namespace CoreLib
 
                     }
                 }
-                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3")
+                else if (verificationAlgorithm == "ucsplitparallel3")
                 {
                     List<StratifiedCallSite> candidates = new List<StratifiedCallSite>();
                     List<StratifiedCallSite> checkedCandidates = new List<StratifiedCallSite>();
@@ -1990,7 +1994,7 @@ namespace CoreLib
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
                             // Block
-                            prover.Assert(topDecision.cs.callSiteExpr, false);
+                            prover.Assert(topDecision.cs.callSiteExpr, false, name: "block_" + GetPersistentID(topDecision.cs));
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -2599,9 +2603,12 @@ namespace CoreLib
         public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
             var ret = new List<Tuple<StratifiedVC, Block>>();
+            var vcgen = svc.info.vcgen;
+            var gen = vcgen.prover.VCExprGen;
 
+            var v = vcgen.CreateNewVar(Bpl.Type.Bool); ;
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true, name: "mustreach_" + GetPersistentID(attachedVCInv[svc]));
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -3381,7 +3388,7 @@ namespace CoreLib
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false);                                    
+                                    prover.Assert(cs.callSiteExpr, false, name: "block_" + GetPersistentID(cs));                                    
                                     mode = 0;                                    
                                 }
                                 else //MUSTREACH callsite
@@ -3439,7 +3446,7 @@ namespace CoreLib
                 {
                     outcome = UnSatCoreSplitStyle(openCallSites, reporter);
                 }
-                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
+                /*else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     //Console.WriteLine("running Hydra");
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
@@ -3452,6 +3459,11 @@ namespace CoreLib
                         backtrackingPoints, decisions);
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3" && !di.disabled && cba.Util.HydraConfig.startHydra)
+                {
+                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                        backtrackingPoints, decisions);
+                }*/
+                else if(cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
