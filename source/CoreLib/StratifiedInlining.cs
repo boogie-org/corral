@@ -222,6 +222,7 @@ namespace CoreLib
         int numPush;
         public HashSet<string> previousSplitSites;
         string calltreeToSend;
+        bool isProgramSafe;
         int parentNodeInTimegraph;
         int childNodeInTimegraph;
         Stack<Tuple<int, int>> emulateServerStack;
@@ -234,6 +235,7 @@ namespace CoreLib
         public DateTime splittingStartTime;
         public DateTime lastSplitAt;
         public double nextSplitInterval = 0;
+
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -876,8 +878,6 @@ namespace CoreLib
                            AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                         treesize = di.ComputeSize();
                     }
-
-
                 }
                 
             }
@@ -1274,6 +1274,8 @@ namespace CoreLib
             string lastCalltreeSent = string.Empty;
             bool splitOnDemand = false;
             bool learnProofs = false;
+            bool newCallSiteFound = false;
+            bool decisionBlockFound = false;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
@@ -1373,7 +1375,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1425,7 +1427,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (verificationAlgorithm == "ucsplitparallel")
+                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1504,8 +1506,8 @@ namespace CoreLib
                             //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
-                            //if (writeLog)
-                            //Console.WriteLine("splitting on : " + GetPersistentID(scs));
+                            if (writeLog)
+                                Console.WriteLine("splitting on : " + GetPersistentID(scs));
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
@@ -1864,57 +1866,140 @@ namespace CoreLib
                 }
                 if (writeLog)
                     Console.WriteLine("point 4");
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                reporter.reportTrace = false;
-                DateTime oqStartTime = DateTime.Now;
-                outcome = CheckVC(reporter);
-                Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
-                Debug.WriteLine(outcome.ToString());
-                //Pop();
-                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
-                {
-                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    //sendRequestToServer("outcome", "OK");
-                    //timeGraph.AddEdgeDone("split");
-                    if (makeTimeGraph)
-                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                    break; // done (T/O)
-                }
+                if (writeLog && ucore == null && outcome == Outcome.Correct)
+                    Console.WriteLine("CORE is NULL");
+                else if (writeLog && outcome == Outcome.Correct)
+                    Console.WriteLine("ALL GooD");
 
-                /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
-                {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    break; // done (error found)
-                }*/                
+                newCallSiteFound = false;
+                decisionBlockFound = false;
 
-                if (outcome == Outcome.Errors)
+                //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
+                if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
                 {
-                    foreach (var scs in reporter.callSitesToExpand)
-                    {                         
-                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
-                        openCallSites.Remove(scs);
-                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                        if (svc != null)
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    if (false && writeLog)
+                        Console.WriteLine("UNSAT CORE Inlined Callsites");
+                    foreach (var scs in openCallSites)
+                    {
+                        if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
                         {
-                            openCallSites.UnionWith(svc.CallSites);
-                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                            if (false && writeLog)
+                                Console.WriteLine(scs.callSite.calleeName);
+                            toRemove.Add(scs);
+                            newCallSiteFound = true;
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                            if (svc != null)
+                                toAdd.UnionWith(svc.CallSites);
+                        }
+                        //Check for reach/block label in UNSAT Core
+                        if (!decisionBlockFound && (ucore.Contains("block_" + GetPersistentID(scs)) || ucore.Contains("mustreach_" + GetPersistentID(scs))))
+                        {
+                            decisionBlockFound = true;
                         }
                     }
+                    //Update OpenCallSites
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+
                     if (ucore != null || ucore.Count != 0)
                     {
-
+                        if (writeLog)
+                            Console.WriteLine("All Callsites in UNSAT CORE");
                         foreach (StratifiedCallSite cs in attachedVC.Keys)
                         {
                             if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
                             {
                                 CallSitesInUCore.Add(cs);
+                                if (writeLog)
+                                    Console.WriteLine("label : " + cs.callSite.calleeName);
+                            }
+                            if (writeLog && ucore.Contains("block_" + GetPersistentID(cs)))
+                                Console.WriteLine("block : " + cs.callSite.calleeName);
+                            if (writeLog && ucore.Contains("mustreach_" + GetPersistentID(cs)))
+                                Console.WriteLine("mustreach : " + cs.callSite.calleeName);
+
+                            //Check for reach/block label in UNSAT Core
+                            if (!decisionBlockFound && (ucore.Contains("block_" + GetPersistentID(cs)) || ucore.Contains("mustreach_" + GetPersistentID(cs))))
+                            {
+                                decisionBlockFound = true;
+                            }
+                        }
+                        if (writeLog)
+                            Console.WriteLine("-------------------------");
+                    }
+                }
+
+                if (verificationAlgorithm == "ucsplitparallel5" && !newCallSiteFound && !decisionBlockFound)
+                {
+                    //Program is SAFE
+                    //TODO : Kill all clients and return PROGRAM as safe.
+                    if (writeLog)
+                        Console.WriteLine("PROGRAM IS SAFE");
+                    outcome = Outcome.Correct;
+                    isProgramSafe = true;
+                    reachedBound = false;
+                    break;
+                }
+
+                if (verificationAlgorithm != "ucsplitparallel5")
+                {
+                    reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    reporter.reportTrace = false;
+                    DateTime oqStartTime = DateTime.Now;
+                    outcome = CheckVC(reporter);
+                    Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
+                    Debug.WriteLine(outcome.ToString());
+                    //Pop();
+                    if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                    {
+                        //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        //sendRequestToServer("outcome", "OK");
+                        //timeGraph.AddEdgeDone("split");
+                        if (makeTimeGraph)
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        break; // done (T/O)
+                    }
+
+                    if (outcome == Outcome.Errors)
+                    {
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null)
+                            {
+                                openCallSites.UnionWith(svc.CallSites);
+                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                            }
+                        }
+                        if (ucore != null || ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
                             }
                         }
                     }
-
                 }
-                else
+
+
+                /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                {
+                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                    break; // done (error found)
+                }*/
+
+                if ((verificationAlgorithm != "ucsplitparallel5" && outcome != Outcome.Errors) || (verificationAlgorithm == "ucsplitparallel5" && !newCallSiteFound))
                 {
                     if (learnProofs)
                     {
@@ -1935,7 +2020,7 @@ namespace CoreLib
                         }
                     }
                     if (writeLog)
-                        Console.WriteLine("block finished");                    
+                        Console.WriteLine("block finished");
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     if (writeLog)
@@ -3038,6 +3123,7 @@ namespace CoreLib
             bool writeLog = false;
             bool continueVerification = true;
             bool makeTimeGraph = false;
+            isProgramSafe = false;
             string replyFromServer;
             string receivedCalltree = null;
             Outcome outcome = Outcome.Correct;
@@ -3183,6 +3269,7 @@ namespace CoreLib
                 backtrackingPoints.Clear();
                 decisions.Clear();
                 persistentIDToCallsiteMap.Clear();
+                isProgramSafe = false;
                 //prover.Reset(prover.VCExprGen);
                 //prover.FullReset(prover.VCExprGen);
                 while (stats.stacksize > 1)
@@ -3463,7 +3550,7 @@ namespace CoreLib
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }*/
-                else if(cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") && !di.disabled && cba.Util.HydraConfig.startHydra)
+                else if((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel5")) && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
@@ -3530,7 +3617,12 @@ namespace CoreLib
                 #endregion
                 if (writeLog)
                 Console.WriteLine("HERE1");
-                if (outcome == Outcome.Correct)
+                if (isProgramSafe && outcome == Outcome.Correct)
+                {
+                    replyFromServer = sendRequestToServer("outcome", "SAFE");
+                    return outcome;
+                }
+                else if (outcome == Outcome.Correct)
                     replyFromServer = sendRequestToServer("outcome", "OK");
                 else if (outcome == Outcome.Errors)
                 {

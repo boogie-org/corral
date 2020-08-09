@@ -732,7 +732,13 @@ namespace LocalServerInCsharp
             if (writeLog)
                 Console.WriteLine(outcome);
             numFreeClients++;
-            if (outcome.Equals("NOK"))
+            if (outcome.Equals("SAFE"))
+            {
+                finalOutcome = "OK";
+                totalTime = (DateTime.Now - startTime).TotalSeconds;
+                setKillFlag = true;
+            }
+            else if (outcome.Equals("NOK"))
             {
                 //bool err = ResponseHttp(context, "kill");
                 /*bool err = ResponseHttp(waitingListener, "RESTART");
