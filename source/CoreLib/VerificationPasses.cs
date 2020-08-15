@@ -347,15 +347,15 @@ namespace cba
                             {
                                 // TODO: need a better fix for BigNums
                                 //v = (modelVal as Model.Integer).AsInt();
-                                v = Microsoft.Basetypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
+                                v = Microsoft.BaseTypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
                             }
                             else if (cc.Proc.Name == recordIntArgProc && modelVal is int)
                             {
                                 v = (int)modelVal;
                             }
-                            else if (cc.Proc.Name == recordIntArgProc && modelVal is Microsoft.Basetypes.BigNum)
+                            else if (cc.Proc.Name == recordIntArgProc && modelVal is Microsoft.BaseTypes.BigNum)
                             {
-                                v = BoogieUtil.BigNumToIntForce((Microsoft.Basetypes.BigNum)modelVal);
+                                v = BoogieUtil.BigNumToIntForce((Microsoft.BaseTypes.BigNum)modelVal);
                             }
                             else if(modelVal is Model.Boolean)
                             {
@@ -465,15 +465,15 @@ namespace cba
                         {
                             // TODO: need a better fix for BigNums
                             //v = (modelVal as Model.Integer).AsInt();
-                            v = Microsoft.Basetypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
+                            v = Microsoft.BaseTypes.BigNum.FromString((modelVal as Model.Integer).Numeral);
                         }
                         else if (cc.Proc.Name == recordIntArgProc && modelVal is int)
                         {
                             v = (int)modelVal;
                         }
-                        else if (cc.Proc.Name == recordIntArgProc && modelVal is Microsoft.Basetypes.BigNum)
+                        else if (cc.Proc.Name == recordIntArgProc && modelVal is Microsoft.BaseTypes.BigNum)
                         {
-                            v = BoogieUtil.BigNumToIntForce((Microsoft.Basetypes.BigNum)modelVal);
+                            v = BoogieUtil.BigNumToIntForce((Microsoft.BaseTypes.BigNum)modelVal);
                         }
                         else if (modelVal is Model.Boolean)
                         {
@@ -1310,12 +1310,12 @@ namespace cba
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            var cc = CommandLineOptions.Clo.ProverCCLimit;
+            var oldErrorLimit = CommandLineOptions.Clo.ErrorLimit;
             CommandLineOptions.Clo.ContractInfer = true;
-            var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
+            var oldTimeout = CommandLineOptions.Clo.TimeLimit;
 
-            CommandLineOptions.Clo.ProverKillTime = 20000; // AbsHoudini interprets this as milliseconds
-            CommandLineOptions.Clo.ProverCCLimit = 1;
+            CommandLineOptions.Clo.TimeLimit = 20000; // AbsHoudini interprets this as milliseconds
+            CommandLineOptions.Clo.ErrorLimit = 1;
             CommandLineOptions.Clo.AbstractHoudini = runAbsHoudiniConfig;
             CommandLineOptions.Clo.PrintErrorModel = 1;
             AbstractHoudini.WitnessFile = null;
@@ -1376,9 +1376,9 @@ namespace cba
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
-            CommandLineOptions.Clo.ProverCCLimit = cc;
+            CommandLineOptions.Clo.ErrorLimit = oldErrorLimit;
             CommandLineOptions.Clo.ContractInfer = false;
-            CommandLineOptions.Clo.ProverKillTime = oldTimeout;
+            CommandLineOptions.Clo.TimeLimit = oldTimeout;
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
@@ -1588,16 +1588,16 @@ namespace cba
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            var cc = CommandLineOptions.Clo.ProverCCLimit;
-            CommandLineOptions.Clo.ProverCCLimit = runHoudiniLite ? 1 : 5;
+            var oldErrorLimit = CommandLineOptions.Clo.ErrorLimit;
+            CommandLineOptions.Clo.ErrorLimit = runHoudiniLite ? 1 : 5;
             CommandLineOptions.Clo.ContractInfer = true;
-            var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
-            CommandLineOptions.Clo.ProverKillTime = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
+            var oldTimeout = CommandLineOptions.Clo.TimeLimit;
+            CommandLineOptions.Clo.TimeLimit = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
 
             if (runAbsHoudini)
             {
-                CommandLineOptions.Clo.ProverKillTime = 20000; // AbsHoudini interprets this as milliseconds
-                CommandLineOptions.Clo.ProverCCLimit = 1;
+                CommandLineOptions.Clo.TimeLimit = 20000; // AbsHoudini interprets this as milliseconds
+                CommandLineOptions.Clo.ErrorLimit = 1;
                 CommandLineOptions.Clo.AbstractHoudini = runAbsHoudiniConfig;
                 CommandLineOptions.Clo.PrintErrorModel = 1;
                 AbstractHoudini.WitnessFile = null;
@@ -1743,9 +1743,9 @@ namespace cba
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
-            CommandLineOptions.Clo.ProverCCLimit = cc;
+            CommandLineOptions.Clo.ErrorLimit = oldErrorLimit;
             CommandLineOptions.Clo.ContractInfer = false;
-            CommandLineOptions.Clo.ProverKillTime = oldTimeout;
+            CommandLineOptions.Clo.TimeLimit = oldTimeout;
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
@@ -2054,11 +2054,11 @@ namespace cba
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            var cc = CommandLineOptions.Clo.ProverCCLimit;
-            CommandLineOptions.Clo.ProverCCLimit = 5;
+            var oldErrorLimit = CommandLineOptions.Clo.ErrorLimit;
+            CommandLineOptions.Clo.ErrorLimit = 5;
             CommandLineOptions.Clo.ContractInfer = true;
-            var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
-            CommandLineOptions.Clo.ProverKillTime = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
+            var oldTimeout = CommandLineOptions.Clo.TimeLimit;
+            CommandLineOptions.Clo.TimeLimit = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
 
             var time3 = DateTime.Now;
 
@@ -2173,9 +2173,9 @@ namespace cba
             CommandLineOptions.Clo.InlineDepth = -1;
             CommandLineOptions.Clo.ProcedureInlining = old;
             CommandLineOptions.Clo.StratifiedInlining = si;
-            CommandLineOptions.Clo.ProverCCLimit = cc;
+            CommandLineOptions.Clo.ErrorLimit = oldErrorLimit;
             CommandLineOptions.Clo.ContractInfer = false;
-            CommandLineOptions.Clo.ProverKillTime = oldTimeout;
+            CommandLineOptions.Clo.TimeLimit = oldTimeout;
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
@@ -2342,7 +2342,7 @@ namespace cba
         private Expr NonNull(Variable x)
         {
             return Expr.Gt(IdentifierExpr.Ident(x),
-                              new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(0)));
+                              new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(0)));
         }
     }
 

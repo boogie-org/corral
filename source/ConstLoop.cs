@@ -439,8 +439,8 @@ namespace cba
             var ua_old = CommandLineOptions.Clo.UseArrayTheory;
             CommandLineOptions.Clo.UseArrayTheory = true;
 
-            var to = CommandLineOptions.Clo.ProverKillTime;
-            CommandLineOptions.Clo.ProverKillTime = 5;
+            var to = CommandLineOptions.Clo.TimeLimit;
+            CommandLineOptions.Clo.TimeLimit = 5;
 
             // verify
             BoogieVerify.Verify(outProg, true, out allErrors, out timeOuts);
@@ -475,7 +475,7 @@ namespace cba
             // Reset options
             CommandLineOptions.Clo.UseArrayTheory = ua_old;
 
-            CommandLineOptions.Clo.ProverKillTime = to;
+            CommandLineOptions.Clo.TimeLimit = to;
 
             return ret;
         }

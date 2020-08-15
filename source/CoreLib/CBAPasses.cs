@@ -693,7 +693,7 @@ namespace cba
 
                     var uniqueId = useGlobalCounter ? counter : cnt[cc.callee];
                     var attr = new List<object>();
-                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(uniqueId)));
+                    attr.Add(new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(uniqueId)));
 
                     cc.Attributes = BoogieUtil.removeAttr("si_old_unique_call", cc.Attributes);
                     var oldAttr = BoogieUtil.getAttr("si_unique_call", cc.Attributes);

@@ -145,7 +145,7 @@ namespace HavocCleanup
                         // Get level
                         if (ccmd.Ins.Count != 1) throw new InternalError("Incorrect hwsw level usage");
                         if (!(ccmd.Ins[0] is LiteralExpr)) throw new InternalError("Incorrect hwsw level usage");
-                        var level = ((Microsoft.Basetypes.BigNum)(ccmd.Ins[0] as LiteralExpr).Val).ToInt;
+                        var level = ((Microsoft.BaseTypes.BigNum)(ccmd.Ins[0] as LiteralExpr).Val).ToInt;
                         // start search
                         var currBlk = blk;
                         var currCmd = i + 1;
@@ -175,7 +175,7 @@ namespace HavocCleanup
                         // Get level
                         if (ccmd.Ins.Count != 1) throw new InternalError("Incorrect hwsw cpu usage");
                         if (!(ccmd.Ins[0] is LiteralExpr)) throw new InternalError("Incorrect hwsw cpu usage");
-                        var level = ((Microsoft.Basetypes.BigNum)(ccmd.Ins[0] as LiteralExpr).Val).ToInt;
+                        var level = ((Microsoft.BaseTypes.BigNum)(ccmd.Ins[0] as LiteralExpr).Val).ToInt;
                         // start search
                         var currBlk = blk;
                         var currCmd = i + 1;

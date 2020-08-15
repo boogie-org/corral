@@ -139,7 +139,7 @@ namespace ConcurrentHoudini
         public bpl.QKeyValue getNextYieldLabel()
         {
             var paramList = new List<object>();
-            paramList.Add(new bpl.LiteralExpr(bpl.Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(numYield++)));
+            paramList.Add(new bpl.LiteralExpr(bpl.Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(numYield++)));
             return new bpl.QKeyValue(bpl.Token.NoToken, yieldAttr, paramList, null);
         }
         public bpl.QKeyValue getAssumeAttrFromCmd(bpl.Cmd cmd)

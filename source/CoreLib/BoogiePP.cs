@@ -150,7 +150,7 @@ namespace cba
             {
                 var args = new List<Expr>();
                 args.Add(Expr.Ident(v1));
-                args.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(c), 32));
+                args.Add(new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(c), 32));
 
                 return new NAryExpr(Token.NoToken,
                     new FunctionCall(getBvGt()), args);
@@ -160,7 +160,7 @@ namespace cba
         public static LiteralExpr getLiteral(int c)
         {
             if (useIntArithmetic) return Expr.Literal(c);
-            return new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(c), 32);
+            return new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(c), 32);
         }
 
         public static Expr increment(Variable v1)
@@ -173,7 +173,7 @@ namespace cba
             {
                 var args = new List<Expr>();
                 args.Add(Expr.Ident(v1));
-                args.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(1), 32));
+                args.Add(new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(1), 32));
                 
                 return new NAryExpr(Token.NoToken,
                     new FunctionCall(getBvAdd()), args);

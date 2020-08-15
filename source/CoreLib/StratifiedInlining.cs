@@ -1191,9 +1191,9 @@ namespace CoreLib
             while (true)
             {
                 // Check timeout
-                if (CommandLineOptions.Clo.ProverKillTime != -1)
+                if (CommandLineOptions.Clo.TimeLimit != 0)
                 {
-                    if ((DateTime.UtcNow - startTime).TotalSeconds > CommandLineOptions.Clo.ProverKillTime)
+                    if ((DateTime.UtcNow - startTime).TotalSeconds > CommandLineOptions.Clo.TimeLimit)
                     {
                         return Outcome.TimedOut;
                     }
@@ -1484,7 +1484,7 @@ namespace CoreLib
                 {
                     if (cba.Util.BoogieVerify.assertsPassedIsInt)
                     {
-                        Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+                        Microsoft.BaseTypes.BigNum zero = Microsoft.BaseTypes.BigNum.FromInt(0);
                         prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
                     }
                     else
@@ -1507,7 +1507,7 @@ namespace CoreLib
             VCExpr assertsPass = null;
             if (cba.Util.BoogieVerify.assertsPassedIsInt)
             {
-                Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+                Microsoft.BaseTypes.BigNum zero = Microsoft.BaseTypes.BigNum.FromInt(0);
                 assertsPass = prover.VCExprGen.Eq(scs.interfaceExprs[index], prover.VCExprGen.Integer(zero));
             }
             else
