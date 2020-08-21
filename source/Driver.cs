@@ -410,8 +410,8 @@ namespace cba
 
                 ErrorTrace cexTrace = null;
                 checkAndRefine(curr, refinementState, printTrace, out cexTrace);
-                TokenTextWriter writer = new TokenTextWriter("something.txt");
-                cexTrace.printTrace(writer);
+                //TokenTextWriter writer = new TokenTextWriter("something.txt");
+                //cexTrace.printTrace(writer);
 
                 ////////////////////////////////////
                 // Output Phase

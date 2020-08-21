@@ -318,7 +318,7 @@ namespace ClientSource
                 //Console.WriteLine(p.StartInfo.Arguments);
                 p.StartInfo.UseShellExecute = false;
             }
-            //p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.CreateNoWindow = false;
             //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;
@@ -356,7 +356,8 @@ namespace ClientSource
             killAllZ3Instances.WaitForExit();*/
             foreach (var process in Process.GetProcessesByName("z3"))
             {
-                process.Kill();
+                if (!process.HasExited)
+                    process.Kill();
             }
             //Console.ReadLine();
         }

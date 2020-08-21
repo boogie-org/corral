@@ -66,6 +66,8 @@ namespace LocalServerInCsharp
         public static Config configuration = new Config();
         public static double boogieDumpTime = 0;
         public static DateTime boogieDumpStart;
+        public static List<string> proofClauses;
+        public static int[] clientClauseCount;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -118,6 +120,8 @@ namespace LocalServerInCsharp
             clientNumForwardPops = new double[maxClients];
             clientNumBackwardPops = new double[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
+            proofClauses = new List<string>();
+            clientClauseCount = new int[maxClients];
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             
@@ -203,15 +207,33 @@ namespace LocalServerInCsharp
                     string[] parseBody = body.Split('=');
                     int clientID = Int16.Parse(parseBody[0]);
                     string calltree = parseBody[1];
-                    if (writeLog)
-                        Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
-                    //Console.ReadLine();
-                    addCalltree(context, clientID, calltree);
-                    if (writeLog)
-                        Console.WriteLine("Adding Calltree");
-                    //Console.ReadLine();
-                    //msgContent = Common.Utils.ParseMsg(body.Replace("\"", ""));
-                    //Log.WriteLine(Log.Info, string.Format("Received Large message"));
+                    string[] check = calltree.Split(',');
+                    if (check[0] == "proofClause")
+                    {
+                        String receivedClause = null;
+                        for (int i = 1; i < check.Length; i++)
+                            receivedClause = receivedClause + check[i] + ",";
+                        receivedClause = receivedClause.Substring(0, receivedClause.Length - 1); // Removed The Trailing ","                        
+                        proofClauses.Add(receivedClause);
+                        
+                        /*Console.WriteLine(proofClauses.Count);
+                        for (int i = 0; i < proofClauses.Count; i++)
+                            Console.WriteLine(proofClauses[i]);*/
+                        //Console.ReadLine();
+                        ResponseHttp(context, "AddedClause");                        
+                    }
+                    else
+                    {
+                        if (writeLog)
+                            Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
+                        //Console.ReadLine();
+                        addCalltree(context, clientID, calltree);
+                        if (writeLog)
+                            Console.WriteLine("Adding Calltree");
+                        //Console.ReadLine();
+                        //msgContent = Common.Utils.ParseMsg(body.Replace("\"", ""));
+                        //Log.WriteLine(Log.Info, string.Format("Received Large message"));
+                    }
                 }
                 else
                 {
@@ -278,6 +300,8 @@ namespace LocalServerInCsharp
                             ResponseHttp(context, "NO");
                         }
                     }
+                    else if (msgContent.ContainsKey("requestProofClause"))
+                        sendProofClauses(context, msgContent["requestProofClause"]);
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -397,6 +421,25 @@ namespace LocalServerInCsharp
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
                     //Console.WriteLine("TIMEOUT END");
                 }
+            }
+        }
+
+        static void sendProofClauses(HttpListenerContext context, string idNumber)
+        {
+            int id = Int16.Parse(idNumber);
+            //Console.WriteLine("Send Clause To Client : " + id);
+            id--;
+            if (clientClauseCount[id] == proofClauses.Count)
+                ResponseHttp(context, "NONE");
+            else
+            {
+                string clauseToSend = null;
+                for (int i = clientClauseCount[id]; i < proofClauses.Count; i++)
+                    clauseToSend = (clauseToSend == null) ? proofClauses[i] : clauseToSend + "+" + proofClauses[i];    //New clauses are concatenated with "+"
+                //clauseToSend = clauseToSend.Substring(1);   //Removed the "+" at the beginning
+                //Console.WriteLine("Send Clause : " + clauseToSend);
+                clientClauseCount[id] = proofClauses.Count;
+                ResponseHttp(context, clauseToSend);
             }
         }
 

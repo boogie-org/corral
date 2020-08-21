@@ -1,9 +1,11 @@
 numListeners=1
-numMaxClients=1            
-timeout=180            
-inputFilesDirectoryPath=F:\00ResearchWork\SVCOMP\test6\
-corralDumpBoogie=F:\00ResearchWork\SVCOMP\corralDumpBoogie3\bin\Debug\corral.exe
+numMaxClients=1        
+timeout=900
+hydraBin=F:\00ResearchWork\hydraCDCL\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug\
+inputFilesDirectoryPath=F:\00ResearchWork\hydraCDCLTest\
+dumpSIBoogieFiles=true
+boogieDumpDirectory=F:\00ResearchWork\SdvBench\ITP_WDM\boogieDump\
 serverAddress=http://localhost:5000/
-corralArguments=/killAfter:180 /tryCTrace /noTraceOnDisk /printDataValues:1 /useProverEvaluate /cex:1 /bopt:proverOpt:O:smt.qi.eager_threshold=100 /k:1 /di /timeLimit:880 /v:1 /maxStaticLoopBound:64 /recursionBound:65536 /irreducibleLoopUnroll:12 /trackAllVars
-hydraArguments=/k:1 /recursionBound:12 /main:main /useProverEvaluate /track:yogi_error  /sdv /recursionBound:3 /timeLimit:86400 /memLimit:1000 /catchAll /houdiniTimeLimit:20000 /runHoudini /track:SLAM_guard_S_0 /track:SLAM_guard_S_0_init /track:irp_copy_next /track:irp_status /track:lowerDriverCalled /track:lowerDriverFailed /track:lowerDriverReturn /track:return_state /track:sdv_cancelFptr /track:thread_state /track:yogi_error /dislike:Mem_T.Data1__GUID /dislike:Mem_T.Data2__GUID /dislike:Mem_T.Data3__GUID /dislike:Mem_T.Data4__GUID /runHoudini:0 /di /runFullHydra
+corralArguments=/oldCorralFlags /k:1 /main:main /useProverEvaluate /sdv /recursionBound:3 /catchAll /houdiniTimeLimit:20000 /runHoudini /trackAllVars /runHoudini:0 
+hydraArguments=/newStratifiedInlining:ucsplitparallelCDCL /maxSplitPerIteration:1 /oldCorralFlags /si /useProverEvaluate /k:1 /di /recursionBound:3
 startLocalListener=true
