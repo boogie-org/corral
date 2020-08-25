@@ -1864,12 +1864,10 @@ namespace CoreLib
                     //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
                 if (writeLog)
-                    Console.WriteLine("point 4");
+                    Console.WriteLine(clientID + " = point 4");
                 bool newCallSiteFound = false;
                 if (verificationAlgorithm != "ucsplitparallel5")
                 {
-                    if (writeLog)
-                        Console.WriteLine("!!WRONG!!\nShould Not be here | Something Went Wrong");
                     reporter.callSitesToExpand = new List<StratifiedCallSite>();
                     reporter.reportTrace = false;
                     DateTime oqStartTime = DateTime.Now;
