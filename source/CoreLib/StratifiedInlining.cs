@@ -14,6 +14,7 @@ using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Threading;
+using System.IO;
 //using LocalServerInCsharp;
 
 namespace CoreLib
@@ -242,6 +243,7 @@ namespace CoreLib
         public HashSet<string> proofSites;
         public List<string> proofClauses;
         public Dictionary<string, Microsoft.Boogie.VCExprAST.VCExpr> cdclSymbolTable;
+        public Dictionary<string, Microsoft.Boogie.VCExprAST.VCExpr> symbolTable;
         static int[] unsatCheck;
         public Dictionary<string, string> callsiteExprToPersistentID;
         // verification start time
@@ -365,6 +367,7 @@ namespace CoreLib
             proofSites = new HashSet<string>();
             proofClauses = new List<string>();
             cdclSymbolTable = new Dictionary<string, VCExpr>();
+            symbolTable = new Dictionary<string, VCExpr>();
             attachedVCbyID = new Dictionary<string, StratifiedVC>();
             attachedVCInvbyID = new Dictionary<StratifiedVC, string>();
             unsatCheck = new int[4];
@@ -1291,10 +1294,14 @@ namespace CoreLib
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             bool useCDCL = cba.Util.HydraConfig.useCDCL;
             bool useUW = cba.Util.HydraConfig.useUW;
+            bool useNewDecisionStrategy = cba.Util.HydraConfig.useNewDecisionStrategy;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             string verificationAlgorithm = cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower();
             bool firstQueryAfterSplit = false;
+            Random randomScore = new Random();
+            int numRandomSplits = 0;
+            int maxRandomSplits = 5;
             for (int i = 0; i < 4; i++)
                 unsatCheck[i] = 0;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
@@ -1361,7 +1368,10 @@ namespace CoreLib
             
             bool partitionUnsat = false;
             bool someFlag = false;
-            
+            if (useCDCL)
+                Console.WriteLine("CDCL IS TRUE");
+            else
+                Console.WriteLine("CDCL IS FALSE");
             while (true)
             {
                 //Pre-inline proofSites
@@ -1474,10 +1484,20 @@ namespace CoreLib
                     }
                         //if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1
                         //&& (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
-                        if (verificationAlgorithm == "ucsplitparalleltest")
+                    if (verificationAlgorithm == "ucsplitparalleltest")
+                    {
+                        if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                             splitFlag = 1;
-                        //Console.WriteLine(splitFlag);
-                        if (splitFlag == 1)
+                    }
+
+                    if (verificationAlgorithm == "ucsplitparallelrandom")
+                    {
+                        if (numRandomSplits <= maxRandomSplits && randomScore.Next(1, 100) <= 25)
+                            splitFlag = 1;
+                    }
+
+                    //Console.WriteLine(splitFlag);
+                    if (splitFlag == 1)
                         {
                             var st = DateTime.Now;
                             
@@ -1502,20 +1522,26 @@ namespace CoreLib
                                 }
 
                                 if (verificationAlgorithm == "ucsplitparalleltest")
-                                {
-                                    
-                                    if (maxVc == null)
+                                {                                    
+                                    var score = Math.Min(sizes[vc].Count, disj[vc]);
+                                    if (score >= maxVcScore && !previousSplitSites.Contains(GetPersistentID(attachedVCInv[vc])))
                                     {
-                                        StratifiedCallSite cs = attachedVCInv[vc];
-                                        if (!previousSplitSites.Contains(GetPersistentID(cs)))
-                                        {
-                                            maxVc = vc;
-                                            break;
-                                        }
+                                        maxVc = vc;
+                                        maxVcScore = score;
                                     }
                                 }
 
-                                if (verificationAlgorithm == "ucsplitparallel")
+                            if (verificationAlgorithm == "ucsplitparallelrandom")
+                            {
+                                var score = randomScore.Next(1, 1000);
+                                if (score >= maxVcScore && !previousSplitSites.Contains(GetPersistentID(attachedVCInv[vc])))
+                                {
+                                    maxVc = vc;
+                                    maxVcScore = score;
+                                }
+                            }
+
+                            if (verificationAlgorithm == "ucsplitparallel")
                                 {
                                     //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                     var score = 0;
@@ -1643,6 +1669,11 @@ namespace CoreLib
                                     firstQueryAfterSplit = true;
                                     //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
                                     Console.WriteLine("Splitting on : " + GetPersistentID(scs));
+                                    if (verificationAlgorithm == "ucsplitparallelrandom")
+                                    {
+                                        File.AppendAllText("out.txt", GetPersistentID(scs) + ",");
+                                        numRandomSplits++;
+                                    }                                    
                                     toRemove.Iter(vc => attachedVCInv.Remove(vc));
                                     UCsplit += 1;
 

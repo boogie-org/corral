@@ -957,6 +957,7 @@ namespace LocalServerInCsharp
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
                 Console.WriteLine("Verification Outcome : " + finalOutcome);
                 Console.WriteLine("Time Taken : " + totalTime.ToString());
+                File.AppendAllText("out.txt", totalTime.ToString() + "\n");
                 File.WriteAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {

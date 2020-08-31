@@ -19,6 +19,7 @@ namespace cba.Util
         public static int maxSplitPerIteration = 1;
         public static bool useCDCL = false;
         public static bool useUW = false;
+        public static bool useNewDecisionStrategy = false;
     }
 
     public static class BoogieVerify

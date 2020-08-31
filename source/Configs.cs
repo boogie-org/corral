@@ -584,6 +584,10 @@ namespace cba
             {
                 cba.Util.HydraConfig.useUW = true;
             }
+            else if (flag.StartsWith("/useNewDecisionStrategy"))
+            {
+                cba.Util.HydraConfig.useNewDecisionStrategy = true;
+            }
             else if (flag.StartsWith("/hydraServerURI:"))
             {
                 var split = flag.Split(sep);

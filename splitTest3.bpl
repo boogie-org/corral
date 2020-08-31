@@ -55,6 +55,8 @@ modifies x;
   assert x > 1;
 }
 
+ite h1, block else mustreach
+Do static analysis. For a split candidate, how different are the block and mustreach partition inlinings are going to be? Figure out from the call graph.
 
 !c and !d
 block(b1) and block(foo4)
