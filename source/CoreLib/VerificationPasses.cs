@@ -677,15 +677,7 @@ namespace cba
         public static bool disableStaticAnalysis = false;
         public static bool inferPreconditions = false;
         public static bool checkAsserts = false;
-        public static string runAbsHoudiniConfig = null;
         public static bool fastRequiresInference = false;
-        public static bool runAbsHoudini
-        {
-            get
-            {
-                return (runAbsHoudiniConfig != null);
-            }
-        }
         public static bool useHoudiniLite = false;
 
         // Template
@@ -1024,28 +1016,21 @@ namespace cba
 
                         Expr e = null;
 
-                        if (!runAbsHoudini)
-                        {
-                            var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "CIC" + cnt.ToString(), Microsoft.Boogie.Type.Bool), false);
-                            constant.AddAttribute("existential", Expr.Literal(true));
-                            cnt++;
+                        var constant = new Constant(Token.NoToken, new TypedIdent(Token.NoToken, "CIC" + cnt.ToString(), Microsoft.Boogie.Type.Bool), false);
+                        constant.AddAttribute("existential", Expr.Literal(true));
+                        cnt++;
 
-                            // record names and dependencies
-                            var id = QKeyValue.FindStringAttribute(template.annotations, "name");
-                            if (id != null) namedConstants.InitAndAdd(Tuple.Create(impl.Name, id), constant.Name);
+                        // record names and dependencies
+                        var id = QKeyValue.FindStringAttribute(template.annotations, "name");
+                        if (id != null) namedConstants.InitAndAdd(Tuple.Create(impl.Name, id), constant.Name);
 
-                            id = QKeyValue.FindStringAttribute(template.annotations, "dep");
-                            if (id != null) dependenciesBetConstants.Add(constant.Name, id);
+                        id = QKeyValue.FindStringAttribute(template.annotations, "dep");
+                        if (id != null) dependenciesBetConstants.Add(constant.Name, id);
 
-                            e = Expr.Imp(Expr.Ident(constant), expr);
-                            constants.Add(constant);
+                        e = Expr.Imp(Expr.Ident(constant), expr);
+                        constants.Add(constant);
 
-                            ret[proc.Name].Add(constant.Name, new EExpr(expr, template.IsEnsures));
-                        }
-                        else
-                        {
-                            e = expr;
-                        }
+                        ret[proc.Name].Add(constant.Name, new EExpr(expr, template.IsEnsures));
 
                         if (template.IsEnsures)
                         {
@@ -1064,9 +1049,6 @@ namespace cba
                     }
                 }
             }
-
-            if (runAbsHoudini)
-                checkStaticAnalysis = false;
 
             var name2Impl = BoogieUtil.nameImplMapping(program);
 
@@ -1144,25 +1126,6 @@ namespace cba
 
         public override CBAProgram runCBAPass(CBAProgram program)
         {
-            #region sanity checking for abstract houdini
-            if (runAbsHoudini)
-            {
-                if (templates.Any(eexpr => eexpr.IsRequires && !eexpr.IsFree))
-                    throw new InvalidInput("Abstract Houdini doesn't yet support inferring Requires annotations");
-                var checkAttr = new Func<QKeyValue, bool>(attr =>
-                    {
-                        for (; attr != null; attr = attr.Next)
-                        {
-                            if (attr.Key == "pre" || attr.Key == "post" || attr.Key == "upper") return true;
-                        }
-                        return false;
-                    });
-                
-                if (templates.Any(eexpr => !eexpr.IsFree && !checkAttr(eexpr.annotations)))
-                    throw new InvalidInput("Abstract Houdini called with illegal templates");
-            }
-            #endregion
-
             if (ExtractLoops)
             {
                 // Unroll loops
@@ -1178,7 +1141,7 @@ namespace cba
 
             if (printHoudiniQuery != null) PrintProofMinQuery(program, "pm_" + printHoudiniQuery);
 
-            if (!runAbsHoudini && info.Count == 0 && summaries.Count == 0) return program;
+            if (info.Count == 0 && summaries.Count == 0) return program;
 
             if (runHoudini)
             {
@@ -1235,170 +1198,6 @@ namespace cba
 
 
         public static bool FPA = false;
-
-        public void trainSummaries(CBAProgram program)
-        {
-            // discard non-free templates
-            templates.RemoveAll(ee => !ee.IsFree);
-
-            var trainingProc = program.TopLevelDeclarations.OfType<Procedure>()
-                .Where(proc => BoogieUtil.checkAttrExists("trainingPredicates", proc.Attributes))
-                .FirstOrDefault();
-            if (trainingProc == null)
-                throw new InternalError("Illegal invocation of training summaries mode");
-
-            foreach (Ensures ens in trainingProc.Ensures)
-                templates.Add(new EExpr(ens));
-
-            BoogieUtil.DoModSetAnalysis(program);
-
-            DoStaticAnalysis(program);
-
-            // fake abs houdini to get the template instantiation correct
-            runAbsHoudiniConfig = "";
-            // We don't want predicates from "main"
-            var impl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            if (impl != null) impl.AddAttribute("entrypoint");
-
-            var info = Instantiate(program);
-
-            var proc2Exprs = new Dictionary<string, List<Expr>>();
-            if (FPA)
-            {
-                var newFns = new List<Declaration>();
-                foreach (var p in program.TopLevelDeclarations.OfType<Implementation>())
-                {
-                    var proc = p.Proc;
-                    
-                    var sp = proc.Ensures.Partition(ens => ens.Free);
-                    proc.Ensures = sp.fst;
-
-                    var foo = CreateFunctionFPA(sp.snd.Count, "foo_" + proc.Name);
-                    foo.AddAttribute("absdomain", "PredicateAbs");
-                    newFns.Add(foo);
-
-                    var exprArgs = new List<Expr>(sp.snd.Select(ens => ens.Condition));
-                    var expr = new NAryExpr(Token.NoToken, new FunctionCall(foo), exprArgs);
-                    proc.Ensures.Add(new Ensures(false, expr));
-
-                    proc2Exprs.Add(foo.Name, exprArgs);
-                }
-
-                program.AddTopLevelDeclarations(newFns);
-            }
-
-            // Massage program
-            (new RewriteCallDontCares()).VisitProgram(program);
-            // get rid of assert in main
-            var mainImpl = BoogieUtil.findProcedureImpl(program.TopLevelDeclarations, program.mainProcName);
-            foreach (var blk in mainImpl.Blocks)
-            {
-                for (int i = 0; i < blk.Cmds.Count; i++)
-                {
-                    var acmd = blk.Cmds[i] as AssertCmd;
-                    if (acmd == null) continue;
-                    var le = acmd.Expr as LiteralExpr;
-                    if (le != null && le.IsTrue) continue;
-                    blk.Cmds[i] = new AssumeCmd(Token.NoToken, acmd.Expr);
-                }
-            }
-
-            // Run Abs Houdini
-
-            CommandLineOptions.Clo.InlineDepth = InlineDepth;
-            var old = CommandLineOptions.Clo.ProcedureInlining;
-            CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
-            var si = CommandLineOptions.Clo.StratifiedInlining;
-            CommandLineOptions.Clo.StratifiedInlining = 0;
-            var cc = CommandLineOptions.Clo.ProverCCLimit;
-            CommandLineOptions.Clo.ContractInfer = true;
-            var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
-
-            CommandLineOptions.Clo.ProverKillTime = 20000; // AbsHoudini interprets this as milliseconds
-            CommandLineOptions.Clo.ProverCCLimit = 1;
-            CommandLineOptions.Clo.AbstractHoudini = runAbsHoudiniConfig;
-            CommandLineOptions.Clo.PrintErrorModel = 1;
-            AbstractHoudini.WitnessFile = null;
-
-            var time3 = DateTime.Now;
-
-            inline(program);
-            BoogieUtil.TypecheckProgram(program, "error.bpl");
-
-            if (printHoudiniQuery != null)
-                BoogieUtil.PrintProgram(program, printHoudiniQuery);
-
-            HashSet<string> predicates = new HashSet<string>();
-
-            if (FPA)
-            {
-                AbstractDomainFactory.Initialize(program);
-                var domain = AbstractDomainFactory.GetInstance("PredicateAbs");
-                var abs = new AbsHoudini(program, domain);
-                CommandLineOptions.Clo.PrintAssignment = true;
-                var absout = abs.ComputeSummaries();
-
-                var summaries = abs.GetAssignment();
-                foreach (var foo in summaries)
-                {
-                    var body = foo.Body;
-                    if(body is LiteralExpr && (body as LiteralExpr).IsTrue)
-                        continue;
-
-                    // break top-level ANDs
-
-                    var subst = new Substitution(v =>
-                        {
-                            var num = Int32.Parse(v.Name.Substring(1));
-                            return proc2Exprs[foo.Name][num];
-                        });
-
-                    body = Substituter.Apply(subst, body);
-
-                    foreach(var c in GetConjuncts(body)) 
-                        predicates.Add(c.ToString());
-                }
-            }
-            else
-            {
-                AbstractHoudini absHoudini = null;
-                PredicateAbs.Initialize(program);
-                absHoudini = new AbstractHoudini(program);
-                absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
-                // Abstract houdini sets a prover option for the time limit. Get rid of that now
-                CommandLineOptions.Clo.ProverOptions = CommandLineOptions.Clo.ProverOptions.Where(str => !str.StartsWith("TIME_LIMIT"));
-
-                // Record new summaries
-                predicates = absHoudini.GetPredicates();
-            }
-
-            
-            CommandLineOptions.Clo.InlineDepth = -1;
-            CommandLineOptions.Clo.ProcedureInlining = old;
-            CommandLineOptions.Clo.StratifiedInlining = si;
-            CommandLineOptions.Clo.ProverCCLimit = cc;
-            CommandLineOptions.Clo.ContractInfer = false;
-            CommandLineOptions.Clo.ProverKillTime = oldTimeout;
-            CommandLineOptions.Clo.AbstractHoudini = null;
-            CommandLineOptions.Clo.PrintErrorModel = 0;
-
-            // get rid of "true ==> blah" for type-state predicates 
-            // because we know they get covered by other candidates anyway
-            var typestatePost = new HashSet<string>();
-            templates
-                .Where(ee => BoogieUtil.checkAttrExists("typestate", ee.annotations)
-                    && BoogieUtil.checkAttrExists("post", ee.annotations))
-                .Iter(ee => typestatePost.Add(ee.expr.ToString()));
-            predicates.ExceptWith(typestatePost);
-
-            // write out the predicates
-            Console.WriteLine("Predicates:");
-            predicates.Iter(s => Console.WriteLine("  {0}", s));
-            using (var fs = new System.IO.StreamWriter("corralPredicates.txt"))
-            {
-                predicates.Iter(s => fs.WriteLine("{0}", s));
-            }
-        }
 
         private Function CreateFunctionFPA(int numArgs, string name)
         {
@@ -1511,9 +1310,9 @@ namespace cba
         private void RunHoudini(CBAProgram program, Dictionary<string, Dictionary<string, EExpr>> info)
         {
             var runHoudiniLite = useHoudiniLite;
-            if (checkAsserts || fastRequiresInference || runAbsHoudini) runHoudiniLite = false;
+            if (checkAsserts || fastRequiresInference) runHoudiniLite = false;
 
-            Console.WriteLine("Running {0}Houdini{1}", runAbsHoudini ? "Abstract " : "", runHoudiniLite ? "Lite" : "");
+            Console.WriteLine("Running Houdini{0}", runHoudiniLite ? "Lite" : "");
 
             // Get rid of inline attributes
             foreach (var decl in program.TopLevelDeclarations)
@@ -1594,16 +1393,6 @@ namespace cba
             var oldTimeout = CommandLineOptions.Clo.ProverKillTime;
             CommandLineOptions.Clo.ProverKillTime = Math.Max(1, (HoudiniTimeout + 500) / 1000); // milliseconds -> seconds
 
-            if (runAbsHoudini)
-            {
-                CommandLineOptions.Clo.ProverKillTime = 20000; // AbsHoudini interprets this as milliseconds
-                CommandLineOptions.Clo.ProverCCLimit = 1;
-                CommandLineOptions.Clo.AbstractHoudini = runAbsHoudiniConfig;
-                CommandLineOptions.Clo.PrintErrorModel = 1;
-                AbstractHoudini.WitnessFile = null;
-                AbstractHoudini.iterTimeLimit = HoudiniTimeout; // milliseconds
-            }
-
             var time3 = DateTime.Now;
 
             var trueConstants = new HashSet<string>();
@@ -1653,46 +1442,36 @@ namespace cba
 
                 HoudiniOutcome outcome = null;
 
-                if (runAbsHoudini)
+                if (runHoudiniLite)
                 {
-                    PredicateAbs.Initialize(program);
-                    absHoudini = new AbstractHoudini(program);
-                    absHoudini.computeSummaries(new PredicateAbs(program.TopLevelDeclarations.OfType<Implementation>().First().Name));
-                    // Abstract houdini sets a prover option for the time limit. Get rid of that now
-                    CommandLineOptions.Clo.ProverOptions = CommandLineOptions.Clo.ProverOptions.Where(str => !str.StartsWith("TIME_LIMIT"));
+                    cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
+                    var res = CoreLib.HoudiniInlining.RunHoudini(program);
+                    trueConstants.UnionWith(res);
+                    //CoreLib.HoudiniStats.Print();
+                    //Console.WriteLine("Num true = {0}", res.Count);
+                    //Console.WriteLine("True assignment: {0}", res.Concat(" "));
+                    //trueConstants.UnionWith(res);
+                    //throw new NormalExit("Done");
                 }
                 else
                 {
-                    if (runHoudiniLite)
+
+                    var houdiniStats = new HoudiniSession.HoudiniStatistics();
+                    Houdini houdini = new Houdini(program, houdiniStats);
+                    outcome = houdini.PerformHoudiniInference();
+                    Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
+
+                    if (!fastRequiresInference)
                     {
-                        cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
-                        var res = CoreLib.HoudiniInlining.RunHoudini(program);
-                        trueConstants.UnionWith(res);
-                        //CoreLib.HoudiniStats.Print();
-                        //Console.WriteLine("Num true = {0}", res.Count);
-                        //Console.WriteLine("True assignment: {0}", res.Concat(" "));
-                        //trueConstants.UnionWith(res);
-                        //throw new NormalExit("Done");
+                        outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });        
                     }
-                    else
-                    {
-
-                        var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                        Houdini houdini = new Houdini(program, houdiniStats);
-                        outcome = houdini.PerformHoudiniInference();
-                        Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
-
-                        if (!fastRequiresInference)
-                        {
-                            outcome.assignment.Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });        
-                        }
-                        houdini = null; // for gc
-                    }
-                    Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
-
-                    var time4 = DateTime.Now;
-                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    houdini = null; // for gc
                 }
+                Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
+
+                var time4 = DateTime.Now;
+                Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                
                 
                 if(fastRequiresInference)
                 {
@@ -1722,8 +1501,8 @@ namespace cba
                         .Iter(kvp => { if (kvp.Value) trueConstants.Add(kvp.Key); });
 
                     Console.WriteLine("Inferred {0} contracts", trueConstants.Count);
-                    var time4 = DateTime.Now;
-                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time4 - time3).TotalSeconds.ToString("F2"));
+                    var time5 = DateTime.Now;
+                    Log.WriteLine(Log.Debug, "Houdini took {0} seconds", (time5 - time3).TotalSeconds.ToString("F2"));
                     houdini = null;
                 }
                  
@@ -1749,9 +1528,6 @@ namespace cba
             CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
-            if (runAbsHoudini)
-                trueConstants = staticAnalysisConstants;
-
             #region debug static analysis
 
             if (!staticAnalysisConstants.IsSubsetOf(trueConstants))
@@ -1775,17 +1551,6 @@ namespace cba
                 Debug.Assert(false, "Bug in static analysis module");
             }
             #endregion
-
-            // Record new summaries
-            if (runAbsHoudini)
-            {
-                foreach (var proc in programProcs)
-                {
-                    var summary = absHoudini.GetSummary(program, proc);
-                    if (!summaries.ContainsKey(proc.Name)) summaries.Add(proc.Name, new List<EExpr>());
-                    summaries[proc.Name].Add(new EExpr(new Ensures(true, summary)));
-                }
-            }
 
             foreach (var proc in programProcs)
             {
@@ -2046,7 +1811,7 @@ namespace cba
         private void RunHoudini(CBAProgram program)
         {
             inferred_asserts = new HashSet<KeyValuePair<string, string>>();
-            Console.WriteLine("Running {0}Houdini", runAbsHoudini ? "Abstract " : "");
+            Console.WriteLine("Running Houdini");
             // Run Houdini
 
             CommandLineOptions.Clo.InlineDepth = InlineDepth;
