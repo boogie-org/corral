@@ -1049,13 +1049,6 @@ namespace cba
 
                     // add summaries to the original program
                     curr = ciPass.addSummaries(curr);
-
-                    if (config.trainSummaries)
-                    {
-                        var tmpCiPass = new ContractInfer(GlobalConfig.InferPass);
-                        tmpCiPass.trainSummaries(tmp_abs.getCBAProgram());
-                    }
-
                 }
 
                 // Infer min. loop bounds
@@ -1482,13 +1475,11 @@ namespace cba
                     var absHoudiniAnnotations = new HashSet<string>(new string[] { "pre", "post", "upper" });
 
                     proc.Ensures.OfType<Ensures>().Where(e =>
-                        (config.runAbsHoudini != null && (e.Free || BoogieUtil.checkAttrExists(absHoudiniAnnotations, e.Attributes))) ||
-                        (config.runAbsHoudini == null && !BoogieUtil.checkAttrExists("abshoudini", e.Attributes)))
+                        (!BoogieUtil.checkAttrExists("abshoudini", e.Attributes)))
                         .Iter(e => ens.Add(e));
 
                     proc.Requires.OfType<Requires>().Where(r =>
-                        (config.runAbsHoudini != null && (r.Free || BoogieUtil.checkAttrExists(absHoudiniAnnotations, r.Attributes))) ||
-                        (config.runAbsHoudini == null && !BoogieUtil.checkAttrExists("abshoudini", r.Attributes)))
+                        (!BoogieUtil.checkAttrExists("abshoudini", r.Attributes)))
                         .Iter(r => req.Add(r));
                 }
 
@@ -1510,22 +1501,7 @@ namespace cba
                 extra.Remove(t.Name);
             }
 
-            if (config.trainSummaries)
-            {
-                // Track variables mentioned in the templates
-                var trainingProc = program.TopLevelDeclarations.OfType<Procedure>()
-                    .Where(proc => BoogieUtil.checkAttrExists("trainingPredicates", proc.Attributes))
-                    .FirstOrDefault();
-                if (trainingProc != null)
-                {
-                    var vu = new VarsUsed();
-                    trainingProc.Ensures.Iter(e => vu.VisitExpr(e.Condition));
-                    extra.UnionWith(vu.globalsUsed);
-                }
-            }
-
             program.TopLevelDeclarations = newDecls;
-            ContractInfer.runAbsHoudiniConfig = config.runAbsHoudini;
             GlobalConfig.InferPass = new ContractInfer(templateVarNames, req, ens, config.runHoudini, -1);
             return extra;
         }

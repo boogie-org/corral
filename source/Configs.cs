@@ -100,7 +100,6 @@ namespace cba
         public bool sdvInstrumentAssert { get; private set; }
 
         public int runHoudini { get; private set; }
-        public string runAbsHoudini { get; private set; }
         public bool runHoudiniLite { get; private set; }
 
         public bool summaryComputation { get; private set; }
@@ -295,7 +294,6 @@ namespace cba
             sdvInstrumentAssert = false;
 
             runHoudini = -2;
-            runAbsHoudini = null;
             runHoudiniLite = false;
             summaryComputation = false;
 
@@ -442,10 +440,6 @@ namespace cba
             {
                 unifyMaps = true;
             }
-            else if (flag == "/trainSummaries")
-            {
-                trainSummaries = true;
-            }
             else if (flag.StartsWith("/set"))
             {
                 var split = flag.Split(sep);
@@ -590,11 +584,6 @@ namespace cba
             else if (flag == "/useHoudiniLite")
             {
                 runHoudiniLite = true;
-            }
-            else if (flag.StartsWith("/runAbsHoudini:"))
-            {
-                var split = flag.Split(sep);
-                runAbsHoudini = split[1];
             }
             else if (flag == "/computeSummary")
             {
