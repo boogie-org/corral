@@ -1396,7 +1396,6 @@ namespace cba
             var time3 = DateTime.Now;
 
             var trueConstants = new HashSet<string>();
-            AbstractHoudini absHoudini = null;
             var programProcs = new List<Procedure>();
             program.TopLevelDeclarations.OfType<Procedure>()
                 .Iter(proc => programProcs.Add(proc));
@@ -1525,7 +1524,6 @@ namespace cba
             CommandLineOptions.Clo.ErrorLimit = oldErrorLimit;
             CommandLineOptions.Clo.ContractInfer = false;
             CommandLineOptions.Clo.TimeLimit = oldTimeout;
-            CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
             #region debug static analysis
@@ -1941,7 +1939,6 @@ namespace cba
             CommandLineOptions.Clo.ErrorLimit = oldErrorLimit;
             CommandLineOptions.Clo.ContractInfer = false;
             CommandLineOptions.Clo.TimeLimit = oldTimeout;
-            CommandLineOptions.Clo.AbstractHoudini = null;
             CommandLineOptions.Clo.PrintErrorModel = 0;
 
             //#region debug static analysis
