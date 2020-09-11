@@ -1,0 +1,11 @@
+numListeners=1
+numMaxClients=4        
+timeout=3600
+hydraBin=/home/prantik/hydra/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/
+inputFilesDirectoryPath=/home/prantik/copyFiles/
+dumpSIBoogieFiles=false
+boogieDumpDirectory=F:\00ResearchWork\SdvBench\ITP_WDM\boogieDump\
+serverAddress=http://localhost:5000/
+corralArguments=/oldCorralFlags /k:1 /recursionBound:12 /main:main /useProverEvaluate /track:yogi_error  /sdv /recursionBound:3 /timeLimit:86400 /memLimit:1000 /catchAll /houdiniTimeLimit:20000  /runHoudini /track:SLAM_guard_O_0  /track:SLAM_guard_O_0_init  /track:completion_set  /track:lower_driver_return  /track:sdv_cancelFptr  /track:yogi_error  /dislike:Mem_T.Data1__GUID  /dislike:Mem_T.Data2__GUID  /dislike:Mem_T.Data3__GUID  /dislike:Mem_T.Data4__GUID  /runHoudini:2
+hydraArguments=/newStratifiedInlining:ucsplitparallel2 /maxSplitPerIteration:1 /oldCorralFlags /si /useProverEvaluate /di /recursionBound:3
+startLocalListener=true
