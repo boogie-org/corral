@@ -1062,9 +1062,9 @@ namespace cba
         {
             if (var == "k" || var == LanguageSemantics.tidName)
             {
-                if (val is Microsoft.Basetypes.BigNum)
+                if (val is Microsoft.BaseTypes.BigNum)
                 {
-                    val = BoogieUtil.BigNumToIntForce((Microsoft.Basetypes.BigNum)val);
+                    val = BoogieUtil.BigNumToIntForce((Microsoft.BaseTypes.BigNum)val);
                 }
             }
 
@@ -1089,7 +1089,7 @@ namespace cba
             var val = getVal(var);
             if (val is int) return (int)val;
             if (val is Model.Integer) return ((Model.Integer)val).AsInt();
-            if (val is Microsoft.Basetypes.BigNum) return BoogieUtil.BigNumToIntForce((Microsoft.Basetypes.BigNum)val);
+            if (val is Microsoft.BaseTypes.BigNum) return BoogieUtil.BigNumToIntForce((Microsoft.BaseTypes.BigNum)val);
             Debug.Assert(false);
             return 0;
         }
@@ -1103,14 +1103,14 @@ namespace cba
             return false;
         }
 
-        public Microsoft.Basetypes.BigNum getBigNumVal(string var)
+        public Microsoft.BaseTypes.BigNum getBigNumVal(string var)
         {
             var val = getVal(var);
-            if (val is int) return Microsoft.Basetypes.BigNum.FromInt((int)val);
-            if (val is Model.Integer) return Microsoft.Basetypes.BigNum.FromString(((Model.Integer)val).Numeral);
-            if (val is Microsoft.Basetypes.BigNum) return (Microsoft.Basetypes.BigNum)val;
+            if (val is int) return Microsoft.BaseTypes.BigNum.FromInt((int)val);
+            if (val is Model.Integer) return Microsoft.BaseTypes.BigNum.FromString(((Model.Integer)val).Numeral);
+            if (val is Microsoft.BaseTypes.BigNum) return (Microsoft.BaseTypes.BigNum)val;
             Debug.Assert(false);
-            return Microsoft.Basetypes.BigNum.FromInt(0);
+            return Microsoft.BaseTypes.BigNum.FromInt(0);
         }
 
 
@@ -1124,7 +1124,7 @@ namespace cba
             if (!hasVar(var)) return false;
             var v = varToVal[var];
             return ((v is int) || (v is Microsoft.Boogie.Model.Integer) ||
-                (v is Microsoft.Basetypes.BigNum));
+                (v is Microsoft.BaseTypes.BigNum));
         }
 
         public bool hasBoolVar(string var)
@@ -1767,8 +1767,8 @@ namespace cba
                 {
                     file = attr[0] as string;
                     var tt = attr[1] as LiteralExpr;
-                    if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
-                        line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;
+                    if (tt != null && (tt.Val is Microsoft.BaseTypes.BigNum))
+                        line = ((Microsoft.BaseTypes.BigNum)(tt.Val)).ToInt;
                 }
                 else
                 {

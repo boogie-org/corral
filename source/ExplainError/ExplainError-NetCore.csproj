@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CoreLib\CoreLib-NetCore.csproj" />
     <ProjectReference Include="..\..\boogie\Source\AbsInt\AbsInt-NetCore.csproj" />
-    <ProjectReference Include="..\..\boogie\Source\Basetypes\Basetypes-NetCore.csproj" />
+    <ProjectReference Include="..\..\boogie\Source\BaseTypes\BaseTypes-NetCore.csproj" />
     <ProjectReference Include="..\..\boogie\Source\CodeContractsExtender\CodeContractsExtender-NetCore.csproj" />
     <ProjectReference Include="..\..\boogie\Source\Concurrency\Concurrency-NetCore.csproj" />
     <ProjectReference Include="..\..\boogie\Source\Core\Core-NetCore.csproj" />

@@ -49,7 +49,7 @@ namespace CoreLib {
             this.name2Impl = BoogieUtil.nameImplMapping(program);
 
             this.vcgen = new VCGen(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
-            this.prover = ProverInterface.CreateProver(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.ProverKillTime);
+            this.prover = ProverInterface.CreateProver(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
             this.reporter = new AbstractHoudiniErrorReporter();
 
             var impls = new List<Implementation>(
@@ -443,7 +443,7 @@ namespace CoreLib {
                     continue;
 
                 var vexpr = VCExpressionGenerator.False;
-                consts.Iter(c => vexpr = gen.OrSimp(vexpr, gen.Eq(incarnations[v.Name], gen.Integer(Microsoft.Basetypes.BigNum.FromInt(c)))));
+                consts.Iter(c => vexpr = gen.OrSimp(vexpr, gen.Eq(incarnations[v.Name], gen.Integer(Microsoft.BaseTypes.BigNum.FromInt(c)))));
                 ret = gen.AndSimp(ret, vexpr);
             }
 
@@ -592,7 +592,7 @@ namespace CoreLib {
         {
             if (elem is Model.Integer)
             {
-                return Microsoft.Basetypes.BigNum.FromInt((elem as Model.Integer).AsInt());
+                return Microsoft.BaseTypes.BigNum.FromInt((elem as Model.Integer).AsInt());
             }
             if (elem is Model.Boolean)
             {
@@ -617,9 +617,9 @@ namespace CoreLib {
                         return VCExpressionGenerator.False;
                     }
                 }
-                else if (val is Microsoft.Basetypes.BigNum)
+                else if (val is Microsoft.BaseTypes.BigNum)
                 {
-                    return gen.Integer((Microsoft.Basetypes.BigNum)val);
+                    return gen.Integer((Microsoft.BaseTypes.BigNum)val);
                 }
 
                 throw new NotImplementedException("Cannot handle literals of this type");

@@ -42,10 +42,10 @@ namespace cba.Util
 
         public static void setTimeOut(int TO)
         {
-            CommandLineOptions.Clo.ProverKillTime = -1;
+            CommandLineOptions.Clo.TimeLimit = 0;
             if (TO > 0)
             {
-                CommandLineOptions.Clo.ProverKillTime = TO;
+                CommandLineOptions.Clo.TimeLimit = TO;
             }
         }
 

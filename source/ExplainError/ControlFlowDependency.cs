@@ -8,7 +8,7 @@ using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
 using VC;
-using Microsoft.Basetypes;
+using Microsoft.BaseTypes;
 using BType = Microsoft.Boogie.Type;
 using Microsoft.Boogie.GraphUtil;
 

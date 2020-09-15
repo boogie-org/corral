@@ -101,7 +101,7 @@ namespace HoudiniLite
             CommandLineOptions.Clo.UseSubsumption = CommandLineOptions.SubsumptionOption.Never;
             CommandLineOptions.Clo.ContractInfer = true;
             BoogieUtil.InitializeBoogie(boogieOptions);
-            CommandLineOptions.Clo.ProverCCLimit = 1;
+            CommandLineOptions.Clo.ErrorLimit = 1;
             cba.Util.BoogieVerify.options = new BoogieVerifyOptions();
         }
 

@@ -1499,7 +1499,7 @@ namespace cba
             var ret = ContextSwitchCmd();
             // {:cs_location int}
             var param = new List<object>();
-            param.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.FromInt(getNewCSLocation())));
+            param.Add(new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.FromInt(getNewCSLocation())));
             var attr = new QKeyValue(Token.NoToken, "cs_location", param, null);
 
             ret.Attributes = attr;

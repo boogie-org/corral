@@ -331,10 +331,10 @@ namespace cba.Util
             }
         }
 
-        public static int BigNumToIntForce(Microsoft.Basetypes.BigNum num)
+        public static int BigNumToIntForce(Microsoft.BaseTypes.BigNum num)
         {
             if (num.InInt32) return num.ToInt;
-            if (num > Microsoft.Basetypes.BigNum.FromInt(0)) return int.MaxValue;
+            if (num > Microsoft.BaseTypes.BigNum.FromInt(0)) return int.MaxValue;
             return int.MinValue;
         }
 

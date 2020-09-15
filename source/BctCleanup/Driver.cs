@@ -217,7 +217,7 @@ namespace BctCleanup
               List<AssignLhs> lhss = new List<AssignLhs>();
               lhss.Add(new SimpleAssignLhs(Token.NoToken, Expr.Ident(trackVariable)));
               List<Expr> rhss = new List<Expr>();
-              rhss.Add(new LiteralExpr(Token.NoToken, Microsoft.Basetypes.BigNum.ZERO));
+              rhss.Add(new LiteralExpr(Token.NoToken, Microsoft.BaseTypes.BigNum.ZERO));
               newCmds.Add(new AssignCmd(Token.NoToken, lhss, rhss));
             }
 

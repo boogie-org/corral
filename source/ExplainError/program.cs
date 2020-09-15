@@ -9,7 +9,7 @@ using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
 using VC;
-using Microsoft.Basetypes;
+using Microsoft.BaseTypes;
 using BType = Microsoft.Boogie.Type;
 using cba.Util;
 
@@ -1306,7 +1306,7 @@ namespace ExplainError
         {
             //create vcgen/proverInterface
             vcgen = new VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
-            proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.ProverKillTime);
+            proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
             translator = proverInterface.Context.BoogieExprTranslator;
             exprGen = proverInterface.Context.ExprGen;
             collector = new ConditionGeneration.CounterexampleCollector();
@@ -1333,12 +1333,11 @@ namespace ExplainError
                     new List<Requires>(new Requires[] { new Requires(false, e) }), new List<IdentifierExpr>(), new List<Ensures>(new Ensures[] { new Ensures(false, Expr.False) }));
                 i.Proc = p;
                 var cexList = new List<Counterexample>();
-                var mList = new List<Model>();
                 prog.AddTopLevelDeclaration(i);
                 prog.AddTopLevelDeclaration(p);
                 prog.Resolve();
                 prog.Typecheck();
-                var result = (MyVerifyImplementation(i, ref cexList, ref mList) == VC.ConditionGeneration.Outcome.Correct);
+                var result = (MyVerifyImplementation(i, ref cexList) == VC.ConditionGeneration.Outcome.Correct);
                 prog.RemoveTopLevelDeclaration(i);
                 prog.RemoveTopLevelDeclaration(p);
                 prog.Resolve();
@@ -1350,7 +1349,7 @@ namespace ExplainError
             }
             //routines for querying the verifier
             public static VC.ConditionGeneration.Outcome MyVerifyImplementation(Implementation i,
-                ref List<Counterexample> cexList, ref List<Model> mList)
+                ref List<Counterexample> cexList)
             {
                 //this creates a z3 process per vcgen
                 var checkers = new List<Checker>();
@@ -1370,7 +1369,7 @@ namespace ExplainError
                     i.Blocks = i.OriginalBlocks;
                     i.LocVars = i.OriginalLocVars;
                 }
-                var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList, out mList);
+                var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList);
                 var reset = new ResetVerificationState();
                 reset.Visit(i);
                 foreach (Checker checker in checkers)
@@ -1386,8 +1385,7 @@ namespace ExplainError
             public static VC.ConditionGeneration.Outcome MyVerifyImplementation(Implementation i)
             {
                 List<Counterexample> cexs = new List<Counterexample>();
-                List<Model> models = new List<Model>();
-                return MyVerifyImplementation(i, ref cexs, ref models);
+                return MyVerifyImplementation(i, ref cexs);
             }
             class ResetVerificationState : StandardVisitor
             {

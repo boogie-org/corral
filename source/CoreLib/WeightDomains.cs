@@ -311,7 +311,7 @@ namespace StaticAnalysis
             if (lexpr != null)
             {
                 // TODO: insert check for Boolean literals
-                if(lexpr.Val is Microsoft.Basetypes.BigNum)
+                if(lexpr.Val is Microsoft.BaseTypes.BigNum)
                     return Value.GetSingleton(lexpr.asBigNum.ToInt);
                 if (lexpr.Val is BvConst)
                     return Value.GetSingleton((lexpr.Val as BvConst).Value.ToInt);

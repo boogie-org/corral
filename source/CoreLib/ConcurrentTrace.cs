@@ -282,11 +282,11 @@ namespace cba
             {
                 file = attr[0] as string;
                 var tt = attr[1] as LiteralExpr;
-                if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
-                    line = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;
+                if (tt != null && (tt.Val is Microsoft.BaseTypes.BigNum))
+                    line = ((Microsoft.BaseTypes.BigNum)(tt.Val)).ToInt;
                 tt = attr[2] as LiteralExpr;
-                if (tt != null && (tt.Val is Microsoft.Basetypes.BigNum))
-                    column = ((Microsoft.Basetypes.BigNum)(tt.Val)).ToInt;                
+                if (tt != null && (tt.Val is Microsoft.BaseTypes.BigNum))
+                    column = ((Microsoft.BaseTypes.BigNum)(tt.Val)).ToInt;                
 
             }
             else
