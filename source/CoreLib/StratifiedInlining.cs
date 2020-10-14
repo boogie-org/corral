@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -181,7 +181,7 @@ namespace CoreLib
         public static readonly string ForceInlineAttr = "ForceInline";
 
         public Stats stats;
-        
+
         /* call-site to VC map -- used for trace construction */
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
@@ -190,7 +190,7 @@ namespace CoreLib
         private StratifiedVC mainVC;
 
         /*  Parent linking -- used only for computing the recursion depth */
-        public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;        
+        public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
 
         // Set of implementations
         HashSet<string> implementations;
@@ -315,11 +315,11 @@ namespace CoreLib
             if (BoogieVerify.options.extraFlags.Contains("do") || BoogieVerify.options.extraFlags.Contains("doslow"))
             {
                 Console.WriteLine("============= DAG Oracle ============");
-                
+
                 var sttime = DateTime.Now;
                 DagOracle dago = null;
                 var treesize = 0;
-                
+
                 if (BoogieVerify.options.extraFlags.Contains("doslow"))
                 {
                     dago = DagOracle.ConstructCallDag(program, extraRecBound);
@@ -386,7 +386,8 @@ namespace CoreLib
         }
 
         /* Has this call-site reached the bound, given extraRecBound */
-        public bool HasExceededRecursionDepth(StratifiedCallSite cs, int bound) {
+        public bool HasExceededRecursionDepth(StratifiedCallSite cs, int bound)
+        {
 
             var i = RecursionDepth(cs);
 
@@ -465,7 +466,7 @@ namespace CoreLib
             }
 
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites, ref HashSet<string> previousSplitSites)
-            {               
+            {
                 ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
             }
@@ -501,7 +502,7 @@ namespace CoreLib
             }
         }
 
-        public class TimeGraph 
+        public class TimeGraph
         {
             public Dictionary<int, string> Nodes;
             Dictionary<int, HashSet<Tuple<int, string, double>>> Edges;
@@ -555,7 +556,7 @@ namespace CoreLib
                         foreach (var tgt in tup.Value)
                             fs.WriteLine("{0} -> {1} [label=\"{2} {3}\"]", tup.Key, tgt.Item1, tgt.Item2, tgt.Item3.ToString("F2"));
                     }
-                        
+
                     fs.WriteLine("}");
 
                 }
@@ -677,7 +678,7 @@ namespace CoreLib
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>();
 
             var timeGraph = new TimeGraph();
-            
+
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -693,19 +694,19 @@ namespace CoreLib
                 return ret;
             });
 
-            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>( (d,n) =>
+            var applyDecisionToDI = new Action<DecisionType, StratifiedVC>((d, n) =>
+            {
+                if (d == DecisionType.BLOCK)
                 {
-                    if (d == DecisionType.BLOCK)
-                    {
-                        di.DeleteNode(n);
-                    }
-                    if (d == DecisionType.MUST_REACH)
-                    {
-                        var disj = di.DisjointNodes(n);
+                    di.DeleteNode(n);
+                }
+                if (d == DecisionType.MUST_REACH)
+                {
+                    var disj = di.DisjointNodes(n);
 
-                        disj.Iter(m => di.DeleteNode(m));
-                    }
-                });
+                    disj.Iter(m => di.DeleteNode(m));
+                }
+            });
 
             var containingVC = new Func<StratifiedCallSite, StratifiedVC>(scs => attachedVC[parent[scs]]);
 
@@ -717,9 +718,9 @@ namespace CoreLib
             while (true)
             {
                 // Lets split when the tree has become big enough
-                var size = di.ComputeSize(); 
-                
-                if ( (treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
+                var size = di.ComputeSize();
+
+                if ((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2))
                 {
                     var st = DateTime.Now;
 
@@ -754,7 +755,7 @@ namespace CoreLib
                     var desc = sizes[maxVc];
                     var cnt = 0;
                     openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
-                    
+
                     // Push & Block
                     MacroSI.PRINT("{0}>>> Pushing Block({1}, {2}, {3}, {4}, {5})", indent(decisions.Count), scs.callSite.calleeName, sizes[maxVc].Count, disj[maxVc], size, stats.numInlined);
 
@@ -879,7 +880,7 @@ namespace CoreLib
 
 
                 }
-                
+
             }
             reporter.reportTraceIfNothingToExpand = false;
 
@@ -893,7 +894,7 @@ namespace CoreLib
                 for (int j = 0; j < 5; j++) sum += timeGraph.ComputeTimes(i);
                 sum = sum / 5;
 
-                Console.Write("{0}\t", sum.ToString("F2"));                
+                Console.Write("{0}\t", sum.ToString("F2"));
             }
             Console.WriteLine();
 
@@ -918,7 +919,7 @@ namespace CoreLib
             int numSplits = 0;
             int UCsplit = 0;
             HashSet<string> previousSplitSites = new HashSet<string>();
-            
+
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -1019,11 +1020,11 @@ namespace CoreLib
                         if (UCoreChildrenCount.ContainsKey(cs))
                         {
                             score = UCoreChildrenCount[cs];
-                        } 
+                        }
                         if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score >= maxVcScore)
-                        { 
-                                maxVc = vc;
-                                maxVcScore = score;
+                        {
+                            maxVc = vc;
+                            maxVcScore = score;
                         }
                     }
                     if (maxVc != null)
@@ -1133,7 +1134,7 @@ namespace CoreLib
                         {
                             if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
                             {
-                                CallSitesInUCore.Add(cs);  
+                                CallSitesInUCore.Add(cs);
                             }
                         }
                     }
@@ -1247,7 +1248,7 @@ namespace CoreLib
 
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, TimeGraph timeGraph,
-            Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar, 
+            Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar,
             Stack<SiState> backtrack, Stack<Decision> dc)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
@@ -1373,7 +1374,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1425,7 +1426,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (verificationAlgorithm == "ucsplitparallel")
+                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1513,7 +1514,7 @@ namespace CoreLib
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            prover.Assert(scs.callSiteExpr, false, name: "block_" + GetPersistentID(scs));
+                            prover.Assert(scs.callSiteExpr, false);
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
                             if (writeLog)
@@ -1788,7 +1789,7 @@ namespace CoreLib
                             break;
                     }
                 }
-                
+
                 numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
@@ -1863,58 +1864,105 @@ namespace CoreLib
                     //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
                 if (writeLog)
-                    Console.WriteLine("point 4");
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                reporter.reportTrace = false;
-                DateTime oqStartTime = DateTime.Now;
-                outcome = CheckVC(reporter);
-                Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
-                Debug.WriteLine(outcome.ToString());
-                //Pop();
-                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                    Console.WriteLine(clientID + " = point 4");
+                bool newCallSiteFound = false;
+                if (verificationAlgorithm != "ucsplitparallel5")
                 {
-                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    //sendRequestToServer("outcome", "OK");
-                    //timeGraph.AddEdgeDone("split");
-                    if (makeTimeGraph)
-                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                    break; // done (T/O)
-                }
-
-                /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
-                {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    break; // done (error found)
-                }*/                
-
-                if (outcome == Outcome.Errors)
-                {
-                    foreach (var scs in reporter.callSitesToExpand)
-                    {                         
-                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
-                        openCallSites.Remove(scs);
-                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                        if (svc != null)
-                        {
-                            openCallSites.UnionWith(svc.CallSites);
-                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                        }
-                    }
-                    if (ucore != null || ucore.Count != 0)
+                    reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    reporter.reportTrace = false;
+                    DateTime oqStartTime = DateTime.Now;
+                    outcome = CheckVC(reporter);
+                    Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
+                    Debug.WriteLine(outcome.ToString());
+                    //Pop();
+                    if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                     {
+                        //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        //sendRequestToServer("outcome", "OK");
+                        //timeGraph.AddEdgeDone("split");
+                        if (makeTimeGraph)
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        break; // done (T/O)
+                    }
 
-                        foreach (StratifiedCallSite cs in attachedVC.Keys)
+                    /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                    {
+                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        break; // done (error found)
+                    }*/
+
+                    if (outcome == Outcome.Errors)
+                    {
+                        foreach (var scs in reporter.callSitesToExpand)
                         {
-                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                            openCallSites.Remove(scs);
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null)
                             {
-                                CallSitesInUCore.Add(cs);
+                                openCallSites.UnionWith(svc.CallSites);
+                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                            }
+                        }
+                        if (ucore != null && ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+
+                    }
+                }
+                else // verificationAlgorithm == "ucsplitparallel5"
+                {
+                    if (writeLog)
+                        Console.WriteLine("Correct :)");
+                    //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
+
+                    if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
+                    {
+                        var toAdd = new HashSet<StratifiedCallSite>();
+                        var toRemove = new HashSet<StratifiedCallSite>();
+                        if (false && writeLog)
+                            Console.WriteLine("UNSAT CORE Inlined Callsites");
+                        foreach (var scs in openCallSites)
+                        {
+                            if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                            {
+                                calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                                if (false && writeLog)
+                                    Console.WriteLine(scs.callSite.calleeName);
+                                toRemove.Add(scs);
+                                newCallSiteFound = true;
+                                var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                                if (svc != null)
+                                    toAdd.UnionWith(svc.CallSites);
+                            }
+                        }
+                        //Update OpenCallSites
+                        openCallSites.ExceptWith(toRemove);
+                        openCallSites.UnionWith(toAdd);
+                        if (ucore != null && ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
                             }
                         }
                     }
-
                 }
-                else
+                if ((verificationAlgorithm != "ucsplitparallel5" && outcome != Outcome.Errors) || (verificationAlgorithm == "ucsplitparallel5" && !newCallSiteFound))
                 {
                     if (learnProofs)
                     {
@@ -1935,7 +1983,7 @@ namespace CoreLib
                         }
                     }
                     if (writeLog)
-                        Console.WriteLine("block finished");                    
+                        Console.WriteLine("block finished");
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     if (writeLog)
@@ -1994,7 +2042,7 @@ namespace CoreLib
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
                             // Block
-                            prover.Assert(topDecision.cs.callSiteExpr, false, name: "block_" + GetPersistentID(topDecision.cs));
+                            prover.Assert(topDecision.cs.callSiteExpr, false);
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -2055,7 +2103,7 @@ namespace CoreLib
             string[] splitCalltree = calltree.Split(',');
             int lastDecisionLocation = 0;
 
-            for (int i = splitCalltree.Length-1; i > 0; i--)
+            for (int i = splitCalltree.Length - 1; i > 0; i--)
             {
                 if (splitCalltree[i].Equals("BLOCK") || splitCalltree[i].Equals("MUSTREACH"))
                 {
@@ -2083,7 +2131,7 @@ namespace CoreLib
             //Console.WriteLine(string.Format("{0}={1}", request, requestContent));
             DateTime communicationStartTime = DateTime.Now;
             string replyFromServer = callServer.GetStringAsync(serverUri.Uri).Result;
-            communicationTime =  communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
+            communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
             return replyFromServer;
         }
 
@@ -2118,20 +2166,20 @@ namespace CoreLib
             });
 
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
-                {
-                    var ret = new HashSet<Tuple<StratifiedVC, Block>>();
-                    prevMustAsserted.ToList().Iter(ls =>
-                        ls.Iter(tup => ret.Add(tup)));
-                    return ret;
-                });
-            
+            {
+                var ret = new HashSet<Tuple<StratifiedVC, Block>>();
+                prevMustAsserted.ToList().Iter(ls =>
+                    ls.Iter(tup => ret.Add(tup)));
+                return ret;
+            });
+
             var rand = new Random();
             var reachedBound = false;
 
             var decideToInline = new Func<bool>(() =>
-                {
-                    return false; // rand.Next(100) != 0;
-                });
+            {
+                return false; // rand.Next(100) != 0;
+            });
 
             while (true)
             {
@@ -2139,7 +2187,7 @@ namespace CoreLib
 
                 // Find cex
                 foreach (StratifiedCallSite cs in openCallSites)
-                {                    
+                {
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
@@ -2223,7 +2271,7 @@ namespace CoreLib
                         backtrackingPoints.Pop();
                         prevMustAsserted.Pop();
                         Console.WriteLine("{0}>>> Pop", indent(decisions.Count));
-                    }while (topDecision.num == 1);
+                    } while (topDecision.num == 1);
 
                     if (doneBT)
                         break;
@@ -2231,7 +2279,7 @@ namespace CoreLib
                     topState.ApplyState(this, ref openCallSites);
 
                     // flip the decision
-                    
+
                     Push();
                     backtrackingPoints.Push(SiState.SaveState(this, openCallSites));
 
@@ -2312,7 +2360,7 @@ namespace CoreLib
                     Debug.Assert(!boundAsserted.Contains(scs));
                     openCallSites.Remove(scs);
                     var svc = Expand(scs);
-                    if(svc != null) openCallSites.UnionWith(svc.CallSites);
+                    if (svc != null) openCallSites.UnionWith(svc.CallSites);
                     Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                 }
             }
@@ -2608,17 +2656,17 @@ namespace CoreLib
 
             var v = vcgen.CreateNewVar(Bpl.Type.Bool); ;
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true, name: "mustreach_" + GetPersistentID(attachedVCInv[svc]));
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
 
-            var iter = attachedVCInv[svc]; 
+            var iter = attachedVCInv[svc];
             while (parent.ContainsKey(iter))
             {
                 var vc = attachedVC[parent[iter]];
                 var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
-                
+
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
@@ -2772,15 +2820,15 @@ namespace CoreLib
             var indexLast = svc.info.interfaceExprVars.FindLastIndex(x => x.Name.Contains(cba.Util.BoogieVerify.assertsPassed));
 
             var AssertVar = new Action<int, bool>((index, b) =>
+            {
+                if (cba.Util.BoogieVerify.assertsPassedIsInt)
                 {
-                    if (cba.Util.BoogieVerify.assertsPassedIsInt)
-                    {
-                        Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
-                        prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
-                    }
-                    else
-                        prover.Assert(svc.interfaceExprVars[index], b);
-                });
+                    Microsoft.Basetypes.BigNum zero = Microsoft.Basetypes.BigNum.FromInt(0);
+                    prover.Assert(prover.VCExprGen.Eq(svc.interfaceExprVars[index], prover.VCExprGen.Integer(zero)), b);
+                }
+                else
+                    prover.Assert(svc.interfaceExprVars[index], b);
+            });
 
             // assertVar[First] is not set
             AssertVar(indexFirst, true);
@@ -3093,7 +3141,7 @@ namespace CoreLib
             });
 
             while (continueVerification)
-            {                
+            {
                 startTime = DateTime.UtcNow;
                 //Outcome outcome = Outcome.Correct;
                 //sendRequestToServer("outcome", "NOK");
@@ -3130,7 +3178,7 @@ namespace CoreLib
                     if (replyFromServer.Equals("SendResetTime"))
                     {
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
-                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
+                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID,
                             communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
                     }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
@@ -3213,7 +3261,7 @@ namespace CoreLib
 
                 //di = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
                 di = initialDI.Copy();
-                
+
                 Push();
 
                 StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
@@ -3222,7 +3270,7 @@ namespace CoreLib
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
 
-                
+
                 var reporter = new StratifiedInliningErrorReporter(callback, this, svc);
 
 
@@ -3388,8 +3436,8 @@ namespace CoreLib
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false, name: "block_" + GetPersistentID(cs));                                    
-                                    mode = 0;                                    
+                                    prover.Assert(cs.callSiteExpr, false);
+                                    mode = 0;
                                 }
                                 else //MUSTREACH callsite
                                 {
@@ -3398,7 +3446,7 @@ namespace CoreLib
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));                                    
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
                                     decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
                                     //try
                                     {
@@ -3412,7 +3460,7 @@ namespace CoreLib
                                     prevMustAsserted.Push(AssertMustReach(attachedVC[cs], PrevAsserted()));
                                     //AssertMustReach(attachedVC[cs], new HashSet<Tuple<StratifiedVC, Block>>());
                                     mode = 0;
-                                    
+
                                 }
                             }
                             callsiteToInline = "";
@@ -3463,13 +3511,13 @@ namespace CoreLib
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }*/
-                else if(cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") && !di.disabled && cba.Util.HydraConfig.startHydra)
+                else if ((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel5")) && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }
                 else
-                {                    
+                {
                     int currRecursionBound = (BoogieVerify.options.extraFlags.Contains("MaxRec") || BoogieVerify.options.NonUniformUnfolding) ? CommandLineOptions.Clo.RecursionBound :
                         1;
                     while (true)
@@ -3506,10 +3554,10 @@ namespace CoreLib
 
                 if (!di.disabled)
                     //Console.WriteLine("Time spent inside DI: {0} sec", di.timeTaken.TotalSeconds.ToString("F2"));
-                
-                if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 ||
-                    BoogieVerify.options.extraFlags.Contains("DumpDag"))
-                    di.Dump("ct" + (dumpCnt++) + ".dot");
+
+                    if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 ||
+                        BoogieVerify.options.extraFlags.Contains("DumpDag"))
+                        di.Dump("ct" + (dumpCnt++) + ".dot");
 
                 if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
                     stats.print();
@@ -3529,12 +3577,12 @@ namespace CoreLib
                 }
                 #endregion
                 if (writeLog)
-                Console.WriteLine("HERE1");
+                    Console.WriteLine("HERE1");
                 if (outcome == Outcome.Correct)
                     replyFromServer = sendRequestToServer("outcome", "OK");
                 else if (outcome == Outcome.Errors)
                 {
-                    cba.Util.HydraConfig.startHydra = false;                    
+                    cba.Util.HydraConfig.startHydra = false;
                     replyFromServer = sendRequestToServer("outcome", "NOK");
                     return outcome;
                 }
@@ -3744,7 +3792,7 @@ namespace CoreLib
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
             proverStartTime = DateTime.Now;
-            ProverInterface.Outcome outcome = 
+            ProverInterface.Outcome outcome =
                 prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
             proverTime += (DateTime.Now - proverStartTime).TotalSeconds;
             stats.time += stopwatch.ElapsedTicks;
@@ -3755,13 +3803,13 @@ namespace CoreLib
         {
             var name2VC = new Dictionary<string, StratifiedVC>();
             var getSVC = new Func<string, StratifiedVC>(name =>
-                {
-                    if (name2VC.ContainsKey(name))
-                        return name2VC[name];
-                    var tt = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
-                    name2VC.Add(name, tt);
-                    return tt;
-                });
+            {
+                if (name2VC.ContainsKey(name))
+                    return name2VC[name];
+                var tt = new StratifiedVC(implName2StratifiedInliningInfo[name], implementations);
+                name2VC.Add(name, tt);
+                return tt;
+            });
 
             Push();
 
@@ -3809,7 +3857,7 @@ namespace CoreLib
             allBoolVars = ret;
 
             Pop();
-            
+
             return Outcome.Correct;
         }
 
@@ -3873,7 +3921,7 @@ namespace CoreLib
             }
 
             var o = CheckAssumptions(reporter, assumptions);
-            if(o != Outcome.Correct && o != Outcome.Errors)
+            if (o != Outcome.Correct && o != Outcome.Errors)
                 throw new cba.Util.InternalError(string.Format("z3 ran out of resources in RefinementLoop: {0}", o));
             prover.LogComment("FindLeast: Query End");
 
@@ -3991,7 +4039,7 @@ namespace CoreLib
     public enum MERGING_STRATEGY { NONE, FIRST, RANDOM_PICK, RANDOM, MAXC, OPT };
 
     public class DI
-    {    
+    {
         MERGING_STRATEGY strategy;
 
         public bool disabled { get; private set; }
@@ -4044,7 +4092,7 @@ namespace CoreLib
                 currentDag = new DagOracle(SI.program, Disj, SI.extraRecBound);
 
                 strategy = PickStrategy();
-                
+
                 if (strategy == MERGING_STRATEGY.OPT && optimalDag == null)
                 {
                     optimalDag = new DagOracle(SI.program, Disj, SI.extraRecBound);
@@ -4068,7 +4116,7 @@ namespace CoreLib
             ret.vcToRecVector = new Dictionary<StratifiedVC, int[]>(vcToRecVector);
             ret.IndexC = IndexC;
             ret.currentDag = currentDag.Copy();
-            
+
             ret.vcNodeMap = new BijectiveDictionary<StratifiedVC, DagOracle.DagNode>();
             ret.currentOptNodeMapping = new BijectiveDictionary<DagOracle.DagNode, DagOracle.DagNode>();
             foreach (var n in vcNodeMap.GetDomain())
@@ -4173,7 +4221,7 @@ namespace CoreLib
         {
             Debug.Assert(vcNodeMap.ContainsDomain(vc));
             var node = vcNodeMap[vc];
-            if(currentDag.Nodes.Contains(node))
+            if (currentDag.Nodes.Contains(node))
                 currentDag.DeleteNodeAndDecendants(node);
         }
 
@@ -4187,7 +4235,7 @@ namespace CoreLib
         public void CheckSanity()
         {
             var st = DateTime.Now;
-            if(currentDag.Nodes.Count != 0)
+            if (currentDag.Nodes.Count != 0)
                 currentDag.CheckSanity();
             timeTaken += (DateTime.Now - st);
         }
@@ -4222,7 +4270,7 @@ namespace CoreLib
         void RegisterVC(StratifiedVC vc)
         {
             foreach (var cs in vc.CallSites)
-                containingVC[cs] = vc;           
+                containingVC[cs] = vc;
         }
 
         public void Expanded(StratifiedCallSite cs, StratifiedVC vc)
@@ -4384,7 +4432,7 @@ namespace CoreLib
         // Return the sizes of shared dags; and more info about the largest shared sub-tree
         private void ComputeDagSizes()
         {
-            if(!disabled)
+            if (!disabled)
                 currentDag.ComputeDagSizes();
         }
 
@@ -4671,7 +4719,7 @@ namespace CoreLib
         TimeSpan tmpTime1; //, tmpTime2;
 
         public DagOracle(Program program, Dictionary<string, int> extraRecBound)
-            :this(program, new ProgramDisjointness(program), extraRecBound)
+            : this(program, new ProgramDisjointness(program), extraRecBound)
         {
         }
 
@@ -4740,7 +4788,7 @@ namespace CoreLib
                 yield break;
 
             var an = Ancestors(n1);
-            
+
             foreach (var n2 in IdToNodes[targetId])
             {
                 Debug.Assert(!an.Contains(n2));
@@ -4763,7 +4811,7 @@ namespace CoreLib
                     }
                 }
                 if (!suitable) continue;
-                
+
                 // For each decendant of n2, if we go up, when it hits an,
                 // then disjointness should hold; this is the entire check and above
                 // are just filters
@@ -4838,8 +4886,8 @@ namespace CoreLib
         private bool CheckDisjointness(DagNode n, HashSet<DagNode> ancestors, HashSet<DagNode> blocked)
         {
             Debug.Assert(!ancestors.Contains(n));
-            if(!Parents.ContainsKey(n)) return true;
-            
+            if (!Parents.ContainsKey(n)) return true;
+
             foreach (var pedge in Parents[n])
             {
                 if (blocked.Contains(pedge.Source)) continue;
@@ -4882,7 +4930,7 @@ namespace CoreLib
         {
             var ret = new Graph<string>();
             idToProc = new Dictionary<string, string>();
-            
+
             var impls = new Dictionary<string, Implementation>();
             program.TopLevelDeclarations.OfType<Implementation>()
                 .Iter(impl => impls.Add(impl.Name, impl));
@@ -4910,7 +4958,7 @@ namespace CoreLib
                 foreach (var r in procToReachableRecProcs[impl.Name])
                     str += rv[impl2index[r]].ToString();
                 var id = string.Format("{0}[{1}]", impl.Name, str);
-                
+
                 return id;
             });
 
@@ -4945,7 +4993,7 @@ namespace CoreLib
                     rvcopy[impl2index[succImpl]]++;
 
                     if (HasExceededRecBound(succImpl, rvcopy[impl2index[succImpl]]))
-                        continue;                    
+                        continue;
 
                     var sid = ImplToId(impls[succImpl], rvcopy);
                     idToProc[sid] = succImpl;
@@ -5014,11 +5062,11 @@ namespace CoreLib
             if (strategy != MERGING_STRATEGY.OPT)
             {
                 var NodeToCalls = new Func<DagNode, List<Tuple<DagNode, int, string>>>(n =>
-                    {
-                        var r = new List<Tuple<DagNode, int, string>>();
-                        implToCalls[n.ImplName].Iter(t => r.Add(Tuple.Create(n, t.Item1, t.Item2)));
-                        return r;
-                    });
+                {
+                    var r = new List<Tuple<DagNode, int, string>>();
+                    implToCalls[n.ImplName].Iter(t => r.Add(Tuple.Create(n, t.Item1, t.Item2)));
+                    return r;
+                });
 
                 var opencalls = new List<Tuple<DagNode, int, string>>();
                 opencalls.AddRange(NodeToCalls(Root));
@@ -5057,7 +5105,7 @@ namespace CoreLib
 
                     if (strategy == MERGING_STRATEGY.RANDOM)
                     {
-                        
+
                         var choice = rand.Next(0, candidatesList.Count + 2);
                         DagNode t = null;
                         if (choice > candidatesList.Count - 1)
@@ -5106,15 +5154,15 @@ namespace CoreLib
                 var idsExtended = new HashSet<string> { rootid };
 
                 lazyExtendDag = new Action<string>(id =>
+                {
+                    foreach (var n in sorted)
                     {
-                        foreach (var n in sorted)
-                        {
-                            if (idsExtended.Contains(n)) continue;
-                            idsExtended.Add(n);
-                            ExtendAndCompress(n, idgraph, idToProc, implToCalls, id2numnodes);
-                            if (n == id) break;
-                        }
-                    });
+                        if (idsExtended.Contains(n)) continue;
+                        idsExtended.Add(n);
+                        ExtendAndCompress(n, idgraph, idToProc, implToCalls, id2numnodes);
+                        if (n == id) break;
+                    }
+                });
 
                 if (lazy)
                     return 0;
@@ -5128,7 +5176,7 @@ namespace CoreLib
                 if (id == rootid) continue;
                 ExtendAndCompress(id, idgraph, idToProc, implToCalls, id2numnodes);
             }
-            */            
+            */
 
             var ret = 0;
             id2numnodes.Iter(tup => ret += tup.Value);
@@ -5141,12 +5189,12 @@ namespace CoreLib
             lazyExtendDag(id);
         }
 
-        void ExtendAndCompress(string id, Graph<string> idgraph, 
+        void ExtendAndCompress(string id, Graph<string> idgraph,
             Dictionary<string, string> idToProc,
             Dictionary<string, HashSet<Tuple<int, string>>> implToCalls,
             Dictionary<string, int> id2numnodes)
         {
-            if(CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
                 Console.WriteLine("Adding id {0}", id);
             var predids = idgraph.Predecessors(id);
             Debug.Assert(predids.Count() != 0);
@@ -5180,7 +5228,7 @@ namespace CoreLib
 
         void Compress(string id)
         {
-            if(IdToNodes.ContainsKey(id))
+            if (IdToNodes.ContainsKey(id))
                 IdToNodes[id].RemoveWhere(n => !Nodes.Contains(n));
 
             if (!IdToNodes.ContainsKey(id) ||
@@ -5314,7 +5362,7 @@ namespace CoreLib
                 foreach (var e2 in Children[node])
                 {
                     if (e1 == e2) continue;
-                    
+
                     if (Disj.IsExclusive(node.ImplName, e1.CallSite, e2.CallSite)) continue;
                     var g1 = childToDescendants[e1].Difference(childToDescendants[e2]);
                     var g2 = childToDescendants[e2].Difference(childToDescendants[e1]);
@@ -5322,11 +5370,11 @@ namespace CoreLib
                     g1.RemoveWhere(a => a.id != id);
                     g2.RemoveWhere(a => a.id != id);
 
-                    foreach(var a in g1)
+                    foreach (var a in g1)
                         adj[a].UnionWith(g2);
 
                     foreach (var a in g2)
-                        adj[a].UnionWith(g1);                        
+                        adj[a].UnionWith(g1);
                 }
             }
 
@@ -5334,7 +5382,7 @@ namespace CoreLib
 
         Dictionary<Node, int> ColorGraph<Node>(Microsoft.Boogie.GraphUtil.Graph<Node> graph)
         {
-            return ColorGraph(graph.Nodes, n =>new HashSet<Node>(graph.Successors(n)));
+            return ColorGraph(graph.Nodes, n => new HashSet<Node>(graph.Successors(n)));
         }
 
         // Colors a graph
@@ -5471,7 +5519,7 @@ namespace CoreLib
             if (Nodes.Contains(node))
                 return;
             Nodes.Add(node);
-            
+
             IdToNodes.InitAndAdd(node.id, node);
 
             Children.Add(node, new HashSet<DagEdge>());
@@ -5504,7 +5552,7 @@ namespace CoreLib
             var edges = new HashSet<DagEdge>();
             edges.UnionWith(Children[node]);
             edges.UnionWith(Parents[node]);
-            foreach(var e in edges)
+            foreach (var e in edges)
                 DeleteEdge(e);
 
             Nodes.Remove(node);
@@ -5588,7 +5636,7 @@ namespace CoreLib
 
             var root = ImplToNode(ep, recursionVector);
             var frontier = new Stack<Tuple<DagNode, int[]>>();
-            
+
             frontier.Push(Tuple.Create(root, recursionVector));
 
             while (frontier.Any())
@@ -5612,7 +5660,7 @@ namespace CoreLib
                     var s = ImplToNode(impls[tup.Item2], rvcopy);
                     ret.AddEdge(new DagEdge(n, s, tup.Item1));
                     frontier.Push(Tuple.Create(s, rvcopy));
-                }                
+                }
             }
 
             ret.SetRoot(root);
@@ -5720,7 +5768,8 @@ namespace CoreLib
             }
 
             HashSet<DagNode> tt = null; // temporary
-            if(!CheckSanityBackward(Root, out tt)) {
+            if (!CheckSanityBackward(Root, out tt))
+            {
                 Console.WriteLine("DAG Sanity check failed!!");
                 Debug.Assert(false);
             }
@@ -5729,7 +5778,7 @@ namespace CoreLib
 
         bool CheckSanityBackward(DagNode node, out HashSet<DagNode> reachable)
         {
-            reachable = new HashSet<DagNode>{node};
+            reachable = new HashSet<DagNode> { node };
             var childToDescendants = new Dictionary<DagEdge, HashSet<DagNode>>();
             foreach (var e in Children[node])
             {
@@ -5754,7 +5803,7 @@ namespace CoreLib
 
             return true;
         }
-        
+
         bool CheckSanityForward(DagNode node)
         {
             foreach (var e1 in Parents[node])
@@ -5929,7 +5978,7 @@ namespace CoreLib
                     }
                 }
             }
-            
+
             if (largestnode != null)
             {
                 Console.WriteLine("Shared node size distribution");
@@ -5942,12 +5991,12 @@ namespace CoreLib
                 Dump("largest.dot", Ancestors(largestnode));
             }
             Console.WriteLine("Tree size: {0}", nodeToTreeSize[Root]);
-             
+
             return nodeToTreeSize[Root];
         }
 
     }
-    
+
     /****************************************
     *      Counter-example Generation       *
     ****************************************/
@@ -6067,8 +6116,8 @@ namespace CoreLib
 
         private List<Absy> GetAbsyTraceBoolControlVC(StratifiedVC svc)
         {
-            Debug.Assert(CommandLineOptions.Clo.UseProverEvaluate, "Must use prover evaluate option with boolControlVC"); 
-            
+            Debug.Assert(CommandLineOptions.Clo.UseProverEvaluate, "Must use prover evaluate option with boolControlVC");
+
             var ret = new List<Absy>();
             var impl = svc.info.impl;
             var block = impl.Blocks[0];
