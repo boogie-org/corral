@@ -356,7 +356,8 @@ namespace ClientSource
             killAllZ3Instances.WaitForExit();*/
             foreach (var process in Process.GetProcessesByName("z3"))
             {
-                process.Kill();
+                if (!process.HasExited)
+                    process.Kill();
             }
             //Console.ReadLine();
         }
