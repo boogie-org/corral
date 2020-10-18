@@ -3555,9 +3555,9 @@ namespace CoreLib
                 if (!di.disabled)
                     //Console.WriteLine("Time spent inside DI: {0} sec", di.timeTaken.TotalSeconds.ToString("F2"));
 
-                    if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 ||
+                    /*if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 ||
                         BoogieVerify.options.extraFlags.Contains("DumpDag"))
-                        di.Dump("ct" + (dumpCnt++) + ".dot");
+                        di.Dump("ct" + (dumpCnt++) + ".dot");*/
 
                 if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
                     stats.print();
