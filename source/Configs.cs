@@ -564,6 +564,10 @@ namespace cba
             {
                 runFullHydra = true;
             }
+            else if (flag.StartsWith("/memoization"))
+            {
+                cba.Util.HydraConfig.memoization = true;
+            }
             else if (flag.StartsWith("/maxSplitPerIteration:"))
             {
                 var split = flag.Split(sep);

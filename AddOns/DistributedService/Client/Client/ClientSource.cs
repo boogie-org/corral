@@ -318,8 +318,8 @@ namespace ClientSource
                 //Console.WriteLine(p.StartInfo.Arguments);
                 p.StartInfo.UseShellExecute = false;
             }
-            //p.StartInfo.CreateNoWindow = false;
-            //p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            p.StartInfo.CreateNoWindow = false;
+            p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
             //p.StartInfo.CreateNoWindow = true;
             //p.StartInfo.UseShellExecute = false;
             //p.StartInfo.RedirectStandardOutput = true;

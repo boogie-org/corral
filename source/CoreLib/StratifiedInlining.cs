@@ -14,6 +14,9 @@ using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Threading;
+using DequeNet;
+using System.IO;
+
 //using LocalServerInCsharp;
 
 namespace CoreLib
@@ -235,6 +238,7 @@ namespace CoreLib
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
         public HashSet<string> proofSites;
+        public Deque<Tuple<StratifiedCallSite, int>> splitDecisionMemory;
         // verification start time
         DateTime startTime;
 
@@ -353,6 +357,8 @@ namespace CoreLib
             communicationTime = 0;
             lastSplitAt = DateTime.Now;
             proofSites = new HashSet<string>();
+            splitDecisionMemory = new Deque<Tuple<StratifiedCallSite, int>>();
+            numPush = 0;
         }
 
         /* depth in the call tree */
@@ -473,6 +479,15 @@ namespace CoreLib
                 ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
                 calltreeToSend = this.calltreeToSend;
+            }
+            public void ApplyState(StratifiedInlining SI, ref HashSet<string> previousSplitSites)
+            {
+                //SI.attachedVC = attachedVC;
+                //SI.attachedVCInv = attachedVCInv;
+                //SI.parent = parent;
+                //SI.di = di;
+                previousSplitSites = this.previousSplitSites;
+                //calltreeToSend = this.calltreeToSend;
             }
         }
 
@@ -1253,8 +1268,8 @@ namespace CoreLib
             reporter.reportTraceIfNothingToExpand = true;
             var boundHit = false;
             int treesize = 0;
-            Stack<SiState> backtrackingPoints = new Stack<SiState>(backtrack);
-            Stack<Decision> decisions = new Stack<Decision>(dc);
+            Stack<SiState> backtrackingPoints = new Stack<SiState>();
+            Stack<Decision> decisions = new Stack<Decision>();
             var prevMustAsserted = new Stack<List<Tuple<StratifiedVC, Block>>>(prevMustAssertedSoFar);
             List<string> ucore = null;
             List<StratifiedCallSite> CallSitesInUCore = new List<StratifiedCallSite>();
@@ -1264,7 +1279,7 @@ namespace CoreLib
             //bool startFirstJob = false;
             string replyFromServer;
             //string calltreeToSend = "";
-            numPush = 0;
+            //numPush = 0;
             bool pauseForDebug = false;
             bool writeLog = false;
             bool makeTimeGraph = false;
@@ -1274,13 +1289,12 @@ namespace CoreLib
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
-            //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
-            //Console.ReadLine();
-            //HashSet<string> previousSplitSites = new HashSet<string>();
-            /*Console.WriteLine("Requesting ID");
-            replyFromServer = sendRequestToServer("requestID", "What Is My ID");
-            clientID = replyFromServer;
-            Console.WriteLine("Client ID is : " + clientID);*/
+            string logFileName = "client" + clientID + ".txt";
+            bool writeToLogFile = false;
+            splitDecisionMemory.Clear();
+            if (writeToLogFile)
+                File.WriteAllText(logFileName, "LOG START: \n");
+            
             var indent = new Func<int, string>(i =>
             {
                 var ret = "";
@@ -1313,34 +1327,12 @@ namespace CoreLib
 
             var reachedBound = false;
 
-            var tt = TimeSpan.Zero;
-
-            //Reset Variables
-            /*HashSet<StratifiedCallSite> initOpenCallSites = new HashSet<StratifiedCallSite>();
-            foreach (StratifiedCallSite cs in openCallSites)
-                initOpenCallSites.Add(cs);
-            Dictionary<StratifiedCallSite, StratifiedVC> initAttachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>(attachedVC);
-            Dictionary<StratifiedVC, StratifiedCallSite> initAttachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>(attachedVCInv);
-            Dictionary<StratifiedCallSite, StratifiedCallSite> initParent = new Dictionary<StratifiedCallSite, StratifiedCallSite>(parent);
-            DI initDi = di.Copy();
-            ProverInterface initProver = prover;
-            Console.WriteLine("initial state: ");
-            Console.WriteLine(initOpenCallSites.Count + " " + initAttachedVC.Count + " " + initAttachedVCInv.Count + " " + initParent.Count + " " + numPush);
-            */
-            /*Console.WriteLine("Start First Job?");
-            replyFromServer = sendRequestToServer("startFirstJob", "Start Job 0?");
-            Console.WriteLine("Reply : " + replyFromServer);
-            if (replyFromServer.Equals("YES"))
-                startFirstJob = true;
-            else
-            {
-                startFirstJob = false;
-                Console.WriteLine("Request Calltree");
-                replyFromServer = sendRequestToServer("Calltree", clientID);
-            }*/
+            var tt = TimeSpan.Zero;           
 
             while (true)
             {
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "here 5\n");
                 //Pre-inline proofSites
                 if (learnProofs)
                 {
@@ -1364,6 +1356,8 @@ namespace CoreLib
                         }
                     }
                 }
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "here 6\n");
                 // Lets split when the tree has become big enough
                 splittingStartTime = DateTime.Now;
                 var size = di.ComputeSize();
@@ -1399,6 +1393,8 @@ namespace CoreLib
                             }
                         }
                     }
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "here 7\n");
                     if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1
                     && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
                     {
@@ -1465,19 +1461,24 @@ namespace CoreLib
                                 }
                             }
                         }
-
+                        if (writeToLogFile)
+                            File.AppendAllText(logFileName, "here 8\n");
                         if (maxVc != null)
                         {
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
+                            
                             toRemove.Iter(vc => attachedVCInv.Remove(vc));
                             UCsplit += 1;
                             StratifiedCallSite scs = attachedVCInv[maxVc];
                             previousSplitSites.Add(GetPersistentID(scs));
                             Debug.Assert(!openCallSites.Contains(scs));
                             numSplits = numSplits + 1;
-                            var desc = sizes[maxVc];
+                            /*var desc = sizes[maxVc];
                             var cnt = 0;
-                            openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);
+                            openCallSites.Iter(cs => cnt += desc.Contains(containingVC(cs)) ? 1 : 0);*/
+                            if (writeToLogFile)
+                                File.AppendAllText(logFileName, "splitting on " + GetPersistentID(scs) + "\n");
+                            //Console.WriteLine("splitting on " + GetPersistentID(scs));
                             // Push & Block
                             //var tgNode = string.Format("{0},{1}", scs.callSite.calleeName, maxVcScore);
                             //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
@@ -1514,6 +1515,8 @@ namespace CoreLib
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                            if (cba.Util.HydraConfig.memoization)
+                                splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(scs, 0));
                             prover.Assert(scs.callSiteExpr, false);
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
@@ -1821,12 +1824,15 @@ namespace CoreLib
                 reporter.reportTrace = true;
                 if (writeLog)
                     Console.WriteLine("point 0.1");
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 0.1\n");
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
                 Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
                 if (writeLog)
                     Console.WriteLine("point 0.2");
-
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 0.2\n");
                 if (outcome == Outcome.Errors)
                 {
                     //Console.WriteLine("EtUC");
@@ -1838,15 +1844,21 @@ namespace CoreLib
                 }
                 if (writeLog)
                     Console.WriteLine("point 1");
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 1\n");
                 if (outcome == Outcome.Correct)
                 {
                     ucore = prover.UnsatCore();
                 }
                 if (writeLog)
                     Console.WriteLine("point 2");
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 2\n");
                 Pop();
                 if (writeLog)
                     Console.WriteLine("point 3");
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 3\n");
                 //Push();
                 //var softAssumptions = new List<VCExpr>();
                 foreach (StratifiedCallSite cs in openCallSites)
@@ -1865,6 +1877,8 @@ namespace CoreLib
                 }
                 if (writeLog)
                     Console.WriteLine("point 4");
+                if (writeToLogFile)
+                    File.AppendAllText(logFileName, "point 4\n");
                 reporter.callSitesToExpand = new List<StratifiedCallSite>();
                 reporter.reportTrace = false;
                 DateTime oqStartTime = DateTime.Now;
@@ -1890,10 +1904,26 @@ namespace CoreLib
 
                 if (outcome == Outcome.Errors)
                 {
+                    if (writeLog)
+                        Console.WriteLine("here 1 " + stats.stacksize + " " + numPush);
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "here 1 " + stats.stacksize + " " + numPush + "\n");
+                    if (cba.Util.HydraConfig.memoization)
+                    {
+                        if (writeLog)
+                            Console.WriteLine(splitDecisionMemory.Count);
+                        if (writeToLogFile)
+                            File.AppendAllText(logFileName, "sdm sount " + splitDecisionMemory.Count + "\n");
+                        //if (splitDecisionMemory.Count > 0)
+                        //    Console.WriteLine(GetPersistentID(splitDecisionMemory.PeekLeft().Item1) + " " + splitDecisionMemory.PeekLeft().Item2);
+                        for (int i = 0; i < splitDecisionMemory.Count; i++)
+                            Pop();                        
+                    }
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "here 2 " + stats.stacksize + " " + numPush + "\n");
                     foreach (var scs in reporter.callSitesToExpand)
                     {                         
-                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
+                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";                        
                         openCallSites.Remove(scs);
                         StratifiedVC svc = null;
                         if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
@@ -1906,6 +1936,35 @@ namespace CoreLib
                             Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                         }
                     }
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "here 3 " + stats.stacksize + " " + numPush + "\n");
+                    if (cba.Util.HydraConfig.memoization)
+                    {
+                        Deque<Tuple<StratifiedCallSite, int>> tempMemory = new Deque<Tuple<StratifiedCallSite, int>>(splitDecisionMemory);
+                        while (tempMemory.Count != 0)
+                        {
+                            Push();
+                            var t = tempMemory.PopRight();
+                            if (t.Item2 == 0)
+                            {
+                                if (writeLog)
+                                    Console.WriteLine("blocking " + GetPersistentID(t.Item1));
+                                if (writeToLogFile)
+                                    File.AppendAllText(logFileName, "blocking " + GetPersistentID(t.Item1) + "\n");
+                                prover.Assert(t.Item1.callSiteExpr, false);
+                            }
+                            else
+                            {
+                                if (writeLog)
+                                    Console.WriteLine("mustreaching " + GetPersistentID(t.Item1));
+                                if (writeToLogFile)
+                                    File.AppendAllText(logFileName, "mustreaching " + GetPersistentID(t.Item1) + "\n");
+                                prevMustAsserted.Push(AssertMustReach(attachedVC[t.Item1], PrevAsserted()));
+                            }
+                        }
+                    }
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "here 4 " + stats.stacksize + " " + numPush + "\n");
                     if (ucore != null || ucore.Count != 0)
                     {
 
@@ -1917,7 +1976,7 @@ namespace CoreLib
                             }
                         }
                     }
-
+                    //Console.ReadLine();
                 }
                 else
                 {
@@ -1940,7 +1999,9 @@ namespace CoreLib
                         }
                     }
                     if (writeLog)
-                        Console.WriteLine("block finished");                    
+                        Console.WriteLine("block finished");
+                    if (writeToLogFile)
+                        File.AppendAllText(logFileName, "block finished\n");
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     if (writeLog)
@@ -1981,6 +2042,8 @@ namespace CoreLib
                             decisions.Pop();
                             backtrackingPoints.Pop();
                             prevMustAsserted.Pop();
+                            if (cba.Util.HydraConfig.memoization)
+                                splitDecisionMemory.PopLeft();
                             npops++;
 
                         } while (topDecision.num == 1);
@@ -1988,7 +2051,10 @@ namespace CoreLib
                         if (doneBT)
                             break;
 
-                        topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
+                        if (cba.Util.HydraConfig.memoization)
+                            topState.ApplyState(this, ref previousSplitSites);
+                        else
+                            topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
                         //timeGraph.Pop(npops - 1);
 
                         // flip the decision
@@ -2003,6 +2069,7 @@ namespace CoreLib
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                            splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 0));
                             treesize = di.ComputeSize();
                         }
                         else
@@ -2012,6 +2079,7 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(
                                AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 1));
                             treesize = di.ComputeSize();
                         }
                     }
@@ -3384,11 +3452,11 @@ namespace CoreLib
                                     if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
-                                    Push();
+                                    //Push();
                                     previousSplitSites.Add(callsiteToInline);
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                    //decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
                                     prover.Assert(cs.callSiteExpr, false);                                    
                                     mode = 0;                                    
@@ -3398,14 +3466,14 @@ namespace CoreLib
                                     if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
-                                    Push();
+                                    //Push();
                                     previousSplitSites.Add(callsiteToInline);
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));                                    
-                                    decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));                                    
+                                    //decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
                                     //try
-                                    {
+                                    //{
                                         //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
-                                    }
+                                    //}
                                     //catch (KeyNotFoundException e)
                                     //
                                     //    Console.WriteLine(e.Message);
@@ -3533,7 +3601,7 @@ namespace CoreLib
                 {
                     cba.Util.HydraConfig.startHydra = false;                    
                     replyFromServer = sendRequestToServer("outcome", "NOK");
-                    return outcome;
+                    //return outcome;
                 }
                 else
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
@@ -3572,7 +3640,7 @@ namespace CoreLib
                 //Console.ReadLine();
                 sendRequestToServer("TimeGraph", sendTimeGraph);
             }
-            //Console.ReadLine();
+            Console.ReadLine();
             return outcome;
         }
 
