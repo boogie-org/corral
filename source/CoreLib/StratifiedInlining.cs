@@ -4316,7 +4316,7 @@ namespace CoreLib
             }
 
             Block lastBlock = (Block)absyList[absyList.Count - 2];
-            Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, model, svc.info.mvInfo, si.prover.Context);
+            Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, null, model, svc.info.mvInfo, si.prover.Context);
             newCounterexample.AddCalleeCounterexample(calleeCounterexamples);
             return newCounterexample;
         }

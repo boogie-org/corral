@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cba-NetCore", "cba-NetCore.csproj", "{B4CA290E-83E7-4AE3-91BD-14D7FE7F5784}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Corral", "Corral\Corral.csproj", "{B4CA290E-83E7-4AE3-91BD-14D7FE7F5784}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

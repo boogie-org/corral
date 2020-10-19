@@ -8,7 +8,7 @@ using System.Diagnostics;
 namespace cba.Util
 {
 
-    // THis is intended to be an exact copy of Duplicator, except
+    // This is intended to be an exact copy of Duplicator, except
     // that it inherits from FixedVisitor instead of StandardVisitor
     public class MyDuplicator : FixedVisitor
     {

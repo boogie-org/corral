@@ -682,7 +682,7 @@ namespace cba.Util
                     break;
             }
 
-            var ret = new AssertCounterexample(newTrace, null, trace.Model, trace.MvInfo, trace.Context);
+            var ret = new AssertCounterexample(newTrace, null, null, trace.Model, trace.MvInfo, trace.Context);
             ret.calleeCounterexamples = newTraceCallees;
 
             return ret;
@@ -786,7 +786,6 @@ namespace cba.Util
             }
             trace.Trace = newBlocks;
             // reset other info. Safe thing to do unless we know what it is
-            trace.relatedInformation = new List<string>();
             trace.calleeCounterexamples = newCalleeTraces;
         }
     }

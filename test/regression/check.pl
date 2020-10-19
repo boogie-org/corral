@@ -69,7 +69,7 @@ foreach my $line (@files) {
     close (TMP_HANDLE);
 
     my @files;
-    my $buildPath = File::Spec->catfile('..', '..', 'bin', $BuildConfig);
+    my $buildPath = File::Spec->catfile('..', '..', 'source', 'Corral', 'bin', $BuildConfig);
     find( sub {
         # Skip any `publish` directories
         $File::Find::prune = 1 if $File::Find::name =~ m/\bpublish\b/;

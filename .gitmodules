@@ -1,3 +1,0 @@
-[submodule "boogie"]
-	path = boogie
-	url = https://github.com/boogie-org/boogie.git
