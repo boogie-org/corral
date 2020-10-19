@@ -623,7 +623,7 @@ namespace LocalServerInCsharp
                     workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('\\') + 1);
                     workingFileName = workingFile.Substring(workingFile.LastIndexOf('\\') + 1);
                 }
-                //Console.WriteLine(workingFilePath);
+                Console.WriteLine("Verifying " + workingFileName);
                 //Console.ReadLine();
                 string inputFileExtension = workingFile.Substring(workingFile.Length - 3);
                 if (!(inputFileExtension.ToLower() == "bpl")) //Invoke SMACK to convert given C program to Boogie
