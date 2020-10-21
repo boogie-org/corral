@@ -6,7 +6,7 @@ git:
   depth: false
 env:
   global:
-    - SOLUTION=cba-NetCore.sln
+    - SOLUTION=source/Corral.sln
     - Z3URL=https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
     # Workaround for GitVersionTask bug in combination with .NET Core SDK 3.1.200
     # (see, e.g., https://github.com/dotnet/sdk/issues/10878 and https://github.com/GitTools/GitVersion/issues/2063)
@@ -22,11 +22,6 @@ install:
   - export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
 
 script:
-  - git submodule update --init
-
-  # Attach HEADs in submodules to appease GitVersion
-  - git submodule foreach 'git branch -d master && git checkout -b master'
-
   # Build one configuration
   - dotnet build -c ${CONFIGURATION} ${SOLUTION}
 
@@ -37,7 +32,7 @@ deploy:
 
   # Publish dotnet global tool on nuget.org
   - provider: script
-    script: dotnet nuget push bin/${CONFIGURATION}/Corral*.nupkg -k ${NUGET_API_KEY} -s https://api.nuget.org/v3/index.json
+    script: dotnet nuget push source/Corral/bin/${CONFIGURATION}/Corral*.nupkg -k ${NUGET_API_KEY} -s https://api.nuget.org/v3/index.json
     skip_cleanup: true
     on:
       all_branches: true
@@ -49,7 +44,7 @@ deploy:
     token:
       secure: QDinEx1hu7AkjXNnut767Q6g9us91dVQAzxBoI5o+VGfvsLDV/G0VcVXTSWw1oLskxfEdnDuALFORwAvZxAVvRpQVTF1p/fVwsz1WgdjdfV0sm+0KlhTWekIBBMoZ7l7u3bjCFUYw6/7qqD732bUG24iSz7YG2WB6qB1AgS1RhyK9PaHLSfi5jtAAB179Pt00TcXhdT3Vr2v3f6CcSa3z2qOdtwUMLLz6ZSkobnWXE7DIDNXnntCQDCVFTF2JiCGfZpscKw70ufa4Vqr5pd4XJ+LDQGmB+y7ZAG9EIMcG0/c8/c8xac6K6URWmrDUSmTSFEhryM7wqzCpWDtzN9oJic86Lwv5TTHypfIdcM3LpoUoV02mmomyCJ4gL429Ts0FSC9rvIxxYqbIpDihE3yCJwtp5URZ0ZqRdMvc+GtWUqEPuJIkAvw2zP36+BAM3WS4z1ZytuB9RE01g27hg3yyjEBzJc/jkb4V1JW1UZyllCDp/IKv2tcKKv3nx/nuf72MJsixTTS1BgJitVgcO0dT37kP6xQFg2uTvzWUZUssb6PslDAyjaaQr9Fgyh+f87O5p73iMCUe9hivFsYI+ppgmRkx7Bp0aUKK8lBNsvRxPXNodAK1G6PDflmFXRonoRPueG2QHY5xX2zefdXmy2KXp/f2Xsi/Muwy3/h3iDaBHk=
     file_glob: true
-    file: bin/${CONFIGURATION}/Corral*.nupkg
+    file: source/Corral/bin/${CONFIGURATION}/Corral*.nupkg
     skip_cleanup: true
     on:
       all_branches: true
