@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>PropInst</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Util\CorralUtil.csproj" />
+    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -131,7 +131,15 @@ namespace PropInstUtils
 
         public override Cmd VisitAssertCmd(AssertCmd node)
         {
-            return new AssertCmd(node.tok, VisitExpr(node.Expr));
+			if ( node.Attributes == null)
+				return new AssertCmd(node.tok, VisitExpr(node.Expr));
+			else
+				return new AssertCmd(node.tok, VisitExpr(node.Expr), (QKeyValue)node.Attributes.Clone());
+		}
+
+        public override Cmd VisitAssumeCmd(AssumeCmd node)
+        {
+            return new AssumeCmd(node.tok, VisitExpr(node.Expr));
         }
 
         public override Cmd VisitAssignCmd(AssignCmd node)
@@ -160,6 +168,16 @@ namespace PropInstUtils
             return new AssignCmd(node.tok, lhssDispatched, rhssDispatched);
         }
 
+        public override Cmd VisitHavocCmd(HavocCmd node)
+        {
+            var dispatchedVars = new List<IdentifierExpr>();
+            foreach(var x in node.Vars)
+            {
+                dispatchedVars.Add(VisitIdentifierExpr(x) as IdentifierExpr);
+            }
+            return new HavocCmd(Token.NoToken, dispatchedVars);
+        }
+
         public override List<Cmd> VisitCmdSeq(List<Cmd> cmdSeq)
         {
             List<Cmd> dispatchedCmds = new List<Cmd>();
@@ -182,6 +200,10 @@ namespace PropInstUtils
                 {
                     dispatchedCmds.Add(VisitAssumeCmd(c as AssumeCmd));
                 }
+                else if (c is HavocCmd)
+                {
+                    dispatchedCmds.Add(VisitHavocCmd(c as HavocCmd));
+                }
             }
 
             return dispatchedCmds;
@@ -192,7 +214,7 @@ namespace PropInstUtils
 
     public class ProcedureSigMatcher
     {
-        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution)
+        public static bool MatchSig(Implementation toMatch, DeclWithFormals dwf, Program boogieProgram, out QKeyValue toMatchAnyParamsAttributes, out int anyParamsPosition, out QKeyValue toMatchAnyParamsAttributesOut, out int anyParamsPositionOut, out Dictionary<Declaration, Expr> paramSubstitution, bool matchPtrs)
         {
             toMatchAnyParamsAttributes = null;
             anyParamsPosition = int.MaxValue;
@@ -206,7 +228,7 @@ namespace PropInstUtils
             }
 
             // match procedure name
-
+            // Positive filters: AnyProcedure, NameMatches, ByName
             if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.AnyProcedure, toMatch.Attributes))
             {
                 //do nothing
@@ -214,6 +236,7 @@ namespace PropInstUtils
             else if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.NameMatches, toMatch.Attributes))
             {
                 var nmAttrParams = BoogieUtil.getAttr(ExprMatchVisitor.BoogieKeyWords.NameMatches, toMatch.Attributes);
+                Debug.Assert(nmAttrParams.Count() == 1, "Expecting exactly one #NameMatches attribute, found " + nmAttrParams.Count());
                 var regex = nmAttrParams.First().ToString();
                 var m = Regex.Match(dwf.Name, regex);
                 if (m.Success)
@@ -230,6 +253,27 @@ namespace PropInstUtils
                 return false;
             }
 
+            //Negative filter: NameNotMatches (can be multiple of them)
+            if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.NameNotMatches, toMatch.Attributes))
+            {
+                //get the params from multiple matching key
+                var getAttrRepeated = new Func<QKeyValue, string, IList<IList<object>>>((attr, name) =>
+                {
+                    var ret = new List<IList<object>>();
+                    for (; attr != null; attr = attr.Next)
+                    {
+                        if (attr.Key == name) ret.Add(attr.Params);
+                    }
+                    return ret;
+                });
+
+                var nmAttrParams = getAttrRepeated(toMatch.Attributes, ExprMatchVisitor.BoogieKeyWords.NameNotMatches);
+                foreach(var nm in nmAttrParams)
+                {
+                    if (Regex.Match(dwf.Name, nm.First().ToString()).Success) return false;
+                }
+            }
+
             // if the procedure name is matched, it may still be that we are looking only for stubs
             if (BoogieUtil.checkAttrExists(ExprMatchVisitor.BoogieKeyWords.NoImplementation, toMatch.Attributes))
             {
@@ -238,15 +282,21 @@ namespace PropInstUtils
                         return false;
             }
 
-            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams)) return false;
+			Procedure dwfProc = null;
+			if (dwf is Implementation)
+				dwfProc = ((Implementation)dwf).Proc;
+			else if (dwf is Procedure)
+				dwfProc = (Procedure)dwf;
 
-            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams)) return false;
+            if (!MatchParams(ref toMatchAnyParamsAttributes, ref anyParamsPosition, paramSubstitution, toMatch.InParams, toMatch.Proc.InParams, dwf.InParams,dwfProc.InParams, matchPtrs)) return false;
+
+            if (!MatchParams(ref toMatchAnyParamsAttributesOut, ref anyParamsPositionOut, paramSubstitution, toMatch.OutParams, toMatch.Proc.OutParams, dwf.OutParams,dwfProc.OutParams, matchPtrs)) return false;
 
             return true;
         }
 
         private static bool MatchParams(ref QKeyValue toMatchAnyParamsAttributes, ref int anyParamsPosition,
-            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams)
+            Dictionary<Declaration, Expr> paramSubstitution, List<Variable> toMatchInParams, List<Variable> toMatchProcInParams, List<Variable> dwfInParams, List<Variable> dwfProcInParams, bool matchPtrs)
         {
             // match procedure parameters
             for (var i = 0; i < toMatchInParams.Count; i++)
@@ -275,11 +325,56 @@ namespace PropInstUtils
                 if (!toMatchInParams[i].TypedIdent.Type.Equals(dwfInParams[i].TypedIdent.Type))
                     return false;
 
-                paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
+				// if {:#MatchPtrs} attribute is present, check if pointer references match
+				if (matchPtrs)
+					if (!MatchPtrs(toMatchProcInParams[i], dwfProcInParams[i]))
+						return false;
+
+				paramSubstitution.Add(toMatchInParams[i], new IdentifierExpr(Token.NoToken, dwfInParams[i]));
             }
             return true;
         }
-    }
+
+		// Checks if the parameter references in 'var1' matches with that of 'var2'
+		private static bool MatchPtrs(Variable var1, Variable var2)
+		{
+			HashSet<string> ptrs1 = GetPtrsInVar(var1);
+			HashSet<string> ptrs2 = GetPtrsInVar(var2);
+
+			if (ptrs1.Count != ptrs2.Count)
+				return false;
+
+			bool disjoint = true;
+			foreach (string str in ptrs1)
+			{
+				if (!ptrs2.Contains(str))
+				{
+					disjoint = false;
+					break;
+				}
+			}
+
+			return disjoint;
+		}
+
+		// Returns the parameter references of 'var'
+		private static HashSet<string> GetPtrsInVar(Variable var)
+		{
+			HashSet<string> refs = new HashSet<string>();
+
+			for (QKeyValue kv = var.Attributes; kv != null; kv = kv.Next)
+			{
+				if (kv.Key.Equals("ptr"))
+				{
+					foreach (string str in kv.Params)
+						refs.Add(str);
+				}
+
+			}
+
+			return refs;
+		}
+	}
 
     public class OccursInVisitor : FixedVisitor
     {
@@ -297,6 +392,43 @@ namespace PropInstUtils
                 Success = true;
             }
             return base.VisitIdentifierExpr(node);
+        }
+    }
+
+    public class MkUniqueFnVisitor: FixedVisitor
+    {
+        private HashSet<Function> uniqFuncs;
+        private Program program;
+
+        public MkUniqueFnVisitor(Program prog) { program = prog;  uniqFuncs = new HashSet<Function>();}
+
+        public override Expr VisitNAryExpr(NAryExpr node)
+        {
+            var nArgs = node.Args.Select(x => base.VisitExpr(x)).ToList();
+            node.Args = nArgs;
+            var fcall = node.Fun as FunctionCall;
+            if (fcall != null 
+                && fcall.Func != null //for a function not declared in AVP file
+                && fcall.Func.HasAttribute(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn))
+            {
+                var formals = new List<Variable>();
+                fcall.Func.InParams.Iter(a =>
+                    {
+                        var z = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, a.Name, a.TypedIdent.Type), true);
+                        formals.Add(z);
+                    });
+                var r = new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "r", fcall.Func.OutParams[0].TypedIdent.Type), false);
+
+                var f = new Function(Token.NoToken, fcall.FunctionName + "__" + uniqFuncs.Count,
+                    formals, r) ;
+                //inherit all attributes other than mkUniqueFn
+                f.Attributes = BoogieUtil.removeAttr(ExprMatchVisitor.BoogieKeyWords.MkUniqueFn, fcall.Func.Attributes);
+                f.Body = fcall.Func.Body;
+                uniqFuncs.Add(f);
+                program.AddTopLevelDeclaration(f);
+                node.Fun = new FunctionCall(f);
+            }
+            return node;
         }
     }
 }
