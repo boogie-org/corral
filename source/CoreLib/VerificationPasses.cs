@@ -1158,7 +1158,6 @@ namespace cba
                 Debug.Assert(onlyEnsures());
                 // Turn on summary computation in Boogie
                 Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
-                CommandLineOptions.Clo.StratifiedInliningOption = 1;
             }
 
             // Insert summaries
@@ -1694,14 +1693,7 @@ namespace cba
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
         {
-            var ret = trace;
-            if(ExtractLoops) ret = elPass.mapBackTrace(trace);
-
-            if (!runHoudini)
-            {
-                CommandLineOptions.Clo.StratifiedInliningOption = 0;
-            }
-            return ret;
+            return ExtractLoops ? elPass.mapBackTrace(trace) : trace;
         }
     }
 
