@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>FastAvn</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Util\CorralUtil.csproj" />
+    <ProjectReference Include="..\CoreLib\CoreLib.csproj" />
+    <ProjectReference Include="..\ExplainError\ExplainError.csproj" />
+    <ProjectReference Include="..\ProgTransformation\ProgTransformation.csproj" />
+    <ProjectReference Include="..\AliasAnalysis\AliasAnalysis.csproj" />
+    <ProjectReference Include="..\AvHarnessInstrumentation\AvHarnessInstrumentation.csproj" />
+    <ProjectReference Include="..\AvUtil\AvUtil.csproj" />
+    <ProjectReference Include="..\Corral\Corral.csproj" />
+  </ItemGroup>
+
+</Project>

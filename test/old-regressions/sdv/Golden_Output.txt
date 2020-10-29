@@ -1,0 +1,64 @@
+
+-------------------- exitwithoutrelease.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing exitwithoutrelease.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != notAcquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace3 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc ExReleaseResourceLite with expr false and entrypoint CsampCleanup
+
+-------------------- funcatdispatch.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing funcatdispatch.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc IoBuildDeviceIoControlRequest with expr false and entrypoint IoBuildDeviceIoControlRequest
+
+-------------------- funcatdispatch_correct.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing funcatdispatch_correct.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> !(sdv_irql_current != PASSIVE_LEVEL && sdv_irql_current != APC_LEVEL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_2(x_3) ==> !(sdv_irql_current != APC_LEVEL && x_3 == NULL && sdv_irql_current != PASSIVE_LEVEL))
+
+-------------------- lowerdriverreturn.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing lowerdriverreturn.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> return_state != yes
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc sdv_stub_dispatch_end with expr false and entrypoint MouFilter_PnP
+
+-------------------- slam_guard.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing slam_guard.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_4(x_2) ==> !(x_2 == SLAM_guard && accessState == acquired))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_5(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc lock with expr accessState != acquired and entrypoint SLAM_guard_example
+
+-------------------- slam_guard2.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing slam_guard2.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_4(x_2) ==> !(x_2 == SLAM_guard && accessState == acquired))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_5(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_0(x_2) ==> !(x_2 == NULL && accessState == acquired))
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> accessState != acquired
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_0(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_0(x_2) ==> x_2 != SLAM_guard)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace6 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc lock with expr accessState != acquired and entrypoint SLAM_guard_example
+
+-------------------- startdevicewait.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing startdevicewait.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_3(x_2) ==> !(x_2 == STATUS_SUCCESS && irp_event == set_in_completion))
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc SLIC_KeWaitForSingleObject_exit with expr false and entrypoint ToasterSendIrpSynchronously
+
+-------------------- ebasic_example.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing ebasic_example.bpl ------
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc foo with expr global == 1 and entrypoint foo
+
+-------------------- ebasic_example2.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing ebasic_example2.bpl ------
+
+-------------------- soft_constraint_example.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing soft_constraint_example.bpl ------
+
+-------------------- eedoesntblock.bpl --------------------
+[TAG: AV_OUTPUT] ----- Analyzing eedoesntblock.bpl ------
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> sdv_irql_current == PASSIVE_LEVEL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: true ==> sdv_irql_current == PASSIVE_LEVEL
