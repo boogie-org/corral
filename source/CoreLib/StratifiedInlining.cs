@@ -2069,7 +2069,8 @@ namespace CoreLib
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                            splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 0));
+                            if (cba.Util.HydraConfig.memoization)
+                                splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 0));
                             treesize = di.ComputeSize();
                         }
                         else
@@ -2077,9 +2078,10 @@ namespace CoreLib
                             // Must Reach
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
-                            prevMustAsserted.Push(
-                               AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
-                            splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 1));
+                            //prevMustAsserted.Push(
+                            //   AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            if (cba.Util.HydraConfig.memoization)
+                                splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 1));
                             treesize = di.ComputeSize();
                         }
                     }
