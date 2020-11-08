@@ -568,6 +568,10 @@ namespace cba
             {
                 cba.Util.HydraConfig.memoization = true;
             }
+            else if (flag.StartsWith("/doNotAssertMR"))
+            {
+                cba.Util.HydraConfig.doNotAssertMR = true;
+            }
             else if (flag.StartsWith("/maxSplitPerIteration:"))
             {
                 var split = flag.Split(sep);
