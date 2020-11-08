@@ -428,6 +428,7 @@ namespace CoreLib
             //public HashSet<StratifiedCallSite> previousSplitSites;
             public HashSet<string> previousSplitSites;
             public string calltreeToSend;
+            public string inliningTillThisSplit;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -458,6 +459,17 @@ namespace CoreLib
                 return ret;
             }
 
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
+                HashSet<string> previousSplitSites, string calltree, string inliningTillThisSplit)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites);
+                ret.previousSplitSites = new HashSet<string>(previousSplitSites);
+                ret.calltreeToSend = calltree;
+                ret.inliningTillThisSplit = inliningTillThisSplit;
+                return ret;
+            }
+
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites)
             {
                 SI.attachedVC = attachedVC;
@@ -480,14 +492,16 @@ namespace CoreLib
                 previousSplitSites = this.previousSplitSites;
                 calltreeToSend = this.calltreeToSend;
             }
-            public void ApplyState(StratifiedInlining SI, ref HashSet<string> previousSplitSites)
+            public void ApplyState(StratifiedInlining SI, ref HashSet<string> previousSplitSites,
+                ref string calltreeToSend, ref string inliningTillThisSplit)
             {
                 //SI.attachedVC = attachedVC;
                 //SI.attachedVCInv = attachedVCInv;
                 //SI.parent = parent;
                 //SI.di = di;
                 previousSplitSites = this.previousSplitSites;
-                //calltreeToSend = this.calltreeToSend;
+                inliningTillThisSplit = this.inliningTillThisSplit;
+                calltreeToSend = this.calltreeToSend;
             }
         }
 
@@ -1291,6 +1305,9 @@ namespace CoreLib
             int aggressiveSplitQueryBound = 5;
             string logFileName = "client" + clientID + ".txt";
             bool writeToLogFile = false;
+            Stack<string> inliningFrames = new Stack<string>();
+            string totalInlinings = "";
+            string inliningTillThisSplit = "";
             splitDecisionMemory.Clear();
             if (writeToLogFile)
                 File.WriteAllText(logFileName, "LOG START: \n");
@@ -1511,12 +1528,20 @@ namespace CoreLib
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
-                            replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
+                            replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");                            
+                            
+                            if (cba.Util.HydraConfig.memoization)
+                            {
+                                splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(scs, 0));
+                                inliningTillThisSplit = totalInlinings;
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites,
+                                    lastCalltreeSent, inliningTillThisSplit));
+                                inliningTillThisSplit = "";
+                            }
+                            else
+                                backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            if (cba.Util.HydraConfig.memoization)
-                                splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(scs, 0));
                             prover.Assert(scs.callSiteExpr, false);
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
@@ -1923,7 +1948,9 @@ namespace CoreLib
                         File.AppendAllText(logFileName, "here 2 " + stats.stacksize + " " + numPush + "\n");
                     foreach (var scs in reporter.callSitesToExpand)
                     {                         
-                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";                        
+                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                        if (cba.Util.HydraConfig.memoization)
+                            totalInlinings = totalInlinings + GetPersistentID(scs) + ",";
                         openCallSites.Remove(scs);
                         StratifiedVC svc = null;
                         if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
@@ -2052,7 +2079,21 @@ namespace CoreLib
                             break;
 
                         if (cba.Util.HydraConfig.memoization)
-                            topState.ApplyState(this, ref previousSplitSites);
+                        {
+                            topState.ApplyState(this, ref previousSplitSites, ref calltreeToSend, ref inliningTillThisSplit);
+                            if (totalInlinings.StartsWith(inliningTillThisSplit))
+                            {
+                                int length = inliningTillThisSplit.Length;
+                                string missing = totalInlinings.Substring(length);
+                                /*Console.WriteLine("totalInlinings: " + totalInlinings);
+                                Console.WriteLine("inliningTillThisSplit: " + inliningTillThisSplit);
+                                Console.WriteLine("calltreeToSend: " + calltreeToSend);
+                                Console.WriteLine("missing: " + missing);
+                                Console.ReadLine();*/
+                                calltreeToSend = calltreeToSend + missing;
+                                inliningTillThisSplit = inliningTillThisSplit + missing;
+                            }
+                        }
                         else
                             topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
                         //timeGraph.Pop(npops - 1);
@@ -2078,8 +2119,8 @@ namespace CoreLib
                             // Must Reach
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
-                            //prevMustAsserted.Push(
-                            //   AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            prevMustAsserted.Push(
+                               AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                             if (cba.Util.HydraConfig.memoization)
                                 splitDecisionMemory.PushLeft(new Tuple<StratifiedCallSite, int>(topDecision.cs, 1));
                             treesize = di.ComputeSize();
@@ -3123,6 +3164,7 @@ namespace CoreLib
             DI initialDI = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
             DagOracle initialDAG = initialDI.currentDag.Copy();
             Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
+            
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
@@ -3390,7 +3432,7 @@ namespace CoreLib
                 // Inline receivedCalltree and push split decisions
                 if (receivedCalltree != null)
                 {
-                    //Console.WriteLine(receivedCalltree);
+                    //Console.WriteLine(receivedCalltree);                    
                     calltreeToSend = receivedCalltree;
                     string callsiteToInline = "";
                     int mode = 0;
