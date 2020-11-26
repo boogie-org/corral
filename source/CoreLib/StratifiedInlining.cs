@@ -1460,17 +1460,18 @@ namespace CoreLib
                                 {
                                     numUnsatNodesInOwnSubtree = UCoreChildrenCount[cs];
                                 }
-                                var disjointNodes = di.DisjointNodes(vc);
+                                /*var disjointNodes = di.DisjointNodes(vc);
                                 foreach (StratifiedVC v in disjointNodes)
                                 {
                                     if (CallSitesInUCore.Contains(attachedVCInv[v]))
                                         numUnsatNodesInSiblingSubtree++;
-                                }
+                                }*/
+                                numUnsatNodesInSiblingSubtree = CallSitesInUCore.Count - numUnsatNodesInOwnSubtree;
                                 score = 1 - (Math.Min(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree) / Math.Max(numUnsatNodesInOwnSubtree, numUnsatNodesInSiblingSubtree));
                                 //if (!previousSplitSites.Contains(GetPersistentID(cs)) && CallSitesInUCore.Contains(cs) && score < minVcScore)
 
-                                //if (!previousSplitSites.Contains(GetPersistentID(cs)) && score < minVcScore) //ENABLE THIS FOR PREVIOUS HEURISTIC
-                                if (!previousSplitSites.Contains(GetPersistentID(cs)) && score < 0.5)
+                                if (!previousSplitSites.Contains(GetPersistentID(cs)) && score < minVcScore) //ENABLE THIS FOR PREVIOUS HEURISTIC
+                                //if (!previousSplitSites.Contains(GetPersistentID(cs)) && score < 0.5)
                                 {
                                     maxVc = vc;
                                     minVcScore = score;
@@ -1853,7 +1854,7 @@ namespace CoreLib
                     File.AppendAllText(logFileName, "point 0.1\n");
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
-                Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                //Console.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
                 if (writeLog)
                     Console.WriteLine("point 0.2");
                 if (writeToLogFile)
@@ -1954,7 +1955,7 @@ namespace CoreLib
                         openCallSites.Remove(scs);
                         StratifiedVC svc = null;
                         if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-                            svc = Expand(scs);
+                            svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                         else
                             svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                         if (svc != null)
@@ -1995,12 +1996,24 @@ namespace CoreLib
                         File.AppendAllText(logFileName, "here 4 " + stats.stacksize + " " + numPush + "\n");
                     if (ucore != null || ucore.Count != 0)
                     {
-
-                        foreach (StratifiedCallSite cs in attachedVC.Keys)
+                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                         {
-                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                            foreach (StratifiedCallSite cs in openCallSites)
                             {
-                                CallSitesInUCore.Add(cs);
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
                             }
                         }
                     }
@@ -3486,7 +3499,11 @@ namespace CoreLib
                                         //Console.ReadLine();
                                     }
                                     openCallSites.Remove(scs);
-                                    var vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                    StratifiedVC vc = null;
+                                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
+                                        vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                    else
+                                        vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                                     if (vc != null)
                                     {
                                         openCallSites.UnionWith(vc.CallSites);
