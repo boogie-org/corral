@@ -231,6 +231,9 @@ namespace CoreLib
         public DateTime splittingStartTime;
         public DateTime lastSplitAt;
         public double nextSplitInterval = 0;
+        public int splitMode;
+        public long currentId;
+        public Random random;
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -353,6 +356,9 @@ namespace CoreLib
             communicationTime = 0;
             lastSplitAt = DateTime.Now;
             proofSites = new HashSet<string>();
+            splitMode = 100;
+            currentId = 0;
+            random = new Random();
         }
 
         /* depth in the call tree */
@@ -1510,7 +1516,13 @@ namespace CoreLib
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
-                            replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                            replyFromServer = sendRequestToServer("NewPartitionId", " ");
+                            long blockId = Int64.Parse(replyFromServer);
+                            long mustReachId = blockId + 1;
+                            Console.WriteLine("splitID : " + currentId + " " + mustReachId);
+                            replyFromServer = sendCalltreeToServer(splitMode + ";" + currentId + ";" + mustReachId + ";AND;" +
+                                              calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                            currentId = blockId;
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
@@ -1526,270 +1538,24 @@ namespace CoreLib
 
                     }
                 }
-                else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3")
+                if (cba.Util.HydraConfig.runPortfolio)
                 {
-                    List<StratifiedCallSite> candidates = new List<StratifiedCallSite>();
-                    List<StratifiedCallSite> checkedCandidates = new List<StratifiedCallSite>();
-                    //while (numSplitThisIteration <= maxSplitPerIteration)
-                    int numAggressiveSplitQueries = 0;
-                    while (true)
+                    if (numSplits > 4)
                     {
-                        //Console.WriteLine("CANDIDATES : " + candidates.Count);
-                        //Console.WriteLine("CHECKED CANDIDATES : " + checkedCandidates.Count);
-
-                        StratifiedCallSite toRemoveCs = null;
-                        // find a node to split on
-                        StratifiedVC maxVc = null;
-                        double maxVcScore = 0;
-
-                        ucore = null;
-                        boundHit = false;
-                        foreach (StratifiedCallSite cs in candidates)
-                        {
-                            if (!checkedCandidates.Contains(cs))
-                            {
-                                toRemoveCs = cs;
-                                checkedCandidates.Add(toRemoveCs);
-                                break;
-                            }
-                        }
-                        if (toRemoveCs == null && checkedCandidates.Count != 0)
-                            break;
-
-                        // underapproximate query
-                        //Console.WriteLine("Underapprox Begin");
-                        Push();
-                        foreach (StratifiedCallSite cs in openCallSites)
-                        {
-                            if (toRemoveCs != null && GetPersistentID(cs) == GetPersistentID(toRemoveCs))
-                                continue;
-                            //Console.WriteLine(GetPersistentID(cs));
-                            if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                                (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                                StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
-                            {
-                                prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
-                                procsHitRecBound.Add(cs.callSite.calleeName);
-                                boundHit = true;
-                            }
-                            // Non-uniform unfolding
-                            if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
-                                Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
-
-                            prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-                        }
-                        reporter.reportTrace = true;
-                        DateTime uqStartTimein = DateTime.Now;
-                        outcome = CheckVC(reporter);
-                        Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTimein).TotalSeconds);
-                        /*if (outcome == Outcome.Errors)
-                        {
-                            //Console.WriteLine("EtUC");
-                            //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                            if (makeTimeGraph)
-                                timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                            //sendRequestToServer("outcome", "NOK");
-                            Pop();
-                            break; // done (error found)
-                        }*/
-                        ucore = null;
-                        if (outcome == Outcome.Correct)
-                        {
-                            ucore = prover.UnsatCore();
-                            if (ucore != null)
-                                Debug.WriteLine("UCORE COUNT : " + ucore.Count);
-                        }
-                        Pop();
-                        if (ucore != null && ucore.Count != 0)
-                        {
-                            foreach (StratifiedCallSite cs in attachedVC.Keys)
-                            {
-                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
-                                {
-                                    if (!CallSitesInUCore.Contains(cs))
-                                        CallSitesInUCore.Add(cs);
-                                    if (!candidates.Contains(cs))
-                                        candidates.Add(cs);
-                                }
-                            }
-                        }
-                        //Console.WriteLine(ucore.Count + " " + candidates.Count);
-                        //Console.ReadLine();
-                        numAggressiveSplitQueries++;
-                        if (candidates.Count == 0 || numAggressiveSplitQueries >= aggressiveSplitQueryBound)
-                            break;
-                    }
-                    if (candidates.Count != 0 && splitFlag == 1)
-                    {
-                        foreach (StratifiedCallSite cs in candidates)
-                        {
-                            if (UCoreChildrenCount.ContainsKey(cs))
-                            {
-                                UCoreChildrenCount[cs] = UCoreChildrenCount[cs] + 1;
-                            }
-                            else
-                            {
-                                UCoreChildrenCount.Add(cs, 1);
-                            }
-                            StratifiedCallSite parentOfCs = cs;
-                            while (parent.ContainsKey(parentOfCs))
-                            {
-                                parentOfCs = parent[parentOfCs];
-                                if (UCoreChildrenCount.ContainsKey(parentOfCs))
-                                {
-                                    UCoreChildrenCount[parentOfCs] = UCoreChildrenCount[parentOfCs] + 1;
-                                }
-                                else
-                                {
-                                    UCoreChildrenCount.Add(parentOfCs, 1);
-                                }
-                            }
-                        }
-                    }
-                    //Console.WriteLine("EXITED LOOP");
-                    //Console.ReadLine();
-                    foreach (StratifiedCallSite cs in candidates)
-                    {
-                        Debug.WriteLine(GetPersistentID(cs) + " " + attachedVC.ContainsKey(cs));
-                    }
-                    //Console.ReadLine();
-                    while (candidates.Count != 0)
-                    {
-                        var toRemove = new HashSet<StratifiedVC>();
-                        var sizes = di.ComputeSubtrees();
-                        var disj = di.ComputeNumDisjoint();
-                        var st = DateTime.Now;
-                        //TODO: sort candidates by their score
-                        StratifiedVC maxVc = null;
-                        StratifiedCallSite maxNonInlinedCallsite = null;
-                        double maxVcScore = 0;
-                        double maxNonInlinedCallsiteScore = 0;
-                        //Console.WriteLine("HERE1");
-                        //Console.ReadLine();
-                        foreach (var vc in attachedVCInv.Keys)
-                        {
-                            if (!di.VcExists(vc))
-                            {
-                                toRemove.Add(vc);
-                                continue;
-                            }
-                            double score = 0;
-                            StratifiedCallSite cs = attachedVCInv[vc];
-                            //Console.WriteLine("HERE2");
-                            //Console.ReadLine();
-                            if (UCoreChildrenCount.ContainsKey(cs))
-                            {
-                                score = UCoreChildrenCount[cs];
-                            }
-                            if (candidates.Contains(cs) && !previousSplitSites.Contains(GetPersistentID(cs)) && score >= maxVcScore)
-                            {
-                                maxVc = vc;
-                                maxVcScore = score;
-                            }
-                        }
-                        foreach (StratifiedCallSite cs in openCallSites)
-                        {
-                            double score = 0;
-                            if (UCoreChildrenCount.ContainsKey(cs))
-                            {
-                                score = UCoreChildrenCount[cs];
-                            }
-                            if (candidates.Contains(cs) && !previousSplitSites.Contains(GetPersistentID(cs)) && score >= maxNonInlinedCallsiteScore)
-                            {
-                                maxNonInlinedCallsite = cs;
-                                maxNonInlinedCallsiteScore = score;
-                            }
-                        }
-                        if (maxNonInlinedCallsiteScore > maxVcScore)
-                        {
-                            //Console.WriteLine("SPLITTING ON NON-INLINED CALLSITE");
-                            //Console.ReadLine();
-                            StratifiedCallSite scs = maxNonInlinedCallsite;
-                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
-                            openCallSites.Remove(scs);
-                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                            if (svc != null)
-                            {
-                                openCallSites.UnionWith(svc.CallSites);
-                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                            }
-                            maxVc = attachedVC[scs];
-                        }
-                        //Console.WriteLine("HERE3");
-                        //Console.ReadLine();
-                        if (maxVc != null)
-                        {
-                            StratifiedCallSite cs = attachedVCInv[maxVc];
-                            //StratifiedVC maxVc = vc;
-                            //Console.WriteLine("IN SPLIT : " + GetPersistentID(cs) + " " + candidates.Contains(cs) + " " + previousSplitSites.Count);
-                            //if (candidates.Contains(cs))
-                            {
-                                candidates.Remove(cs);
-                                //if (!previousSplitSites.Contains(GetPersistentID(cs)))
-                                {
-                                    toRemove.Iter(vc2 => attachedVCInv.Remove(vc2));
-                                    UCsplit += 1;
-                                    StratifiedCallSite scs = attachedVCInv[maxVc];
-                                    previousSplitSites.Add(GetPersistentID(scs));
-                                    Debug.Assert(!openCallSites.Contains(scs));
-                                    numSplits = numSplits + 1;
-                                    var desc = sizes[maxVc];
-                                    var cnt = 0;
-                                    openCallSites.Iter(cs2 => cnt += desc.Contains(containingVC(cs2)) ? 1 : 0);
-                                    // Push & Block
-                                    //var tgNode = string.Format("{0},{1}", scs.callSite.calleeName, maxVcScore);
-                                    //timeGraph.AddEdge(tgNode, decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                                    if (makeTimeGraph)
-                                    {
-                                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                                        parentNodeInTimegraph = childNodeInTimegraph;
-                                        childNodeInTimegraph = timeGraph.Count() + 1;
-                                        if (!timeGraph.Nodes.ContainsKey(parentNodeInTimegraph))
-                                            timeGraph.Nodes.Add(parentNodeInTimegraph, "");
-                                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
-                                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
-                                        Tuple<int, int> saveStateTimegraph = new Tuple<int, int>(parentNodeInTimegraph, childNodeInTimegraph);
-                                        if (writeLog)
-                                            Console.WriteLine("SaveState " + parentNodeInTimegraph + " " + childNodeInTimegraph);
-                                        emulateServerStack.Push(saveStateTimegraph);
-                                        childNodeInTimegraph = childNodeInTimegraph + 1;
-                                        if (!timeGraph.Nodes.ContainsKey(childNodeInTimegraph))
-                                            timeGraph.Nodes.Add(childNodeInTimegraph, "");
-                                        timeGraph.startTime = DateTime.Now;
-                                    }
-                                    Push();
-                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    //prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    //decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                                    //applyDecisionToDI(DecisionType.BLOCK, maxVc);
-
-                                    //if (writeLog)
-                                    //Console.WriteLine("splitting on : " + GetPersistentID(scs));
-                                    if (writeLog)
-                                        Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
-                                    lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
-                                    replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
-                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                                    //prover.Assert(scs.callSiteExpr, true);
-                                    treesize = di.ComputeSize();
-                                    tt += (DateTime.Now - st);
-                                    if (writeLog)
-                                        Console.WriteLine(replyFromServer);
-                                    if (pauseForDebug)
-                                        Console.ReadLine();
-                                    calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";
-                                    numSplitThisIteration++;
-                                }
-                            }
-                        }
-                        if (numSplitThisIteration == maxSplitPerIteration || maxVc == null)
-                            break;
+                        int newSetting;
+                        if (splitMode == 100)
+                            newSetting = 0;
+                        else
+                            newSetting = 100;
+                        replyFromServer = sendRequestToServer("NewPartitionId", " ");
+                        long ORId = Int64.Parse(replyFromServer);
+                        Console.WriteLine("splitID : " + currentId + " " + ORId);
+                        replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId + 
+                                          ";OR;" + calltreeToSend);
+                        Console.WriteLine("OR Split Check : " + numSplits + " 100");
+                        numSplits = 0;
                     }
                 }
-                
                 numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
@@ -1836,6 +1602,7 @@ namespace CoreLib
                     //sendRequestToServer("outcome", "NOK");
                     break; // done (error found)
                 }
+                
                 if (writeLog)
                     Console.WriteLine("point 1");
                 if (outcome == Outcome.Correct)
@@ -1849,77 +1616,129 @@ namespace CoreLib
                     Console.WriteLine("point 3");
                 //Push();
                 //var softAssumptions = new List<VCExpr>();
-                foreach (StratifiedCallSite cs in openCallSites)
+                bool isDone = false;
+                int chooseMode = random.Next(0, 100);
+                
+                if (chooseMode > splitMode)
                 {
-                    // Stop if we've reached the recursion bound or
-                    // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    int numUWInlinings = 0;
+                    if (ucore != null)
                     {
-                        prover.Assert(cs.callSiteExpr, false);
-                        reachedBound = true;
-                    }
-                    //if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
-                    //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
-                }
-                if (writeLog)
-                    Console.WriteLine("point 4");
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                reporter.reportTrace = false;
-                DateTime oqStartTime = DateTime.Now;
-                outcome = CheckVC(reporter);
-                Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
-                Debug.WriteLine(outcome.ToString());
-                //Pop();
-                if (outcome != Outcome.Correct && outcome != Outcome.Errors)
-                {
-                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    //sendRequestToServer("outcome", "OK");
-                    //timeGraph.AddEdgeDone("split");
-                    if (makeTimeGraph)
-                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                    break; // done (T/O)
-                }
-
-                /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
-                {
-                    timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    break; // done (error found)
-                }*/                
-
-                if (outcome == Outcome.Errors)
-                {
-                    foreach (var scs in reporter.callSitesToExpand)
-                    {                         
-                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
-                        openCallSites.Remove(scs);
-                        StratifiedVC svc = null;
-                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-                            svc = Expand(scs);
-                        else
-                            svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                        if (svc != null)
+                        if (ucore.Count != 0)
                         {
-                            openCallSites.UnionWith(svc.CallSites);
-                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                        }
-                    }
-                    if (ucore != null || ucore.Count != 0)
-                    {
-
-                        foreach (StratifiedCallSite cs in attachedVC.Keys)
-                        {
-                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                            HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
+                            foreach (StratifiedCallSite scs in openCallSites2)
                             {
-                                CallSitesInUCore.Add(cs);
+                                if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                                {
+                                    numUWInlinings++;
+                                    calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                                    openCallSites.Remove(scs);
+                                    StratifiedVC svc = null;
+                                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                        svc = Expand(scs);
+                                    else
+                                        svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                    if (svc != null)
+                                    {
+                                        openCallSites.UnionWith(svc.CallSites);
+                                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                    }
+                                }
+                            }
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
                             }
                         }
                     }
-
+                    if (numUWInlinings == 0)
+                        isDone = true;
+                    Console.WriteLine("UWInlinings : " + numUWInlinings);
                 }
                 else
+                {
+                    foreach (StratifiedCallSite cs in openCallSites)
+                    {
+                        // Stop if we've reached the recursion bound or
+                        // the stack-depth bound (if there is one)
+                        if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                            (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                            StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false);
+                            reachedBound = true;
+                        }
+                        //if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                        //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
+                    }
+                    if (writeLog)
+                        Console.WriteLine("point 4");
+                    reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    reporter.reportTrace = false;
+                    DateTime oqStartTime = DateTime.Now;
+                    outcome = CheckVC(reporter);
+                    Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
+                    Debug.WriteLine(outcome.ToString());
+                    //Pop();
+                    if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                    {
+                        //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        //sendRequestToServer("outcome", "OK");
+                        //timeGraph.AddEdgeDone("split");
+                        if (makeTimeGraph)
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        break; // done (T/O)
+                    }
+
+                    /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                    {
+                        timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        break; // done (error found)
+                    }*/
+
+                    if (outcome == Outcome.Errors)
+                    {
+                        int numORInlinings = 0;
+                        foreach (var scs in reporter.callSitesToExpand)
+                        {
+                            numORInlinings++;
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+
+                            openCallSites.Remove(scs);
+                            StratifiedVC svc = null;
+                            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                svc = Expand(scs);
+                            else
+                                svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null)
+                            {
+                                openCallSites.UnionWith(svc.CallSites);
+                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                            }
+                        }
+                        Console.WriteLine("ORInlinings : " + numORInlinings);
+                        if (ucore != null || ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+
+                    }
+                    else
+                        isDone = true;
+                }
+                if (isDone)
                 {
                     if (learnProofs)
                     {
@@ -1956,9 +1775,11 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
-                    if (replyFromServer.Equals("YES"))
+                    if (!replyFromServer.Equals("NO"))
                     //if (false)
                     {
+                        Console.WriteLine(replyFromServer);
+                        currentId = Int64.Parse(replyFromServer);
                         //calltreeToSend = lastCalltreeSent;
                         Decision topDecision = null;
                         SiState topState = SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend);
@@ -3072,7 +2893,11 @@ namespace CoreLib
             if (writeLog)
                 Console.WriteLine("Reply : " + replyFromServer);
             if (replyFromServer.Equals("YES"))
+            {
                 startFirstJob = true;
+                splitMode = 100;
+                currentId = 0;
+            }
             /*else
             {
                 startFirstJob = false;
@@ -3169,7 +2994,12 @@ namespace CoreLib
                     }*/
                     //else
                     {
-                        receivedCalltree = replyFromServer;
+                        string[] parse = replyFromServer.Split(';');
+                        Console.WriteLine("Received ORSplit Mode : " + parse[0]);
+                        splitMode = Int16.Parse(parse[0]);
+                        Console.WriteLine("Received ORSplit Mode : " + splitMode);
+                        currentId = Int64.Parse(parse[2]);
+                        receivedCalltree = parse[4];
                         if (writeLog)
                             Console.WriteLine("Received Calltree:");
                         if (writeLog)

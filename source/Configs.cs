@@ -564,6 +564,10 @@ namespace cba
             {
                 runFullHydra = true;
             }
+            else if (flag.StartsWith("/runPortfolio"))
+            {
+                cba.Util.HydraConfig.runPortfolio = true;
+            }
             else if (flag.StartsWith("/maxSplitPerIteration:"))
             {
                 var split = flag.Split(sep);
