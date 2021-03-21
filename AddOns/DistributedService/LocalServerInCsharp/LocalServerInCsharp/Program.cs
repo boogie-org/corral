@@ -17,6 +17,7 @@ namespace LocalServerInCsharp
         public string nodeType;
         public int clientId;
         public List<long> children;
+        public string status;
 
         public splitNode(long parentId, string type)
         {
@@ -24,6 +25,7 @@ namespace LocalServerInCsharp
             nodeType = type;
             clientId = -1;
             children = new List<long>();
+            status = "PENDING";
         }
     }
 
@@ -85,6 +87,7 @@ namespace LocalServerInCsharp
         public static double boogieDumpTime = 0;
         public static DateTime boogieDumpStart;
         public static Dictionary<long, splitNode> tree;
+        public static List<int> clientsToKill;
         public static long partitionId = 0;
         static void Main(string[] args)
         {
@@ -139,6 +142,7 @@ namespace LocalServerInCsharp
             clientNumBackwardPops = new double[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
             tree = new Dictionary<long, splitNode>();
+            clientsToKill = new List<int>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             
@@ -288,6 +292,10 @@ namespace LocalServerInCsharp
                         addResetTime(context, msgContent["ResetTime"]);
                     else if (msgContent.ContainsKey("NewPartitionId"))
                         createPartitionId(context);
+                    else if (msgContent.ContainsKey("FINISHED"))
+                        killRedundantClients(context, msgContent["FINISHED"]);
+                    else if (msgContent.ContainsKey("KillThisClient"))
+                        handleKillingClients(context, msgContent["KillThisClient"]);
                     else if (msgContent.ContainsKey("SplitNow"))
                     {
                         if (clientRequestQueue.Count > 0)
@@ -381,6 +389,8 @@ namespace LocalServerInCsharp
                             string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
                             string[] parse = calltreeToSend.Split(';');
                             long partitionId = Int64.Parse(parse[2]);
+                            Console.WriteLine("Assign partition " + partitionId + " from client " + clientIDOfLargestQueue + " to " + t.Item1);
+                            showTree("Assigning partition");
                             tree[partitionId].clientId = t.Item1;
                             if (writeLog)
                             {
@@ -609,7 +619,8 @@ namespace LocalServerInCsharp
             askForResetTime = false;
             numClientsResetTimeSent = 0;
             clientCalltreeQueue = new Deque<string>[maxClients];
-            tree.Clear();            
+            tree.Clear();
+            clientsToKill.Clear();
             splitRate = 0;
             boogieDumpTime = 0;
             Array.Clear(clientCommunicationTime, 0, maxClients);
@@ -743,7 +754,7 @@ namespace LocalServerInCsharp
             int clientIDOfLargestQueue = -1;
             for (int i = 0; i < clientCalltreeQueue.Length; i++)
             {
-                if (clientCalltreeQueue[i].Count > maxQueueSize)
+                if (clientCalltreeQueue[i].Count > maxQueueSize && !clientsToKill.Contains(i))
                 {
                     maxQueueSize = clientCalltreeQueue[i].Count;
                     clientIDOfLargestQueue = i;
@@ -822,6 +833,118 @@ namespace LocalServerInCsharp
                 handleClientCrash();
         }        
 
+        static void killRedundantClients(HttpListenerContext context, string msg)
+        {
+            long finishedPartition = Int64.Parse(msg);
+            showTree("Received finished partition : " + finishedPartition);
+            if (!tree.ContainsKey(finishedPartition))
+            {
+                Console.WriteLine("Cannot find finished partition in tree : " + finishedPartition);
+            }
+            else
+            {
+                handleOK(finishedPartition);
+            }
+            showTree("After removing finished partition : " + finishedPartition);
+            string reply = "continue";
+            bool err = ResponseHttp(context, reply);
+            if (err)
+                handleClientCrash();
+        }
+
+        static void showTree(string location)
+        {
+            Console.WriteLine("\nShowing tree at" + location + "\n");
+            foreach (long k in tree.Keys)
+            {
+                Console.Write(k + ": ");
+                foreach (long c in tree[k].children)
+                    Console.Write(tree[c].nodeType + ":" + c + " ");
+                Console.WriteLine("");
+            }
+            Console.WriteLine("Ending tree display\n");
+        }
+
+        static void handleOK(long id)
+        {
+            long parent = tree[id].parent;
+            if (tree[id].nodeType.Equals("OR"))
+            {
+                tree.Remove(id);
+                Console.WriteLine("\nLOCATION - " + parent + ": " + id);
+                tree[parent].children.Remove(id);
+                if (tree[parent].children.Count > 0)
+                {
+                    foreach (long c in tree[parent].children)
+                    {
+                        killSubTree(c);
+                        tree.Remove(c);
+                    }
+                }
+                tree[parent].children.Clear();
+            }
+            else if (tree[id].nodeType.Equals("AND"))
+            {
+                tree.Remove(id);
+                tree[parent].children.Remove(id);
+            }
+
+            if (parent != -1)
+            {
+                if (tree[parent].children.Count == 0)
+                    handleOK(parent);
+            }
+            else
+            {
+                Console.WriteLine("Reached root of partition tree. Verfification Finished.");
+                finalOutcome = "OK";
+                totalTime = (DateTime.Now - startTime).TotalSeconds;
+                setKillFlag = true;
+            }
+        }
+
+        static void killSubTree(long id)
+        {
+            if (tree[id].clientId != -1)
+                clientsToKill.Add(tree[id].clientId);
+
+            if (tree[id].children.Count > 0)
+            {
+                foreach (long c in tree[id].children)
+                    killSubTree(c);
+            }
+            tree.Remove(id);
+        }
+
+        static void handleKillingClients(HttpListenerContext context, string msg)
+        {
+            int clientId = Int16.Parse(msg) - 1;
+            string reply = null;
+
+            if (clientsToKill.Contains(clientId))
+            {
+                reply = "YES";
+                clientsToKill.Remove(clientId);
+                while (clientCalltreeQueue[clientId].Count != 0)
+                {
+                    string calltree = clientCalltreeQueue[clientId].PopLeft();
+                    string[] parse = calltree.Split(';');
+                    long id = Int64.Parse(parse[2]);
+                    if (tree.ContainsKey(id))
+                    {
+                        long parent = tree[id].parent;
+                        tree[parent].children.Remove(id);
+                        tree.Remove(id);
+                    }
+                }
+            }
+            else
+                reply = "NO";
+            bool err = ResponseHttp(context, reply);
+            if (err)
+                handleClientCrash();
+        }
+
         static void replyStartOrWaitForCalltree(HttpListenerContext context)
         {
             string reply;
@@ -879,10 +1002,12 @@ namespace LocalServerInCsharp
                 long mustReachId = Int64.Parse(parse[2]);
                 long blockId = Int64.Parse(parse[2]) - 1;
                 string partitionType = parse[3];
-                splitNode node = new splitNode(parentId, partitionType);
-                tree.Add(blockId, node);
+                splitNode blockNode = new splitNode(parentId, partitionType);
+                splitNode mustReachNode = new splitNode(parentId, partitionType);
+                tree.Add(blockId, blockNode);
                 tree[blockId].clientId = clientID - 1;
-                tree.Add(mustReachId, node);
+                tree.Add(mustReachId, mustReachNode);
+                Console.WriteLine("Added Nodes: " + blockId + " " + mustReachId);
                 if (!tree.ContainsKey(parentId))
                 {
                     Console.WriteLine("Key not found for parentID : " + parentId);
@@ -895,9 +1020,14 @@ namespace LocalServerInCsharp
             {
                 long parentId = Int64.Parse(parse[1]);
                 long ORId = Int64.Parse(parse[2]);
+                long dummySplitID = Int64.Parse(parse[2]) - 1;
                 string partitionType = parse[3];
-                splitNode node = new splitNode(parentId, partitionType);
-                tree.Add(ORId, node);
+                splitNode dummyNode = new splitNode(parentId, partitionType);
+                splitNode ORNode = new splitNode(parentId, partitionType);
+                tree.Add(dummySplitID, dummyNode);
+                tree[dummySplitID].clientId = clientID - 1;
+                tree.Add(ORId, ORNode);
+                Console.WriteLine("Added Nodes: " + dummySplitID + " " + ORId);
                 if (!tree.ContainsKey(parentId))
                 {
                     Console.WriteLine("Key not found for parentID : " + parentId);

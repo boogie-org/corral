@@ -1347,6 +1347,12 @@ namespace CoreLib
 
             while (true)
             {
+                replyFromServer = sendRequestToServer("KillThisClient", clientID.ToString());
+                if (replyFromServer.Equals("YES"))
+                {
+                    outcome = Outcome.Correct;
+                    return outcome;
+                }
                 //Pre-inline proofSites
                 if (learnProofs)
                 {
@@ -1548,11 +1554,13 @@ namespace CoreLib
                         else
                             newSetting = 100;
                         replyFromServer = sendRequestToServer("NewPartitionId", " ");
-                        long ORId = Int64.Parse(replyFromServer);
-                        Console.WriteLine("splitID : " + currentId + " " + ORId);
+                        long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                        long ORId = dummyId + 1;
+                        Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
                         replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId + 
                                           ";OR;" + calltreeToSend);
-                        Console.WriteLine("OR Split Check : " + numSplits + " 100");
+                        currentId = dummyId;
+                        //Console.WriteLine("OR Split Check : " + numSplits + " 100");
                         numSplits = 0;
                     }
                 }
@@ -1658,7 +1666,7 @@ namespace CoreLib
                     }
                     if (numUWInlinings == 0)
                         isDone = true;
-                    Console.WriteLine("UWInlinings : " + numUWInlinings);
+                    //Console.WriteLine("UWInlinings : " + numUWInlinings);
                 }
                 else
                 {
@@ -1721,7 +1729,7 @@ namespace CoreLib
                                 Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                             }
                         }
-                        Console.WriteLine("ORInlinings : " + numORInlinings);
+                        //Console.WriteLine("ORInlinings : " + numORInlinings);
                         if (ucore != null || ucore.Count != 0)
                         {
 
@@ -1740,6 +1748,7 @@ namespace CoreLib
                 }
                 if (isDone)
                 {
+                    replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
                     if (learnProofs)
                     {
                         if (outcome == Outcome.Correct)
@@ -1869,7 +1878,7 @@ namespace CoreLib
             //    sendRequestToServer("outcome", "ReachedBound");
             //else if (outcome == Outcome.Correct)
             //    sendRequestToServer("outcome", "OK");
-
+            //replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
             if (outcome == Outcome.Correct && reachedBound) return Outcome.ReachedBound;
             //Console.ReadLine();
             return outcome;
@@ -2959,6 +2968,7 @@ namespace CoreLib
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
                         sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
                             communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
+                        Console.ReadLine();
                     }
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
@@ -2995,9 +3005,9 @@ namespace CoreLib
                     //else
                     {
                         string[] parse = replyFromServer.Split(';');
-                        Console.WriteLine("Received ORSplit Mode : " + parse[0]);
+                        //Console.WriteLine("Received ORSplit Mode : " + parse[0]);
                         splitMode = Int16.Parse(parse[0]);
-                        Console.WriteLine("Received ORSplit Mode : " + splitMode);
+                        //Console.WriteLine("Received ORSplit Mode : " + splitMode);
                         currentId = Int64.Parse(parse[2]);
                         receivedCalltree = parse[4];
                         if (writeLog)
