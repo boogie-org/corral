@@ -1033,6 +1033,7 @@ namespace LocalServerInCsharp
                     Console.WriteLine("Key not found for parentID : " + parentId);
                     Console.ReadLine();
                 }
+                tree[parentId].children.Add(dummySplitID);
                 tree[parentId].children.Add(ORId);
             }
             clientCalltreeQueue[clientID-1].PushLeft(calltree);
