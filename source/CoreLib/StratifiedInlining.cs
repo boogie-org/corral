@@ -1256,6 +1256,7 @@ namespace CoreLib
         {
             if (replyFromServer.Equals("KillNow"))
             {
+                replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
                 return true;
             }
             return false;
