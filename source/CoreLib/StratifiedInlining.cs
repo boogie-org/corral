@@ -233,6 +233,7 @@ namespace CoreLib
         public double nextSplitInterval = 0;
         public int splitMode;
         public long currentId;
+        public bool killCurrentPartition;
         public Random random;
         //public Config configuration;
         /* Forced inline procs */
@@ -358,6 +359,7 @@ namespace CoreLib
             proofSites = new HashSet<string>();
             splitMode = 100;
             currentId = 0;
+            killCurrentPartition = false;
             random = new Random();
         }
 
@@ -1240,12 +1242,23 @@ namespace CoreLib
                 }
                 if (splitOnDemand)
                 {
-                    string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                    string reply = sendRequestToServer("SplitNow", clientID.ToString());
+                    if (killThisClient(reply))
+                        killCurrentPartition = true;
                     if (reply.Equals("NO"))
                         splitFlag = 0;
                 }
             }
             return splitFlag;
+        }
+
+        bool killThisClient(string replyFromServer)
+        {
+            if (replyFromServer.Equals("KillNow"))
+            {
+                return true;
+            }
+            return false;
         }
 
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
@@ -1280,6 +1293,7 @@ namespace CoreLib
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
+            killCurrentPartition = false;
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1348,11 +1362,8 @@ namespace CoreLib
             while (true)
             {
                 replyFromServer = sendRequestToServer("KillThisClient", clientID.ToString());
-                if (replyFromServer.Equals("YES"))
-                {
-                    outcome = Outcome.Correct;
-                    return outcome;
-                }
+                if (killThisClient(replyFromServer))
+                    return Outcome.Correct;
                 //Pre-inline proofSites
                 if (learnProofs)
                 {
@@ -1384,6 +1395,8 @@ namespace CoreLib
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
+                    if (killCurrentPartition)
+                        return Outcome.Correct;
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
                     {
                         foreach (StratifiedCallSite cs in CallSitesInUCore)
@@ -1522,7 +1535,9 @@ namespace CoreLib
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
-                            replyFromServer = sendRequestToServer("NewPartitionId", " ");
+                            replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
+                            if (killThisClient(replyFromServer))
+                                return Outcome.Correct;
                             long blockId = Int64.Parse(replyFromServer);
                             long mustReachId = blockId + 1;
                             Console.WriteLine("splitID : " + currentId + " " + mustReachId);
@@ -1553,7 +1568,9 @@ namespace CoreLib
                             newSetting = 0;
                         else
                             newSetting = 100;
-                        replyFromServer = sendRequestToServer("NewPartitionId", " ");
+                        replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
+                        if (killThisClient(replyFromServer))
+                            return Outcome.Correct;
                         long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
                         long ORId = dummyId + 1;
                         Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
@@ -1784,6 +1801,8 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
+                    if (killThisClient(replyFromServer))
+                        return Outcome.Correct;
                     if (!replyFromServer.Equals("NO"))
                     //if (false)
                     {

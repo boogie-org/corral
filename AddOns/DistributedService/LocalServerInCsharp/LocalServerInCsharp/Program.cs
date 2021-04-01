@@ -291,14 +291,19 @@ namespace LocalServerInCsharp
                     else if (msgContent.ContainsKey("ResetTime"))
                         addResetTime(context, msgContent["ResetTime"]);
                     else if (msgContent.ContainsKey("NewPartitionId"))
-                        createPartitionId(context);
+                        createPartitionId(context, msgContent["NewPartitionId"]);
                     else if (msgContent.ContainsKey("FINISHED"))
                         killRedundantClients(context, msgContent["FINISHED"]);
                     else if (msgContent.ContainsKey("KillThisClient"))
                         handleKillingClients(context, msgContent["KillThisClient"]);
                     else if (msgContent.ContainsKey("SplitNow"))
                     {
-                        if (clientRequestQueue.Count > 0)
+                        int clientID = Int16.Parse(msgContent["SplitNow"]) - 1;
+                        if (clientsToKill.Contains(clientID))
+                        {
+                            handleKillingClients(context, msgContent["SplitNow"]);
+                        }
+                        else if (clientRequestQueue.Count > 0)
                         {
                             //Console.WriteLine("Count : " + clientRequestQueue.Count);
                             ResponseHttp(context, "YES");
@@ -390,6 +395,8 @@ namespace LocalServerInCsharp
                             string[] parse = calltreeToSend.Split(';');
                             long partitionId = Int64.Parse(parse[2]);
                             Console.WriteLine("Assign partition " + partitionId + " from client " + clientIDOfLargestQueue + " to " + t.Item1);
+                            if (clientsToKill.Contains(t.Item1))
+                                clientsToKill.Remove(t.Item1);
                             showTree("Assigning partition");
                             tree[partitionId].clientId = t.Item1;
                             if (writeLog)
@@ -661,7 +668,7 @@ namespace LocalServerInCsharp
                     workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('\\') + 1);
                     workingFileName = workingFile.Substring(workingFile.LastIndexOf('\\') + 1);
                 }
-                //Console.WriteLine(workingFilePath);
+                Console.WriteLine("working on " + workingFileName);
                 //Console.ReadLine();
                 string inputFileExtension = workingFile.Substring(workingFile.Length - 3);
                 if (!(inputFileExtension.ToLower() == "bpl")) //Invoke SMACK to convert given C program to Boogie
@@ -824,13 +831,20 @@ namespace LocalServerInCsharp
                 handleClientCrash();
         }
 
-        static void createPartitionId(HttpListenerContext context)
+        static void createPartitionId(HttpListenerContext context, string msg)
         {
-            partitionId = partitionId + 5;  //Assume that 5 partition ids are allocated. Client decides what to do with redundant ids. 
-            string reply = partitionId.ToString();
-            bool err = ResponseHttp(context, reply);
-            if (err)
-                handleClientCrash();
+            if (clientsToKill.Contains(Int16.Parse(msg) - 1))
+            {
+                handleKillingClients(context, msg);
+            }
+            else
+            {
+                partitionId = partitionId + 5;  //Assume that 5 partition ids are allocated. Client decides what to do with redundant ids. 
+                string reply = partitionId.ToString();
+                bool err = ResponseHttp(context, reply);
+                if (err)
+                    handleClientCrash();
+            }
         }        
 
         static void killRedundantClients(HttpListenerContext context, string msg)
@@ -923,7 +937,7 @@ namespace LocalServerInCsharp
 
             if (clientsToKill.Contains(clientId))
             {
-                reply = "YES";
+                reply = "KillNow";
                 clientsToKill.Remove(clientId);
                 while (clientCalltreeQueue[clientId].Count != 0)
                 {
@@ -1059,56 +1073,63 @@ namespace LocalServerInCsharp
         {
             //string reply;
             int clientID = Int16.Parse(idNumber);
-            string callTree;
-            if (writeLog)
-                Console.WriteLine("pop request from client {0}", clientID-1);
-            if (writeLog)
-                Console.WriteLine("Stack Count : " + callTreeStack.Count);
-            bool discard = true;    //Discard OR partitions
-            while (discard)
+            if(clientsToKill.Contains(clientID - 1))
             {
-                if (clientCalltreeQueue[clientID - 1].Count != 0)
+                handleKillingClients(context, idNumber);
+            }
+            else
+            {
+                string callTree;
+                if (writeLog)
+                    Console.WriteLine("pop request from client {0}", clientID - 1);
+                if (writeLog)
+                    Console.WriteLine("Stack Count : " + callTreeStack.Count);
+                bool discard = true;    //Discard OR partitions
+                while (discard)
                 {
-                    callTree = clientCalltreeQueue[clientID - 1].PopLeft();
-                    string[] parse = callTree.Split(';');
-                    if (parse[3].Equals("AND"))
+                    if (clientCalltreeQueue[clientID - 1].Count != 0)
                     {
-                        string reply = parse[2].ToString();
-                        if (writeLog)
-                            Console.WriteLine("Count of {0} is {1}", clientID - 1, clientCalltreeQueue[clientID - 1].Count);
-                        //Console.ReadLine();
+                        callTree = clientCalltreeQueue[clientID - 1].PopLeft();
+                        string[] parse = callTree.Split(';');
+                        if (parse[3].Equals("AND"))
+                        {
+                            string reply = parse[2].ToString();
+                            if (writeLog)
+                                Console.WriteLine("Count of {0} is {1}", clientID - 1, clientCalltreeQueue[clientID - 1].Count);
+                            //Console.ReadLine();
+                            ResponseHttp(context, reply);
+                            clientNumForwardPops[clientID - 1]++;
+                            discard = false;
+                        }
+                    }
+                    else
+                    {
+                        string reply = "NO";
                         ResponseHttp(context, reply);
-                        clientNumForwardPops[clientID - 1]++;
+                        //clientNumReset[clientID - 1]++;
                         discard = false;
                     }
+                }
+                /*if (clientCalltreeQueue[clientID-1].Count != 0)
+                {
+                    //Console.WriteLine("Reply Pop to client " + clientID);
+                    string reply = "YES";
+                    clientCalltreeQueue[clientID - 1].PopLeft();
+                    if (writeLog)
+                        Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
+                    //Console.ReadLine();
+                    ResponseHttp(context, reply);
+                    clientNumForwardPops[clientID - 1]++;
                 }
                 else
                 {
                     string reply = "NO";
                     ResponseHttp(context, reply);
                     //clientNumReset[clientID - 1]++;
-                    discard = false;
-                }
+                }*/
+                //if (writeLog)
+                //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
             }
-            /*if (clientCalltreeQueue[clientID-1].Count != 0)
-            {
-                //Console.WriteLine("Reply Pop to client " + clientID);
-                string reply = "YES";
-                clientCalltreeQueue[clientID - 1].PopLeft();
-                if (writeLog)
-                    Console.WriteLine("Count of {0} is {1}", clientID-1, clientCalltreeQueue[clientID-1].Count);
-                //Console.ReadLine();
-                ResponseHttp(context, reply);
-                clientNumForwardPops[clientID - 1]++;
-            }
-            else
-            {
-                string reply = "NO";
-                ResponseHttp(context, reply);
-                //clientNumReset[clientID - 1]++;
-            }*/                
-            //if (writeLog)
-            //    Console.WriteLine("Enqueue " + clientRequestQueue.Count);
         }
 
         static void sendCalltree(HttpListenerContext context, string idNumber)
