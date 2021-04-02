@@ -48,6 +48,7 @@ namespace LocalServerInCsharp
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
+        public static bool showTreeLog = false;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
@@ -397,7 +398,8 @@ namespace LocalServerInCsharp
                             Console.WriteLine("Assign partition " + partitionId + " from client " + clientIDOfLargestQueue + " to " + t.Item1);
                             if (clientsToKill.Contains(t.Item1))
                                 clientsToKill.Remove(t.Item1);
-                            showTree("Assigning partition");
+                            if (showTreeLog)
+                                showTree("Assigning partition");
                             tree[partitionId].clientId = t.Item1;
                             if (writeLog)
                             {
@@ -850,7 +852,8 @@ namespace LocalServerInCsharp
         static void killRedundantClients(HttpListenerContext context, string msg)
         {
             long finishedPartition = Int64.Parse(msg);
-            showTree("Received finished partition : " + finishedPartition);
+            if (showTreeLog)
+                showTree("Received finished partition : " + finishedPartition);
             if (!tree.ContainsKey(finishedPartition))
             {
                 Console.WriteLine("Cannot find finished partition in tree : " + finishedPartition);
@@ -859,7 +862,8 @@ namespace LocalServerInCsharp
             {
                 handleOK(finishedPartition);
             }
-            showTree("After removing finished partition : " + finishedPartition);
+            if (showTreeLog)
+                showTree("After removing finished partition : " + finishedPartition);
             string reply = "continue";
             bool err = ResponseHttp(context, reply);
             if (err)

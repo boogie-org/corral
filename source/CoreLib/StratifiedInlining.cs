@@ -235,6 +235,7 @@ namespace CoreLib
         public long currentId;
         public bool killCurrentPartition;
         public Random random;
+
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -1227,7 +1228,7 @@ namespace CoreLib
             return outcome;
         }
 
-        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand)
+        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, int splitMode, int callsitesInlinedCurrentPartition, int alpha)
         {
             int splitFlag = 0;
             if (CallSitesInUCore.Count != 0)
@@ -1240,13 +1241,36 @@ namespace CoreLib
                         break;
                     }
                 }
+                string reply = sendRequestToServer("SplitNow", clientID.ToString());
+                if (killThisClient(reply, "splitOnDemand"))
+                {
+                    killCurrentPartition = true;
+                    return splitFlag = 0;
+                }
                 if (splitOnDemand)
                 {
-                    string reply = sendRequestToServer("SplitNow", clientID.ToString());
-                    if (killThisClient(reply, "splitOnDemand"))
-                        killCurrentPartition = true;
                     if (reply.Equals("NO"))
                         splitFlag = 0;
+                }
+                else if (splitMode == 0)
+                {
+                    // Added new heuristic for splitting for UW
+                    // split if alpha number of callsites are inlined or if any client is waiting
+                    if (callsitesInlinedCurrentPartition >= alpha)
+                    {
+                        splitFlag = 1;
+                        //Console.WriteLine("splitting due to inlined callsites");
+                    }
+                    else
+                    {
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
+                        else
+                        {
+                            splitFlag = 1;
+                            Console.WriteLine(clientID + " => Spliiting due to client waiting");
+                        }
+                    }
                 }
             }
             return splitFlag;
@@ -1286,6 +1310,7 @@ namespace CoreLib
             string replyFromServer;
             //string calltreeToSend = "";
             numPush = 0;
+            killCurrentPartition = false;
             bool pauseForDebug = false;
             bool writeLog = false;
             bool makeTimeGraph = false;
@@ -1293,9 +1318,11 @@ namespace CoreLib
             bool splitOnDemand = false;
             bool learnProofs = false;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
+            int alpha = cba.Util.HydraConfig.alpha;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
-            killCurrentPartition = false;
+            int callsitesInlinedCurrentPartition = 0;
+
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1396,7 +1423,7 @@ namespace CoreLib
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
-                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
+                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, splitMode, callsitesInlinedCurrentPartition, alpha);
                     if (killCurrentPartition)
                         return Outcome.Correct;
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1496,6 +1523,7 @@ namespace CoreLib
                         if (maxVc != null)
                         {
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
+
                             toRemove.Iter(vc => attachedVCInv.Remove(vc));
                             UCsplit += 1;
                             StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -1534,6 +1562,11 @@ namespace CoreLib
 
                             //if (writeLog)
                             //Console.WriteLine("splitting on : " + GetPersistentID(scs));
+                            Console.WriteLine(clientID + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
+                            if (splitMode == 0 && callsitesInlinedCurrentPartition >= alpha)
+                            {
+                                callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alpha;
+                            }
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
@@ -1683,6 +1716,7 @@ namespace CoreLib
                             }
                         }
                     }
+                    callsitesInlinedCurrentPartition += numUWInlinings;
                     if (numUWInlinings == 0)
                         isDone = true;
                     //Console.WriteLine("UWInlinings : " + numUWInlinings);
@@ -1805,6 +1839,7 @@ namespace CoreLib
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
                     if (killThisClient(replyFromServer, "popFromLocalStack"))
                         return Outcome.Correct;
+                    callsitesInlinedCurrentPartition = 0;
                     if (!replyFromServer.Equals("NO"))
                     //if (false)
                     {
