@@ -866,6 +866,24 @@ namespace LocalServerInCsharp
                 handleClientCrash();
         }
 
+        static void showKillandRequestQueue(string location)
+        {
+            Console.WriteLine("showing at location " + location);
+            Console.Write("REQ Q : ");
+            foreach(var req in clientRequestQueue)
+            {
+                Console.Write(" ,{0}", req.Item1);
+            }
+            Console.WriteLine("");
+            Console.Write("KILL Q : ");
+            foreach (var req in clientsToKill)
+            {
+                Console.Write(" ,{0}", req);
+            }
+            Console.WriteLine("");
+            Console.WriteLine("complete");
+        }
+
         static void showTree(string location)
         {
             Console.WriteLine("\nShowing tree at" + location + "\n");
@@ -874,6 +892,7 @@ namespace LocalServerInCsharp
                 Console.Write(k + ": ");
                 foreach (long c in tree[k].children)
                     Console.Write(tree[c].nodeType + ":" + c + " ");
+                Console.Write(" client => " + tree[k].clientId.ToString());
                 Console.WriteLine("");
             }
             Console.WriteLine("Ending tree display\n");
@@ -919,14 +938,12 @@ namespace LocalServerInCsharp
 
         static void killSubTree(long id)
         {
-            if (tree[id].clientId != -1)
-                clientsToKill.Add(tree[id].clientId);
-
             if (tree[id].children.Count > 0)
             {
                 foreach (long c in tree[id].children)
                     killSubTree(c);
-            }
+            }else if (tree[id].clientId != -1)
+                clientsToKill.Add(tree[id].clientId);
             tree.Remove(id);
         }
 
@@ -1099,8 +1116,10 @@ namespace LocalServerInCsharp
                             //Console.ReadLine();
                             ResponseHttp(context, reply);
                             clientNumForwardPops[clientID - 1]++;
+                            tree[long.Parse(parse[2])].clientId = clientID - 1;
                             discard = false;
                         }
+                        
                     }
                     else
                     {

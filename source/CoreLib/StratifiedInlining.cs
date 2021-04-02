@@ -1243,7 +1243,7 @@ namespace CoreLib
                 if (splitOnDemand)
                 {
                     string reply = sendRequestToServer("SplitNow", clientID.ToString());
-                    if (killThisClient(reply))
+                    if (killThisClient(reply, "splitOnDemand"))
                         killCurrentPartition = true;
                     if (reply.Equals("NO"))
                         splitFlag = 0;
@@ -1252,10 +1252,11 @@ namespace CoreLib
             return splitFlag;
         }
 
-        bool killThisClient(string replyFromServer)
+        bool killThisClient(string replyFromServer, string location)
         {
             if (replyFromServer.Equals("KillNow"))
             {
+                //Console.WriteLine("killing at location " + location + " for client {0}", Int16.Parse(clientID) - 1);
                 replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
                 return true;
             }
@@ -1363,7 +1364,7 @@ namespace CoreLib
             while (true)
             {
                 replyFromServer = sendRequestToServer("KillThisClient", clientID.ToString());
-                if (killThisClient(replyFromServer))
+                if (killThisClient(replyFromServer, "start loop"))
                     return Outcome.Correct;
                 //Pre-inline proofSites
                 if (learnProofs)
@@ -1537,7 +1538,7 @@ namespace CoreLib
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
                             replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
-                            if (killThisClient(replyFromServer))
+                            if (killThisClient(replyFromServer, "newpartition AND"))
                                 return Outcome.Correct;
                             long blockId = Int64.Parse(replyFromServer);
                             long mustReachId = blockId + 1;
@@ -1570,7 +1571,7 @@ namespace CoreLib
                         else
                             newSetting = 100;
                         replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
-                        if (killThisClient(replyFromServer))
+                        if (killThisClient(replyFromServer, "newPartition OR"))
                             return Outcome.Correct;
                         long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
                         long ORId = dummyId + 1;
@@ -1802,7 +1803,7 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
-                    if (killThisClient(replyFromServer))
+                    if (killThisClient(replyFromServer, "popFromLocalStack"))
                         return Outcome.Correct;
                     if (!replyFromServer.Equals("NO"))
                     //if (false)
