@@ -1019,75 +1019,82 @@ namespace LocalServerInCsharp
 
         static void addCalltree(HttpListenerContext context, int clientID, string calltree)
         {
-            double splitInterval = (DateTime.Now - lastSplitArrival).TotalSeconds;
-            //Console.WriteLine(splitInterval);
-            if (splitInterval < smallestSplitInterval)
-                smallestSplitInterval = splitInterval;
-            if (splitInterval > largestSplitInterval)
-                largestSplitInterval = splitInterval;
-            averageSplitInterval = averageSplitInterval + splitInterval;
-            string reply;
-            if (writeLog)
-                Console.WriteLine("client {0} adding calltree", clientID - 1);
-            //callTreeStack.Push(calltree);
-            string[] parse = calltree.Split(';');
-            if (parse[3].Equals("AND"))
+            if (clientsToKill.Contains(clientID - 1))
             {
-                long parentId = Int64.Parse(parse[1]);
-                long mustReachId = Int64.Parse(parse[2]);
-                long blockId = Int64.Parse(parse[2]) - 1;
-                string partitionType = parse[3];
-                splitNode blockNode = new splitNode(parentId, partitionType);
-                splitNode mustReachNode = new splitNode(parentId, partitionType);
-                tree.Add(blockId, blockNode);
-                tree[blockId].clientId = clientID - 1;
-                tree.Add(mustReachId, mustReachNode);
-                Console.WriteLine("Added Nodes: " + blockId + " " + mustReachId);
-                if (!tree.ContainsKey(parentId))
-                {
-                    Console.WriteLine("Key not found for parentID : " + parentId);
-                    Console.ReadLine();
-                }
-                tree[parentId].children.Add(blockId);
-                tree[parentId].children.Add(mustReachId);
+                handleKillingClients(context, clientID.ToString());
             }
             else
             {
-                long parentId = Int64.Parse(parse[1]);
-                long ORId = Int64.Parse(parse[2]);
-                long dummySplitID = Int64.Parse(parse[2]) - 1;
-                string partitionType = parse[3];
-                splitNode dummyNode = new splitNode(parentId, partitionType);
-                splitNode ORNode = new splitNode(parentId, partitionType);
-                tree.Add(dummySplitID, dummyNode);
-                tree[dummySplitID].clientId = clientID - 1;
-                tree.Add(ORId, ORNode);
-                Console.WriteLine("Added Nodes: " + dummySplitID + " " + ORId);
-                if (!tree.ContainsKey(parentId))
+                double splitInterval = (DateTime.Now - lastSplitArrival).TotalSeconds;
+                //Console.WriteLine(splitInterval);
+                if (splitInterval < smallestSplitInterval)
+                    smallestSplitInterval = splitInterval;
+                if (splitInterval > largestSplitInterval)
+                    largestSplitInterval = splitInterval;
+                averageSplitInterval = averageSplitInterval + splitInterval;
+                string reply;
+                if (writeLog)
+                    Console.WriteLine("client {0} adding calltree", clientID - 1);
+                //callTreeStack.Push(calltree);
+                string[] parse = calltree.Split(';');
+                if (parse[3].Equals("AND"))
                 {
-                    Console.WriteLine("Key not found for parentID : " + parentId);
-                    Console.ReadLine();
+                    long parentId = Int64.Parse(parse[1]);
+                    long mustReachId = Int64.Parse(parse[2]);
+                    long blockId = Int64.Parse(parse[2]) - 1;
+                    string partitionType = parse[3];
+                    splitNode blockNode = new splitNode(parentId, partitionType);
+                    splitNode mustReachNode = new splitNode(parentId, partitionType);
+                    tree.Add(blockId, blockNode);
+                    tree[blockId].clientId = clientID - 1;
+                    tree.Add(mustReachId, mustReachNode);
+                    Console.WriteLine("Added Nodes: " + blockId + " " + mustReachId);
+                    if (!tree.ContainsKey(parentId))
+                    {
+                        Console.WriteLine("Key not found for parentID : " + parentId);
+                        Console.ReadLine();
+                    }
+                    tree[parentId].children.Add(blockId);
+                    tree[parentId].children.Add(mustReachId);
                 }
-                tree[parentId].children.Add(dummySplitID);
-                tree[parentId].children.Add(ORId);
-            }
-            clientCalltreeQueue[clientID-1].PushLeft(calltree);
-            numSplits++;
-            if (writeLog)
-                Console.WriteLine("Adding : calltreeStack count: " + callTreeStack.Count);
-            if (configuration.controlSplitRate)
-            {
-                if (clientRequestQueue.Count == 0)
-                    splitRate = 20.0d;
                 else
-                    splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
+                {
+                    long parentId = Int64.Parse(parse[1]);
+                    long ORId = Int64.Parse(parse[2]);
+                    long dummySplitID = Int64.Parse(parse[2]) - 1;
+                    string partitionType = parse[3];
+                    splitNode dummyNode = new splitNode(parentId, partitionType);
+                    splitNode ORNode = new splitNode(parentId, partitionType);
+                    tree.Add(dummySplitID, dummyNode);
+                    tree[dummySplitID].clientId = clientID - 1;
+                    tree.Add(ORId, ORNode);
+                    Console.WriteLine("Added Nodes: " + dummySplitID + " " + ORId);
+                    if (!tree.ContainsKey(parentId))
+                    {
+                        Console.WriteLine("Key not found for parentID : " + parentId);
+                        Console.ReadLine();
+                    }
+                    tree[parentId].children.Add(dummySplitID);
+                    tree[parentId].children.Add(ORId);
+                }
+                clientCalltreeQueue[clientID - 1].PushLeft(calltree);
+                numSplits++;
+                if (writeLog)
+                    Console.WriteLine("Adding : calltreeStack count: " + callTreeStack.Count);
+                if (configuration.controlSplitRate)
+                {
+                    if (clientRequestQueue.Count == 0)
+                        splitRate = 20.0d;
+                    else
+                        splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
+                }
+                reply = (splitRate * configuration.splitInterval).ToString();
+                //Console.WriteLine("{0} {1} {2} {3}",clientCalltreeQueue[clientID - 1].Count, clientRequestQueue.Count, splitRate, (splitRate * configuration.splitInterval));
+                bool err = ResponseHttp(context, reply);
+                if (err)
+                    handleClientCrash();
+                lastSplitArrival = DateTime.Now;
             }
-            reply = (splitRate * configuration.splitInterval).ToString();
-            //Console.WriteLine("{0} {1} {2} {3}",clientCalltreeQueue[clientID - 1].Count, clientRequestQueue.Count, splitRate, (splitRate * configuration.splitInterval));
-            bool err = ResponseHttp(context, reply);
-            if (err)
-                handleClientCrash();
-            lastSplitArrival = DateTime.Now;
         }
 
         static void popCalltree(HttpListenerContext context, string idNumber)

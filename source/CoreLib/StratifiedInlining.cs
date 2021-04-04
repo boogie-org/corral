@@ -1578,6 +1578,8 @@ namespace CoreLib
                             Console.WriteLine("splitID : " + currentId + " " + mustReachId);
                             replyFromServer = sendCalltreeToServer(splitMode + ";" + currentId + ";" + mustReachId + ";AND;" +
                                               calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                            if (killThisClient(replyFromServer, "calltreeSend AND"))
+                                return Outcome.Correct;
                             currentId = blockId;
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -1611,6 +1613,8 @@ namespace CoreLib
                         Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
                         replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId + 
                                           ";OR;" + calltreeToSend);
+                        if (killThisClient(replyFromServer, "calltreeSend OR"))
+                            return Outcome.Correct;
                         currentId = dummyId;
                         //Console.WriteLine("OR Split Check : " + numSplits + " 100");
                         numSplits = 0;
