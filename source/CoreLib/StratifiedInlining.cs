@@ -1570,7 +1570,7 @@ namespace CoreLib
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
-                            replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
+                            replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
                             if (killThisClient(replyFromServer, "newpartition AND"))
                                 return Outcome.Correct;
                             long blockId = Int64.Parse(replyFromServer);
@@ -1598,14 +1598,14 @@ namespace CoreLib
                 }
                 if (cba.Util.HydraConfig.runPortfolio)
                 {
-                    if (numSplits > 4)
+                    if (numSplits > 1)
                     {
                         int newSetting;
                         if (splitMode == 100)
                             newSetting = 0;
                         else
                             newSetting = 100;
-                        replyFromServer = sendRequestToServer("NewPartitionId", clientID.ToString());
+                        replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
                         if (killThisClient(replyFromServer, "newPartition OR"))
                             return Outcome.Correct;
                         long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here

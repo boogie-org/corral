@@ -18,6 +18,10 @@ namespace LocalServerInCsharp
         public int clientId;
         public List<long> children;
         public string status;
+        public DateTime startTime;
+        public DateTime endTime;
+        public bool isLeading;
+        public bool isLeafNode;
 
         public splitNode(long parentId, string type)
         {
@@ -26,6 +30,8 @@ namespace LocalServerInCsharp
             clientId = -1;
             children = new List<long>();
             status = "PENDING";
+            isLeading = true;
+            isLeafNode = true;
         }
     }
 
@@ -48,7 +54,7 @@ namespace LocalServerInCsharp
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
-        public static bool showTreeLog = false;
+        public static bool showTreeLog = true;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
@@ -90,6 +96,12 @@ namespace LocalServerInCsharp
         public static Dictionary<long, splitNode> tree;
         public static List<int> clientsToKill;
         public static long partitionId = 0;
+        public static bool trackCompletedNode = false;
+        public static Tuple<int, List<int>> currNodeTrack;
+        public static List<Tuple<int, List<int>>> orList;
+        public static int numSplitsAnd = 0;
+        public static int numSplitsOr = 0;
+        public static Dictionary<long, Tuple<DateTime, DateTime>> nodeTimes;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -401,6 +413,11 @@ namespace LocalServerInCsharp
                             if (showTreeLog)
                                 showTree("Assigning partition");
                             tree[partitionId].clientId = t.Item1;
+                            if (tree[partitionId].nodeType.Equals("OR"))
+                            {
+                                tree[partitionId].isLeading = false;
+                                tree[partitionId].startTime = DateTime.Now;
+                            }
                             if (writeLog)
                             {
                                 Console.WriteLine("Sending job from client {0} to client {1}", clientIDOfLargestQueue,
@@ -835,12 +852,16 @@ namespace LocalServerInCsharp
 
         static void createPartitionId(HttpListenerContext context, string msg)
         {
-            if (clientsToKill.Contains(Int16.Parse(msg) - 1))
+            string[] parse = msg.Split(';');
+            int clientID = Int16.Parse(parse[0]) - 1;
+            long parentPartitionID = Int64.Parse(parse[1]);
+            if (clientsToKill.Contains(clientID))
             {
-                handleKillingClients(context, msg);
+                handleKillingClients(context, parse[0]);
             }
             else
             {
+                tree[parentPartitionID].isLeafNode = false;
                 partitionId = partitionId + 5;  //Assume that 5 partition ids are allocated. Client decides what to do with redundant ids. 
                 string reply = partitionId.ToString();
                 bool err = ResponseHttp(context, reply);
@@ -853,7 +874,10 @@ namespace LocalServerInCsharp
         {
             long finishedPartition = Int64.Parse(msg);
             if (showTreeLog)
+            {
                 showTree("Received finished partition : " + finishedPartition);
+                showKillandRequestQueue("Received finished partition : " + finishedPartition);
+            }
             if (!tree.ContainsKey(finishedPartition))
             {
                 Console.WriteLine("Cannot find finished partition in tree : " + finishedPartition);
@@ -863,7 +887,11 @@ namespace LocalServerInCsharp
                 handleOK(finishedPartition);
             }
             if (showTreeLog)
+            {
                 showTree("After removing finished partition : " + finishedPartition);
+                showKillandRequestQueue("After removing finished partition : " + finishedPartition);
+            }
+
             string reply = "continue";
             bool err = ResponseHttp(context, reply);
             if (err)
@@ -897,16 +925,68 @@ namespace LocalServerInCsharp
                 foreach (long c in tree[k].children)
                     Console.Write(tree[c].nodeType + ":" + c + " ");
                 Console.Write(" client => " + tree[k].clientId.ToString());
+                if (tree[k].isLeading)
+                {
+                    Console.Write(" L");
+                }
+                else
+                {
+                    Console.Write(" NonL");
+                }
                 Console.WriteLine("");
             }
             Console.WriteLine("Ending tree display\n");
         }
 
+        static void checkTracking(long id)
+        {
+            if (tree.ContainsKey(id) && trackCompletedNode && currNodeTrack.Item1 != tree[id].clientId && tree[id].isLeading && tree[id].isLeafNode)
+                currNodeTrack.Item2.Add(tree[id].clientId);
+        }
+
+        static void handleEntryTracking(long id)
+        {
+            if (!trackCompletedNode && !tree[id].isLeading)
+            {
+                trackCompletedNode = true;
+                currNodeTrack = new Tuple<int, List<int>>(tree[id].clientId, new List<int>());
+            }
+        }
+
+        static void handleExitTracking()
+        {
+            if(trackCompletedNode)
+            {
+                orList.Add(currNodeTrack);
+                Console.WriteLine("Added New : ");
+                Console.Write(currNodeTrack.Item1.ToString() + " : ");
+                foreach(var val in currNodeTrack.Item2)
+                {
+                    Console.Write(" , " + val.ToString());
+                }
+                Console.WriteLine("");
+                trackCompletedNode = false;
+            }
+        }
+
+        static void addToNodeTimes(long id)
+        {
+            if (!nodeTimes.ContainsKey(id) && tree.ContainsKey(id) && tree[id].nodeType.Equals("OR"))
+            {
+                Console.WriteLine("here");
+                tree[id].endTime = DateTime.Now;
+                nodeTimes[id] = Tuple.Create(tree[id].startTime, tree[id].endTime);
+            }
+        }
+
         static void handleOK(long id)
         {
             long parent = tree[id].parent;
+            handleEntryTracking(id);
+
             if (tree[id].nodeType.Equals("OR"))
             {
+                addToNodeTimes(id);
                 tree.Remove(id);
                 Console.WriteLine("\nLOCATION - " + parent + ": " + id);
                 tree[parent].children.Remove(id);
@@ -915,13 +995,14 @@ namespace LocalServerInCsharp
                     foreach (long c in tree[parent].children)
                     {
                         killSubTree(c);
-                        tree.Remove(c);
                     }
                 }
                 tree[parent].children.Clear();
             }
             else if (tree[id].nodeType.Equals("AND"))
             {
+                checkTracking(id);
+                addToNodeTimes(id);
                 tree.Remove(id);
                 tree[parent].children.Remove(id);
             }
@@ -930,9 +1011,12 @@ namespace LocalServerInCsharp
             {
                 if (tree[parent].children.Count == 0)
                     handleOK(parent);
+                else
+                    handleExitTracking();
             }
             else
             {
+                handleExitTracking();
                 Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                 finalOutcome = "OK";
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
@@ -942,12 +1026,17 @@ namespace LocalServerInCsharp
 
         static void killSubTree(long id)
         {
+            Console.WriteLine("removing " + id.ToString());
             if (tree[id].children.Count > 0)
             {
                 foreach (long c in tree[id].children)
                     killSubTree(c);
             }else if (tree[id].clientId != -1)
+            {
                 clientsToKill.Add(tree[id].clientId);
+            }
+            checkTracking(id);
+            addToNodeTimes(id);
             tree.Remove(id);
         }
 
@@ -969,6 +1058,7 @@ namespace LocalServerInCsharp
                     {
                         long parent = tree[id].parent;
                         tree[parent].children.Remove(id);
+                        addToNodeTimes(id);
                         tree.Remove(id);
                     }
                 }
@@ -991,6 +1081,9 @@ namespace LocalServerInCsharp
                 tree.Add(0, node);
                 tree[0].clientId = 0;
                 partitionId = 0;
+                orList = new List<Tuple<int, List<int>>>();
+                nodeTimes = new Dictionary<long, Tuple<DateTime, DateTime>>();
+                trackCompletedNode = false;
                 //startTime = DateTime.Now;
                 lastSplitArrival = DateTime.Now;
                 resetTime = 0;
@@ -1019,7 +1112,7 @@ namespace LocalServerInCsharp
 
         static void addCalltree(HttpListenerContext context, int clientID, string calltree)
         {
-            if (clientsToKill.Contains(clientID - 1))
+            if(clientsToKill.Contains(clientID - 1))
             {
                 handleKillingClients(context, clientID.ToString());
             }
@@ -1056,6 +1149,12 @@ namespace LocalServerInCsharp
                     }
                     tree[parentId].children.Add(blockId);
                     tree[parentId].children.Add(mustReachId);
+                    if (!tree[parentId].isLeading)
+                    {
+                        tree[mustReachId].isLeading = false;
+                        tree[blockId].isLeading = false;
+                    }
+                    numSplitsAnd++;
                 }
                 else
                 {
@@ -1067,6 +1166,7 @@ namespace LocalServerInCsharp
                     splitNode ORNode = new splitNode(parentId, partitionType);
                     tree.Add(dummySplitID, dummyNode);
                     tree[dummySplitID].clientId = clientID - 1;
+                    tree[dummySplitID].startTime = DateTime.Now;
                     tree.Add(ORId, ORNode);
                     Console.WriteLine("Added Nodes: " + dummySplitID + " " + ORId);
                     if (!tree.ContainsKey(parentId))
@@ -1076,6 +1176,7 @@ namespace LocalServerInCsharp
                     }
                     tree[parentId].children.Add(dummySplitID);
                     tree[parentId].children.Add(ORId);
+                    numSplitsOr++;
                 }
                 clientCalltreeQueue[clientID - 1].PushLeft(calltree);
                 numSplits++;
@@ -1095,6 +1196,7 @@ namespace LocalServerInCsharp
                     handleClientCrash();
                 lastSplitArrival = DateTime.Now;
             }
+
         }
 
         static void popCalltree(HttpListenerContext context, string idNumber)
@@ -1127,10 +1229,10 @@ namespace LocalServerInCsharp
                             //Console.ReadLine();
                             ResponseHttp(context, reply);
                             clientNumForwardPops[clientID - 1]++;
-                            tree[long.Parse(parse[2])].clientId = clientID - 1;
+                            long partitionID = long.Parse(parse[2]);
+                            tree[partitionID].clientId = clientID - 1;
                             discard = false;
                         }
-                        
                     }
                     else
                     {
@@ -1186,6 +1288,42 @@ namespace LocalServerInCsharp
             File.WriteAllText(outFile, toWrite);
         }
 
+        public static void writetStats(string outFile)
+        {
+            string statsString = "#stats#";
+            statsString += "\nTotalSplitsOR: " + numSplitsOr.ToString();
+            statsString += "\nTotalSplitsAND: " + numSplitsAnd.ToString();
+
+            statsString += "\nNon-Leading client : comma seperated leading clients killed";
+            foreach (var tup in orList)
+                statsString = statsString + "\n" + tup.Item1.ToString() + " : " + string.Join(",", tup.Item2);
+
+            statsString += "\nNode : startTime, EndTime";
+            foreach (var id in nodeTimes)
+                statsString += "\n" + id.Key.ToString() + " : " + id.Value.Item1.ToString("dd/MM HH:mm:ss.ffffff") + "," + id.Value.Item2.ToString("dd/MM HH:mm:ss.ffffff");
+
+            File.AppendAllText(outFile, statsString);
+
+            Console.WriteLine("TotalSplitsOR: " + numSplitsOr.ToString());
+            Console.WriteLine("TotalSplitsAND: " + numSplitsAnd.ToString());
+            Console.WriteLine("count => " + orList.Count.ToString());
+            Console.WriteLine("Non-Leading client : comma seperated leading clients killed");
+            foreach(var tup in orList)
+            {
+                Console.Write(tup.Item1.ToString() + " : ");
+                foreach(var val in tup.Item2)
+                {
+                    Console.WriteLine("," + val);
+                }
+                Console.WriteLine("");
+            }
+            Console.WriteLine("Node : startTime, EndTime");
+            foreach (var id in nodeTimes)
+            {
+                Console.WriteLine(id.Key.ToString() + " : " + id.Value.Item1.ToString() + "," + id.Value.Item2.ToString());
+            }
+        }
+
         public static void writeDetailedOutcome(bool timedOut)
         {
             string outFile = workingFile + ".txt";
@@ -1205,6 +1343,7 @@ namespace LocalServerInCsharp
                         clientNumForwardPops[i], clientNumBackwardPops[i]);
                     File.AppendAllText(outFile, statsPerClient);
                 }
+                writetStats(outFile);
             }
             else
             {
@@ -1220,6 +1359,7 @@ namespace LocalServerInCsharp
                         clientNumForwardPops[i], clientNumBackwardPops[i]);
                     File.AppendAllText(outFile, statsPerClient);
                 }
+                writetStats(outFile);
             }
         }
 
