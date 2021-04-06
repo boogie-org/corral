@@ -884,6 +884,7 @@ namespace LocalServerInCsharp
             }
             else
             {
+                handleEntryTracking(finishedPartition);
                 handleOK(finishedPartition);
             }
             if (showTreeLog)
@@ -982,7 +983,6 @@ namespace LocalServerInCsharp
         static void handleOK(long id)
         {
             long parent = tree[id].parent;
-            handleEntryTracking(id);
 
             if (tree[id].nodeType.Equals("OR"))
             {

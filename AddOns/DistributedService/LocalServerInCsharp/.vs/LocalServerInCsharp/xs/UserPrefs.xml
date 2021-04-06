@@ -2,8 +2,8 @@
   <MonoDevelop.Ide.ItemProperties.LocalServerInCsharp PreferredExecutionTarget="MonoDevelop.Default" />
   <MonoDevelop.Ide.Workbench ActiveDocument="LocalServerInCsharp/Program.cs">
     <Files>
-      <File FileName="LocalServerInCsharp/Program.cs" Line="868" Column="25" />
-      <File FileName="../../../source/CoreLib/StratifiedInlining.cs" Line="1608" Column="76" />
+      <File FileName="../../../source/CoreLib/StratifiedInlining.cs" Line="1603" Column="40" />
+      <File FileName="LocalServerInCsharp/Program.cs" Line="898" Column="23" />
     </Files>
     <Pads>
       <Pad Id="ProjectPad">
