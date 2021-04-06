@@ -1598,7 +1598,7 @@ namespace CoreLib
                 }
                 if (cba.Util.HydraConfig.runPortfolio)
                 {
-                    if (numSplits > 1)
+                    if (numSplits > 4)
                     {
                         int newSetting;
                         if (splitMode == 100)
