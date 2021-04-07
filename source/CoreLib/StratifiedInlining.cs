@@ -1228,7 +1228,7 @@ namespace CoreLib
             return outcome;
         }
 
-        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, int splitMode, int callsitesInlinedCurrentPartition, int alpha)
+        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, int splitMode, int callsitesInlinedCurrentPartition, int alphaOR, int alphaUW)
         {
             int splitFlag = 0;
             if (CallSitesInUCore.Count != 0)
@@ -1256,7 +1256,26 @@ namespace CoreLib
                 {
                     // Added new heuristic for splitting for UW
                     // split if alpha number of callsites are inlined or if any client is waiting
-                    if (callsitesInlinedCurrentPartition >= alpha)
+                    if (callsitesInlinedCurrentPartition >= alphaUW)
+                    {
+                        splitFlag = 1;
+                        //Console.WriteLine("splitting due to inlined callsites");
+                    }
+                    else
+                    {
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
+                        else
+                        {
+                            splitFlag = 1;
+                            Console.WriteLine(clientID + " => Spliiting due to client waiting");
+                        }
+                    }
+                }else if (splitMode == 100)
+                {
+                    // Added new heuristic for splitting for UW
+                    // split if alpha number of callsites are inlined or if any client is waiting
+                    if (callsitesInlinedCurrentPartition >= alphaOR)
                     {
                         splitFlag = 1;
                         //Console.WriteLine("splitting due to inlined callsites");
@@ -1318,7 +1337,8 @@ namespace CoreLib
             bool splitOnDemand = false;
             bool learnProofs = false;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
-            int alpha = cba.Util.HydraConfig.alpha;
+            int alphaOR = cba.Util.HydraConfig.alphaOR;
+            int alphaUW = cba.Util.HydraConfig.alphaUW;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             int callsitesInlinedCurrentPartition = 0;
@@ -1423,7 +1443,7 @@ namespace CoreLib
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
-                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, splitMode, callsitesInlinedCurrentPartition, alpha);
+                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, splitMode, callsitesInlinedCurrentPartition, alphaOR, alphaUW);
                     if (killCurrentPartition)
                         return Outcome.Correct;
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1563,9 +1583,13 @@ namespace CoreLib
                             //if (writeLog)
                             //Console.WriteLine("splitting on : " + GetPersistentID(scs));
                             Console.WriteLine(clientID + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
-                            if (splitMode == 0 && callsitesInlinedCurrentPartition >= alpha)
+                            if (splitMode == 0 && callsitesInlinedCurrentPartition >= alphaUW)
                             {
-                                callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alpha;
+                                callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alphaUW;
+                            }
+                            else if (splitMode == 100 && callsitesInlinedCurrentPartition >= alphaOR)
+                            {
+                                callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alphaOR;
                             }
                             if (writeLog)
                                 Console.WriteLine(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
@@ -1798,7 +1822,7 @@ namespace CoreLib
                                 }
                             }
                         }
-
+                        callsitesInlinedCurrentPartition += numORInlinings;
                     }
                     else
                         isDone = true;

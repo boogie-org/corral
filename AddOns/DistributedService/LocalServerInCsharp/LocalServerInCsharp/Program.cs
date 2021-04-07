@@ -54,7 +54,7 @@ namespace LocalServerInCsharp
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
-        public static bool showTreeLog = true;
+        public static bool showTreeLog = false;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
@@ -155,6 +155,9 @@ namespace LocalServerInCsharp
             clientNumBackwardPops = new double[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
             tree = new Dictionary<long, splitNode>();
+            orList = new List<Tuple<int, List<int>>>();
+            nodeTimes = new Dictionary<long, Tuple<DateTime, DateTime>>();
+            trackCompletedNode = false;
             clientsToKill = new List<int>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
@@ -235,6 +238,7 @@ namespace LocalServerInCsharp
                     }
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
+                    Console.WriteLine("Reading Message");
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
                     //Console.WriteLine(body);
                     body = body.Substring(1, body.Length - 2);
@@ -661,6 +665,11 @@ namespace LocalServerInCsharp
             Array.Clear(clientNumForwardPops, 0, maxClients);
             Array.Clear(clientNumBackwardPops, 0, maxClients);
             Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
+            numSplitsOr = 0;
+            numSplitsAnd = 0;
+            orList.Clear();
+            nodeTimes.Clear();
+            trackCompletedNode = false;
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
@@ -958,14 +967,9 @@ namespace LocalServerInCsharp
         {
             if(trackCompletedNode)
             {
-                orList.Add(currNodeTrack);
                 Console.WriteLine("Added New : ");
-                Console.Write(currNodeTrack.Item1.ToString() + " : ");
-                foreach(var val in currNodeTrack.Item2)
-                {
-                    Console.Write(" , " + val.ToString());
-                }
-                Console.WriteLine("");
+                orList.Add(currNodeTrack);
+                Console.WriteLine(currNodeTrack.Item1.ToString() + " : " + string.Join(",", currNodeTrack.Item2));
                 trackCompletedNode = false;
             }
         }
@@ -974,7 +978,6 @@ namespace LocalServerInCsharp
         {
             if (!nodeTimes.ContainsKey(id) && tree.ContainsKey(id) && tree[id].nodeType.Equals("OR"))
             {
-                Console.WriteLine("here");
                 tree[id].endTime = DateTime.Now;
                 nodeTimes[id] = Tuple.Create(tree[id].startTime, tree[id].endTime);
             }
@@ -1081,9 +1084,6 @@ namespace LocalServerInCsharp
                 tree.Add(0, node);
                 tree[0].clientId = 0;
                 partitionId = 0;
-                orList = new List<Tuple<int, List<int>>>();
-                nodeTimes = new Dictionary<long, Tuple<DateTime, DateTime>>();
-                trackCompletedNode = false;
                 //startTime = DateTime.Now;
                 lastSplitArrival = DateTime.Now;
                 resetTime = 0;
@@ -1114,10 +1114,12 @@ namespace LocalServerInCsharp
         {
             if(clientsToKill.Contains(clientID - 1))
             {
+                Console.WriteLine("killing client " + (clientID - 1).ToString());
                 handleKillingClients(context, clientID.ToString());
             }
             else
             {
+                Console.WriteLine("Adding Tree from " + (clientID - 1).ToString());
                 double splitInterval = (DateTime.Now - lastSplitArrival).TotalSeconds;
                 //Console.WriteLine(splitInterval);
                 if (splitInterval < smallestSplitInterval)
