@@ -18,6 +18,8 @@ namespace cba.Util
         public static bool startHydra = false;
         public static int maxSplitPerIteration = 1;
         public static bool runPortfolio = false;
+        public static int alphaUW = 0;
+        public static int alphaOR = 0;
     }
 
     public static class BoogieVerify
