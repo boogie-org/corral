@@ -9,6 +9,7 @@ using System.Diagnostics;
 using DequeNet;
 using System.Runtime.InteropServices;
 
+
 namespace LocalServerInCsharp
 {
     public class splitNode
@@ -50,11 +51,11 @@ namespace LocalServerInCsharp
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
         public static DateTime startTime;
-        public static Queue<Tuple<int, HttpListenerContext>> clientRequestQueue = new Queue<Tuple<int, HttpListenerContext>>();
+        public static Queue<Tuple<int, HttpListenerContext>> clientRequestQueueLeading = new Queue<Tuple<int, HttpListenerContext>>();
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
-        public static bool showTreeLog = false;
+        public static bool showTreeLog = true;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
@@ -102,6 +103,11 @@ namespace LocalServerInCsharp
         public static int numSplitsAnd = 0;
         public static int numSplitsOr = 0;
         public static Dictionary<long, Tuple<DateTime, DateTime>> nodeTimes;
+        public static Deque<string> clientCalltreeQueueOr;
+        public static int maxClientsLeading;
+        public static int maxClientsNonLeading;
+        public static Queue<Tuple<int, HttpListenerContext>> clientRequestQueueNonLeading = new Queue<Tuple<int, HttpListenerContext>>();
+        public static Random random;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -112,6 +118,9 @@ namespace LocalServerInCsharp
                     Directory.CreateDirectory(configuration.boogieDumpDirectory);
             }
             maxClients = configuration.numMaxClients * configuration.numListeners;
+            maxClientsLeading = (maxClients + 1) / 2;
+            maxClientsNonLeading = maxClients - maxClientsLeading;
+            Console.WriteLine(maxClientsLeading.ToString() + " L Non-L " + maxClientsNonLeading.ToString());
             maxListeners = configuration.numListeners;
             timeout = configuration.timeout;
             waitingListener = new Queue<HttpListenerContext>();
@@ -159,6 +168,8 @@ namespace LocalServerInCsharp
             nodeTimes = new Dictionary<long, Tuple<DateTime, DateTime>>();
             trackCompletedNode = false;
             clientsToKill = new List<int>();
+            random = new Random();
+            clientCalltreeQueueOr = new Deque<string>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             
@@ -320,7 +331,7 @@ namespace LocalServerInCsharp
                         {
                             handleKillingClients(context, msgContent["SplitNow"]);
                         }
-                        else if (clientRequestQueue.Count > 0)
+                        else if ((clientID < maxClientsLeading && clientRequestQueueLeading.Count > 0) || (clientID >= maxClientsLeading && clientRequestQueueNonLeading.Count > 0))
                         {
                             //Console.WriteLine("Count : " + clientRequestQueue.Count);
                             ResponseHttp(context, "YES");
@@ -371,8 +382,8 @@ namespace LocalServerInCsharp
 
                 //if (clientRequestQueue.Count == maxClients && callTreeStack.Count == 0)
                 if (writeLog)
-                    Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
-                if (clientRequestQueue.Count == maxClients && noJobLeft() && !askForResetTime)   //If all the clients are waiting, then none of them has any job left at queue
+                    Console.WriteLine("Request Queue Count : {0}", clientRequestQueueLeading.Count);
+                if (clientRequestQueueLeading.Count == maxClientsLeading && noJobLeft() && !askForResetTime)   //If all the clients are waiting, then none of them has any job left at queue
                 {
                     if (writeLog)
                         Console.WriteLine("all clients waiting and no job left");
@@ -384,9 +395,9 @@ namespace LocalServerInCsharp
                      totalTime = (DateTime.Now - startTime).TotalSeconds;
                     //setKillFlag = true;
                     askForResetTime = true;
-                    while(clientRequestQueue.Count > 0)
+                    while(clientRequestQueueLeading.Count > 0)
                     {
-                        Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                        Tuple<int, HttpListenerContext> t = clientRequestQueueLeading.Dequeue();
                         clientIdlingTime[t.Item1] = clientIdlingTime[t.Item1] + (DateTime.Now - clientCalltreeRequestReceiveTime[t.Item1]).TotalSeconds;
                         HttpListenerContext sendToClient = t.Item2;
                         ResponseHttp(sendToClient, "SendResetTime");
@@ -395,17 +406,17 @@ namespace LocalServerInCsharp
                 else
                 {
                     //Console.WriteLine("Request Queue Count : {0}", clientRequestQueue.Count);
-                    while (clientRequestQueue.Count > 0)
+                    while (clientRequestQueueLeading.Count > 0)
                     {
                         if (writeLog)
-                            Console.WriteLine("Deque and Pop : free : {0}", clientRequestQueue.Count);                  
-                        int clientIDOfLargestQueue = findClientIDOfLargestQueue();
+                            Console.WriteLine("Deque and Pop : free : {0}", clientRequestQueueLeading.Count);                  
+                        int clientIDOfLargestQueue = findClientIDOfLargestQueue(true);
                         if (clientIDOfLargestQueue == -1)  // No jobs available at any queue
                             break;
                         else
                         {
                             clientNumBackwardPops[clientIDOfLargestQueue]++;
-                            Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                            Tuple<int, HttpListenerContext> t = clientRequestQueueLeading.Dequeue();
                             clientNumReset[t.Item1]++;
                             HttpListenerContext sendToClient = t.Item2;
                             string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
@@ -417,11 +428,6 @@ namespace LocalServerInCsharp
                             if (showTreeLog)
                                 showTree("Assigning partition");
                             tree[partitionId].clientId = t.Item1;
-                            if (tree[partitionId].nodeType.Equals("OR"))
-                            {
-                                tree[partitionId].isLeading = false;
-                                tree[partitionId].startTime = DateTime.Now;
-                            }
                             if (writeLog)
                             {
                                 Console.WriteLine("Sending job from client {0} to client {1}", clientIDOfLargestQueue,
@@ -433,9 +439,55 @@ namespace LocalServerInCsharp
                             numFreeClients--;
                         }
                     }
+
+                    // Non-Leading Queue
+                    while (clientRequestQueueNonLeading.Count > 0)
+                    {
+                        if (writeLog)
+                            Console.WriteLine("Deque and Pop : free : {0}", clientRequestQueueNonLeading.Count);
+                        int clientIDOfLargestQueue = findClientIDOfLargestQueue(false);
+                        removeFinishedPartitions();
+                        if (clientIDOfLargestQueue == -1 && clientCalltreeQueueOr.IsEmpty)  // No jobs available at any queue
+                            break;
+                        else
+                        {
+                            int choose = random.Next(100);
+                            Tuple<int, HttpListenerContext> t = clientRequestQueueNonLeading.Dequeue();
+                            clientNumReset[t.Item1]++;
+                            string calltreeToSend;
+                            long partitionId;
+                            HttpListenerContext sendToClient = t.Item2;
+
+                            if ((clientIDOfLargestQueue != -1 && choose > 70) || clientCalltreeQueueOr.IsEmpty) // Pick a partition from AND queue
+                            {
+                                clientNumBackwardPops[clientIDOfLargestQueue]++;
+                                calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
+                                string[] parse = calltreeToSend.Split(';');
+                                partitionId = Int64.Parse(parse[2]);
+                                Console.WriteLine("Assign partition " + partitionId + " from NON-LEADING client " + clientIDOfLargestQueue + " to " + t.Item1);
+                            }
+                            else // Pick a partition from OR Queue
+                            {
+                                calltreeToSend = clientCalltreeQueueOr.PopRight();
+                                string[] parse = calltreeToSend.Split(';');
+                                partitionId = Int64.Parse(parse[2]);
+                                tree[partitionId].isLeading = false;
+                                tree[partitionId].startTime = DateTime.Now;
+                                Console.WriteLine("Assign partition " + partitionId + " from OR Queue to " + t.Item1);
+                            }
+                            tree[partitionId].clientId = t.Item1;
+                            if (clientsToKill.Contains(t.Item1))
+                                clientsToKill.Remove(t.Item1);
+                            if (showTreeLog)
+                                showTree("Assigning partition");
+                            ResponseHttp(sendToClient, calltreeToSend);
+                            clientIdlingTime[t.Item1] = clientIdlingTime[t.Item1] + (DateTime.Now - clientCalltreeRequestReceiveTime[t.Item1]).TotalSeconds;
+                            numFreeClients--;
+                        }
+                    }
                 }
 
-                if (askForResetTime && numClientsResetTimeSent == maxClients)
+                if (askForResetTime && numClientsResetTimeSent == maxClientsLeading)
                     setKillFlag = true;
                 //Console.ReadLine();
                 //if (receivedTimeGraph)
@@ -643,7 +695,7 @@ namespace LocalServerInCsharp
             numSplits = 0;
             startFirstJob = false;
             callTreeStack.Clear();
-            clientRequestQueue.Clear();
+            clientRequestQueueLeading.Clear();
             setKillFlag = false;
             receivedTimeGraph = false;
             askForResetTime = false;
@@ -670,6 +722,8 @@ namespace LocalServerInCsharp
             orList.Clear();
             nodeTimes.Clear();
             trackCompletedNode = false;
+            clientRequestQueueNonLeading.Clear();
+            clientCalltreeQueueOr = new Deque<string>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
@@ -767,7 +821,7 @@ namespace LocalServerInCsharp
         public static bool noJobLeft()
         {
             bool isNoJobLeft = true;
-            for (int i = 0; i < maxClients; i++)
+            for (int i = 0; i < maxClientsLeading; i++)
             {
                 if (clientCalltreeQueue[i].Count > 0)
                 {
@@ -778,7 +832,7 @@ namespace LocalServerInCsharp
             return isNoJobLeft;
         }
 
-        public static int findClientIDOfLargestQueue()
+        public static int findClientIDOfLargestQueue(bool isLeading)
         {
             int switchForSingleClient;
             if (maxClients == 1)
@@ -787,7 +841,9 @@ namespace LocalServerInCsharp
                 switchForSingleClient = 0;
             int maxQueueSize = switchForSingleClient;
             int clientIDOfLargestQueue = -1;
-            for (int i = 0; i < clientCalltreeQueue.Length; i++)
+            int start = isLeading ? 0 : maxClientsLeading;
+            int end = isLeading ? maxClientsLeading : maxClients;
+            for (int i = start; i < end ; i++)
             {
                 if (clientCalltreeQueue[i].Count > maxQueueSize && !clientsToKill.Contains(i))
                 {
@@ -911,13 +967,21 @@ namespace LocalServerInCsharp
         static void showKillandRequestQueue(string location)
         {
             Console.WriteLine("showing at location " + location);
-            Console.Write("REQ Q : ");
-            foreach(var req in clientRequestQueue)
+            // Leading
+            Console.Write("REQ Q Leading : ");
+            foreach(var req in clientRequestQueueLeading)
             {
                 Console.Write(" ,{0}", req.Item1);
             }
             Console.WriteLine("");
-            Console.Write("KILL Q : ");
+            //  Non-Leading
+            Console.Write("REQ Q Non-Leading : ");
+            foreach (var req in clientRequestQueueNonLeading)
+            {
+                Console.Write(" ,{0}", req.Item1);
+            }
+            Console.WriteLine("");
+            Console.Write("KILL Q Leading : ");
             foreach (var req in clientsToKill)
             {
                 Console.Write(" ,{0}", req);
@@ -946,6 +1010,16 @@ namespace LocalServerInCsharp
                 Console.WriteLine("");
             }
             Console.WriteLine("Ending tree display\n");
+        }
+
+        static void ShowClientCalltreeQueueOr()
+        {
+            Console.Write("OR Q: ");
+            foreach(var val in clientCalltreeQueueOr)
+            {
+                Console.Write(", {0}", val.Split(';')[0]);
+            }
+            Console.WriteLine();
         }
 
         static void checkTracking(long id)
@@ -980,6 +1054,18 @@ namespace LocalServerInCsharp
             {
                 tree[id].endTime = DateTime.Now;
                 nodeTimes[id] = Tuple.Create(tree[id].startTime, tree[id].endTime);
+            }
+        }
+
+        static void removeFinishedPartitions()
+        {
+            while(clientCalltreeQueueOr.Count > 0)
+            {
+                long partitionID = Int64.Parse(clientCalltreeQueueOr.PeekRight().Split(';')[2]);
+                if (tree.ContainsKey(partitionID))
+                    break;
+                clientCalltreeQueueOr.PopRight();
+                Console.WriteLine("removing partition " + partitionId.ToString() + " from OR queue as not it is not present in tree");
             }
         }
 
@@ -1112,6 +1198,7 @@ namespace LocalServerInCsharp
 
         static void addCalltree(HttpListenerContext context, int clientID, string calltree)
         {
+
             if(clientsToKill.Contains(clientID - 1))
             {
                 Console.WriteLine("killing client " + (clientID - 1).ToString());
@@ -1132,9 +1219,9 @@ namespace LocalServerInCsharp
                     Console.WriteLine("client {0} adding calltree", clientID - 1);
                 //callTreeStack.Push(calltree);
                 string[] parse = calltree.Split(';');
+                long parentId = Int64.Parse(parse[1]);
                 if (parse[3].Equals("AND"))
                 {
-                    long parentId = Int64.Parse(parse[1]);
                     long mustReachId = Int64.Parse(parse[2]);
                     long blockId = Int64.Parse(parse[2]) - 1;
                     string partitionType = parse[3];
@@ -1143,7 +1230,7 @@ namespace LocalServerInCsharp
                     tree.Add(blockId, blockNode);
                     tree[blockId].clientId = clientID - 1;
                     tree.Add(mustReachId, mustReachNode);
-                    Console.WriteLine("Added Nodes: " + blockId + " " + mustReachId);
+                    Console.WriteLine("Added AND Nodes: " + blockId + " " + mustReachId);
                     if (!tree.ContainsKey(parentId))
                     {
                         Console.WriteLine("Key not found for parentID : " + parentId);
@@ -1157,10 +1244,10 @@ namespace LocalServerInCsharp
                         tree[blockId].isLeading = false;
                     }
                     numSplitsAnd++;
+                    clientCalltreeQueue[clientID - 1].PushLeft(calltree);
                 }
                 else
                 {
-                    long parentId = Int64.Parse(parse[1]);
                     long ORId = Int64.Parse(parse[2]);
                     long dummySplitID = Int64.Parse(parse[2]) - 1;
                     string partitionType = parse[3];
@@ -1170,7 +1257,7 @@ namespace LocalServerInCsharp
                     tree[dummySplitID].clientId = clientID - 1;
                     tree[dummySplitID].startTime = DateTime.Now;
                     tree.Add(ORId, ORNode);
-                    Console.WriteLine("Added Nodes: " + dummySplitID + " " + ORId);
+                    Console.WriteLine("Added OR Nodes: " + dummySplitID + " " + ORId);
                     if (!tree.ContainsKey(parentId))
                     {
                         Console.WriteLine("Key not found for parentID : " + parentId);
@@ -1178,18 +1265,34 @@ namespace LocalServerInCsharp
                     }
                     tree[parentId].children.Add(dummySplitID);
                     tree[parentId].children.Add(ORId);
+                    if (!tree[parentId].isLeading)
+                    {
+                        tree[dummySplitID].isLeading = false;
+                        tree[ORId].isLeading = false;
+                    }
                     numSplitsOr++;
+                    clientCalltreeQueueOr.PushLeft(calltree);
+                    ShowClientCalltreeQueueOr();
                 }
-                clientCalltreeQueue[clientID - 1].PushLeft(calltree);
                 numSplits++;
                 if (writeLog)
                     Console.WriteLine("Adding : calltreeStack count: " + callTreeStack.Count);
                 if (configuration.controlSplitRate)
                 {
-                    if (clientRequestQueue.Count == 0)
-                        splitRate = 20.0d;
+                    if (tree[parentId].isLeading)
+                    {
+                        if (clientRequestQueueLeading.Count == 0)
+                            splitRate = 20.0d;
+                        else
+                            splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueueLeading.Count;
+                    }
                     else
-                        splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueue.Count;
+                    {
+                        if (clientRequestQueueNonLeading.Count == 0)
+                            splitRate = 20.0d;
+                        else
+                            splitRate = (double)clientCalltreeQueue[clientID - 1].Count / (double)clientRequestQueueNonLeading.Count;
+                    }
                 }
                 reply = (splitRate * configuration.splitInterval).ToString();
                 //Console.WriteLine("{0} {1} {2} {3}",clientCalltreeQueue[clientID - 1].Count, clientRequestQueue.Count, splitRate, (splitRate * configuration.splitInterval));
@@ -1198,7 +1301,6 @@ namespace LocalServerInCsharp
                     handleClientCrash();
                 lastSplitArrival = DateTime.Now;
             }
-
         }
 
         static void popCalltree(HttpListenerContext context, string idNumber)
@@ -1273,7 +1375,10 @@ namespace LocalServerInCsharp
             Tuple<int, HttpListenerContext> t = new Tuple<int, HttpListenerContext>(clientID - 1, context);
             if (writeLog)
                 Console.WriteLine("Enqueued request from {0}", clientID - 1);
-            clientRequestQueue.Enqueue(t);
+            if ((clientID - 1) < maxClientsLeading)
+                clientRequestQueueLeading.Enqueue(t);
+            else
+                clientRequestQueueNonLeading.Enqueue(t);
         }
 
         public static void writeOutcome(bool timedOut)
