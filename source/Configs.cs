@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -101,6 +101,8 @@ namespace cba
 
         public int alphaOR { get; private set; }
         public int alphaUW { get; private set; }
+        public bool mixedSplitMode { get; private set; }
+        public List<int> staticAlphaList { get; private set; }
 
         public string boogieOpts;
         public bool cadeTiming { get; private set; }
@@ -302,6 +304,8 @@ namespace cba
             maxSplitPerIteration = 1;
             alphaUW = 0;
             alphaOR = 0;
+            mixedSplitMode = false;
+            staticAlphaList = new List<int>();
             refinementAlgo = "tttt";
             noCallTreeReuse = false;
             cadeTiming = false;
@@ -590,6 +594,17 @@ namespace cba
                 var split = flag.Split(sep);
                 alphaUW = Int32.Parse(split[1]);
                 cba.Util.HydraConfig.alphaUW = alphaUW;
+            }
+            else if (flag.StartsWith("/mixedSplit:"))
+            {
+                var split = flag.Split(sep);
+                var values = split[1].Split(',');
+                foreach(var val in values)
+                {
+                    staticAlphaList.Add(Int32.Parse(val));
+                }
+                cba.Util.HydraConfig.staticAlphaList = staticAlphaList;
+                cba.Util.HydraConfig.staticAlphaListMode = true;
             }
             else if (flag.StartsWith("/hydraServerURI:"))
             {
