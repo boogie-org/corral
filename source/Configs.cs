@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -604,7 +604,7 @@ namespace cba
                     staticAlphaList.Add(Int32.Parse(val));
                 }
                 cba.Util.HydraConfig.staticAlphaList = staticAlphaList;
-                cba.Util.HydraConfig.staticAlphaMode = true;
+                cba.Util.HydraConfig.staticAlphaListMode = true;
             }
             else if (flag.StartsWith("/hydraServerURI:"))
             {

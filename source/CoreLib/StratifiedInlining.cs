@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -1228,7 +1228,7 @@ namespace CoreLib
             return outcome;
         }
 
-        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, int splitMode, int callsitesInlinedCurrentPartition, int alphaOR, int alphaUW, bool staticAlphaMode)
+        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, int splitMode, int callsitesInlinedCurrentPartition, int alphaOR, int alphaUW)
         {
             int splitFlag = 0;
             if (CallSitesInUCore.Count != 0)
@@ -1252,7 +1252,7 @@ namespace CoreLib
                     if (reply.Equals("NO"))
                         splitFlag = 0;
                 }
-                else if (staticAlphaMode && splitMode != 100)
+                else if (splitMode != 100)
                 {
                     if (callsitesInlinedCurrentPartition >= alphaUW)
                         splitFlag = 1;
@@ -1357,13 +1357,12 @@ namespace CoreLib
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             int callsitesInlinedCurrentPartition = 0;
-            bool staticAlphaMode = false;
+            bool staticAlphaListMode = false;
             List<int> staticAlphaList = new List<int>();
-            if (cba.Util.HydraConfig.staticAlphaMode)
+            if (cba.Util.HydraConfig.staticAlphaListMode)
             {
-                staticAlphaMode = true;
+                staticAlphaListMode = true;
                 staticAlphaList = new List<int> (cba.Util.HydraConfig.staticAlphaList);
-                Console.WriteLine("static alpha list : " + string.Join(",", staticAlphaList));
             }
 
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
@@ -1466,7 +1465,7 @@ namespace CoreLib
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
-                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, splitMode, callsitesInlinedCurrentPartition, alphaOR, alphaUW, staticAlphaMode);
+                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, splitMode, callsitesInlinedCurrentPartition, alphaOR, alphaUW);
                     if (killCurrentPartition)
                         return Outcome.Correct;
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1604,7 +1603,6 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                             //if (writeLog)
-                            //Console.WriteLine("splitting on : " + GetPersistentID(scs));
                             Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
                             if (splitMode == 0 && callsitesInlinedCurrentPartition >= alphaUW)
                             {
@@ -1644,9 +1642,9 @@ namespace CoreLib
                 }
                 if (cba.Util.HydraConfig.runPortfolio)
                 {
-                    if (numSplits > 4)
+                    if (numSplits > 4 || staticAlphaListMode)
                     {
-                        if (!staticAlphaMode)
+                        if (!staticAlphaListMode)
                         {
                             int newSetting;
                             if (splitMode == 100)
@@ -1668,24 +1666,30 @@ namespace CoreLib
                         }
                         else
                         {
-                            foreach(int val in staticAlphaList)
+                            replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
+                            if (killThisClient(replyFromServer, "performORSplit"))
+                                return Outcome.Correct;
+                            if (replyFromServer.Equals("YES"))
                             {
-                                if(val == splitMode)
+                                foreach (int val in staticAlphaList)
                                 {
-                                    continue;
-                                    //SKIP if the new setting is same as current setting
+                                    if (val == splitMode)
+                                    {
+                                        continue;
+                                        //SKIP if the new setting is same as current setting
+                                    }
+                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
+                                    if (killThisClient(replyFromServer, "newPartition OR"))
+                                        return Outcome.Correct;
+                                    long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                                    long ORId = dummyId + 1;
+                                    Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
+                                    replyFromServer = sendCalltreeToServer(val + ";" + currentId + ";" + ORId +
+                                                      ";OR;" + calltreeToSend);
+                                    if (killThisClient(replyFromServer, "calltreeSend OR"))
+                                        return Outcome.Correct;
+                                    currentId = dummyId;
                                 }
-                                replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
-                                if (killThisClient(replyFromServer, "newPartition OR"))
-                                    return Outcome.Correct;
-                                long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
-                                long ORId = dummyId + 1;
-                                Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                                replyFromServer = sendCalltreeToServer(val + ";" + currentId + ";" + ORId +
-                                                  ";OR;" + calltreeToSend);
-                                if (killThisClient(replyFromServer, "calltreeSend OR"))
-                                    return Outcome.Correct;
-                                currentId = dummyId;
                             }
                         }
                         numSplits = 0;
@@ -3136,7 +3140,6 @@ namespace CoreLib
                     //else
                     {
                         string[] parse = replyFromServer.Split(';');
-                        //Console.WriteLine("Received ORSplit Mode : " + parse[0]);
                         splitMode = Int16.Parse(parse[0]);
                         //Console.WriteLine("Received ORSplit Mode : " + splitMode);
                         currentId = Int64.Parse(parse[2]);

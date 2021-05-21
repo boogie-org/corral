@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,7 +20,7 @@ namespace cba.Util
         public static bool runPortfolio = false;
         public static int alphaUW = 0;
         public static int alphaOR = 0;
-        public static bool staticAlphaMode = false;
+        public static bool staticAlphaListMode = false;
         public static List<int> staticAlphaList = new List<int>();
     }
 
