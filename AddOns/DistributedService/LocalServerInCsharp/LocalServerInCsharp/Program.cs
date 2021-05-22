@@ -929,14 +929,14 @@ namespace LocalServerInCsharp
                 toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n";
                 Console.WriteLine("Verification Outcome : TIMEDOUT");
                 Console.WriteLine("Time Taken : " + totalTime.ToString());
-                File.AppendAllText(outFile, toWrite);
+                File.WriteAllText(outFile, toWrite);
                 for (int i = 0; i < maxClients; i++)
                 {
                     string statsPerClient = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n",
                         clientCommunicationTime[i], clientResetTime[i], clientInliningTime[i], clientSplittingTime[i],
                         clientNumInlinings[i], clientNumZ3Calls[i], clientZ3Time[i], clientIdlingTime[i], clientNumReset[i],
                         clientNumForwardPops[i], clientNumBackwardPops[i]);
-                    File.WriteAllText(outFile, statsPerClient);
+                    File.AppendAllText(outFile, statsPerClient);
                 }
             }
         }
