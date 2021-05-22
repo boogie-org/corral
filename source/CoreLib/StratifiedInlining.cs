@@ -1825,6 +1825,7 @@ namespace CoreLib
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     Debug.WriteLine(outcome.ToString());
                     //Pop();
+                    /*
                     if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                     {
                         //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
@@ -1833,7 +1834,7 @@ namespace CoreLib
                         if (makeTimeGraph)
                             timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                         break; // done (T/O)
-                    }
+                    }*/
 
                     /*if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
                     {
@@ -1880,6 +1881,9 @@ namespace CoreLib
                 }
                 if (isDone)
                 {
+                    if (outcome == Outcome.ReachedBound)
+                        replyFromServer = sendRequestToServer("ReachedBound", currentId.ToString());
+
                     replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
                     if (learnProofs)
                     {

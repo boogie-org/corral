@@ -110,6 +110,7 @@ namespace LocalServerInCsharp
         public static Random random;
         public static bool portfolioSplitDone = false;
         public static bool staticAlphaListMode = false;
+        public static bool isAnyReachedBound = false;
         public static List<int> staticAlphaList = new List<int>();
         public static int totalAlgo = 1;
         static void Main(string[] args)
@@ -123,6 +124,7 @@ namespace LocalServerInCsharp
             }
             maxClients = configuration.numMaxClients * configuration.numListeners;
             totalAlgo = staticAlphaList.Count;
+            totalAlgo = totalAlgo == 0 ? 1 : totalAlgo; //Patch for vanilla hydra
             int clientsTakenTillNow = (maxClients / totalAlgo) + (maxClients % totalAlgo);
             lastClientID = new List<int>();
             Console.WriteLine(totalAlgo + " tA taken " + clientsTakenTillNow);
@@ -345,6 +347,11 @@ namespace LocalServerInCsharp
                         checkPortfolioSplitIsCompleted(context, msgContent["performORSplit"]);
                     else if (msgContent.ContainsKey("SplitNow"))
                         replyYesOrNoForSplitNow(context, msgContent["SplitNow"]);
+                    else if (msgContent.ContainsKey("ReachedBound"))
+                    {
+                        isAnyReachedBound = true;   //Outcome will be ReachedBound if not NOK
+                        ResponseHttp(context, "CONTINUE");
+                    }
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -829,6 +836,7 @@ namespace LocalServerInCsharp
             nodeTimes.Clear();
             trackCompletedNode = false;
             portfolioSplitDone = false;
+            isAnyReachedBound = false;
             clientCalltreeQueueOr = new Deque<string>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
@@ -989,6 +997,8 @@ namespace LocalServerInCsharp
             }
             else
             {
+                if (outcome.Equals("REACHEDBOUND"))
+                    isAnyReachedBound = true;
                 //Console.WriteLine("free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
                 //Console.ReadLine();
                 //if (clientRequestQueue.Count == 4 && callTreeStack.Count == 0)
@@ -1002,11 +1012,10 @@ namespace LocalServerInCsharp
                //     setKillFlag = true;
                 //}
                 //else
-                {
-                    bool err = ResponseHttp(context, "CONTINUE");
-                    if (err)
-                        handleClientCrash();
-                }
+                bool err = ResponseHttp(context, "CONTINUE");
+                if (err)
+                handleClientCrash();
+                
             }
             
             /*if (outcome.Equals("OK"))
@@ -1632,8 +1641,11 @@ namespace LocalServerInCsharp
         {
             string outFile = workingFile + ".txt";
             string toWrite;
+            
             if (!timedOut)
             {
+                if (isAnyReachedBound && !finalOutcome.Equals("NOK"))
+                    finalOutcome = "ReachedBound";
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
                 Console.WriteLine("Verification Outcome : " + finalOutcome);
