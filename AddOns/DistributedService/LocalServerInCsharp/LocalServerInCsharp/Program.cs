@@ -52,12 +52,17 @@ namespace LocalServerInCsharp
         public static bool setKillFlag = false;
         public static DateTime startTime;
         // Tuple< clientID, httpContext >
-        public static List< Queue<Tuple<int, HttpListenerContext> > > clientRequestQueue = new List<Queue<Tuple<int, HttpListenerContext > > >();
-        public static List<bool> isJobGiven = new List<bool>();
+        public static List< Queue<Tuple<int, HttpListenerContext> > > clientRequestQueue;
+        public static List<bool> isJobGiven;
+        public static List<bool> isAnyReachedBound;
+        public static List<int> totalSplits;
+        public static List<List<int>> algoClientList;
+        public static Queue<int> clientPool;
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
         public static Stack<string> callTreeStack = new Stack<string>();
         public static bool writeLog = false;
         public static bool showTreeLog = false;
+        public static bool PortfolioLog = true;
         public static string[] filePaths;
         public static Queue<string> fileQueue;
         public static Queue<HttpListenerContext> waitingListener;
@@ -71,7 +76,7 @@ namespace LocalServerInCsharp
         public static double communicationTime;
         private static bool receivedTimeGraph = false;
         public static bool askForResetTime = false;
-        public static List<int> numClientsResetTimeSent = new List<int>();
+        public static List<int> numClientsResetTimeSent;
         public static DateTime lastClientCallAt;
         public static string listenerExecutablePath;
         public static string inputFilesDirectory;
@@ -106,13 +111,14 @@ namespace LocalServerInCsharp
         public static int numSplitsOr = 0;
         public static Dictionary<long, Tuple<DateTime, DateTime>> nodeTimes;
         public static Deque<string> clientCalltreeQueueOr;
-        public static List<int> lastClientID;
         public static Random random;
         public static bool portfolioSplitDone = false;
         public static bool staticAlphaListMode = false;
-        public static bool isAnyReachedBound = false;
         public static List<int> staticAlphaList = new List<int>();
         public static int totalAlgo = 1;
+        public static List<int> algoIdToSplitMode;
+        public static int bestAlgo = -1;
+        public static int lastAlgoCompleted = -1;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -123,23 +129,11 @@ namespace LocalServerInCsharp
                     Directory.CreateDirectory(configuration.boogieDumpDirectory);
             }
             maxClients = configuration.numMaxClients * configuration.numListeners;
-            totalAlgo = staticAlphaList.Count;
-            totalAlgo = totalAlgo == 0 ? 1 : totalAlgo; //Patch for vanilla hydra
-            int clientsTakenTillNow = (maxClients / totalAlgo) + (maxClients % totalAlgo);
-            lastClientID = new List<int>();
-            Console.WriteLine(totalAlgo + " tA taken " + clientsTakenTillNow);
-            for (int algo = 0; algo < totalAlgo; algo++)
-            {
-                Console.WriteLine(algo + "  " + lastClientID.Count);
-                lastClientID.Add(clientsTakenTillNow - 1);
-                Console.WriteLine("SERVER: " + algo.ToString() + " has last clientID " + lastClientID[algo]);
-                clientsTakenTillNow += maxClients / totalAlgo;
-                numClientsResetTimeSent.Add(0);
-                isJobGiven.Add(false);
-                clientRequestQueue.Add(new Queue<Tuple<int, HttpListenerContext>>()); 
-            }
-            //By Default job given to algo 0 is true
-            isJobGiven[0] = true;
+            if (staticAlphaListMode) // To be run with portfolio mode
+                totalAlgo = staticAlphaList.Count;
+            else
+                totalAlgo = 1;
+            distributeClients();
             maxListeners = configuration.numListeners;
             timeout = configuration.timeout;
             waitingListener = new Queue<HttpListenerContext>();
@@ -267,12 +261,10 @@ namespace LocalServerInCsharp
                     }
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
-                    Console.WriteLine("Reading Message");
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
                     //Console.WriteLine(body);
                     body = body.Substring(1, body.Length - 2);
                     string[] parseBody = body.Split('=');
-                    Console.WriteLine("Parsing calltree");
                     int clientID = Int16.Parse(parseBody[0]);
                     string calltree = parseBody[1];
                     if (writeLog)
@@ -348,10 +340,7 @@ namespace LocalServerInCsharp
                     else if (msgContent.ContainsKey("SplitNow"))
                         replyYesOrNoForSplitNow(context, msgContent["SplitNow"]);
                     else if (msgContent.ContainsKey("ReachedBound"))
-                    {
-                        isAnyReachedBound = true;   //Outcome will be ReachedBound if not NOK
-                        ResponseHttp(context, "CONTINUE");
-                    }
+                        handleReachedBound(context, msgContent["ReachedBound"]);
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -402,8 +391,9 @@ namespace LocalServerInCsharp
                     /*bool err = ResponseHttp(waitingListener, "RESTART");
                     if (err)
                         startListenerService();*/
-                     finalOutcome = "OK";
-                     totalTime = (DateTime.Now - startTime).TotalSeconds;
+                    finalOutcome = "OK";
+                    bestAlgo = algoId;
+                    totalTime = (DateTime.Now - startTime).TotalSeconds;
                     //setKillFlag = true;
                     askForResetTime = true;
                     while (clientRequestQueue[algoId].Count > 0)
@@ -427,6 +417,7 @@ namespace LocalServerInCsharp
                                 clientNumReset[t.Item1]++;
                                 string calltreeToSend;
                                 long partitionId;
+                                int splitMode = -1;
                                 HttpListenerContext sendToClient = t.Item2;
                                 calltreeToSend = clientCalltreeQueueOr.PopRight();
                                 string[] parse = calltreeToSend.Split(';');
@@ -443,6 +434,8 @@ namespace LocalServerInCsharp
                                 clientIdlingTime[t.Item1] = clientIdlingTime[t.Item1] + (DateTime.Now - clientCalltreeRequestReceiveTime[t.Item1]).TotalSeconds;
                                 numFreeClients--;
                                 isJobGiven[algo] = true;
+                                splitMode = Int16.Parse(parse[0]);
+                                algoIdToSplitMode[algo] = splitMode;
                                 Console.WriteLine("Algo : " + algo.ToString() + " started ");
                             }
                         }
@@ -462,6 +455,7 @@ namespace LocalServerInCsharp
                                     Console.WriteLine("clientCalltreeQueue Count : {0}", clientCalltreeQueue[clientIDOfLargestQueue].Count);
                                 if (clientIDOfLargestQueue < 0 || clientIDOfLargestQueue >= clientCalltreeQueue.Count())
                                 {
+                                    Console.WriteLine("ERROR: clientIdOfLargestQueue is wrong");
                                     Console.ReadLine();
                                 }
                                 string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
@@ -598,6 +592,84 @@ namespace LocalServerInCsharp
                     //Console.WriteLine("TIMEOUT END");
                 }
             }
+        }
+
+        static void distributeClients()
+        {
+            // Initialization
+            clientPool = new Queue<int>();
+            algoClientList = new List<List<int>>();
+            numClientsResetTimeSent = new List<int>();
+            clientRequestQueue = new List<Queue<Tuple<int, HttpListenerContext>>>();
+            isJobGiven = new List<bool>();
+            isAnyReachedBound = new List<bool>();
+            totalSplits = new List<int>();
+            algoIdToSplitMode = new List<int>();
+            bestAlgo = -1;
+            lastAlgoCompleted = -1;
+
+            for (int client = 1; client < maxClients; client++)
+                clientPool.Enqueue(client);
+            for (int algo = 0; algo < totalAlgo; algo++)
+                algoClientList.Add(new List<int>());
+
+            //1st partition assigned to client 0 for Vanilla OR algorithm
+            algoClientList[0].Add(0);
+            if(totalAlgo > maxClients)
+            {
+                Console.WriteLine("ERROR : More type of algo provided than clients");
+                Console.ReadLine();
+            }
+            //Current allocation for client as follows
+            for (int algo = 0; algo < totalAlgo; algo++)
+            {
+                int clientsToAdd = algo == 0 ? ((maxClients / totalAlgo) + (maxClients % totalAlgo)) - 1 : maxClients / totalAlgo;
+                bool areAdded = addClientsToAlgo(algo, clientsToAdd);
+                if (!areAdded)
+                {
+                    Console.WriteLine("ERROR : Clients not added to algo " + algo.ToString());
+                    Console.ReadLine();
+                }
+
+                numClientsResetTimeSent.Add(0);
+                isJobGiven.Add(false);
+                isAnyReachedBound.Add(false);
+                totalSplits.Add(0);
+                algoIdToSplitMode.Add(-1);
+                clientRequestQueue.Add(new Queue<Tuple<int, HttpListenerContext>>());
+                if (PortfolioLog)
+                    showClientsOfAlgo(algo);
+            }
+
+            //Default Values
+            //Job given to algo 0 is true
+            isJobGiven[0] = true;
+            algoIdToSplitMode[0] = 100; // OR
+        }
+
+        static void showClientsOfAlgo(int algoID)
+        {
+            Console.WriteLine("Algo Client list " + algoID.ToString() + ":  " + string.Join(",", algoClientList[algoID]));
+        }
+
+        static bool addClientsToAlgo(int algoId, int clientsToAdd)
+        {
+            bool areClientsAdded = false;
+            if(clientPool.Count < clientsToAdd || clientsToAdd < 0)
+            {
+                Console.WriteLine("ERROR: cannot add "+ clientsToAdd + " clients to algo " + algoId);
+            }
+            else
+            {
+                areClientsAdded = true;
+                while(clientsToAdd > 0)
+                {
+                    int clientID = clientPool.Dequeue();
+                    algoClientList[algoId].Add(clientID);
+                    clientsToAdd--;
+                }
+            }
+            return areClientsAdded;
         }
 
         static void setupConfig(string[] args)
@@ -803,13 +875,7 @@ namespace LocalServerInCsharp
             numSplits = 0;
             startFirstJob = false;
             callTreeStack.Clear();
-            for (int algo = 0; algo < totalAlgo; algo++)
-            {
-                clientRequestQueue[algo].Clear();
-                isJobGiven[algo] = false;
-                numClientsResetTimeSent[algo] = 0;
-            }
-            isJobGiven[0] = true;
+            distributeClients();
             setKillFlag = false;
             receivedTimeGraph = false;
             askForResetTime = false;
@@ -836,7 +902,6 @@ namespace LocalServerInCsharp
             nodeTimes.Clear();
             trackCompletedNode = false;
             portfolioSplitDone = false;
-            isAnyReachedBound = false;
             clientCalltreeQueueOr = new Deque<string>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
@@ -949,8 +1014,7 @@ namespace LocalServerInCsharp
 
         static int getAlgoClientsCount(int algoId)
         {
-            int start = algoId == 0 ? 0 : lastClientID[algoId - 1] + 1;
-            return lastClientID[algoId] - start + 1;
+            return algoClientList[algoId].Count;
         }
 
         public static int findClientIDOfLargestQueue(int algoId)
@@ -962,15 +1026,13 @@ namespace LocalServerInCsharp
                 switchForSingleClient = 0;
             int maxQueueSize = switchForSingleClient;
             int clientIDOfLargestQueue = -1;
-            int start = algoId == 0 ? 0 : lastClientID[algoId - 1] + 1;
-            int end = lastClientID[algoId];
             //Console.WriteLine(algoId + " : " + start + " - " + end);
-            for (int client = start; client <= end ; client++)
+            for (int i = 0; i < algoClientList[algoId].Count ; i++)
             {
-                if (clientCalltreeQueue[client].Count > maxQueueSize && !clientsToKill.Contains(client))
+                if (clientCalltreeQueue[algoClientList[algoId][i]].Count > maxQueueSize && !clientsToKill.Contains(algoClientList[algoId][i]))
                 {
-                    maxQueueSize = clientCalltreeQueue[client].Count;
-                    clientIDOfLargestQueue = client;
+                    maxQueueSize = clientCalltreeQueue[algoClientList[algoId][i]].Count;
+                    clientIDOfLargestQueue = algoClientList[algoId][i];
                 }
             }
             if (maxQueueSize == switchForSingleClient)
@@ -980,11 +1042,15 @@ namespace LocalServerInCsharp
         }
 
 
-        static void checkOutcome(HttpListenerContext context, string outcome)
+        static void checkOutcome(HttpListenerContext context, string msg)
         {
             if (writeLog)
-                Console.WriteLine(outcome);
+                Console.WriteLine(msg);
             numFreeClients++;
+            string[] parse = msg.Split(';');
+            string outcome = parse[0];
+            int clientID = Int16.Parse(parse[1]) - 1;
+            int algoID = getAlgoID(clientID);
             if (outcome.Equals("NOK"))
             {
                 //bool err = ResponseHttp(context, "kill");
@@ -992,30 +1058,31 @@ namespace LocalServerInCsharp
                 if (err)
                     startListenerService();*/
                 finalOutcome = "NOK";
+                bestAlgo = algoID;
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
                 setKillFlag = true;
             }
             else
             {
-                if (outcome.Equals("REACHEDBOUND"))
-                    isAnyReachedBound = true;
                 //Console.WriteLine("free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
                 //Console.ReadLine();
                 //if (clientRequestQueue.Count == 4 && callTreeStack.Count == 0)
                 //{
-                    //bool err = ResponseHttp(context, "DONE");
-                    /*bool err = ResponseHttp(waitingListener, "RESTART");
-                    if (err)
-                        startListenerService();*/
-               //     finalOutcome = "OK";
-               //     totalTime = (DateTime.Now - startTime).TotalSeconds;
-               //     setKillFlag = true;
+                //bool err = ResponseHttp(context, "DONE");
+                /*bool err = ResponseHttp(waitingListener, "RESTART");
+                if (err)
+                    startListenerService();*/
+                //     finalOutcome = "OK";
+                //     totalTime = (DateTime.Now - startTime).TotalSeconds;
+                //     setKillFlag = true;
                 //}
                 //else
+
+                if (outcome.Equals("REACHEDBOUND"))
+                    isAnyReachedBound[algoID] = true;
                 bool err = ResponseHttp(context, "CONTINUE");
                 if (err)
-                handleClientCrash();
-                
+                    handleClientCrash();
             }
             
             /*if (outcome.Equals("OK"))
@@ -1074,6 +1141,7 @@ namespace LocalServerInCsharp
             }
             else
             {
+                lastAlgoCompleted = tree[finishedPartition].clientId;
                 handleEntryTracking(finishedPartition);
                 handleOK(finishedPartition);
             }
@@ -1227,6 +1295,7 @@ namespace LocalServerInCsharp
                 handleExitTracking();
                 Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                 finalOutcome = "OK";
+                bestAlgo = lastAlgoCompleted;
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
                 setKillFlag = true;
             }
@@ -1287,6 +1356,7 @@ namespace LocalServerInCsharp
                 startFirstJob = true;
                 splitNode node = new splitNode(-1, "root");
                 tree.Add(0, node);
+                //1st partition will be assigned to 0 client
                 tree[0].clientId = 0;
                 partitionId = 0;
                 //startTime = DateTime.Now;
@@ -1336,6 +1406,14 @@ namespace LocalServerInCsharp
             }
         }
 
+        static void handleReachedBound(HttpListenerContext context, string msg)
+        {
+            int clientID = Int16.Parse(msg) - 1;
+            int algoID = getAlgoID(clientID);
+            isAnyReachedBound[algoID] = true;   //Outcome will be ReachedBound if not NOK
+            ResponseHttp(context, "CONTINUE");
+        }
+
         static void checkPortfolioSplitIsCompleted(HttpListenerContext context, string msg)
         {
             //Console.WriteLine("checkPortfolioSplitIsCompleted : " + msg);
@@ -1366,27 +1444,38 @@ namespace LocalServerInCsharp
             int algoId = -1;
             for(int algo = 0;algo < totalAlgo; algo++)
             {
-                if(isJobGiven[algo])
+                if (isAlgoCompleted(algo))
                 {
-                    bool completed = true;
-                    int start = algo == 0 ? 0 : lastClientID[algo - 1] + 1;
-                    for (int clientID = start; clientID <= lastClientID[algo]; clientID++)
-                    {
-                        if (clientCalltreeQueue[clientID].Count > 0)
-                        {
-                            completed = false;
-                            break;
-                        }
-                    }
-                    int totalClientsInAlgo = lastClientID[algo] - start + 1;
-                    if (completed && totalClientsInAlgo == clientRequestQueue[algo].Count)
-                    {
-                        algoId = algo;
-                        break;
-                    }
+                    algoId = algo;
+                    break;
                 }
             }
             return algoId;
+        }
+
+        //Return Value: Description
+        // True: Algo is completed
+        // False: Algo is not started or not completed
+        static bool isAlgoCompleted(int algoID)
+        {
+            bool isCompleted = false;
+            if (isJobGiven[algoID])
+            {
+                bool noJobPending = true;
+                for (int i = 0; i < algoClientList[algoID].Count; i++)
+                {
+                    if (clientCalltreeQueue[algoClientList[algoID][i]].Count > 0)
+                    {
+                        noJobPending = false;
+                        break;
+                    }
+                }
+                if (noJobPending && algoClientList[algoID].Count == clientRequestQueue[algoID].Count)
+                {
+                    isCompleted = true;
+                }
+            }
+            return isCompleted;
         }
 
         static void addCalltree(HttpListenerContext context, int clientID, string calltree)
@@ -1398,7 +1487,8 @@ namespace LocalServerInCsharp
             }
             else
             {
-                Console.WriteLine("Adding Tree from " + (clientID - 1).ToString());
+                //Console.WriteLine("Adding Tree from " + (clientID - 1).ToString());
+                int algoID = getAlgoID(clientID - 1);
                 double splitInterval = (DateTime.Now - lastSplitArrival).TotalSeconds;
                 //Console.WriteLine(splitInterval);
                 if (splitInterval < smallestSplitInterval)
@@ -1425,7 +1515,7 @@ namespace LocalServerInCsharp
                     Console.WriteLine("Added AND Nodes: " + blockId + " " + mustReachId);
                     if (!tree.ContainsKey(parentId))
                     {
-                        Console.WriteLine("Key not found for parentID : " + parentId);
+                        Console.WriteLine("ERROR: Key not found for parentID : " + parentId);
                         Console.ReadLine();
                     }
                     tree[parentId].children.Add(blockId);
@@ -1436,6 +1526,7 @@ namespace LocalServerInCsharp
                         tree[blockId].isLeading = false;
                     }
                     numSplitsAnd++;
+                    totalSplits[algoID]++;
                     clientCalltreeQueue[clientID - 1].PushLeft(calltree);
                 }
                 else
@@ -1452,7 +1543,7 @@ namespace LocalServerInCsharp
                     Console.WriteLine("Added OR Nodes: " + dummySplitID + " " + ORId);
                     if (!tree.ContainsKey(parentId))
                     {
-                        Console.WriteLine("Key not found for parentID : " + parentId);
+                        Console.WriteLine("ERROR: Key not found for parentID : " + parentId);
                         Console.ReadLine();
                     }
                     tree[parentId].children.Add(dummySplitID);
@@ -1564,8 +1655,15 @@ namespace LocalServerInCsharp
             int algoID = -1;
             for(int algo = 0; algo < totalAlgo; algo++)
             {
-                algoID = algo;
-                if (clientID <= lastClientID[algo])
+                for(int i = 0; i < algoClientList[algo].Count; i++)
+                {
+                    if(algoClientList[algo][i] == clientID)
+                    {
+                        algoID = algo;
+                        break;
+                    }
+                }
+                if (algoID != -1)
                     break;
             }
             return algoID;
@@ -1599,6 +1697,19 @@ namespace LocalServerInCsharp
             else
                 toWrite = "TIMEDOUT";
             File.WriteAllText(outFile, toWrite);
+        }
+
+        public static void writeAlgoDetails(string outFile)
+        {
+            string toWrite = "#ALGO Details#";
+            toWrite += "\nBest Algo splitMode:" + algoIdToSplitMode[bestAlgo].ToString();
+            toWrite += "\nSplitMode:totalANDSplits";
+            for(int algo = 0; algo < totalAlgo; algo++)
+            {
+                toWrite += "\n" + algoIdToSplitMode[algo].ToString() + ":" + totalSplits[algo].ToString();
+            }
+            File.AppendAllText(outFile, toWrite);
+            Console.WriteLine("bestAlgo: " + bestAlgo.ToString());
         }
 
         public static void writetStats(string outFile)
@@ -1641,10 +1752,9 @@ namespace LocalServerInCsharp
         {
             string outFile = workingFile + ".txt";
             string toWrite;
-            
             if (!timedOut)
             {
-                if (isAnyReachedBound && !finalOutcome.Equals("NOK"))
+                if (isAnyReachedBound[bestAlgo] && !finalOutcome.Equals("NOK"))
                     finalOutcome = "ReachedBound";
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
@@ -1677,6 +1787,7 @@ namespace LocalServerInCsharp
                 }
                 //writetStats(outFile);
             }
+            writeAlgoDetails(outFile);
         }
 
         public static bool ResponseHttp(HttpListenerContext context, string msg)
