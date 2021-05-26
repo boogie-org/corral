@@ -1141,7 +1141,7 @@ namespace LocalServerInCsharp
             }
             else
             {
-                lastAlgoCompleted = tree[finishedPartition].clientId;
+                lastAlgoCompleted = getAlgoID(tree[finishedPartition].clientId);
                 handleEntryTracking(finishedPartition);
                 handleOK(finishedPartition);
             }
@@ -1699,10 +1699,13 @@ namespace LocalServerInCsharp
             File.WriteAllText(outFile, toWrite);
         }
 
-        public static void writeAlgoDetails(string outFile)
+        public static void writeAlgoDetails(string outFile, bool timedOut)
         {
             string toWrite = "#ALGO Details#";
-            toWrite += "\nBest Algo splitMode:" + algoIdToSplitMode[bestAlgo].ToString();
+            if(!timedOut)
+                toWrite += "\nBest Algo splitMode:" + algoIdToSplitMode[bestAlgo].ToString();
+            else
+                toWrite += "\nBest Algo splitMode:-1";
             toWrite += "\nSplitMode:totalANDSplits";
             for(int algo = 0; algo < totalAlgo; algo++)
             {
@@ -1787,7 +1790,7 @@ namespace LocalServerInCsharp
                 }
                 //writetStats(outFile);
             }
-            writeAlgoDetails(outFile);
+            writeAlgoDetails(outFile, timedOut);
         }
 
         public static bool ResponseHttp(HttpListenerContext context, string msg)
