@@ -393,6 +393,7 @@ namespace LocalServerInCsharp
                         startListenerService();*/
                     finalOutcome = "OK";
                     bestAlgo = algoId;
+                    Console.WriteLine("Outcome OK bestAlgo updated to " + bestAlgo.ToString());
                     totalTime = (DateTime.Now - startTime).TotalSeconds;
                     //setKillFlag = true;
                     askForResetTime = true;
@@ -1059,6 +1060,7 @@ namespace LocalServerInCsharp
                     startListenerService();*/
                 finalOutcome = "NOK";
                 bestAlgo = algoID;
+                Console.WriteLine("Outcome NOK bestAlgo updated to " + bestAlgo.ToString());
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
                 setKillFlag = true;
             }
@@ -1295,7 +1297,11 @@ namespace LocalServerInCsharp
                 handleExitTracking();
                 Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                 finalOutcome = "OK";
-                bestAlgo = lastAlgoCompleted;
+                if(bestAlgo == -1)
+                {
+                    bestAlgo = lastAlgoCompleted;
+                    Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
+                }
                 totalTime = (DateTime.Now - startTime).TotalSeconds;
                 setKillFlag = true;
             }
