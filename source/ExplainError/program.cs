@@ -77,7 +77,7 @@ namespace ExplainError
         #endregion
 
         #region Globals
-        //Statics
+        //Staticsprogra
         static private Stopwatch sw;
         static public Program prog;
         static private Implementation currImpl;
@@ -132,14 +132,15 @@ namespace ExplainError
             /////////////////////////////////////
             //override teh default options
             verbose = false;
-            onlySlicAssumes = true; //changing it to false makese several stackoverflowexns, timeouts with little 
+            // onlySlicAssumes = true; //changing it to false makese several stackoverflowexns, timeouts with little 
+            onlySlicAssumes = false; //changed for the purposes of experimentation 
             onlyDisplayAliasingInPre = true;
             onlyDisplayMapExpressions = true;
             dontDisplayComparisonsWithConsts = true;
             cflowDependencyInfo = cntrlFlowDependencyInfo;
             if (explainErrorFilters == 1) //using it for memory safety rootcause
             {
-                ignoreAllAssumes = true;
+                ignoreAllAssumes = false;
                 //onlyDisplayAliasingInPre = false;
                 onlyDisplayMapExpressions = false;
                 dontDisplayComparisonsWithConsts = false;
@@ -182,8 +183,9 @@ namespace ExplainError
                 //SimplifyAssumesUsingForwardPass();
                 ComputePreCmdSeq(impl.Blocks[0].Cmds, skipAssumes, out preInDnfForm, out eeSlicedSourceLines);
                 //Don't call the prover on impl before the expression generation phase, it adds auxiliary incarnation variables, and later checks are rendered vacuous
-
+                Console.WriteLine("This is the pre before neccesary checking {0}", preInDnfForm);
                 CheckNecessaryDisjuncts(ref preInDnfForm);
+                Console.WriteLine("This is the pre after neccesary checking {0}", preInDnfForm);
                 CheckIfTrueDisjunct(ref preInDnfForm);
                 Console.WriteLine("ExplainError Rootcause = {0}", ExprListSetToDNFExpr(preInDnfForm)); //print boogie exprs
                 returnStatus = STATUS.SUCCESS;
@@ -305,6 +307,8 @@ namespace ExplainError
             List<string> lastStmtsAdded = new List<string>(); //remember if a stmt was added since last sourceline found
             foreach (var cmd in cmds)
             {
+
+                Console.WriteLine("this is the command {0}", cmd);
                 //if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
                 var si = FindSourceLineInfo(cmd); //with SMACK, we cannot trust lineinfo to be in assert true anymore
@@ -342,13 +346,19 @@ namespace ExplainError
                 }
                 else if (cmd is AssumeCmd)
                 {
+                   
                     if (ContainsBlockInfo((AssumeCmd)cmd))
                     {
                         //if (verbose) Console.WriteLine("--- Block {0}", cmd);
                         UpdateBranchJoinStack((AssumeCmd)cmd, supportVarsInPre, branchJoinStack);
                         continue;
                     }
-                    if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) continue;
+                    if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) { 
+                    Console.WriteLine("this assume was filtered out");
+                        continue;
+
+                    }
+                    Console.WriteLine("this assume was not filtered out");
                     numAssumes++; //this assume permitted by filter
                     if (skipAssumes.Contains(cmd) || branchJoinStack.Count > 0)
                     {
@@ -360,6 +370,7 @@ namespace ExplainError
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
                     //pre = Expr.And(((AssumeCmd)cmd).Expr, pre); //TODO: Boolean simplifications
+                    Console.WriteLine("expr for this added to pre");
                     preL.Add(((AssumeCmd)cmd).Expr);
                     GetSupportVars(((AssumeCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
                 }
@@ -396,6 +407,8 @@ namespace ExplainError
             //Now compute the pre over the sequence of commands
             //THIS IS THE HEAVYWEIGHT SIMPLIFICATION, SO IGNORE WHEN NOT NEEDED
             if (traceSlicingOnly) return;
+            // Console.WriteLine("printint preL");
+            // Console.WriteLine(String.Join(", ", preL));
             foreach (var d in ComputePreOverVocab(preL, null))
                 preInDnfForm.Add(d);
         }
@@ -525,6 +538,7 @@ namespace ExplainError
             //TODO: get the NNF in a list<Expr> form so that FilteredPreIsNecessary does not have to recurse on the AND chain
             Expr fe; //filtered expr (not used)
             HashSet<Expr> filteredAtoms;
+            Console.WriteLine("\n precondition before filtering = {0}", e);
             if ((filteredAtoms = FilteredAtoms(currImpl, e, out fe)).Count == 0)
             {
                 //throw new Exception("Abort: No atoms after applying filter...no point proceeding");
@@ -542,8 +556,8 @@ namespace ExplainError
                 preDnf = ExprUtil.PerformDNF(e);
             }
             else
-            {
-                var mc = MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf);
+            { 
+            var mc = MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf);
                 if (mc)
                     Console.WriteLine("\n Found a conjunctive cube cover {0}\n", preDnf[0]);
                 else
@@ -601,6 +615,8 @@ namespace ExplainError
         /// <returns></returns>
         private static bool MonomialCubeCover(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
         {
+            Console.WriteLine("currPre in monomial Cube Cover = {0}",currPre);
+            Console.WriteLine("fe in monomical cube cover = {0}", fe);
             var t = fe.ToList().FindAll(a => VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Imp(currPre, a))));
             l = new List<Expr>();
             if (t.Count > 0)
@@ -1209,6 +1225,7 @@ namespace ExplainError
                 int eeCoverOptAsInt = 0;
                 if (CheckIntegerFlag(a, "eeCoverOpt", ref eeCoverOptAsInt))
                 {
+                    Console.WriteLine("heard you");
                     eeCoverOpt =
                         eeCoverOptAsInt == 0 ? COVERMODE.MONOMIAL :
                         eeCoverOptAsInt == 1 ? COVERMODE.FULL :
@@ -1527,13 +1544,25 @@ namespace ExplainError
 
         private static bool LiteralInVocabulary(Expr c)
         {
-            Console.Write("Atom:{0}\t", c);
+            //Console.WriteLine("This is the Atom:{0}\t", c);
             if (useFiltersFromFile)
             {
                 return LiteralInVocabularyNew(c);
             }
             else
                 return LiteralInVocabularyAux(c); //!LiteralNotInVocabularyOld(c);
+        }
+
+        private static void LiteralFilterFlags()
+        {
+            Console.WriteLine("These are the literal Filter flags");
+            Console.WriteLine("onlyDisplayAliasingInPre:{0}", onlyDisplayAliasingInPre);
+            Console.WriteLine("onlyDisplayMapExpressions:{0}", onlyDisplayMapExpressions);
+            Console.WriteLine("dontDisplayComparisonsWithConsts:{0}", dontDisplayComparisonsWithConsts);
+            Console.WriteLine("displayGuardVariables:{0}", displayGuardVariables);
+            Console.WriteLine("noFilters:{0}", noFilters);
+            Console.WriteLine("displayTypeStateVariables:{0}", displayTypeStateVariables);
+            Console.WriteLine("diplayPropertyMaps:{0}", diplayPropertyMaps);
         }
 
         /// <summary>
@@ -1543,7 +1572,7 @@ namespace ExplainError
         /// <returns></returns>
         private static bool LiteralInVocabularyAux(Expr c)
         {
-            //Console.Write("Atom:{0}\t", c);
+            Console.WriteLine("Atom:{0}\t", c);
             //Check if it matches any of the negative filters
             if (onlyDisplayAliasingInPre && IsNeqComparison(c) /*!IsAliasingConstraint(c)*/) return false;   //definitely not matches
             if (onlyDisplayMapExpressions && !ContainsMapExpression(c)) return false;
@@ -1618,30 +1647,123 @@ namespace ExplainError
         }
         private static bool MatchesSyntacticAssumeFilters(AssumeCmd assumeCmd)
         {
+            //Console.WriteLine("1");
             if (((AssumeCmd) assumeCmd).Expr.ToString() == Expr.True.ToString()) return false;
+            //Console.WriteLine("2");
             //only consider assume wiht {:partition} tags
             if (!QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "partition")) return false;
+            // Console.WriteLine("3");
             if (ignoreAllAssumes) return false;
+             //Console.WriteLine("4");
+            // Console.WriteLine("{0}",assumeCmd.Attributes);
             if(onlySlicAssumes) return QKeyValue.FindBoolAttribute(assumeCmd.Attributes, "slic");
+            // Console.WriteLine("5");
             return true;
         }
         private static HashSet<Expr> FilteredAtoms(Implementation currImpl, Expr t, out Expr e)
         {
             var fexps = new HashSet<Expr>(); // list of filtered exprs
+
+            LiteralFilterFlags();
+            fexps = new HashSet<Expr>(); // list of filtered exprs
             e = GetFilteredExpr(t, ref fexps); //the return expr is of no value now
-            Console.WriteLine("\n Filtered atoms before true/false = {0}", String.Join(", ", fexps));
+
             fexps.RemoveWhere(p =>
                 VCVerifier.CheckIfExprFalse(currImpl, p) ||
                 VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(p))); //remove any true/false predicate
             Console.WriteLine("\n Filtered atoms = {0}", String.Join(", ", fexps));
+
+            //exploring the structure of the atoms
+            //Console.WriteLine((((fexps.ElementAt(0) as NAryExpr).Args[0] as NAryExpr).Fun as FunctionCall).FunctionName);
+
+
+
+            // This part is just testing 
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+            );
+            HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
+            fexps.Iter(fexp=>GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
+            Console.WriteLine("\n The variables in the filtered expressions = {0}", String.Join(", ", supportVarsInFilteredAtoms));
+
+            Variable len = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
+            Variable start = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
+            foreach (Variable var in supportVarsInFilteredAtoms)
+            {
+                if (var.Name.Contains("i1")) {
+                    len = var;
+                }
+
+
+                if (var.Name.Contains("p0")) {
+                    start = var;
+                }
+            }
+            Console.WriteLine("start = {0}, len = {1}", start, len);
+
+            LiteralExpr size = new LiteralExpr(Token.NoToken, BigNum.FromInt(4));
+
+            //Done
+            Console.WriteLine("buffer assumption call {0}", GetBufferAssumptionCall(new IdentifierExpr(Token.NoToken, start)));
+            Console.WriteLine("pattern1 assumption call {0}", GenerateTemplate1(new IdentifierExpr(Token.NoToken, start), 
+                new IdentifierExpr(Token.NoToken, len),
+                size));
+            Expr bufferAssumption = GetBufferAssumptionCall(new IdentifierExpr(Token.NoToken, start));
+            Expr pattern1Assumption = GenerateTemplate1(new IdentifierExpr(Token.NoToken, start),
+                new IdentifierExpr(Token.NoToken, len),
+                size);
+
+            Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern1Assumption));
+            Console.WriteLine("final condition = {0}",FinalCondition);
+            fexps = new HashSet<Expr>();
+            fexps.Add(FinalCondition);
             return fexps;
         }
+
+
+        private static Expr GetBufferAssumptionCall(Expr buffStart)
+        {
+            Function BufferAssumptionFunction = BoogieUtil.findFunctionDecl(prog.TopLevelDeclarations, "assumeBufferAtAddress");
+            if (BufferAssumptionFunction == null)
+            {
+                throw new InvalidInput("pattern1Assume function not found");
+            }
+
+            Variable AllocArray = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
+            if (AllocArray == null)
+            {
+                throw new InvalidInput("$Alloc array not found.");
+            }
+
+            List<Expr> argsList = new List<Expr>() {buffStart, new IdentifierExpr(Token.NoToken, AllocArray) };
+            return new NAryExpr(Token.NoToken, new FunctionCall(BufferAssumptionFunction), argsList);
+        }
+
+        //Note that you might need an argument for  buff type too
+        private static Expr GenerateTemplate1(Expr buffStart, Expr buffLen, Expr buffSize)
+        {
+            Function pattern1Assume = BoogieUtil.findFunctionDecl(prog.TopLevelDeclarations, "pattern1Assume");
+            if (pattern1Assume == null) {
+                throw new InvalidInput("pattern1Assume function not found");
+            }
+            List<Expr> argsList = new List<Expr>() { buffStart, buffLen, buffSize };
+            return new NAryExpr(Token.NoToken, new FunctionCall(pattern1Assume) , argsList);
+        }
+
+
         private static Expr GetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
         {
             CheckTimeout("Inside GetFilteredExpr");
             var expr = e as NAryExpr;
+            //Console.WriteLine("\n  value of e getfilteredexpr {0}", e);
+            //Console.WriteLine("\n  value of expr getfilteredexpr {0}", expr);
             if (expr == null)
             {
+                //Console.WriteLine("expre == null\n");
                 if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
@@ -1649,6 +1771,7 @@ namespace ExplainError
             var binOp = expr.Fun as BinaryOperator;
             if (binOp == null || (binOp.Op != BinaryOperator.Opcode.And && binOp.Op != BinaryOperator.Opcode.Or))
             {
+                //Console.WriteLine("binop not and or or\n");
                 if (!LiteralInVocabulary(e)) return Expr.True; //default
                 if (!fexps.Contains(e)) fexps.Add(e);
                 return e;
@@ -1656,6 +1779,112 @@ namespace ExplainError
             return ExprUtil.NAryExpr(binOp,
                 new List<Expr> { GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps) });
         }
+
+        private static Expr NewGetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
+        {
+            //1. get the set of variable in the expression e
+            //2. generate the pairwise inequality/(and equality?) of atoms
+            //3. return the set of filtered expressions
+            
+            // if (expr == null)
+            // {
+            //     Console.WriteLine("expre == null\n");
+            //     if (!LiteralInVocabulary(e)) return Expr.True; //default
+            //     if (!fexps.Contains(e)) fexps.Add(e);
+            //     return e;
+            // }
+
+            //1. get the set of variable in the expression e
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+            );
+            HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
+            GetSupportVars(e).Iter(x => supportVarsInPre.Add(x));
+            Console.WriteLine("\n The variables in the precondition = {0}", String.Join(", ", supportVarsInPre));
+            
+            //2. generate the pairwise inequality/(and equality?) of atoms
+            foreach (Variable v1 in supportVarsInPre)
+            {
+                foreach (Variable v2 in supportVarsInPre){
+                    if(v1!=v2){
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Gt, Expr.Ident(v1), Expr.Ident(v2)));
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Ge, Expr.Ident(v1), Expr.Ident(v2)));
+                    }
+                }
+            }
+            Console.WriteLine("\n The newly generated set = {0}", String.Join(", ", fexps));
+            return e;
+
+        }
+
+        private static Expr NewGetFilteredExprWithArithmetic(Expr e, ref HashSet<Expr> fexps)
+        {
+            //1. get the set of variable in the expression e
+            //2. generate the arithmetic expressions from the variables
+            //3. generate the pairwise inequality/(and equality?) of expressions
+            //4. return the set of filtered expressions
+
+            // if (expr == null)
+            // {
+            //     Console.WriteLine("expre == null\n");
+            //     if (!LiteralInVocabulary(e)) return Expr.True; //default
+            //     if (!fexps.Contains(e)) fexps.Add(e);
+            //     return e;
+            // }
+
+            //1. get the set of variable in the expression e
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+            );
+            HashSet<Variable> supportVarsInPre = new HashSet<Variable>();
+            GetSupportVars(e).Iter(x => supportVarsInPre.Add(x));
+            Console.WriteLine("\n The variables in the precondition = {0}", String.Join(", ", supportVarsInPre));
+
+            //2. generate the pairwise arithmetic expression from the variables in the original expression
+            HashSet<Expr> arithmeticExpressions = new HashSet<Expr>();
+            foreach (Variable v1 in supportVarsInPre)
+            {
+                foreach (Variable v2 in supportVarsInPre)
+                {
+                    if (v1 != v2)
+                    {
+                        arithmeticExpressions.Add(Expr.Binary(BinaryOperator.Opcode.Add, Expr.Ident(v1), Expr.Ident(v2)));
+                        arithmeticExpressions.Add(Expr.Binary(BinaryOperator.Opcode.Sub, Expr.Ident(v1), Expr.Ident(v2)));
+                    }
+                }
+            }
+            Console.WriteLine("\n The newly generated set of arithmetic expressions= {0}", String.Join(", ", arithmeticExpressions));
+
+            //3. generate the expressions from the arithmetic expression and the variables, such that on one side you have a
+            //   variable and on the other side you have an expression
+            foreach (Variable v1 in supportVarsInPre)
+            {
+                foreach (Expr arith in arithmeticExpressions)
+                {
+
+                    if (!GetSupportVars(arith).Contains(v1))
+                    {
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Gt, arith, Expr.Ident(v1)));
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Ge, arith, Expr.Ident(v1)));
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Lt, arith, Expr.Ident(v1)));
+                        fexps.Add(Expr.Binary(BinaryOperator.Opcode.Le, arith, Expr.Ident(v1)));
+                    }
+                }
+            }
+
+            Console.WriteLine("\n The newly generated set = {0}", String.Join(", ", fexps));
+            return e;
+
+        }
+
         /// <summary>
         /// Returns false if c matches all the enabled filters that apply to it
         /// </summary>

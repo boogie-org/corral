@@ -1,0 +1,38 @@
+﻿<Properties StartupConfiguration="{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}|Default">
+  <MonoDevelop.Ide.Workbench ActiveDocument="../../boogie/Source/Basetypes/BigNum.cs">
+    <Files>
+      <File FileName="../../boogie/Source/Core/AbsyExpr.cs" Line="587" Column="45" />
+      <File FileName="../../boogie/Source/Core/DeadVarElim.cs" Line="333" Column="20" />
+      <File FileName="../../source/ExplainError/program.cs" Line="1704" Column="64" />
+      <File FileName="../../source/Util/BoogieUtil.cs" Line="544" Column="10" />
+      <File FileName="AngelicVerifierNull/Program.cs" Line="439" Column="65" />
+      <File FileName="../../boogie/Source/Core/Absy.cs" Line="1623" Column="57" />
+      <File FileName="../../boogie/Source/Basetypes/BigNum.cs" Line="18" Column="17" />
+    </Files>
+    <Pads>
+      <Pad Id="ProjectPad">
+        <State name="__root__">
+          <Node name="AngelicVerifierNull" expanded="True">
+            <Node name="boogie" expanded="True">
+              <Node name="Basetypes" expanded="True">
+                <Node name="BigNum.cs" selected="True" />
+              </Node>
+              <Node name="Core" expanded="True" />
+            </Node>
+            <Node name="AngelicVerifierNull" expanded="True" />
+            <Node name="AvHarnessInstrumentation" expanded="True" />
+            <Node name="CorralUtil" expanded="True" />
+            <Node name="ExplainError" expanded="True" />
+          </Node>
+        </State>
+      </Pad>
+    </Pads>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.ItemProperties.AngelicVerifierNull PreferredExecutionTarget="MonoDevelop.Default" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MultiItemStartupConfigurations />
+</Properties>

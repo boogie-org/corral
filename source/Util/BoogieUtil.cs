@@ -404,6 +404,7 @@ namespace cba.Util
                 Console.WriteLine(e.ToString());
                 return null;
             }
+            BoogieUtil.PrintProgram(p, "temp_prog.bpl");
             return p;
         }
 
@@ -581,6 +582,19 @@ namespace cba.Util
                 }
             }
 
+            return null;
+        }
+
+        public static Function findFunctionDecl(IEnumerable<Declaration> decls, string procname)
+        {
+            foreach (Declaration d in decls)
+            {
+                if (d is Function)
+                {
+                    if ((d as Function).Name.Equals(procname))
+                        return (d as Function);
+                }
+            }
             return null;
         }
 
