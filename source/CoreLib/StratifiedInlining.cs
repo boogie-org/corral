@@ -1671,26 +1671,25 @@ namespace CoreLib
                             replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
                             if (killThisClient(replyFromServer, "performORSplit"))
                                 return Outcome.Correct;
+                            long parentID = currentId;
                             if (replyFromServer.Equals("YES"))
                             {
                                 foreach (int val in staticAlphaList)
                                 {
-                                    if (val == splitMode)
-                                    {
-                                        continue;
-                                        //SKIP if the new setting is same as current setting
-                                    }
-                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
+                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + parentID.ToString());
                                     if (killThisClient(replyFromServer, "newPartition OR"))
                                         return Outcome.Correct;
                                     long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
                                     long ORId = dummyId + 1;
                                     //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                                    replyFromServer = sendCalltreeToServer(val + ";" + currentId + ";" + ORId +
+                                    replyFromServer = sendCalltreeToServer(val + ";" + parentID + ";" + ORId +
                                                       ";OR;" + calltreeToSend);
                                     if (killThisClient(replyFromServer, "calltreeSend OR"))
                                         return Outcome.Correct;
-                                    currentId = dummyId;
+                                    if(val == splitMode)
+                                    {
+                                        currentId = ORId;
+                                    }
                                 }
                             }
                         }
@@ -3116,6 +3115,7 @@ namespace CoreLib
                             communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
                         //Console.ReadLine();
                     }
+
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -3151,8 +3151,12 @@ namespace CoreLib
                     //else
                     {
                         string[] parse = replyFromServer.Split(';');
-                        Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " replyFromServer: " + replyFromServer.Substring(0, Math.Min(20, replyFromServer.Length)));
+                        if(parse.Length == 1)
+                        {
+                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => replyFromServer: " + replyFromServer.Substring(0, Math.Min(20, replyFromServer.Length)));
+                        }
                         splitMode = Int16.Parse(parse[0]);
+                        Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => after replyFromServer: " + parse[0]);
                         //Console.WriteLine("Received ORSplit Mode : " + splitMode);
                         currentId = Int64.Parse(parse[2]);
                         receivedCalltree = parse[4];

@@ -606,6 +606,10 @@ namespace cba
                 cba.Util.HydraConfig.staticAlphaList = staticAlphaList;
                 cba.Util.HydraConfig.staticAlphaListMode = true;
             }
+            else if (flag.StartsWith("/waitForBetterResult"))
+            {
+                Console.WriteLine("Waiting for better result if ReachedBound");
+            }
             else if (flag.StartsWith("/hydraServerURI:"))
             {
                 var split = flag.Split(sep);
