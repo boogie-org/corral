@@ -397,7 +397,7 @@ namespace LocalServerInCsharp
                             finalOutcome = "OK";
                             Console.WriteLine("Outcome OK bestAlgo updated to " + bestAlgo.ToString());
                         }
-                        if (!askForResetTime[algo])
+                        if (clientRequestQueue[algo].Count == algoClientList[algo].Count && !askForResetTime[algo])
                         {
                             askForResetTime[algo] = true;
                             while (clientRequestQueue[algo].Count > 0)
@@ -1230,7 +1230,7 @@ namespace LocalServerInCsharp
                 tree[parent].children.Remove(id);
             }
 
-            if (parent != -1)
+            if ((!waitForBetterResult && parent != -1) || (waitForBetterResult && parent != 0 && parent != -1))
             {
                 if (tree[parent].children.Count == 0)
                     handleOK(parent);
@@ -1240,16 +1240,39 @@ namespace LocalServerInCsharp
             else
             {
                 handleExitTracking();
-                Console.WriteLine("Reached root of partition tree. Verfification Finished.");
-                finalOutcome = "OK";
-                if(bestAlgo == -1)
+                if (!waitForBetterResult)
                 {
-                    bestAlgo = lastAlgoCompleted;
-                    Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
-                    totalTime[bestAlgo] = (DateTime.Now - startTime).TotalSeconds;
-                    isJobCompleted[bestAlgo] = true;
-                    if(!waitForBetterResult || !isAnyReachedBound[bestAlgo])
+                    Console.WriteLine("Reached root of partition tree. Verfification Finished.");
+                    finalOutcome = "OK";
+                    if (bestAlgo == -1)
                     {
+                        bestAlgo = lastAlgoCompleted;
+                        Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
+                        totalTime[bestAlgo] = (DateTime.Now - startTime).TotalSeconds;
+                        isJobCompleted[bestAlgo] = true;
+                        setKillFlag = true;
+                    }
+                }
+                else
+                {
+                    finalOutcome = "OK";
+                    if (parent == 0)
+                    {
+                        if (bestAlgo == -1)
+                        {
+                            bestAlgo = lastAlgoCompleted;
+                            Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
+                        }
+                        Console.WriteLine("Reached root of "+ lastAlgoCompleted.ToString() + " algo. Verfification Finished.");
+                        totalTime[lastAlgoCompleted] = (DateTime.Now - startTime).TotalSeconds;
+                        isJobCompleted[lastAlgoCompleted] = true;
+                        bool allCompleted = areAllAlgoCompleted();
+                        if (allCompleted || !isAnyReachedBound[lastAlgoCompleted])
+                            setKillFlag = true;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                         setKillFlag = true;
                     }
                 }
@@ -1888,7 +1911,7 @@ namespace LocalServerInCsharp
                 }
                 //writetStats(outFile);
             }
-            writeAlgoDetails(outFile, timedOut);
+            writeAlgoDetails(outFile, allTimedOut);
         }
 
         public static bool ResponseHttp(HttpListenerContext context, string msg)

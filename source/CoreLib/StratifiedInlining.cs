@@ -3113,7 +3113,8 @@ namespace CoreLib
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
                         sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
                             communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
-                        //Console.ReadLine();
+                        continueVerification = false;
+                        continue;
                     }
 
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
