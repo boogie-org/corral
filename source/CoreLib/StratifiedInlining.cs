@@ -1462,6 +1462,60 @@ namespace CoreLib
                 splittingStartTime = DateTime.Now;
                 var size = di.ComputeSize();
                 int splitFlag = 0;
+                if (cba.Util.HydraConfig.runPortfolio)
+                {
+                    if (numSplits > 4 || staticAlphaListMode)
+                    {
+                        if (!staticAlphaListMode)
+                        {
+                            int newSetting;
+                            if (splitMode == 100)
+                                newSetting = 0;
+                            else
+                                newSetting = 100;
+                            replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
+                            if (killThisClient(replyFromServer, "newPartition OR"))
+                                return Outcome.Correct;
+                            long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                            long ORId = dummyId + 1;
+                            //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
+                            replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId +
+                                              ";OR;" + calltreeToSend);
+                            if (killThisClient(replyFromServer, "calltreeSend OR"))
+                                return Outcome.Correct;
+                            currentId = dummyId;
+                            //Console.WriteLine("OR Split Check : " + numSplits + " 100");
+                        }
+                        else
+                        {
+                            replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
+                            if (killThisClient(replyFromServer, "performORSplit"))
+                                return Outcome.Correct;
+                            long parentID = currentId;
+                            if (replyFromServer.Equals("YES"))
+                            {
+                                foreach (int val in staticAlphaList)
+                                {
+                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + parentID.ToString());
+                                    if (killThisClient(replyFromServer, "newPartition OR"))
+                                        return Outcome.Correct;
+                                    long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                                    long ORId = dummyId + 1;
+                                    //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
+                                    replyFromServer = sendCalltreeToServer(val + ";" + parentID + ";" + ORId +
+                                                      ";OR;" + calltreeToSend);
+                                    if (killThisClient(replyFromServer, "calltreeSend OR"))
+                                        return Outcome.Correct;
+                                    if (val == splitMode)
+                                    {
+                                        currentId = ORId;
+                                    }
+                                }
+                            }
+                        }
+                        numSplits = 0;
+                    }
+                }
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
@@ -1603,7 +1657,9 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                             //if (writeLog)
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
+                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition + " with id = " + currentId.ToString() + " and splitMode " + splitMode.ToString());
+                            
+
                             if (splitMode == 0 && callsitesInlinedCurrentPartition >= alphaUW)
                             {
                                 //callsitesInlinedCurrentPartition = 0;
@@ -1642,60 +1698,7 @@ namespace CoreLib
                         }
                     }
                 }
-                if (cba.Util.HydraConfig.runPortfolio)
-                {
-                    if (numSplits > 4 || staticAlphaListMode)
-                    {
-                        if (!staticAlphaListMode)
-                        {
-                            int newSetting;
-                            if (splitMode == 100)
-                                newSetting = 0;
-                            else
-                                newSetting = 100;
-                            replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
-                            if (killThisClient(replyFromServer, "newPartition OR"))
-                                return Outcome.Correct;
-                            long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
-                            long ORId = dummyId + 1;
-                            //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                            replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId +
-                                              ";OR;" + calltreeToSend);
-                            if (killThisClient(replyFromServer, "calltreeSend OR"))
-                                return Outcome.Correct;
-                            currentId = dummyId;
-                            //Console.WriteLine("OR Split Check : " + numSplits + " 100");
-                        }
-                        else
-                        {
-                            replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
-                            if (killThisClient(replyFromServer, "performORSplit"))
-                                return Outcome.Correct;
-                            long parentID = currentId;
-                            if (replyFromServer.Equals("YES"))
-                            {
-                                foreach (int val in staticAlphaList)
-                                {
-                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + parentID.ToString());
-                                    if (killThisClient(replyFromServer, "newPartition OR"))
-                                        return Outcome.Correct;
-                                    long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
-                                    long ORId = dummyId + 1;
-                                    //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                                    replyFromServer = sendCalltreeToServer(val + ";" + parentID + ";" + ORId +
-                                                      ";OR;" + calltreeToSend);
-                                    if (killThisClient(replyFromServer, "calltreeSend OR"))
-                                        return Outcome.Correct;
-                                    if(val == splitMode)
-                                    {
-                                        currentId = ORId;
-                                    }
-                                }
-                            }
-                        }
-                        numSplits = 0;
-                    }
-                }
+
                 numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
@@ -3043,7 +3046,7 @@ namespace CoreLib
                 Console.WriteLine("Client ID is : " + clientID);
             if (writeLog)
                 Console.WriteLine("Start First Job?");
-            replyFromServer = sendRequestToServer("startFirstJob", "Start Job 0?");
+            replyFromServer = sendRequestToServer("startFirstJob", clientID);
             if (writeLog)
                 Console.WriteLine("Reply : " + replyFromServer);
             if (replyFromServer.Equals("YES"))

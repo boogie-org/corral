@@ -323,7 +323,7 @@ namespace LocalServerInCsharp
                     else if (msgContent.ContainsKey("requestID"))
                         assignIDtoClient(context);
                     else if (msgContent.ContainsKey("startFirstJob"))
-                        replyStartOrWaitForCalltree(context);
+                        replyStartOrWaitForCalltree(context, msgContent["startFirstJob"]);
                     else if (msgContent.ContainsKey("requestCalltree"))
                         sendCalltree(context, msgContent["requestCalltree"]);
                     else if (msgContent.ContainsKey("popFromLocalStack"))
@@ -439,7 +439,7 @@ namespace LocalServerInCsharp
                                 isJobGiven[algo] = true;
                                 splitMode = Int16.Parse(parse[0]);
                                 algoIdToSplitMode[algo] = splitMode;
-                                Console.WriteLine("Algo : " + algo.ToString() + " started ");
+                                Console.WriteLine("Algo : " + algo.ToString() + " started with splitmode " + splitMode.ToString());
                             }
                         }
                         else
@@ -1325,10 +1325,11 @@ namespace LocalServerInCsharp
                 handleClientCrash();
         }
 
-        static void replyStartOrWaitForCalltree(HttpListenerContext context)
+        static void replyStartOrWaitForCalltree(HttpListenerContext context, string msg)
         {
+            int clientId = Int16.Parse(msg) - 1;
             string reply;
-            if (!startFirstJob)
+            if (!startFirstJob && clientId == 0)
             {
                 reply = "YES";
                 startFirstJob = true;
@@ -1544,8 +1545,14 @@ namespace LocalServerInCsharp
                 //callTreeStack.Push(calltree);
                 string[] parse = calltree.Split(';');
                 long parentId = Int64.Parse(parse[1]);
+
                 if (parse[3].Equals("AND"))
                 {
+                    if (!portfolioSplitDone)
+                    {
+                        Console.WriteLine("ERROR: portfolio split not performed " + algoID.ToString() + " algo and client " + (clientID - 1).ToString());
+                        Console.ReadLine();
+                    }
                     long mustReachId = Int64.Parse(parse[2]);
                     long blockId = Int64.Parse(parse[2]) - 1;
                     string partitionType = parse[3];
