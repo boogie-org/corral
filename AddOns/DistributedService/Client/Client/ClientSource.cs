@@ -367,7 +367,7 @@ namespace ClientSource
         static void killProcessSubTree(Process p)
         {
             TimeSpan timeout = new TimeSpan();
-            timeout = TimeSpan.Zero;
+            timeout = TimeSpan.FromMilliseconds(2000);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 string stdout;
@@ -439,7 +439,10 @@ namespace ClientSource
             }
             else
             {
+                Console.WriteLine("Process did not finish");
                 process.Kill();
+                while (!process.WaitForExit(1000));
+                Console.WriteLine("Process killed");
             }
 
             return process.ExitCode;
