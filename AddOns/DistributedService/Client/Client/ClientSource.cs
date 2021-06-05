@@ -346,6 +346,7 @@ namespace ClientSource
                 //p.Close();
                 //p.CloseMainWindow();
                 //p.StandardInput.Close();
+                killProcessSubTree(p);
                 if (!p.HasExited)
                     p.Kill();
             }
@@ -354,14 +355,95 @@ namespace ClientSource
             killAllZ3Instances.StartInfo.Arguments = "/F /IM z3.exe /T";
             killAllZ3Instances.Start();
             killAllZ3Instances.WaitForExit();*/
+            /*
             foreach (var process in Process.GetProcessesByName("z3"))
             {
                 if (!process.HasExited)
                     process.Kill();
-            }
+            }*/
             //Console.ReadLine();
         }
 
+        static void killProcessSubTree(Process p)
+        {
+            TimeSpan timeout = new TimeSpan();
+            timeout = TimeSpan.Zero;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string stdout;
+                RunProcessAndWaitForExit("taskkill", $"/T /F /PID {p.Id}", timeout, out stdout);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                HashSet<int> z3Process = new HashSet<int>();
+                getZ3ProcessIds(p.Id, z3Process, timeout);
+                foreach (var pid in z3Process)
+                {
+                    killProcess(pid, timeout);
+                }
+            }
+            else
+                Console.WriteLine("Cannot Run On This Operating System");
+        }
+
+        static void getZ3ProcessIds(int pid, ISet<int> z3Process, TimeSpan timeout)
+        {
+            string stdout;
+            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
+
+            if (exitCode == 0 && !string.IsNullOrEmpty(stdout))
+            {
+                using (var reader = new StringReader(stdout))
+                {
+                    while (true)
+                    {
+                        var text = reader.ReadLine();
+                        if (text == null)
+                        {
+                            return;
+                        }
+
+                        int id;
+                        if (int.TryParse(text, out id))
+                        {
+                            z3Process.Add(id);
+                            // Recursively get the children                            
+                        }
+                    }
+                }
+            }
+        }        
+
+        static void killProcess(int pid, TimeSpan timeout)
+        {
+            string stdout;
+            RunProcessAndWaitForExit("kill", $"-TERM {pid}", timeout, out stdout);
+        }
+
+        static int RunProcessAndWaitForExit(string fileName, string arguments, TimeSpan timeout, out string stdout)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+
+            var process = Process.Start(startInfo);
+
+            stdout = null;
+            if (process.WaitForExit((int)timeout.TotalMilliseconds))
+            {
+                stdout = process.StandardOutput.ReadToEnd();
+            }
+            else
+            {
+                process.Kill();
+            }
+
+            return process.ExitCode;
+        }
     }
 
     public class JsonContent : StringContent
