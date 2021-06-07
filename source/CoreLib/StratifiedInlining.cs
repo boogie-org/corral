@@ -1183,6 +1183,9 @@ namespace CoreLib
 
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
+            List<string> ucore = new List<string>();
+            Random random = new Random();
+            int toggle = cba.Util.CorralConfig.alphaInterleaving;
             Outcome outcome = Outcome.Inconclusive;
 
             ForceInline(openCallSites, recBound);
@@ -1205,82 +1208,178 @@ namespace CoreLib
                 {
                     return Outcome.ReachedBound;
                 }
-
-                MacroSI.PRINT_DEBUG("  - underapprox");
-                boundHit = false;
-
-                // underapproximate query
-                Push();
-
-
-                foreach (StratifiedCallSite cs in openCallSites)
+                int chooseMode = random.Next(0, 100);
+                if (chooseMode >= toggle)
                 {
-                    prover.Assert(cs.callSiteExpr, false);
-                }
+                    MacroSI.PRINT_DEBUG("  - underapprox");
+                    boundHit = false;
 
-                MacroSI.PRINT_DEBUG("    - check");
-                reporter.reportTrace = main;
-                outcome = CheckVC(reporter);
-                Pop();
-                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
-                if (outcome != Outcome.Correct) break;
+                    // underapproximate query
+                    ucore = null;
+                    Push();
 
-                MacroSI.PRINT_DEBUG("  - overapprox");
-                // overapproximate query
-                Push();
-                var softAssumptions = new List<VCExpr>();
-                foreach (StratifiedCallSite cs in openCallSites)
-                {
-                    // Stop if we've reached the recursion bound or
-                    // the stack-depth bound (if there is one)
-                    if (HasExceededRecursionDepth(cs, recBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    //bool assertedLabels = false;
+                    foreach (StratifiedCallSite cs in openCallSites)
                     {
-                        prover.Assert(cs.callSiteExpr, false);
-                        procsHitRecBound.Add(cs.callSite.calleeName);
-                        //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
-                        boundHit = true;
+                        if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                            (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                            StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                            procsHitRecBound.Add(cs.callSite.calleeName);
+                            boundHit = true;
+                            
+                        }
+                        // Non-uniform unfolding
+                        if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                            Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                        //Console.WriteLine("Asserting Labels : " + GetPersistentID(cs));
+                        //assertedLabels = true;
+                        continue;
                     }
-                    // Non-uniform unfolding
-                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
-                        softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
-                }
-                MacroSI.PRINT_DEBUG("    - check");
-                reporter.reportTrace = false;
-                reporter.callSitesToExpand = new List<StratifiedCallSite>();
-                outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
-                    CheckVC(reporter);
-                Pop();
-                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
-                if (outcome != Outcome.Errors)
-                {
-                    if (boundHit && outcome == Outcome.Correct)
-                        outcome = Outcome.ReachedBound;
 
-                    break; // done
-                }
-                if (reporter.callSitesToExpand.Count == 0)
-                    return Outcome.Inconclusive;
+                    MacroSI.PRINT_DEBUG("    - check");
+                    reporter.reportTrace = main;
+                    outcome = CheckVC(reporter);
+                    
+                    MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+                    //if (outcome != Outcome.Correct) break;
 
-                var toExpand = reporter.callSitesToExpand;
-                if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
-                {
-                    var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
-                    toExpand = toExpand.Where(cs => RecursionDepth(cs) == min).ToList();
-                }
-                foreach (var scs in toExpand)
-                {
-                    openCallSites.Remove(scs);
-                    var svc = Expand(scs);
-                    if (svc != null)
+                    if (outcome == Outcome.Errors) break;
+
+                    if (outcome == Outcome.Correct)
                     {
-                        openCallSites.UnionWith(svc.CallSites);
-                        if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
+                        ucore = prover.UnsatCore();
+                    }
+                    Pop();
+                    int numUWInlinings = 0;
+                    if (ucore != null)
+                    {
+                        if (ucore.Count != 0)
+                        {
+                            HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
+                            foreach (StratifiedCallSite scs in openCallSites2)
+                            {
+                                if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                                {
+                                    numUWInlinings++;
+                                    Console.WriteLine("UW Inlining: " + GetPersistentID(scs));
+                                    openCallSites.Remove(scs);
+                                    StratifiedVC svc = null;
+                                    svc = Expand(scs);
+                                    if (svc != null)
+                                    {
+                                        openCallSites.UnionWith(svc.CallSites);
+                                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                    if (numUWInlinings == 0)
+                    {
+                        MacroSI.PRINT_DEBUG("  - overapprox");
+                        // overapproximate query
+                        Push();
+                        var softAssumptions = new List<VCExpr>();
+                        foreach (StratifiedCallSite cs in openCallSites)
+                        {
+                            // Stop if we've reached the recursion bound or
+                            // the stack-depth bound (if there is one)
+                            if (HasExceededRecursionDepth(cs, recBound) ||
+                                (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                            {
+                                prover.Assert(cs.callSiteExpr, false);
+                                procsHitRecBound.Add(cs.callSite.calleeName);
+                                //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
+                                boundHit = true;
+                            }
+                            // Non-uniform unfolding
+                            if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                                softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
+                        }
+                        MacroSI.PRINT_DEBUG("    - check");
+                        reporter.reportTrace = false;
+                        reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                        outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
+                            CheckVC(reporter);
+                        Pop();
+                        MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+                        if (outcome != Outcome.Errors)
+                        {
+                            if (boundHit && outcome == Outcome.Correct)
+                                outcome = Outcome.ReachedBound;
+
+                            break; // done
+                        }
+                        if (reporter.callSitesToExpand.Count == 0)
+                            return Outcome.Inconclusive;
                     }
                 }
+                else
+                {
+                    MacroSI.PRINT_DEBUG("  - overapprox");
+                    // overapproximate query
+                    Push();
+                    var softAssumptions = new List<VCExpr>();
+                    foreach (StratifiedCallSite cs in openCallSites)
+                    {
+                        // Stop if we've reached the recursion bound or
+                        // the stack-depth bound (if there is one)
+                        if (HasExceededRecursionDepth(cs, recBound) ||
+                            (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                            StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false);
+                            procsHitRecBound.Add(cs.callSite.calleeName);
+                            //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
+                            boundHit = true;
+                        }
+                        // Non-uniform unfolding
+                        if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                            softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
+                    }
+                    MacroSI.PRINT_DEBUG("    - check");
+                    reporter.reportTrace = false;
+                    reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
+                        CheckVC(reporter);
+                    Pop();
+                    MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+                    if (outcome != Outcome.Errors)
+                    {
+                        if (boundHit && outcome == Outcome.Correct)
+                            outcome = Outcome.ReachedBound;
 
-                ForceInline(openCallSites, recBound);
+                        break; // done
+                    }
+                    if (reporter.callSitesToExpand.Count == 0)
+                        return Outcome.Inconclusive;
+
+                    var toExpand = reporter.callSitesToExpand;
+                    if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
+                    {
+                        var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
+                        toExpand = toExpand.Where(cs => RecursionDepth(cs) == min).ToList();
+                    }
+                    foreach (var scs in toExpand)
+                    {
+                        Console.WriteLine("OR Inlining: " + GetPersistentID(scs));
+                        openCallSites.Remove(scs);
+                        var svc = Expand(scs);
+                        if (svc != null)
+                        {
+                            openCallSites.UnionWith(svc.CallSites);
+                            if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
+                        }
+                    }
+
+                    ForceInline(openCallSites, recBound);
+                }
             }
             return outcome;
         }
@@ -1665,6 +1764,10 @@ namespace CoreLib
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "split" && !di.disabled)
             {
                 outcome = MustReachSplitStyle(openCallSites, reporter);
+            }
+            else if (cba.Util.CorralConfig.alphaInterleaving < 100)
+            {
+                outcome = Fwd(openCallSites, reporter, true, CommandLineOptions.Clo.RecursionBound);
             }
             else
             {

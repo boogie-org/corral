@@ -221,7 +221,10 @@ namespace cba
             }
 
             Initialize(config);
-
+            /*
+            if (cba.Util.CorralConfig.alphaInterleaving < 100)
+                CommandLineOptions.Clo.EnableUnSatCoreExtract = 1;*/
+            CommandLineOptions.Clo.EnableUnSatCoreExtract = 1;
             var startTime = DateTime.Now;
 
             ////////////////////////////////////

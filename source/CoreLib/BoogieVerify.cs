@@ -12,6 +12,10 @@ using cba.Util;
 
 namespace cba.Util
 {
+    public static class CorralConfig
+    {
+        public static int alphaInterleaving = 100;
+    }
     public static class BoogieVerify
     {
         public enum ReturnStatus { OK, NOK, ReachedBound };
