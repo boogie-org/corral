@@ -1245,7 +1245,7 @@ namespace CoreLib
                     reporter.reportTrace = main;
                     qStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
-                    Console.WriteLine("UQ: " + (DateTime.Now - qStartTime).Milliseconds);
+                    Console.WriteLine("UQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     //if (outcome != Outcome.Correct) break;
 
@@ -1311,7 +1311,7 @@ namespace CoreLib
                         qStartTime = DateTime.Now;
                         outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                             CheckVC(reporter);
-                        Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).Milliseconds);
+                        Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                         Pop();
                         MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                         if (outcome != Outcome.Errors)
@@ -1354,7 +1354,7 @@ namespace CoreLib
                     qStartTime = DateTime.Now;
                     outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                         CheckVC(reporter);
-                    Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).Milliseconds);
+                    Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     Pop();
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     if (outcome != Outcome.Errors)
