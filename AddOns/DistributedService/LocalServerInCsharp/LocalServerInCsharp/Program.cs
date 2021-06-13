@@ -623,7 +623,7 @@ namespace LocalServerInCsharp
                     workingFilePath = workingFile.Substring(0, workingFile.LastIndexOf('\\') + 1);
                     workingFileName = workingFile.Substring(workingFile.LastIndexOf('\\') + 1);
                 }
-                //Console.WriteLine(workingFilePath);
+                Console.WriteLine(workingFile);
                 //Console.ReadLine();
                 string inputFileExtension = workingFile.Substring(workingFile.Length - 3);
                 if (!(inputFileExtension.ToLower() == "bpl")) //Invoke SMACK to convert given C program to Boogie
@@ -926,6 +926,7 @@ namespace LocalServerInCsharp
             }
             else
             {
+                totalTime = configuration.timeout;
                 toWrite = "TIMEDOUT" + "\n" + configuration.timeout + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n";
                 Console.WriteLine("Verification Outcome : TIMEDOUT");
                 Console.WriteLine("Time Taken : " + totalTime.ToString());
