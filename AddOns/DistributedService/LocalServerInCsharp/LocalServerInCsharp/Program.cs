@@ -194,6 +194,8 @@ namespace LocalServerInCsharp
             //_httpListener.Prefixes.Add("http://localhost:5000/"); // add prefix "http://localhost:5000/"
             //_httpListener.Prefixes.Add("http://10.0.0.7:5000/");
             _httpListener.Prefixes.Add(configuration.serverAddress);
+            _httpListener.TimeoutManager.RequestQueue = Timeout.InfiniteTimeSpan;
+            _httpListener.TimeoutManager.IdleConnection = Timeout.InfiniteTimeSpan;
             _httpListener.Start(); // start server (Run application as Administrator!)
             //Console.WriteLine("Server started.");
             //Console.WriteLine("Waiting for Listener...");
