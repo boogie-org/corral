@@ -1921,6 +1921,12 @@ namespace CoreLib
                 }
                 else
                 {
+                    if (outcome == Outcome.ReachedBound || (reachedBound && outcome == Outcome.Correct))
+                    {
+                        //replyFromServer = sendRequestToServer("ReachedBound", clientID);
+                        replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
+
+                    }
                     if (learnProofs)
                     {
                         if (outcome == Outcome.Correct)

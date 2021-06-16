@@ -66,6 +66,7 @@ namespace LocalServerInCsharp
         public static Config configuration = new Config();
         public static double boogieDumpTime = 0;
         public static DateTime boogieDumpStart;
+        public static bool isAnyReachedBound;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -118,6 +119,7 @@ namespace LocalServerInCsharp
             clientNumForwardPops = new double[maxClients];
             clientNumBackwardPops = new double[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
+            isAnyReachedBound = false;
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             
@@ -265,6 +267,8 @@ namespace LocalServerInCsharp
                         checkOutcome(context, msgContent["outcome"]);
                     else if (msgContent.ContainsKey("ResetTime"))
                         addResetTime(context, msgContent["ResetTime"]);
+                    else if (msgContent.ContainsKey("ReachedBound"))
+                        isAnyReachedBound = true;
                     else if (msgContent.ContainsKey("SplitNow"))
                     {
                         if (clientRequestQueue.Count > 0)
@@ -597,6 +601,7 @@ namespace LocalServerInCsharp
             Array.Clear(clientNumForwardPops, 0, maxClients);
             Array.Clear(clientNumBackwardPops, 0, maxClients);
             Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
+            isAnyReachedBound = false;
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
@@ -744,17 +749,19 @@ namespace LocalServerInCsharp
             }
             else
             {
+                if (outcome.Equals("REACHEDBOUND"))
+                    isAnyReachedBound = true;
                 //Console.WriteLine("free : {0} | cts avail : {1}", clientRequestQueue.Count, callTreeStack.Count);
                 //Console.ReadLine();
                 //if (clientRequestQueue.Count == 4 && callTreeStack.Count == 0)
                 //{
-                    //bool err = ResponseHttp(context, "DONE");
-                    /*bool err = ResponseHttp(waitingListener, "RESTART");
-                    if (err)
-                        startListenerService();*/
-               //     finalOutcome = "OK";
-               //     totalTime = (DateTime.Now - startTime).TotalSeconds;
-               //     setKillFlag = true;
+                //bool err = ResponseHttp(context, "DONE");
+                /*bool err = ResponseHttp(waitingListener, "RESTART");
+                if (err)
+                    startListenerService();*/
+                //     finalOutcome = "OK";
+                //     totalTime = (DateTime.Now - startTime).TotalSeconds;
+                //     setKillFlag = true;
                 //}
                 //else
                 {
@@ -910,6 +917,8 @@ namespace LocalServerInCsharp
             string toWrite;
             if (!timedOut)
             {
+                if (isAnyReachedBound && !finalOutcome.Equals("NOK"))
+                    finalOutcome = "ReachedBound";
                 toWrite = finalOutcome + "\n" + totalTime.ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
                 Console.WriteLine("Verification Outcome : " + finalOutcome);
