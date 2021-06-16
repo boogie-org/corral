@@ -2075,8 +2075,25 @@ namespace CoreLib
             serverUri.Query = string.Empty;
             JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
             DateTime communicationStartTime = DateTime.Now;
-            var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
-            string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            string replyFromServer = null;
+            int cnt = 0;
+            while (true)
+            {
+                try
+                {
+                    cnt++;
+                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => start sending try : " + cnt.ToString() + "  calltree: " + calltree.Substring(0, Math.Min(40, calltree.Length)));
+                    var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
+                    replyFromServer = rep.Content.ReadAsStringAsync().Result;
+                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => recieve complete try : " + cnt.ToString() + "  replyFromServer: " + replyFromServer.Substring(0, Math.Min(40, replyFromServer.Length)));
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    Console.WriteLine("Error occured while sending call tree");
+                }
+            }
             lastSplitAt = DateTime.Now;
             nextSplitInterval = double.Parse(replyFromServer);
             communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
