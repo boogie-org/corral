@@ -2090,8 +2090,9 @@ namespace CoreLib
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine("Error occured while sending call tree");
+                    //Console.WriteLine(e.Message);
+                    //Console.WriteLine("Error occured while sending call tree");
+                    Console.WriteLine("Could not send calltree. Trying again.");
                 }
             }
             lastSplitAt = DateTime.Now;

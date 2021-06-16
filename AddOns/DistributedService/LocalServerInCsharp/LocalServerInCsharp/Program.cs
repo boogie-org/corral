@@ -122,6 +122,7 @@ namespace LocalServerInCsharp
         public static List<int> algoIdToSplitMode;
         public static int bestAlgo = -1;
         public static int lastAlgoCompleted = -1;
+        public static Queue<HttpListenerContext> requestQueue = new Queue<HttpListenerContext>();
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -186,6 +187,7 @@ namespace LocalServerInCsharp
             clientsToKill = new List<int>();
             random = new Random();
             clientCalltreeQueueOr = new Deque<string>();
+            requestQueue = new Queue<HttpListenerContext>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //foreach (string s in filePaths)
@@ -233,6 +235,19 @@ namespace LocalServerInCsharp
             }
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
+            startServer();
+        }
+
+        static void ResponseThread()
+        {
+            while (true)
+            {
+                HttpListenerContext context = _httpListener.GetContext();
+                lock (requestQueue)
+                {
+                    requestQueue.Enqueue(context);
+                }                
+            }
         }
 
         static void executeLinuxTerminal(string cmd, string arguments, bool wait)
@@ -249,12 +264,21 @@ namespace LocalServerInCsharp
                 p.WaitForExit();
         }
         
-        static void ResponseThread()
+        static void startServer()
         {
             
             while (true)
             {
-                HttpListenerContext context = _httpListener.GetContext(); // get a context
+                HttpListenerContext context = null;
+                lock (requestQueue)
+                {
+                    if (requestQueue.Count != 0)
+                        context = requestQueue.Dequeue();
+                    else
+                        continue;
+                }
+                
+                //HttpListenerContext context = _httpListener.GetContext(); // get a context
                 Dictionary<string, string> msgContent = null;
                 // parse input msg
                 List<string> allKeys = context.Request.QueryString.AllKeys.ToList();
@@ -842,6 +866,10 @@ namespace LocalServerInCsharp
             trackCompletedNode = false;
             portfolioSplitDone = false;
             clientCalltreeQueueOr = new Deque<string>();
+            lock (requestQueue)
+            {
+                requestQueue.Clear();
+            }
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
