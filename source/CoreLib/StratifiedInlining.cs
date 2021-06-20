@@ -347,7 +347,7 @@ namespace CoreLib
                 throw new NormalExit("Done");
             }
             callServer = new HttpClient();
-            callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+            callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;            
             //configuration = new Config();
             //serverUri = new UriBuilder("http://localhost:5000/");
             //serverUri = new UriBuilder("http://10.0.0.7:5000/");
@@ -1718,12 +1718,12 @@ namespace CoreLib
                         boundHit = true;
                     }
                     // Non-uniform unfolding
-                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                    else if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                         Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+                    else
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
 
-                    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-
-                    continue;
+                    //continue;
 
                 }
                 //Console.WriteLine("Underapprox end");

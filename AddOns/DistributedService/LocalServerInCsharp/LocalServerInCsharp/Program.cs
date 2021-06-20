@@ -1973,6 +1973,7 @@ namespace LocalServerInCsharp
             }
             catch (Exception e)
             {
+                Console.WriteLine(e);
                 err = true;
                 clientReplyCrash = true;
                 setKillFlag = true;
