@@ -123,6 +123,7 @@ namespace LocalServerInCsharp
         public static int bestAlgo = -1;
         public static int lastAlgoCompleted = -1;
         public static Queue<HttpListenerContext> requestQueue = new Queue<HttpListenerContext>();
+        public static bool clientReplyCrash = false;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -190,6 +191,7 @@ namespace LocalServerInCsharp
             requestQueue = new Queue<HttpListenerContext>();
             for (int i = 0; i < maxClients; i++)
                 clientCalltreeQueue[i] = new Deque<string>();
+            clientReplyCrash = false;
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
             //Console.WriteLine("Starting server...");
@@ -847,6 +849,7 @@ namespace LocalServerInCsharp
             clientsToKill.Clear();
             splitRate = 0;
             boogieDumpTime = 0;
+            clientReplyCrash = false;
             Array.Clear(clientCommunicationTime, 0, maxClients);
             Array.Clear(clientResetTime, 0, maxClients);
             Array.Clear(clientInliningTime, 0, maxClients);
@@ -1917,6 +1920,8 @@ namespace LocalServerInCsharp
             if (!allTimedOut)
             {
                 finalOutcome = getFinalOutcome();
+                if (clientReplyCrash)
+                    finalOutcome = "CRASH";
                 toWrite = finalOutcome + "\n" + totalTime[bestAlgo].ToString() + "\n" + numSplits + "\n" + "Boogie Dump Took : " + boogieDumpTime.ToString() + "\n"
                     + smallestSplitInterval + "\n" + largestSplitInterval + "\n" + (averageSplitInterval/(double)numSplits) + "\n";
                 Console.WriteLine("Verification Outcome : " + finalOutcome);
@@ -1966,9 +1971,11 @@ namespace LocalServerInCsharp
                         Console.WriteLine("Sent");
                 }
             }
-            catch (HttpListenerException)
+            catch (Exception e)
             {
                 err = true;
+                clientReplyCrash = true;
+                setKillFlag = true;
             }
             return err;
         }
