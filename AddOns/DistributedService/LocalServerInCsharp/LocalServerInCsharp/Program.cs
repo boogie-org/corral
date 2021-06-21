@@ -1049,7 +1049,13 @@ namespace LocalServerInCsharp
                 //     setKillFlag = true;
                 //}
                 //else
-
+                if (outcome.Equals("CRASH"))
+                {
+                    clientReplyCrash = true;
+                    setKillFlag = true;
+                    bestAlgo = algoID;
+                    finalOutcome = "CRASH";
+                }
                 if (outcome.Equals("REACHEDBOUND"))
                     isAnyReachedBound[algoID] = true;
                 bool err = ResponseHttp(context, "CONTINUE");
@@ -1789,6 +1795,8 @@ namespace LocalServerInCsharp
         {
             if (finalOutcome == "NOK")
                 return finalOutcome;
+            else if ((finalOutcome == "CRASH") || clientReplyCrash)
+                return finalOutcome;
             if (!waitForBetterResult)
             {
                 if (isAnyReachedBound[bestAlgo])
@@ -1973,9 +1981,13 @@ namespace LocalServerInCsharp
             }
             catch (Exception e)
             {
+                Console.WriteLine("Server Could Not Send Message");
+                Console.WriteLine("MESSAGE : ");
+                Console.WriteLine(msg);
                 Console.WriteLine(e);
                 err = true;
                 clientReplyCrash = true;
+                finalOutcome = "CRASH";
                 setKillFlag = true;
             }
             return err;

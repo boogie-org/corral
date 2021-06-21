@@ -2082,10 +2082,10 @@ namespace CoreLib
                 try
                 {
                     cnt++;
-                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => start sending try : " + cnt.ToString() + "  calltree: " + calltree.Substring(0, Math.Min(40, calltree.Length)));
+                    //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => start sending try : " + cnt.ToString() + "  calltree: " + calltree.Substring(0, Math.Min(40, calltree.Length)));
                     var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
                     replyFromServer = rep.Content.ReadAsStringAsync().Result;
-                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => recieve complete try : " + cnt.ToString() + "  replyFromServer: " + replyFromServer.Substring(0, Math.Min(40, replyFromServer.Length)));
+                    //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => recieve complete try : " + cnt.ToString() + "  replyFromServer: " + replyFromServer.Substring(0, Math.Min(40, replyFromServer.Length)));
                     break;
                 }
                 catch (Exception e)
@@ -3462,10 +3462,20 @@ namespace CoreLib
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
-                    //Console.WriteLine("running Hydra");
-                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions);
-                    //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
+                    try
+                    {
+                        //Console.WriteLine("running Hydra");
+                        outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                            backtrackingPoints, decisions);
+                        //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
+                    }
+                    catch(Exception e)
+                    {
+                        Console.WriteLine("Exception Thrown By Client: " + clientID);
+                        Console.WriteLine(e);
+                        replyFromServer = sendRequestToServer("outcome", "CRASH;" + clientID);
+                        Console.ReadLine();
+                    }                    
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
