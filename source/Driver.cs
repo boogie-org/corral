@@ -18,6 +18,7 @@ namespace cba
 
         static int Main(string[] args)
         {
+            Console.WriteLine("Redirecting Standard Out and Error To Null Textwriter From Driver.Main");
             Console.SetOut(TextWriter.Null);
             Console.SetError(TextWriter.Null);
             
