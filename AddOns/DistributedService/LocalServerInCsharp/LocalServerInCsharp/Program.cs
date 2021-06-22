@@ -1989,6 +1989,7 @@ namespace LocalServerInCsharp
                 clientReplyCrash = true;
                 finalOutcome = "CRASH";
                 setKillFlag = true;
+                bestAlgo = 0;
             }
             return err;
         }

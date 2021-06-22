@@ -3474,7 +3474,7 @@ namespace CoreLib
                         Console.WriteLine("Exception Thrown By Client: " + clientID);
                         Console.WriteLine(e);
                         replyFromServer = sendRequestToServer("outcome", "CRASH;" + clientID);
-                        Console.ReadLine();
+                        //Console.ReadLine();
                     }                    
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
