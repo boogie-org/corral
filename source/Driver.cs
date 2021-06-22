@@ -18,6 +18,9 @@ namespace cba
 
         static int Main(string[] args)
         {
+            Console.SetOut(TextWriter.Null);
+            Console.SetError(TextWriter.Null);
+            
             if (args.Any(f => f == "/catchAll"))
             {
                 try
