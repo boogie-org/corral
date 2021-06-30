@@ -17,7 +17,7 @@ namespace cba
     {
 
         static int Main(string[] args)
-        {
+        {           
             if (args.Any(f => f == "/catchAll"))
             {
                 try

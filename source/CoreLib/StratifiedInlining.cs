@@ -347,7 +347,7 @@ namespace CoreLib
                 throw new NormalExit("Done");
             }
             callServer = new HttpClient();
-            callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+            callServer.Timeout = System.Threading.Timeout.InfiniteTimeSpan;            
             //configuration = new Config();
             //serverUri = new UriBuilder("http://localhost:5000/");
             //serverUri = new UriBuilder("http://10.0.0.7:5000/");
@@ -1462,6 +1462,60 @@ namespace CoreLib
                 splittingStartTime = DateTime.Now;
                 var size = di.ComputeSize();
                 int splitFlag = 0;
+                if (cba.Util.HydraConfig.runPortfolio)
+                {
+                    if (numSplits > 4 || staticAlphaListMode)
+                    {
+                        if (!staticAlphaListMode)
+                        {
+                            int newSetting;
+                            if (splitMode == 100)
+                                newSetting = 0;
+                            else
+                                newSetting = 100;
+                            replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
+                            if (killThisClient(replyFromServer, "newPartition OR"))
+                                return Outcome.Correct;
+                            long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                            long ORId = dummyId + 1;
+                            //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
+                            replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId +
+                                              ";OR;" + calltreeToSend);
+                            if (killThisClient(replyFromServer, "calltreeSend OR"))
+                                return Outcome.Correct;
+                            currentId = dummyId;
+                            //Console.WriteLine("OR Split Check : " + numSplits + " 100");
+                        }
+                        else
+                        {
+                            replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
+                            if (killThisClient(replyFromServer, "performORSplit"))
+                                return Outcome.Correct;
+                            long parentID = currentId;
+                            if (replyFromServer.Equals("YES"))
+                            {
+                                foreach (int val in staticAlphaList)
+                                {
+                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + parentID.ToString());
+                                    if (killThisClient(replyFromServer, "newPartition OR"))
+                                        return Outcome.Correct;
+                                    long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
+                                    long ORId = dummyId + 1;
+                                    //Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
+                                    replyFromServer = sendCalltreeToServer(val + ";" + parentID + ";" + ORId +
+                                                      ";OR;" + calltreeToSend);
+                                    if (killThisClient(replyFromServer, "calltreeSend OR"))
+                                        return Outcome.Correct;
+                                    if (val == splitMode)
+                                    {
+                                        currentId = ORId;
+                                    }
+                                }
+                            }
+                        }
+                        numSplits = 0;
+                    }
+                }
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")
                 {
@@ -1603,13 +1657,17 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                             //if (writeLog)
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
+                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition + " with id = " + currentId.ToString() + " and splitMode " + splitMode.ToString());
+                            
+
                             if (splitMode == 0 && callsitesInlinedCurrentPartition >= alphaUW)
                             {
+                                //callsitesInlinedCurrentPartition = 0;
                                 callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alphaUW;
                             }
                             else if (splitMode == 100 && callsitesInlinedCurrentPartition >= alphaOR)
                             {
+                                //callsitesInlinedCurrentPartition = 0;
                                 callsitesInlinedCurrentPartition = callsitesInlinedCurrentPartition - alphaOR;
                             }
                             if (writeLog)
@@ -1620,7 +1678,7 @@ namespace CoreLib
                                 return Outcome.Correct;
                             long blockId = Int64.Parse(replyFromServer);
                             long mustReachId = blockId + 1;
-                            Console.WriteLine("splitID : " + currentId + " " + mustReachId);
+                            //Console.WriteLine("splitID : " + currentId + " " + mustReachId);
                             replyFromServer = sendCalltreeToServer(splitMode + ";" + currentId + ";" + mustReachId + ";AND;" +
                                               calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
                             if (killThisClient(replyFromServer, "calltreeSend AND"))
@@ -1640,61 +1698,7 @@ namespace CoreLib
                         }
                     }
                 }
-                if (cba.Util.HydraConfig.runPortfolio)
-                {
-                    if (numSplits > 4 || staticAlphaListMode)
-                    {
-                        if (!staticAlphaListMode)
-                        {
-                            int newSetting;
-                            if (splitMode == 100)
-                                newSetting = 0;
-                            else
-                                newSetting = 100;
-                            replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
-                            if (killThisClient(replyFromServer, "newPartition OR"))
-                                return Outcome.Correct;
-                            long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
-                            long ORId = dummyId + 1;
-                            Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                            replyFromServer = sendCalltreeToServer(newSetting + ";" + currentId + ";" + ORId +
-                                              ";OR;" + calltreeToSend);
-                            if (killThisClient(replyFromServer, "calltreeSend OR"))
-                                return Outcome.Correct;
-                            currentId = dummyId;
-                            //Console.WriteLine("OR Split Check : " + numSplits + " 100");
-                        }
-                        else
-                        {
-                            replyFromServer = sendRequestToServer("performORSplit", clientID.ToString());
-                            if (killThisClient(replyFromServer, "performORSplit"))
-                                return Outcome.Correct;
-                            if (replyFromServer.Equals("YES"))
-                            {
-                                foreach (int val in staticAlphaList)
-                                {
-                                    if (val == splitMode)
-                                    {
-                                        continue;
-                                        //SKIP if the new setting is same as current setting
-                                    }
-                                    replyFromServer = sendRequestToServer("NewPartitionId", clientID + ";" + currentId.ToString());
-                                    if (killThisClient(replyFromServer, "newPartition OR"))
-                                        return Outcome.Correct;
-                                    long dummyId = Int64.Parse(replyFromServer);    //Dummy split happens here
-                                    long ORId = dummyId + 1;
-                                    Console.WriteLine("ORsplitID : " + currentId + " " + ORId);
-                                    replyFromServer = sendCalltreeToServer(val + ";" + currentId + ";" + ORId +
-                                                      ";OR;" + calltreeToSend);
-                                    if (killThisClient(replyFromServer, "calltreeSend OR"))
-                                        return Outcome.Correct;
-                                    currentId = dummyId;
-                                }
-                            }
-                        }
-                        numSplits = 0;
-                    }
-                }
+
                 numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
@@ -1714,12 +1718,12 @@ namespace CoreLib
                         boundHit = true;
                     }
                     // Non-uniform unfolding
-                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                    else if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                         Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+                    else
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
 
-                    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-
-                    continue;
+                    //continue;
 
                 }
                 //Console.WriteLine("Underapprox end");
@@ -1825,8 +1829,7 @@ namespace CoreLib
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     Debug.WriteLine(outcome.ToString());
                     //Pop();
-                    /*
-                    if (outcome != Outcome.Correct && outcome != Outcome.Errors)
+                    /*if (outcome != Outcome.Correct && outcome != Outcome.Errors)
                     {
                         //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
                         //sendRequestToServer("outcome", "OK");
@@ -1881,8 +1884,14 @@ namespace CoreLib
                 }
                 if (isDone)
                 {
-                    if (outcome == Outcome.ReachedBound)
-                        replyFromServer = sendRequestToServer("ReachedBound", currentId.ToString());
+                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => LOOP outcome: " + outcome.ToString() + " & reachbound = " + reachedBound.ToString());
+
+                    if (outcome == Outcome.ReachedBound || (reachedBound && outcome == Outcome.Correct))
+                    {
+                        replyFromServer = sendRequestToServer("ReachedBound", clientID);
+                        if (killThisClient(replyFromServer, "ReachedBound"))
+                            return Outcome.ReachedBound;
+                    }
 
                     replyFromServer = sendRequestToServer("FINISHED", currentId.ToString());
                     if (learnProofs)
@@ -1926,7 +1935,7 @@ namespace CoreLib
                     if (!replyFromServer.Equals("NO"))
                     //if (false)
                     {
-                        Console.WriteLine(replyFromServer);
+                        //Console.WriteLine(replyFromServer);
                         currentId = Int64.Parse(replyFromServer);
                         //calltreeToSend = lastCalltreeSent;
                         Decision topDecision = null;
@@ -2066,8 +2075,26 @@ namespace CoreLib
             serverUri.Query = string.Empty;
             JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
             DateTime communicationStartTime = DateTime.Now;
-            var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
-            string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            string replyFromServer = null;
+            int cnt = 0;
+            while (true)
+            {
+                try
+                {
+                    cnt++;
+                    //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => start sending try : " + cnt.ToString() + "  calltree: " + calltree.Substring(0, Math.Min(40, calltree.Length)));
+                    var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
+                    replyFromServer = rep.Content.ReadAsStringAsync().Result;
+                    //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => recieve complete try : " + cnt.ToString() + "  replyFromServer: " + replyFromServer.Substring(0, Math.Min(40, replyFromServer.Length)));
+                    break;
+                }
+                catch (Exception e)
+                {
+                    //Console.WriteLine(e.Message);
+                    //Console.WriteLine("Error occured while sending call tree");
+                    Console.WriteLine("Could not send calltree. Trying again.");
+                }
+            }
             lastSplitAt = DateTime.Now;
             nextSplitInterval = double.Parse(replyFromServer);
             communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
@@ -3037,7 +3064,7 @@ namespace CoreLib
                 Console.WriteLine("Client ID is : " + clientID);
             if (writeLog)
                 Console.WriteLine("Start First Job?");
-            replyFromServer = sendRequestToServer("startFirstJob", "Start Job 0?");
+            replyFromServer = sendRequestToServer("startFirstJob", clientID);
             if (writeLog)
                 Console.WriteLine("Reply : " + replyFromServer);
             if (replyFromServer.Equals("YES"))
@@ -3107,8 +3134,10 @@ namespace CoreLib
                         //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
                         sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID, 
                             communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
-                        //Console.ReadLine();
+                        continueVerification = false;
+                        continue;
                     }
+
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -3144,7 +3173,12 @@ namespace CoreLib
                     //else
                     {
                         string[] parse = replyFromServer.Split(';');
+                        if(parse.Length == 1)
+                        {
+                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => replyFromServer: " + replyFromServer.Substring(0, Math.Min(20, replyFromServer.Length)));
+                        }
                         splitMode = Int16.Parse(parse[0]);
+                        Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => after replyFromServer: " + parse[0]);
                         //Console.WriteLine("Received ORSplit Mode : " + splitMode);
                         currentId = Int64.Parse(parse[2]);
                         receivedCalltree = parse[4];
@@ -3428,10 +3462,20 @@ namespace CoreLib
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
-                    //Console.WriteLine("running Hydra");
-                    outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions);
-                    //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
+                    try
+                    {
+                        //Console.WriteLine("running Hydra");
+                        outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
+                            backtrackingPoints, decisions);
+                        //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
+                    }
+                    catch(Exception e)
+                    {
+                        Console.WriteLine("Exception Thrown By Client: " + clientID);
+                        Console.WriteLine(e);
+                        replyFromServer = sendRequestToServer("outcome", "CRASH;" + clientID);
+                        //Console.ReadLine();
+                    }                    
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
@@ -3504,17 +3548,18 @@ namespace CoreLib
                 }
                 #endregion
                 if (writeLog)
-                Console.WriteLine("HERE1");
+                    Console.WriteLine("HERE1");
+                Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => outcome: " + outcome.ToString());
                 if (outcome == Outcome.Correct)
-                    replyFromServer = sendRequestToServer("outcome", "OK");
+                    replyFromServer = sendRequestToServer("outcome", "OK;"+clientID);
                 else if (outcome == Outcome.Errors)
                 {
                     cba.Util.HydraConfig.startHydra = false;                    
-                    replyFromServer = sendRequestToServer("outcome", "NOK");
+                    replyFromServer = sendRequestToServer("outcome", "NOK;"+clientID);
                     return outcome;
                 }
                 else
-                    replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
+                    replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND;"+clientID);
                 if (writeLog)
                     Console.WriteLine("HERE2");
                 if (writeLog)
