@@ -139,7 +139,14 @@ namespace ClientSource
         {
             while (true)
             {
-                SendToServerAsync();
+                try
+                {
+                    SendToServerAsync();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Server Has Not Yet Started.");
+                }
             }
         }
 

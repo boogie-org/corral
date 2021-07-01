@@ -116,6 +116,14 @@
       <Project>{f2af6beb-eba6-46fe-987a-8438603c4290}</Project>
       <Name>Client</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\ListenerDriver\ListenerDriver.csproj">
+      <Project>{ee8aa99d-9d3e-443d-a9c5-7e4c45b4c17f}</Project>
+      <Name>ListenerDriver</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ServerDriver\ServerDriver.csproj">
+      <Project>{f05db24c-ff07-48af-a261-fdf11169ba3a}</Project>
+      <Name>ServerDriver</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
