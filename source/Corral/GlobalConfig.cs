@@ -117,13 +117,13 @@ namespace cba
         // Starting time
         public static DateTime corralStartTime;
 
-        public static int getTimeLeft()
+        public static uint getTimeLeft()
         {
             if (timeOut == 0) return 0;
             var ret = timeOut - (int) ((DateTime.Now - corralStartTime).TotalSeconds);
             if (ret <= 0) ret = 1; // KLM: prevent ret from being negative
             // if (ret == 0) ret = 1;
-            return ret;
+            return (uint) ret;
         }
 
         public static bool timeOutReached()

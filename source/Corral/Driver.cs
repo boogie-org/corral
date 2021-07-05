@@ -1038,7 +1038,7 @@ namespace cba
                     var tmp_abs = abs;
 
                     ciPass = new ContractInfer(GlobalConfig.InferPass);
-                    if (config.houdiniTimeout != -1) ContractInfer.HoudiniTimeout = config.houdiniTimeout; // milliseconds
+                    if (config.houdiniTimeout != 0) ContractInfer.HoudiniTimeout = config.houdiniTimeout; // milliseconds
                     else ContractInfer.HoudiniTimeout = 60000; // milliseconds
                     ciPass.ExtractLoops = false;
                     abs = ciPass.run(abs);

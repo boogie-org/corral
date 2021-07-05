@@ -7,7 +7,7 @@
 
   <!-- Boogie dependency -->
   <ItemGroup>
-    <PackageReference Include="Boogie.ExecutionEngine" Version="2.8.27" />
+    <PackageReference Include="Boogie.ExecutionEngine" Version="2.8.33" />
   </ItemGroup>
 
   <!-- Configure GitVersionTask -->
