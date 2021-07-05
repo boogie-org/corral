@@ -682,13 +682,13 @@ namespace AngelicVerifierNull
             var cprogram = sI.runCBAPass(new cba.CBAProgram(program, main.Name, 1));
 
             // shallow checking only
-            var sd = CommandLineOptions.Clo.StackDepthBound;
-            CommandLineOptions.Clo.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
+            var sd = CoreLib.StratifiedInlining.StackDepthBound;
+            CoreLib.StratifiedInlining.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
             //BoogieUtil.PrintProgram(program, "env.bpl");
 
             var ret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
 
-            CommandLineOptions.Clo.StackDepthBound = sd;
+            CoreLib.StratifiedInlining.StackDepthBound = sd;
 
             if(ret != null)
                 ret.Iter(n => instr.SuppressEnvironmentConstraint(soft2actual[n]));
@@ -906,13 +906,13 @@ namespace AngelicVerifierNull
             //BoogieUtil.PrintProgram(cprogram, "relax.bpl");
             Console.WriteLine("CheckInconsistency: {0} soft constraints and {1} assertions ({2} pruned)", softcnt, assertcnt, prunedassert);
 
-            var sd = CommandLineOptions.Clo.StackDepthBound;
-            CommandLineOptions.Clo.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
+            var sd = CoreLib.StratifiedInlining.StackDepthBound;
+            CoreLib.StratifiedInlining.StackDepthBound = AvnAnnotations.RelaxConstraintsStackDepthBound;
 
             // Relax
             var softret = RelaxConstraints(cprogram, cprogram.mainProcName, sI.assertsPassedName);
 
-            CommandLineOptions.Clo.StackDepthBound = sd;
+            CoreLib.StratifiedInlining.StackDepthBound = sd;
 
             var ret = new HashSet<int>();
             
@@ -1655,7 +1655,7 @@ namespace AngelicVerifierNull
                     bvarList.Add(allocToBndVarAndTrigger[x.Name].Item1);
                 }
             });
-            Substitution subst = Substituter.SubstitutionFromHashtable(substMap);
+            Substitution subst = Substituter.SubstitutionFromDictionary(substMap);
             nexpr = Substituter.Apply(subst, nexpr);
             Utils.Print(string.Format("The substituted expression for {0} is {1}", expr, nexpr));
 

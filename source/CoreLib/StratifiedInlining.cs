@@ -22,7 +22,7 @@ namespace CoreLib
     {
         public static void PRINT(int lvl, string s, params object[] args)
         {
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose >= lvl)
+            if (StratifiedInlining.StratifiedInliningVerbose >= lvl)
                 Console.WriteLine(s, args);
         }
 
@@ -166,6 +166,8 @@ namespace CoreLib
     public class StratifiedInlining : StratifiedVCGenBase
     {
         public static readonly string ForceInlineAttr = "ForceInline";
+        public static int StratifiedInliningVerbose = 0;
+        public static int StackDepthBound = 0;
 
         public Stats stats;
 
@@ -239,7 +241,7 @@ namespace CoreLib
             else
             {
                 MacroSI.PRINT_DETAIL(assertMethods.Count + " methods containing asserts detected");
-                if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
+                if (StratifiedInliningVerbose > 1)
                     foreach (var method in assertMethods)
                         Console.WriteLine("-> " + method.Name);
             }
@@ -248,7 +250,7 @@ namespace CoreLib
             builder.Visit(prog);
             callGraph = builder.graph;
 
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 3)
+            if (StratifiedInliningVerbose > 3)
                 callGraph.PrintOut(Console.Out);
         }
 
@@ -693,8 +695,8 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -855,8 +857,8 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         reachedBound = true;
@@ -994,8 +996,8 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound))
                     {
                         if (!boundAsserted.Contains(cs))
                         {
@@ -1067,8 +1069,8 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (RecursionDepth(cs) > CommandLineOptions.Clo.RecursionBound ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound))
                     {
                         blocked.Add(cs);
                     }
@@ -1124,21 +1126,6 @@ namespace CoreLib
                         if (boundHit) outcome = Outcome.ReachedBound;
                         Pop();
                         break;
-                    }
-
-                    // compute interpolants
-                    var leaves = pushed.Peek().Select(svc => vc2name[svc]).ToList();
-                    var root = vc2name.Where(tup => !pushed.Peek().Contains(tup.Key))
-                        .Select(tup => tup.Value).ToList();
-                    root.AddRange(backgroundnames);
-                    root.Add(mainName);
-
-                    var summaries = prover.GetTreeInterpolant(root, leaves);
-                    prover.LogComment(Environment.NewLine);
-
-                    for (int i = 0; i < summaries.Count; i++)
-                    {
-                        Console.WriteLine("Summary of {0}: {1}", name2vc[leaves[i]].info.impl.Name, summaries[i]);
                     }
 
                     // backtrack
@@ -1234,8 +1221,8 @@ namespace CoreLib
                     // Stop if we've reached the recursion bound or
                     // the stack-depth bound (if there is one)
                     if (HasExceededRecursionDepth(cs, recBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound))
                     {
                         prover.Assert(cs.callSiteExpr, false);
                         procsHitRecBound.Add(cs.callSite.calleeName);
@@ -1293,8 +1280,8 @@ namespace CoreLib
                 var toExpand = new HashSet<StratifiedCallSite>(openCallSites.Where(cs => forceInlineProcs.Contains(cs.callSite.calleeName)));
                 // filter away ones that have reached the bound
                 toExpand.RemoveWhere(cs => HasExceededRecursionDepth(cs, recBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound));
+                        (StackDepthBound > 0 &&
+                        StackDepth(cs) > StackDepthBound));
                 if (toExpand.Count == 0) break;
 
                 foreach (var scs in toExpand)
@@ -1683,7 +1670,7 @@ namespace CoreLib
                     // reached bound?
                     if (outcome == Outcome.ReachedBound && currRecursionBound < CommandLineOptions.Clo.RecursionBound)
                     {
-                        if(CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                        if(StratifiedInliningVerbose > 0)
                             Console.WriteLine("SI: Exhausted recursion bound of {0}", currRecursionBound);
                         currRecursionBound++;
                         continue;
@@ -1705,11 +1692,11 @@ namespace CoreLib
             if(!di.disabled)
                 Console.WriteLine("Time spent inside DI: {0} sec", di.timeTaken.TotalSeconds.ToString("F2"));
 
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0 || 
+            if (StratifiedInliningVerbose > 0 || 
                 BoogieVerify.options.extraFlags.Contains("DumpDag"))
                 di.Dump("ct" + (dumpCnt++) + ".dot");
 
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 1)
+            if (StratifiedInliningVerbose > 1)
                 stats.print();
 
             #region Stash call tree
@@ -2467,7 +2454,7 @@ namespace CoreLib
             if (strategy == MERGING_STRATEGY.RANDOM)
             {
                 var choice = random.Next(0, matches.Count + 2);
-                if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                if (StratifiedInlining.StratifiedInliningVerbose > 0)
                     Console.WriteLine("Making choice {0} of {1} for {2}", choice, matches.Count - 1, cs.callSite.calleeName);
                 if (choice >= matches.Count) return null;
                 return vcNodeMap[matches[choice]];
@@ -2476,7 +2463,7 @@ namespace CoreLib
             if (strategy == MERGING_STRATEGY.RANDOM_PICK)
             {
                 var choice = random.Next(0, matches.Count);
-                if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+                if (StratifiedInlining.StratifiedInliningVerbose > 0)
                     Console.WriteLine("Making choice {0} of {1} for {2}", choice, matches.Count - 1, cs.callSite.calleeName);
                 return vcNodeMap[matches[choice]];
             }
@@ -3097,7 +3084,7 @@ namespace CoreLib
         // Returns the size of the fully expanded tree
         public int ConstructCallDagOnTheFly(bool lazy, MERGING_STRATEGY strategy)
         {
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+            if (StratifiedInlining.StratifiedInliningVerbose > 0)
                 Console.WriteLine("Constructing the call dag on the fly");
 
             var main = "";
@@ -3138,7 +3125,7 @@ namespace CoreLib
                 }
             }
 
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+            if (StratifiedInlining.StratifiedInliningVerbose > 0)
                 Console.WriteLine("ID graph done, and top sorted (size = {0})", idgraph.Nodes.Count);
 
             if (strategy != MERGING_STRATEGY.OPT)
@@ -3276,7 +3263,7 @@ namespace CoreLib
             Dictionary<string, HashSet<Tuple<int, string>>> implToCalls,
             Dictionary<string, int> id2numnodes)
         {
-            if(CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+            if(StratifiedInlining.StratifiedInliningVerbose > 0)
                 Console.WriteLine("Adding id {0}", id);
             var predids = idgraph.Predecessors(id);
             Debug.Assert(predids.Count() != 0);
@@ -3377,7 +3364,7 @@ namespace CoreLib
             var coloring = graph != null ? ColorGraph<DagNode>(graph) : ColorGraph<DagNode>(IdToNodes[id], n => adj[n]);
 
             // Got the coloring!
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 0)
+            if (StratifiedInlining.StratifiedInliningVerbose > 0)
                 Console.WriteLine("Got a coloring of {0} nodes with {1} colors", IdToNodes[id].Count, coloring.Values.Max() + 1);
 
             // pick representation in each color
@@ -4160,7 +4147,7 @@ namespace CoreLib
             var cex = NewTrace(mainVC, absyList, model);
             //cex.PrintModel();
 
-            if (CommandLineOptions.Clo.StratifiedInliningVerbose > 2)
+            if (StratifiedInlining.StratifiedInliningVerbose > 2)
                 cex.Print(6, Console.Out);
 
             if (cex != null && (reportTrace ||

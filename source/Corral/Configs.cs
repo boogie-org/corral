@@ -70,7 +70,6 @@ namespace cba
 
         private List<string> includeFiles;
 
-        public bool newStratifiedInlining { get; private set; }
         public string newStratifiedInliningAlgo { get; private set; }
 
         public ArrayTheoryOptions arrayTheory { get; private set; }
@@ -108,6 +107,7 @@ namespace cba
         public bool NonUniformUnfolding { get; private set; }
 
         public int verboseMode { get; private set; }
+        public int stackDepthBound { get; private set; }
         public string houdiniQuery { get; private set; }
 
         public bool useInitialPruning { get; private set; }
@@ -145,7 +145,6 @@ namespace cba
         public int maxStaticLoopBound { get; private set; }
 
         public bool disableStaticAnalysis { get; private set; }
-        public bool useDuality { get; private set; }
 
         public string prevCorralState { get; private set; }
         public string dumpCorralState { get; private set; }
@@ -314,7 +313,6 @@ namespace cba
             assertsPassed = "assertsPassed";
             assertsPassedIsInt = false;
             fwdBckInRef = false;
-            useDuality = false;
 
             catchAllExceptions = false;
             specialVars = new List<string>();
@@ -340,7 +338,6 @@ namespace cba
             prevCorralState = null;
             dumpCorralState = null;
 
-            newStratifiedInlining = true;
             newStratifiedInliningAlgo = "";
 
             NumCex = 1;
@@ -647,6 +644,11 @@ namespace cba
                 var split = flag.Split(sep);
                 verboseMode = Int32.Parse(split[1]);
             }
+            else if (flag.StartsWith("/stackDepthBound:"))
+            {
+                var split = flag.Split(sep);
+                stackDepthBound = Int32.Parse(split[1]);
+            }
             else if (flag.StartsWith("/refinementAlgo:"))
             {
                 var split = flag.Split(sep);
@@ -713,17 +715,8 @@ namespace cba
                 printLanguageSemantics();
                 throw new InvalidInput("Stopping");
             }
-            else if (flag == "/oldStratifiedInlining")
-            {
-                newStratifiedInlining = false;
-            }
-            else if (flag == "/newStratifiedInlining")
-            {
-                newStratifiedInlining = true;
-            }
             else if (flag.StartsWith("/newStratifiedInlining:"))
             {
-                newStratifiedInlining = true;
                 var split = flag.Split(sep);
                 newStratifiedInliningAlgo = split[1];
             }
@@ -760,11 +753,6 @@ namespace cba
                  * context switches are only added where explictly specified by a dummy call to corral_yield.
                  **/
                 cooperativeYield = true;
-            }
-            else if (flag == "/useDuality")
-            {
-                useDuality = true;
-                newStratifiedInlining = false;
             }
             else
             {

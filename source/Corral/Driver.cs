@@ -90,8 +90,6 @@ namespace cba
             // Batch-mode GC is best for performance
             System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Batch;
 
-            BoogieVerify.useDuality = config.useDuality;
-
             #region Set global flags
             ////////////////////////////////////////////////////
             // Set global configs
@@ -125,6 +123,9 @@ namespace cba
             GlobalConfig.cadeTiming = config.cadeTiming;
             GlobalConfig.staticInlining = config.staticInlining;
 
+            CoreLib.StratifiedInlining.StratifiedInliningVerbose = config.verboseMode;
+            CoreLib.StratifiedInlining.StackDepthBound = config.stackDepthBound;
+
             BoogieVerify.assertsPassed = config.assertsPassed;
             BoogieVerify.assertsPassedIsInt = config.assertsPassedIsInt;
             BoogieVerify.ignoreAssertMethods = new HashSet<string>(config.ignoreAssertMethods);
@@ -152,7 +153,6 @@ namespace cba
             // Initialize Boogie
             CommandLineOptions.Clo.PrintInstrumented = true;
             CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
-            CommandLineOptions.Clo.StratifiedInliningVerbose = config.verboseMode;
             CommandLineOptions.Clo.TypeEncodingMethod = CommandLineOptions.TypeEncoding.Monomorphic;
 
             // /noRemoveEmptyBlocks is needed for field refinement. It ensures that
@@ -466,7 +466,6 @@ namespace cba
             Log.WriteLine(string.Format("Total Time: {0} s", (endTime - startTime).TotalSeconds));
 
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
-            Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
             TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
             Log.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds));
@@ -600,12 +599,10 @@ namespace cba
 
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
-                BoogieVerify.options.newStratifiedInlining = config.newStratifiedInlining;
                 BoogieVerify.options.newStratifiedInliningAlgo = config.newStratifiedInliningAlgo;
                 BoogieVerify.options.useDI = config.useDI;
                 BoogieVerify.options.extraFlags = config.extraFlags;
                 if (config.staticInlining > 0) BoogieVerify.options.StratifiedInlining = 100;
-                if (config.useDuality) BoogieVerify.options.newStratifiedInlining = false;
                 var rstatus = BoogieVerify.Verify(init, out err, true);
                 Console.WriteLine("Return status: {0}", rstatus);
                 if (err == null || err.Count == 0)
@@ -1222,7 +1219,6 @@ namespace cba
             Console.WriteLine("Total Time: {0} s", (endTime - startTime).TotalSeconds.ToString("F2"));
             
             // Add our CPU time to Z3's CPU time reported by SMTLibProcess and print it
-            Microsoft.Boogie.FixedpointVC.CleanUp(); // make sure to account for FixedPoint Time
             System.TimeSpan TotalUserTime = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime;
             TotalUserTime += Microsoft.Boogie.SMTLib.SMTLibProcess.TotalUserTime;
             Console.WriteLine(string.Format("Total User CPU time: {0} s", TotalUserTime.TotalSeconds.ToString("F2")));
@@ -1282,14 +1278,12 @@ namespace cba
             // program options
             ConfigManager.progVerifyOptions.UseProverEvaluate = false;
             ConfigManager.progVerifyOptions.StratifiedInliningWithoutModels = true;
-            if (config.NonUniformUnfolding || config.newStratifiedInlining)
-                    ConfigManager.progVerifyOptions.UseProverEvaluate = true;
+            ConfigManager.progVerifyOptions.UseProverEvaluate = true;
 
             // path options
             ConfigManager.pathVerifyOptions.UseProverEvaluate = false;
             ConfigManager.pathVerifyOptions.StratifiedInliningWithoutModels = true;
-            if (config.NonUniformUnfolding || config.newStratifiedInlining)
-                ConfigManager.pathVerifyOptions.UseProverEvaluate = true;
+            ConfigManager.pathVerifyOptions.UseProverEvaluate = true;
 
             if (config.printData == 1)
             {

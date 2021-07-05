@@ -87,7 +87,7 @@ namespace cba.Util
             allErrors = new List<BoogieErrorTrace>();
             timedOut = new List<string>();
             Debug.Assert(program != null);
-            
+
             // Make a copy of the input program
             var duper = new FixedDuplicator(true);
             var origProg = new Dictionary<string, Implementation>();
@@ -103,10 +103,10 @@ namespace cba.Util
                     }
                 }
             }
-            
+
             if (removeAsserts)
                 RemoveAsserts(program);
-            
+
             // Set options
             options.Set();
 
@@ -163,23 +163,8 @@ namespace cba.Util
             VC.VCGen vcgen = null;
             try
             {
-                Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
-                if (options.newStratifiedInlining) {
-                  if(options.newStratifiedInliningAlgo.ToLower() == "duality") Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
-                  vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
-                }
-                else
-                   // vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, options.procsToSkip, options.extraRecBound, program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
-
-
-                    if (!useDuality || !isCBA || !needErrorTraces || options.StratifiedInlining > 1 || mains.Count > 1)
-                        vcgen = new VC.StratifiedVCGen(options.CallTree != null, options.CallTree, program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>()); 
-                    else
-                    {
-                        CommandLineOptions.Clo.FixedPointMode = CommandLineOptions.FixedPointInferenceMode.Corral;
-                        CommandLineOptions.Clo.FixedPointEngine = "duality";
-                        vcgen = new Microsoft.Boogie.FixedpointVC(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>(), options.extraRecBound);
-                    }
+                Debug.Assert(CommandLineOptions.Clo.StratifiedInlining > 0);
+                vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
             }
             catch (ProverException e)
             {
@@ -195,7 +180,7 @@ namespace cba.Util
 
             foreach (var impl in mains)
             {
-                if(PrintImplsBeingVerified) 
+                if (PrintImplsBeingVerified)
                     Log.WriteLine(Log.Verbose, "Verifying implementation " + impl.Name);
 
                 List<Counterexample> errors;
@@ -307,29 +292,14 @@ namespace cba.Util
             }
 
             //PutBackAsserts(program);
-
-            if (vcgen is StratifiedVCGen)
+            Debug.Assert(vcgen is CoreLib.StratifiedInlining);
+            procsHitRecBound = (vcgen as CoreLib.StratifiedInlining).procsHitRecBound;
+            CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
+            vcSize = (vcgen as CoreLib.StratifiedInlining).stats.vcSize;
+            if (options.CallTree != null)
             {
-                CallTreeSize = (vcgen as StratifiedVCGen).numInlined;
-                vcSize = (vcgen as StratifiedVCGen).vcsize;
-                if (options.CallTree != null)
-                {
-                    options.CallTree = VC.StratifiedVCGen.callTree;
-                    VC.StratifiedVCGen.callTree = null;
-                }
+                options.CallTree = (vcgen as CoreLib.StratifiedInlining).GetCallTree();
             }
-            else if (vcgen is CoreLib.StratifiedInlining)
-            {
-                procsHitRecBound = (vcgen as CoreLib.StratifiedInlining).procsHitRecBound;
-                CallTreeSize = (vcgen as CoreLib.StratifiedInlining).stats.numInlined;
-                vcSize = (vcgen as CoreLib.StratifiedInlining).stats.vcSize;
-                if (options.CallTree != null)
-                {
-                    options.CallTree = (vcgen as CoreLib.StratifiedInlining).GetCallTree();
-                }
-            }
-            else
-                CallTreeSize = 0;
 
             vcgen.Close();
             CommandLineOptions.Clo.TheProverFactory.Close();
@@ -516,10 +486,7 @@ namespace cba.Util
             VC.StratifiedVCGenBase vcgen = null;
             try
             {
-                if(options.newStratifiedInlining) 
-                    vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
-                else
-                    vcgen = new VC.StratifiedVCGen(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
+                vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
             }
             catch (ProverException)
             {
@@ -807,7 +774,6 @@ namespace cba.Util
         }
         private int _stratifiedInlining;
 
-        public bool newStratifiedInlining;
         public string newStratifiedInliningAlgo;
 
         public bool NonUniformUnfolding;
@@ -836,7 +802,6 @@ namespace cba.Util
         public BoogieVerifyOptions()
         {
             StratifiedInlining = 1;
-            newStratifiedInlining = false;
             newStratifiedInliningAlgo = null;
             NonUniformUnfolding = false;
             CallTree = null;
@@ -856,7 +821,6 @@ namespace cba.Util
         {
             var ret = new BoogieVerifyOptions();
             ret.StratifiedInlining = StratifiedInlining;
-            ret.newStratifiedInlining = newStratifiedInlining;
             ret.newStratifiedInliningAlgo = newStratifiedInliningAlgo;
             ret.NonUniformUnfolding = NonUniformUnfolding;
             ret.CallTree = CallTree;
@@ -883,7 +847,6 @@ namespace cba.Util
         public void Set()
         {
             CommandLineOptions.Clo.StratifiedInlining = StratifiedInlining;
-            CommandLineOptions.Clo.NonUniformUnfolding = NonUniformUnfolding;
             CommandLineOptions.Clo.StratifiedInliningWithoutModels = StratifiedInliningWithoutModels;
             CommandLineOptions.Clo.UseProverEvaluate = UseProverEvaluate;
             if (!StratifiedInliningWithoutModels && ModelViewFile != null)
