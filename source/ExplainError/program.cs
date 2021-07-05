@@ -1791,7 +1791,7 @@ namespace ExplainError
                 {
                     h.Add(lhss[i].DeepAssignedVariable, rhss[i]);
                 }
-                Substitution s = Substituter.SubstitutionFromHashtable(h);
+                Substitution s = Substituter.SubstitutionFromDictionary(h);
                 return Substituter.Apply(s, p);
             }
 
