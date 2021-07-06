@@ -1,21 +1,23 @@
 <Project>
 
-  <!-- Target framework -->
+  <!-- Target framework and package configuration -->
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Version>1.0.18</Version>
+    <TargetFramework>net5.0</TargetFramework>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Authors>Corral</Authors>
+    <RepositoryUrl>https://github.com/boogie-org/corral</RepositoryUrl>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
+
+  <!-- Include license file -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
+  </ItemGroup>
 
   <!-- Boogie dependency -->
   <ItemGroup>
-    <PackageReference Include="Boogie.ExecutionEngine" Version="2.8.33" />
-  </ItemGroup>
-
-  <!-- Configure GitVersionTask -->
-  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)\..\.git')">
-    <PackageReference Include="GitVersionTask" Version="5.1.2">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Boogie.ExecutionEngine" Version="2.9.1" />
   </ItemGroup>
 
 </Project>
