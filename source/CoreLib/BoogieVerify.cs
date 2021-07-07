@@ -40,7 +40,7 @@ namespace cba.Util
         // TODO: move this elsewhere
         public static HashSet<string> ignoreAssertMethods;
 
-        public static void setTimeOut(int TO)
+        public static void setTimeOut(uint TO)
         {
             CommandLineOptions.Clo.TimeLimit = 0;
             if (TO > 0)

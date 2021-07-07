@@ -133,7 +133,7 @@ namespace cba
         public string unfoldRecursion { get; private set; }
         public string daInst { get; private set; }
 
-        public int houdiniTimeout { get; private set; }
+        public uint houdiniTimeout { get; private set; }
         public bool fastRequiresInference { get; private set; }
 
         public bool useProverEvaluate { get; private set; }
@@ -325,7 +325,7 @@ namespace cba
             unfoldRecursion = null;
             daInst = null;
 
-            houdiniTimeout = -1;
+            houdiniTimeout = 0;
             fastRequiresInference = false;
 
             useProverEvaluate = false;
@@ -472,7 +472,7 @@ namespace cba
             else if (flag.StartsWith("/houdiniTimeLimit:"))
             {
                 var split = flag.Split(sep);
-                houdiniTimeout = Int32.Parse(split[1]);
+                houdiniTimeout = UInt32.Parse(split[1]);
             }
             else if (flag == "/fastRequiresInference")
             {

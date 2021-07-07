@@ -673,7 +673,7 @@ namespace cba
         // extract loops?
         public bool ExtractLoops;
 
-        public static int HoudiniTimeout = -1;
+        public static uint HoudiniTimeout = 0;
         public static bool disableStaticAnalysis = false;
         public static bool inferPreconditions = false;
         public static bool checkAsserts = false;

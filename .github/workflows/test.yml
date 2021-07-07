@@ -1,0 +1,50 @@
+name: Corral CI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+
+env:
+  SOLUTION: source/Corral.sln
+  Z3URL: https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
+
+jobs:
+  job0:
+    name: Corral CI
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '5.0.x'
+      - name: Checkout Corral
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Install tools, build Corral, test Corral
+        run: |
+          # Download a Z3 release
+          wget ${Z3URL}
+          unzip z3*.zip
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          # Change directory to Corral root folder
+          cd $GITHUB_WORKSPACE
+          # Restore dotnet tools
+          dotnet tool restore
+          # Build Corral
+          dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
+          # Create packages
+          dotnet pack --no-build -c ${{ matrix.configuration }} ${SOLUTION}
+          # Run regression tests
+          cd test/regression && perl check.pl
+      - name: Deploy to nuget
+        if: matrix.configuration == 'Release' && startsWith(github.ref, 'refs/tags/v')
+        run: dotnet nuget push "source/**/bin/${{ matrix.configuration }}/Corral*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
