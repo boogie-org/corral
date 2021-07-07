@@ -10,11 +10,6 @@
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
 
-  <!-- Include license file -->
-  <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)..\LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
-  </ItemGroup>
-
   <!-- Boogie dependency -->
   <ItemGroup>
     <PackageReference Include="Boogie.ExecutionEngine" Version="2.9.1" />
