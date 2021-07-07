@@ -1245,7 +1245,7 @@ namespace CoreLib
                     reporter.reportTrace = main;
                     qStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
-                    Console.WriteLine("UQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
+                    //Console.WriteLine("UQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     //if (outcome != Outcome.Correct) break;
 
@@ -1281,7 +1281,7 @@ namespace CoreLib
                         }
 
                     }
-                    Console.WriteLine("UW Inlining:" + numUWInlinings.ToString());
+                    //Console.WriteLine("UW Inlining:" + numUWInlinings.ToString());
                     if (numUWInlinings == 0)
                     {
                         MacroSI.PRINT_DEBUG("  - overapprox");
@@ -1311,7 +1311,7 @@ namespace CoreLib
                         qStartTime = DateTime.Now;
                         outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                             CheckVC(reporter);
-                        Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
+                        //Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                         Pop();
                         MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                         if (outcome != Outcome.Errors)
@@ -1354,7 +1354,7 @@ namespace CoreLib
                     qStartTime = DateTime.Now;
                     outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                         CheckVC(reporter);
-                    Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
+                    //Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     Pop();
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     if (outcome != Outcome.Errors)
@@ -1364,7 +1364,7 @@ namespace CoreLib
 
                         break; // done
                     }
-                    Console.WriteLine("OR Inlining:" + reporter.callSitesToExpand.Count.ToString());
+                    //Console.WriteLine("OR Inlining:" + reporter.callSitesToExpand.Count.ToString());
                     if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
                         return outcome;
                     else if (reporter.callSitesToExpand.Count == 0)
