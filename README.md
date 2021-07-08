@@ -2,7 +2,6 @@
 
 [![License][license-badge]](LICENSE.txt)
 [![NuGet package][nuget-badge]][nuget]
-[![Corral CI](https://github.com/boogie-org/corral/actions/workflows/test.yml/badge.svg)](https://github.com/boogie-org/corral/actions/workflows/test.yml)
 
 
 Corral is a solver for the reachability modulo theories problem. Learn more
@@ -47,7 +46,7 @@ To push a new version to nuget, perform the following steps:
 
 - Update the version (e.g., x.y.z) and commit the change
 - git tag vx.y.z
-- git push --tags
+- git push --atomic origin master vx.y.z
 
 The [CI workflow](.github/workflows/test.yml) will build and push the packages.
 

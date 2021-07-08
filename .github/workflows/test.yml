@@ -49,6 +49,4 @@ jobs:
       - name: Deploy to nuget
         if: matrix.configuration == 'Release' && startsWith(github.ref, 'refs/tags/v')
         run: |
-          pwd
-          dotnet nuget push "source/Corral/bin/${{ matrix.configuration }}/Corral*.nupkg" -k ${{ secrets.CORRAL_NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
-          pwd
+          dotnet nuget push "source/Corral/bin/${{ matrix.configuration }}/Corral*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json

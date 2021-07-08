@@ -2,7 +2,7 @@
 
   <!-- Target framework and package configuration -->
   <PropertyGroup>
-    <Version>1.1.5</Version>
+    <Version>1.1.6</Version>
     <TargetFramework>net5.0</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <Authors>Corral</Authors>
