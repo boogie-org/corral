@@ -2,6 +2,7 @@
 
 [![License][license-badge]](LICENSE.txt)
 [![NuGet package][nuget-badge]][nuget]
+[![Corral CI](https://github.com/boogie-org/corral/actions/workflows/test.yml/badge.svg)](https://github.com/boogie-org/corral/actions/workflows/test.yml)
 
 
 Corral is a solver for the reachability modulo theories problem. Learn more

@@ -1,0 +1,38 @@
+name: Corral Release
+
+on:
+  release:
+    types: [published]
+
+env:
+  SOLUTION: source/Corral.sln
+
+jobs:
+  job0:
+    name: Corral Release
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '5.0.x'
+      - name: Checkout Corral
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Build Corral, package Corral
+        run: |
+          # Find version from tag info
+          VERSION="${GITHUB_REF##*/v}"
+          echo VERSION=$VERSION
+          # Change directory to Corral root folder
+          cd $GITHUB_WORKSPACE
+          # Restore dotnet tools
+          dotnet tool restore
+          # Build Corral
+          dotnet build -c Release ${SOLUTION}
+          # Create packages
+          dotnet pack -p:PackageVersion=$VERSION --no-build -c Release ${SOLUTION}
+      - name: Deploy to nuget
+        run:
+          dotnet nuget push "source/Corral/bin/Release/Corral*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
