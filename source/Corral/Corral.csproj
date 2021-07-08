@@ -2,10 +2,7 @@
 
   <PropertyGroup>
     <PackageId>Corral</PackageId>
-    <Authors>Corral</Authors>
     <Description>A solver for the reachability modulo theories problem.</Description>
-    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
-    <RepositoryUrl>https://github.com/boogie-org/corral</RepositoryUrl>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -25,10 +22,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.Resources.Extensions" Version="4.6.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-      <None Include="../../LICENSE.txt" Pack="true" PackagePath="LICENSE.txt" />
   </ItemGroup>
 
 </Project>
