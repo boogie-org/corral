@@ -45,7 +45,7 @@ jobs:
           dotnet pack --no-build -c ${{ matrix.configuration }} ${SOLUTION}
           # Run regression tests
           export CONFIGURATION=${{ matrix.configuration }}
-          cd test/regression && perl check.pl
+          (cd test/regression && perl check.pl)
       - name: Deploy to nuget
         if: matrix.configuration == 'Release' && startsWith(github.ref, 'refs/tags/v')
         run: dotnet nuget push "source/Corral/bin/${{ matrix.configuration }}/Corral*.nupkg" -k ${{ secrets.CORRAL_NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
