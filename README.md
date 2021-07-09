@@ -42,14 +42,11 @@ flags from the file `filename`.
 
 ## Versioning and Release
 
-The current version of Boogie is noted in a [build property](source/Directory.Build.props).
-To push a new version to nuget, perform the following steps:
+To push a new version to nuget, publish a new release with a tag of the form
+`vx.y.z`, where `x.y.z` is the updated version.
 
-- Update the version (e.g., x.y.z) and commit the change
-- git tag vx.y.z
-- git push --atomic origin master vx.y.z
-
-The [CI workflow](.github/workflows/test.yml) will build and push the packages.
+The [release workflow](.github/workflows/release.yml) will automatically build
+and push the packages.
 
 
 [license-badge]: https://img.shields.io/github/license/boogie-org/corral?color=blue
