@@ -35,4 +35,4 @@ jobs:
           dotnet pack -p:Version=$VERSION --no-build -c Release ${SOLUTION}
       - name: Deploy to nuget
         run:
-          dotnet nuget push "source/Corral/bin/Release/Corral*.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+          dotnet nuget push "source/Corral/bin/Release/Corral.$VERSION.nupkg" -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
