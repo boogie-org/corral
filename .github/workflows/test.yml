@@ -1,13 +1,6 @@
 name: Corral CI
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+on: [push, pull_request, workflow_dispatch]
 
 env:
   SOLUTION: source/Corral.sln
