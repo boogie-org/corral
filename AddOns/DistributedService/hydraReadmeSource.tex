@@ -1,6 +1,6 @@
 \documentclass{article}
-%\usepackage{hyperref}
-\usepackage[obeyspaces,spaces]{url}
+\usepackage{hyperref}
+%\usepackage[obeyspaces,spaces]{url}
 \begin{document}
 \section{How To Deploy \textsc{Hydra}}
 \subsection{Dependencies}
@@ -91,7 +91,7 @@ The configuration file accepts the following settings:
   \par
   \noindent
   \path{<Path-where-you-pulled-the-hydra-repository>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug}
-  \item \textbf{smackBin:} Path where you have built the \textsc{Smack} binaries. If the input program is not a \textbf{boogie} program, \textsc{Hydra} will use \textsc{Smack} to compile the given \textbf{C} program to \textbf{boogie} and dump it in the location specified by \textbf{boogieDumpDirectory}. This compiled \textbf{boogie} will then be verified by \textsc{Hydra}. If \textsc{Smack} is already added to path, then this flag is not required.  
+  \item \textbf{smackBin:} Path where you have built the \textsc{Smack} binaries. If the input program is not a \textbf{boogie} program, \textsc{Hydra} will use \textsc{Smack} to compile the given \textbf{C} program to \textbf{boogie} and dump it in the location specified by \textbf{boogieDumpDirectory}. This compiled \textbf{boogie} will then be verified by \textsc{Hydra}. If \textsc{Smack} is already added to path, then this flag is not required.
   \item \textbf{inputFilesDirectoryPath:} If you are invoking \textsc{Hydra} with a single program (the second argument while running \textbf{LocalServerInCsharp.exe}), this setting is irrelevant. If you invoke \textsc{Hydra} without specifying an input program, \textsc{Hydra} will verify each program in this directory. For each program  $\langle$filename.bpl$\rangle$, \textsc{Hydra} will write the result (outcome, total time etc.) in $\langle$filename.bpl.txt$\rangle$ in the same
       directory.
   \item \textbf{dumpSIBoogieFiles:} Set this to false in case you are feeding a SI boogie file to \textsc{Hydra}. Note that, if your SI boogie file was not generated using \textsc{Corral} $1.0.12$, \textsc{Hydra} may crash as \textsc{Hydra} uses \textsc{Corral} $1.0.12$ for verification. Otherwise, if your input is an original boogie program, set this to $true$. \textsc{Hydra} will then dump the SI boogie file and verify that.
@@ -106,4 +106,25 @@ The configuration file accepts the following settings:
 \par
 \noindent
 Note that, if you want to distribute verification over multiple \textbf{Linux} machines, you can do so by specifying \textbf{ListenerAddress} and \textbf{ListenerExecutablesPath} for each one. \textsc{Hydra} will automatically setup the remote machines and distribute verification tasks. However, if you are using multiple \textbf{Windows} machines, then you will need to setup \textsc{Hydra} and start the \path{<path-where-you-pulled-hydra>/AddOns/DistributedService/LocalServerInCsharp/LocalServerInCsharp/bin/Debug/Client.exe} on each one manually.
-\end{document} 
+
+\section{How to distribute \textsc{Hydra} on \textbf{Windows}}
+The following instructions assume that you are going to run hydra on $2$ machines. Machine $m1$ will run the server along with 32 clients and $m2$ will run another 32 clients. So, overall you will be verifying each program with 64 clients.
+\begin{enumerate}
+  \item Pull the "hydra" branch from the corral repository in $m1$. I will assume that you have pulled it to \path{C:\hydra}.
+  \begin{enumerate}
+    \item Copy the benchmarks to be verified in some directory. I will assume this is \path{C:\benchmarks}.
+    \item Setup dotnet framework following the links in Section $1.1.1$.
+    \item Build \path{C:\hydra\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp.sln}.
+    \item Copy $Z3$ version $4.6.0$ in \path{C:\hydra\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug}.
+    \item You will need to provide a config file to \textsc{Hydra}. Explanations for each flag in the config file is provided in Section $1.4$.
+    \item In the config file, set\\ numListeners = 2\\ maxClients = 64\\ timeout = 3600\\ hydraBin = \path{C:\hydra\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug\}\\ inputFilesDirectoryPath = \path{C:\benchmarks\}\\ startLocalListener=true
+    \item Now, you will need to enter the ip address of the server and port so that clients from $m2$ can send messages to the server in $m1$. You can look up this \href{https://support.microsoft.com/en-us/windows/find-your-ip-address-f21a9bbc-c582-55cd-35e0-73431160a1b9}{link} to figure out the ip address of $m1$. Look up this \href{https://www.windowscentral.com/how-open-port-windows-firewall}{link} to figure out how to open a port, e.g., $5000$ to allow incoming and outgoing messages. Once you have done so, you can set \\serverAddress = \path{http://<ip-address>:5000/}
+    \item Now, from inside \path{C:\hydra\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug}, you can execute hydra with:\\
+    \textit{ServerDriver.exe config.txt}\\
+    Doing this will spawn the server on $m1$. However, verification will not start as the server is still waiting for the clients to start on $m2$.
+  \end{enumerate}
+  \item In $m2$, follow the similar steps as $m1$ except you do not have to create/modify any config file. You can simply copy the config file from $m1$ to $m2$. Once you have done so, from inside \path{C:\hydra\AddOns\DistributedService\LocalServerInCsharp\LocalServerInCsharp\bin\Debug} in $m2$, execute\\
+      \\
+      \textit{ListenerDriver.exe config.txt}
+\end{enumerate}
+\end{document}
