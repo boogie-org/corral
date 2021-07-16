@@ -1263,7 +1263,7 @@ namespace CoreLib
                         else
                         {
                             splitFlag = 1;
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => Spliiting due to client waiting");
+                            //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => Spliiting due to client waiting");
                         }
                     }
                 }
@@ -1283,7 +1283,7 @@ namespace CoreLib
                         else
                         {
                             splitFlag = 1;
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => Spliiting due to client waiting");
+                            //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => Spliiting due to client waiting");
                         }
                     }
                 }else if (splitMode == 100)
@@ -1302,7 +1302,7 @@ namespace CoreLib
                         else
                         {
                             splitFlag = 1;
-                            Console.WriteLine(clientID + " => Spliiting due to client waiting");
+                            //Console.WriteLine(clientID + " => Spliiting due to client waiting");
                         }
                     }
                 }
@@ -1657,7 +1657,7 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, maxVc);
 
                             //if (writeLog)
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition + " with id = " + currentId.ToString() + " and splitMode " + splitMode.ToString());
+                            //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => callsites count before spliiting " + callsitesInlinedCurrentPartition + " with id = " + currentId.ToString() + " and splitMode " + splitMode.ToString());
                             
 
                             if (splitMode == 0 && callsitesInlinedCurrentPartition >= alphaUW)
@@ -1884,7 +1884,7 @@ namespace CoreLib
                 }
                 if (isDone)
                 {
-                    Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => LOOP outcome: " + outcome.ToString() + " & reachbound = " + reachedBound.ToString());
+                    //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => LOOP outcome: " + outcome.ToString() + " & reachbound = " + reachedBound.ToString());
 
                     if (outcome == Outcome.ReachedBound || (reachedBound && outcome == Outcome.Correct))
                     {
@@ -3173,12 +3173,12 @@ namespace CoreLib
                     //else
                     {
                         string[] parse = replyFromServer.Split(';');
-                        if(parse.Length == 1)
-                        {
-                            Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => replyFromServer: " + replyFromServer.Substring(0, Math.Min(20, replyFromServer.Length)));
-                        }
+                        //if(parse.Length == 1)
+                        //{
+                            //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => replyFromServer: " + replyFromServer.Substring(0, Math.Min(20, replyFromServer.Length)));
+                        //}
                         splitMode = Int16.Parse(parse[0]);
-                        Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => after replyFromServer: " + parse[0]);
+                        //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => after replyFromServer: " + parse[0]);
                         //Console.WriteLine("Received ORSplit Mode : " + splitMode);
                         currentId = Int64.Parse(parse[2]);
                         receivedCalltree = parse[4];
@@ -3549,7 +3549,7 @@ namespace CoreLib
                 #endregion
                 if (writeLog)
                     Console.WriteLine("HERE1");
-                Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => outcome: " + outcome.ToString());
+                //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => outcome: " + outcome.ToString());
                 if (outcome == Outcome.Correct)
                     replyFromServer = sendRequestToServer("outcome", "OK;"+clientID);
                 else if (outcome == Outcome.Errors)

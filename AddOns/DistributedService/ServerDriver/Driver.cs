@@ -21,13 +21,68 @@ namespace ServerDriver
             Queue<string> fileQueue;
             int numProgramsToVerify;
             string workingFile;
-
+            HttpListener _httpListener = new HttpListener();
+            HttpListenerContext context;
+            string configFilePath = args[0];
             setupConfig(args);
+            int count = 1;
+            string filename = "test";
+            if (configuration.cloudDeployment)
+            {
+                _httpListener.Prefixes.Add(configuration.cloudAddress);
+                _httpListener.Start();
+                Console.WriteLine("Wainting for file upload");
+                context = _httpListener.GetContext();                
+                //Console.WriteLine(context.Request.QueryString["client"].ToString());
+                String body = new StreamReader(context.Request.InputStream).ReadToEnd();
+                Console.WriteLine("Received file");
+                //Console.WriteLine(body);
+                //Console.ReadLine();
+                string[] parseBody = body.Split('\n');
+                //Console.WriteLine(parseBody[0]);
+                //Console.WriteLine(parseBody[1]);
+                //Console.WriteLine(parseBody[2]);
+                //Console.WriteLine(parseBody[3]);
+                //Console.WriteLine(parseBody[4]);
+                //Console.ReadLine();
+                filename = configuration.inputFilesDirectoryPath + filename + count.ToString() + ".bpl";
+                //Console.WriteLine(filename);
+                string filebody = null;
+                for (int i = 3; i < (parseBody.Length - 2); i++)
+                {
+                    filebody = filebody + parseBody[i] + "\n";
+                }
+                if (!Directory.Exists(configuration.inputFilesDirectoryPath))
+                    Directory.CreateDirectory(configuration.inputFilesDirectoryPath);
+                Console.WriteLine("Writing File");
+                File.WriteAllText(filename, filebody);
+                Console.WriteLine("Writing File Finished");
+                fileQueue = new Queue<string>();
+                fileQueue.Enqueue(filename);
+                //Console.ReadLine();
+                Console.WriteLine("Deploying Hydra");
+                deployHydra(fileQueue, configFilePath);
+                string resultFile = filename + ".txt";
+                string result = File.ReadAllText(resultFile);
+                Console.WriteLine(result);
+                ResponseHttp(context, result);
+                Thread.Sleep(60000);
+                count++;
+            }
+            else
+            {
+                inputFilesDirectory = configuration.inputFilesDirectoryPath;
+                filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
+                fileQueue = new Queue<string>(filePaths);
+                deployHydra(fileQueue, configFilePath);
+            }            
 
-            inputFilesDirectory = configuration.inputFilesDirectoryPath;
-            filePaths = Directory.GetFiles(inputFilesDirectory, "*.bpl");
-            fileQueue = new Queue<string>(filePaths);
-            numProgramsToVerify = fileQueue.Count;
+        }
+
+        static void deployHydra(Queue<string> fileQueue, string configFilePath)
+        {
+            int numProgramsToVerify = fileQueue.Count;
+            string workingFile;
 
             for (int i = 0; i < numProgramsToVerify; i++)
             {
@@ -36,7 +91,7 @@ namespace ServerDriver
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     p.StartInfo.FileName = "mono";
-                    p.StartInfo.Arguments = "LocalServerInCsharp.exe" + " " + workingFile + " " + args[0];
+                    p.StartInfo.Arguments = "LocalServerInCsharp.exe" + " " + workingFile + " " + configFilePath;
                     p.StartInfo.UseShellExecute = false;
                     //p.StartInfo.CreateNoWindow = false;
                     p.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
@@ -45,7 +100,7 @@ namespace ServerDriver
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
                     p.StartInfo.FileName = "LocalServerInCsharp.exe";
-                    p.StartInfo.Arguments = workingFile + " " + args[0];                    
+                    p.StartInfo.Arguments = workingFile + " " + configFilePath;
                     //    " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3" +
                     //    " /newStratifiedInlining:ucsplitparallel /enableUnSatCoreExtraction:1";
                     p.StartInfo.UseShellExecute = false;
@@ -58,7 +113,28 @@ namespace ServerDriver
                 p.WaitForExit();
                 Thread.Sleep(60000);    //Wait for cleanup
             }
+        }
 
+        public static bool ResponseHttp(HttpListenerContext context, string msg)
+        {
+            bool err = false;
+            try
+            {
+                using (HttpListenerResponse response = context.Response)
+                {
+                    byte[] outBytes = Encoding.UTF8.GetBytes(msg);
+                    response.OutputStream.Write(outBytes, 0, outBytes.Length);                    
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Server Could Not Send Message");
+                Console.WriteLine("MESSAGE : ");
+                Console.WriteLine(msg);
+                Console.WriteLine(e);
+                err = true;                
+            }
+            return err;
         }
 
         static void setupConfig(string[] args)
@@ -98,6 +174,9 @@ namespace ServerDriver
                     case "serverAddress":
                         configuration.serverAddress = configKey[1];
                         break;
+                    case "cloudAddress":
+                        configuration.cloudAddress = configKey[1];
+                        break;
                     case "corralArguments":
                         configuration.corralArguments = configKey[1];
                         if (configKey.Length > 2)
@@ -121,6 +200,12 @@ namespace ServerDriver
                             configuration.startLocalListener = true;
                         else
                             configuration.startLocalListener = false;
+                        break;
+                    case "cloudDeployment":
+                        if (configKey[1] == "true")
+                            configuration.cloudDeployment = true;
+                        else
+                            configuration.cloudDeployment = false;
                         break;
                     case "listenerExecutablePath":
                         configuration.listenerExecutablePath = configKey[1];

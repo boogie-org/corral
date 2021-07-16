@@ -116,6 +116,10 @@
       <Project>{f2af6beb-eba6-46fe-987a-8438603c4290}</Project>
       <Name>Client</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\CloudAPI\CloudAPI.csproj">
+      <Project>{102ba81d-bc5f-412b-84d1-c34ec44ad224}</Project>
+      <Name>CloudAPI</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\ListenerDriver\ListenerDriver.csproj">
       <Project>{ee8aa99d-9d3e-443d-a9c5-7e4c45b4c17f}</Project>
       <Name>ListenerDriver</Name>

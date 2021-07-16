@@ -32,6 +32,8 @@ namespace ServerDriver
         public double splitInterval;
         public string[] listenerAddress;
         public string[] listenerExecutablesLocation;
+        public string cloudAddress;
+        public bool cloudDeployment;
         public Config()
         {
             //The following values are set by default if the corresponding flag is not present in the configuration file
@@ -45,6 +47,8 @@ namespace ServerDriver
             smackBin = null;
             inputFilesDirectoryPath = @"F:\00ResearchWork\SVCOMP\timeoutSICorrected\";
             serverAddress = "http://localhost:5000/";
+            cloudAddress = "http://localhost:5000/";
+            cloudDeployment = false;
             corralArguments = " /useProverEvaluate /di /si /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             corralDumpArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             rawArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";

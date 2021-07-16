@@ -201,7 +201,7 @@ namespace LocalServerInCsharp
             //_httpListener.TimeoutManager.RequestQueue = Timeout.InfiniteTimeSpan;
             //_httpListener.TimeoutManager.IdleConnection = Timeout.InfiniteTimeSpan;
             _httpListener.Start(); // start server (Run application as Administrator!)
-
+            
             //Console.WriteLine("Server started.");
             //Console.WriteLine("Waiting for Listener...");
             string configFilePath = null;
@@ -235,6 +235,7 @@ namespace LocalServerInCsharp
                 }
                 //Console.ReadLine();
             }
+            
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
             startServer();
@@ -282,7 +283,7 @@ namespace LocalServerInCsharp
                 
                 //HttpListenerContext context = _httpListener.GetContext(); // get a context
                 Dictionary<string, string> msgContent = null;
-                // parse input msg
+                // parse input msg               
                 List<string> allKeys = context.Request.QueryString.AllKeys.ToList();
                 if (allKeys.Count == 0)
                 {
@@ -390,7 +391,7 @@ namespace LocalServerInCsharp
                     {
                         Thread.Sleep(10000);
                         ResponseHttp(context, "returned");
-                        Console.WriteLine("returning");
+                        //Console.WriteLine("returning");
                     }                    
                 }
                 /*else
@@ -423,7 +424,7 @@ namespace LocalServerInCsharp
                         {
                             bestAlgo = algo;
                             finalOutcome = "OK";
-                            Console.WriteLine("Outcome OK bestAlgo updated to " + bestAlgo.ToString());
+                            //Console.WriteLine("Outcome OK bestAlgo updated to " + bestAlgo.ToString());
                         }
                         if (clientRequestQueue[algo].Count == algoClientList[algo].Count && !askForResetTime[algo])
                         {
@@ -455,7 +456,7 @@ namespace LocalServerInCsharp
                                 partitionId = Int64.Parse(parse[2]);
                                 tree[partitionId].isLeading = false;
                                 tree[partitionId].startTime = DateTime.Now;
-                                Console.WriteLine("Assign partition " + partitionId + " from OR Queue to " + t.Item1);
+                                //Console.WriteLine("Assign partition " + partitionId + " from OR Queue to " + t.Item1);
                                 tree[partitionId].clientId = t.Item1;
                                 if (clientsToKill.Contains(t.Item1))
                                     clientsToKill.Remove(t.Item1);
@@ -467,7 +468,7 @@ namespace LocalServerInCsharp
                                 isJobGiven[algo] = true;
                                 splitMode = Int16.Parse(parse[0]);
                                 algoIdToSplitMode[algo] = splitMode;
-                                Console.WriteLine("Algo : " + algo.ToString() + " started with splitmode " + splitMode.ToString());
+                                //Console.WriteLine("Algo : " + algo.ToString() + " started with splitmode " + splitMode.ToString());
                             }
                         }
                         else
@@ -481,18 +482,18 @@ namespace LocalServerInCsharp
                                 Tuple<int, HttpListenerContext> t = clientRequestQueue[algo].Dequeue();
                                 clientNumReset[t.Item1]++;
                                 HttpListenerContext sendToClient = t.Item2;
-                                Console.WriteLine("clientID of largest queue : " + clientIDOfLargestQueue);
+                                //Console.WriteLine("clientID of largest queue : " + clientIDOfLargestQueue);
                                 if (clientIDOfLargestQueue != -1)
-                                    Console.WriteLine("clientCalltreeQueue Count : {0}", clientCalltreeQueue[clientIDOfLargestQueue].Count);
+                                    //Console.WriteLine("clientCalltreeQueue Count : {0}", clientCalltreeQueue[clientIDOfLargestQueue].Count);
                                 if (clientIDOfLargestQueue < 0 || clientIDOfLargestQueue >= clientCalltreeQueue.Count())
                                 {
                                     Console.WriteLine("ERROR: clientIdOfLargestQueue is wrong");
-                                    Console.ReadLine();
+                                    //Console.ReadLine();
                                 }
                                 string calltreeToSend = clientCalltreeQueue[clientIDOfLargestQueue].PopRight();
                                 string[] parse = calltreeToSend.Split(';');
                                 long partitionId = Int64.Parse(parse[2]);
-                                Console.WriteLine("Assign partition " + partitionId + " from client " + clientIDOfLargestQueue + " to " + t.Item1);
+                                //Console.WriteLine("Assign partition " + partitionId + " from client " + clientIDOfLargestQueue + " to " + t.Item1);
                                 if (clientsToKill.Contains(t.Item1))
                                     clientsToKill.Remove(t.Item1);
                                 if (showTreeLog)
@@ -577,7 +578,7 @@ namespace LocalServerInCsharp
             if(totalAlgo > maxClients)
             {
                 Console.WriteLine("ERROR : More type of algo provided than clients");
-                Console.ReadLine();
+                //Console.ReadLine();
             }
             //Current allocation for client as follows
             for (int algo = 0; algo < totalAlgo; algo++)
@@ -587,7 +588,7 @@ namespace LocalServerInCsharp
                 if (!areAdded)
                 {
                     Console.WriteLine("ERROR : Clients not added to algo " + algo.ToString());
-                    Console.ReadLine();
+                    //Console.ReadLine();
                 }
 
                 numClientsResetTimeSent.Add(0);
@@ -611,7 +612,7 @@ namespace LocalServerInCsharp
 
         static void showClientsOfAlgo(int algoID)
         {
-            Console.WriteLine("Algo Client list " + algoID.ToString() + ":  " + string.Join(",", algoClientList[algoID]));
+            //Console.WriteLine("Algo Client list " + algoID.ToString() + ":  " + string.Join(",", algoClientList[algoID]));
         }
 
         static bool addClientsToAlgo(int algoId, int clientsToAdd)
@@ -775,7 +776,7 @@ namespace LocalServerInCsharp
                         {
                             staticAlphaList.Add(Int32.Parse(val));
                         }
-                        Console.WriteLine("SERVER: static alpha list : " + string.Join(",", staticAlphaList));
+                        //Console.WriteLine("SERVER: static alpha list : " + string.Join(",", staticAlphaList));
                     }
                     else if (flag.StartsWith("/waitForBetterResult"))
                     {
@@ -1029,7 +1030,7 @@ namespace LocalServerInCsharp
                     startListenerService();*/
                 finalOutcome = "NOK";
                 bestAlgo = algoID;
-                Console.WriteLine("Outcome NOK bestAlgo updated to " + bestAlgo.ToString());
+                //Console.WriteLine("Outcome NOK bestAlgo updated to " + bestAlgo.ToString());
                 totalTime[algoID] = (DateTime.Now - startTime).TotalSeconds;
                 isJobCompleted[algoID] = true;
                 setKillFlag = true;
@@ -1206,9 +1207,9 @@ namespace LocalServerInCsharp
         {
             if(trackCompletedNode)
             {
-                Console.WriteLine("Added New : ");
+                //Console.WriteLine("Added New : ");
                 orList.Add(currNodeTrack);
-                Console.WriteLine(currNodeTrack.Item1.ToString() + " : " + string.Join(",", currNodeTrack.Item2));
+                //Console.WriteLine(currNodeTrack.Item1.ToString() + " : " + string.Join(",", currNodeTrack.Item2));
                 trackCompletedNode = false;
             }
         }
@@ -1230,7 +1231,7 @@ namespace LocalServerInCsharp
                 if (tree.ContainsKey(partitionID))
                     break;
                 clientCalltreeQueueOr.PopRight();
-                Console.WriteLine("removing partition " + partitionId.ToString() + " from OR queue as not it is not present in tree");
+                //Console.WriteLine("removing partition " + partitionId.ToString() + " from OR queue as not it is not present in tree");
             }
         }
 
@@ -1244,7 +1245,7 @@ namespace LocalServerInCsharp
                 {
                     addToNodeTimes(id);
                     tree.Remove(id);
-                    Console.WriteLine("\nLOCATION - " + parent + ": " + id);
+                    //Console.WriteLine("\nLOCATION - " + parent + ": " + id);
                     tree[parent].children.Remove(id);
                     if (tree[parent].children.Count > 0)
                     {
@@ -1281,12 +1282,12 @@ namespace LocalServerInCsharp
                 handleExitTracking();
                 if (!waitForBetterResult)
                 {
-                    Console.WriteLine("Reached root of partition tree. Verfification Finished.");
+                    //Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                     finalOutcome = "OK";
                     if (bestAlgo == -1)
                     {
                         bestAlgo = lastAlgoCompleted;
-                        Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
+                        //Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
                         totalTime[bestAlgo] = (DateTime.Now - startTime).TotalSeconds;
                         isJobCompleted[bestAlgo] = true;
                         setKillFlag = true;
@@ -1300,9 +1301,9 @@ namespace LocalServerInCsharp
                         if (bestAlgo == -1)
                         {
                             bestAlgo = lastAlgoCompleted;
-                            Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
+                            //Console.WriteLine("Reached root bestAlgo updated to " + bestAlgo.ToString());
                         }
-                        Console.WriteLine("Reached root of "+ lastAlgoCompleted.ToString() + " algo. Verfification Finished.");
+                        //Console.WriteLine("Reached root of "+ lastAlgoCompleted.ToString() + " algo. Verfification Finished.");
                         totalTime[lastAlgoCompleted] = (DateTime.Now - startTime).TotalSeconds;
                         isJobCompleted[lastAlgoCompleted] = true;
                         bool allCompleted = areAllAlgoCompleted();
@@ -1311,7 +1312,7 @@ namespace LocalServerInCsharp
                     }
                     else
                     {
-                        Console.WriteLine("Reached root of partition tree. Verfification Finished.");
+                        //Console.WriteLine("Reached root of partition tree. Verfification Finished.");
                         setKillFlag = true;
                     }
                 }
@@ -1320,7 +1321,7 @@ namespace LocalServerInCsharp
 
         static void killSubTree(long id)
         {
-            Console.WriteLine("removing " + id.ToString());
+            //Console.WriteLine("removing " + id.ToString());
             if (tree[id].children.Count > 0)
             {
                 foreach (long c in tree[id].children)
@@ -1497,7 +1498,7 @@ namespace LocalServerInCsharp
                 {
                     reply = "YES";
                     portfolioSplitDone = true;
-                    Console.WriteLine("Portfolio Split performed!!");
+                    //Console.WriteLine("Portfolio Split performed!!");
                 }
                 ResponseHttp(context, reply);
             }
@@ -1564,7 +1565,7 @@ namespace LocalServerInCsharp
         {
             if(clientsToKill.Contains(clientID - 1))
             {
-                Console.WriteLine("killing client " + (clientID - 1).ToString());
+                //Console.WriteLine("killing client " + (clientID - 1).ToString());
                 handleKillingClients(context, clientID.ToString());
             }
             else
@@ -1590,7 +1591,7 @@ namespace LocalServerInCsharp
                     if (!portfolioSplitDone)
                     {
                         Console.WriteLine("ERROR: portfolio split not performed " + algoID.ToString() + " algo and client " + (clientID - 1).ToString());
-                        Console.ReadLine();
+                        //Console.ReadLine();
                     }
                     long mustReachId = Int64.Parse(parse[2]);
                     long blockId = Int64.Parse(parse[2]) - 1;
@@ -1600,11 +1601,11 @@ namespace LocalServerInCsharp
                     tree.Add(blockId, blockNode);
                     tree[blockId].clientId = clientID - 1;
                     tree.Add(mustReachId, mustReachNode);
-                    Console.WriteLine("Added AND Nodes: " + blockId + " " + mustReachId);
+                    //Console.WriteLine("Added AND Nodes: " + blockId + " " + mustReachId);
                     if (!tree.ContainsKey(parentId))
                     {
                         Console.WriteLine("ERROR: Key not found for parentID : " + parentId);
-                        Console.ReadLine();
+                        //Console.ReadLine();
                     }
                     tree[parentId].children.Add(blockId);
                     tree[parentId].children.Add(mustReachId);
@@ -1631,11 +1632,11 @@ namespace LocalServerInCsharp
                         tree[dummySplitID].clientId = clientID - 1;
                         tree[dummySplitID].startTime = DateTime.Now;
                         tree.Add(ORId, ORNode);
-                        Console.WriteLine("Added OR Nodes: " + dummySplitID + " " + ORId);
+                        //Console.WriteLine("Added OR Nodes: " + dummySplitID + " " + ORId);
                         if (!tree.ContainsKey(parentId))
                         {
                             Console.WriteLine("ERROR: Key not found for parentID : " + parentId);
-                            Console.ReadLine();
+                            //Console.ReadLine();
                         }
                         tree[parentId].children.Add(dummySplitID);
                         tree[parentId].children.Add(ORId);
@@ -1645,7 +1646,7 @@ namespace LocalServerInCsharp
                             tree[ORId].isLeading = false;
                         }
                         clientCalltreeQueueOr.PushLeft(calltree);
-                        ShowClientCalltreeQueueOr();
+                        //ShowClientCalltreeQueueOr();
                     }
                     else
                     {
@@ -1655,11 +1656,11 @@ namespace LocalServerInCsharp
                         long splitMode = Int64.Parse(parse[0]);
                         splitNode ORNode = new splitNode(parentId, partitionType);
                         tree.Add(ORId, ORNode);
-                        Console.WriteLine("Added OR Node: " + ORId);
+                        //Console.WriteLine("Added OR Node: " + ORId);
                         if (!tree.ContainsKey(parentId))
                         {
                             Console.WriteLine("ERROR: Key not found for parentID : " + parentId);
-                            Console.ReadLine();
+                            //Console.ReadLine();
                         }
                         tree[parentId].children.Add(ORId);
                         if (!tree[parentId].isLeading)
@@ -1667,7 +1668,7 @@ namespace LocalServerInCsharp
                         if(splitMode != 100) // other than OR
                         {
                             clientCalltreeQueueOr.PushLeft(calltree);
-                            ShowClientCalltreeQueueOr();
+                            //ShowClientCalltreeQueueOr();
                         }
                         else
                         {
@@ -1810,7 +1811,7 @@ namespace LocalServerInCsharp
                 if(isJobGiven[algo] && isJobCompleted[algo] && !isAnyReachedBound[algo])
                 {
                     bestAlgo = algo;
-                    Console.WriteLine("WriteOutcome bestAlgo updated to " + bestAlgo.ToString());
+                    //Console.WriteLine("WriteOutcome bestAlgo updated to " + bestAlgo.ToString());
                     finalOutcome = "OK";
                     return finalOutcome;
                 }
@@ -1844,7 +1845,7 @@ namespace LocalServerInCsharp
             if (writeLog)
                 Console.WriteLine("Enqueued request from {0}", clientID - 1);
             int algoID = getAlgoID(clientID - 1);
-            Console.WriteLine("for clientid : " + (clientID - 1) + " algo id is " + algoID);
+            //Console.WriteLine("for clientid : " + (clientID - 1) + " algo id is " + algoID);
             if(algoID < 0 || algoID >= totalAlgo)
             {
                 Console.WriteLine("ERROR WRONG algo ID");
