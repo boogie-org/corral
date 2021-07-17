@@ -1183,11 +1183,12 @@ namespace CoreLib
 
         public Outcome Fwd(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
         {
+
             List<string> ucore = new List<string>();
             Random random = new Random();
             int toggle = cba.Util.CorralConfig.alphaInterleaving;
             Outcome outcome = Outcome.Inconclusive;
-
+            DateTime qStartTime;
             ForceInline(openCallSites, recBound);
 
             var boundHit = false;
@@ -1242,8 +1243,9 @@ namespace CoreLib
 
                     MacroSI.PRINT_DEBUG("    - check");
                     reporter.reportTrace = main;
+                    qStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
-                    
+                    //Console.WriteLine("UQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     //if (outcome != Outcome.Correct) break;
 
@@ -1265,7 +1267,7 @@ namespace CoreLib
                                 if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
                                 {
                                     numUWInlinings++;
-                                    Console.WriteLine("UW Inlining: " + GetPersistentID(scs));
+                                    //Console.WriteLine("UW Inlining: " + GetPersistentID(scs));
                                     openCallSites.Remove(scs);
                                     StratifiedVC svc = null;
                                     svc = Expand(scs);
@@ -1279,6 +1281,7 @@ namespace CoreLib
                         }
 
                     }
+                    //Console.WriteLine("UW Inlining:" + numUWInlinings.ToString());
                     if (numUWInlinings == 0)
                     {
                         MacroSI.PRINT_DEBUG("  - overapprox");
@@ -1305,8 +1308,10 @@ namespace CoreLib
                         MacroSI.PRINT_DEBUG("    - check");
                         reporter.reportTrace = false;
                         reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                        qStartTime = DateTime.Now;
                         outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                             CheckVC(reporter);
+                        //Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                         Pop();
                         MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                         if (outcome != Outcome.Errors)
@@ -1346,8 +1351,10 @@ namespace CoreLib
                     MacroSI.PRINT_DEBUG("    - check");
                     reporter.reportTrace = false;
                     reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                    qStartTime = DateTime.Now;
                     outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
                         CheckVC(reporter);
+                    //Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
                     Pop();
                     MacroSI.PRINT_DEBUG("    - checked: " + outcome);
                     if (outcome != Outcome.Errors)
@@ -1357,7 +1364,10 @@ namespace CoreLib
 
                         break; // done
                     }
-                    if (reporter.callSitesToExpand.Count == 0)
+                    //Console.WriteLine("OR Inlining:" + reporter.callSitesToExpand.Count.ToString());
+                    if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                        return outcome;
+                    else if (reporter.callSitesToExpand.Count == 0)
                         return Outcome.Inconclusive;
 
                     var toExpand = reporter.callSitesToExpand;
@@ -1368,7 +1378,7 @@ namespace CoreLib
                     }
                     foreach (var scs in toExpand)
                     {
-                        Console.WriteLine("OR Inlining: " + GetPersistentID(scs));
+                        //Console.WriteLine("OR Inlining: " + GetPersistentID(scs));
                         openCallSites.Remove(scs);
                         var svc = Expand(scs);
                         if (svc != null)
