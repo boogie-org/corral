@@ -1,0 +1,17 @@
+﻿<Properties StartupConfiguration="{AD4BF338-5412-486B-A860-90C16AC092A0}|Default">
+  <MonoDevelop.Ide.ItemProperties.SmackInst PreferredExecutionTarget="MonoDevelop.Default" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="SmackInst/Program.cs">
+    <Files>
+      <File FileName="SmackInst/Program.cs" Line="628" Column="41" />
+      <File FileName="SmackInst/App.config" Line="1" Column="8" />
+      <File FileName="../../source/Util/Visitor.cs" Line="644" Column="38" />
+      <File FileName="../../boogie/Source/Core/StandardVisitor.cs" Line="132" Column="6" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MultiItemStartupConfigurations />
+</Properties>

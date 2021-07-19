@@ -369,6 +369,9 @@ namespace AngelicVerifierNull
         // How many times an assertion has been blocked for an entrypoint
         static Dictionary<string, int> AssertionBlockedCount = new Dictionary<string, int>();
 
+        // The above one is not working as instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus), is always returning null
+        static Dictionary<int, int> AssertionLineBlockedCount = new Dictionary<int, int>();
+
         static int eecnt = 0;
 
         //Run Corral over different assertions (modulo errorLimit)
@@ -401,6 +404,7 @@ namespace AngelicVerifierNull
                 try
                 {
                     Stats.resume("run.corral");
+                    Console.WriteLine(" this is the {0}th iteration", corralIterationCount);
                     cex = RunCorral(prog, instr.assertsPassedName, corralTimeout);
                     Stats.stop("run.corral");
 
@@ -432,7 +436,12 @@ namespace AngelicVerifierNull
 
                 // find failing assert cmd from path program
                 var failingAssert = GetFailingAssertFromTraceProg(instr, ppprog);
-                //Console.WriteLine("Assert -> {0}", failingAssert);
+
+                Console.WriteLine("Assert -> {0}", failingAssert);
+                Console.WriteLine("this assert has the attribute, {0}", failingAssert.HasAttribute("valid_deref"));
+                Console.WriteLine("this assert has the attribute, {0}", failingAssert.HasAttribute("valid-de"));
+
+                Console.WriteLine($"this is  the failing assert line and code {failingAssert.Line}, {failingAssert.UniqueId}");
                 var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
                 // Remove axioms on alloc constants
@@ -452,7 +461,19 @@ namespace AngelicVerifierNull
 
                 Stats.resume("explain.error");
                 List<Tuple<string, int, string>> eeSlicedSourceLines = null;
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, "", Options.EEflags, out eeSlicedSourceLines);
+
+                bool runOld;
+                if (AssertionLineBlockedCount.ContainsKey(failingAssert.Line) && AssertionLineBlockedCount[failingAssert.Line] > MAX_ASSERT_BLOCK_COUNT-2  && failingAssert.HasAttribute("valid_deref"))
+                {
+                    Console.WriteLine($"This assertion {failingAssert}, on line {failingAssert.Line} has been violated {MAX_ASSERT_BLOCK_COUNT}, so now new explain error will run");
+                    runOld = false;
+                }
+                else
+                {
+                    Console.WriteLine("old explain error will run");
+                    runOld = true;
+                }
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, "", Options.EEflags, out eeSlicedSourceLines, runOld);
                 if (!Options.TraceSlicing) eeSlicedSourceLines = null;
                 Stats.stop("explain.error");
 
@@ -462,6 +483,13 @@ namespace AngelicVerifierNull
                 var stubs = instr.GetStubs(cex);
                 if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
                 var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
+
+                Console.WriteLine("this is the location of the assertion failure");
+                if(assertLoc != null) 
+                {
+                    Console.WriteLine($"{assertLoc.Item1}, {assertLoc.Item2}");
+                }
+
                 Console.WriteLine("Stubs used along the trace: {0}", stubs.Print());
                 traceCount++;
 
@@ -478,16 +506,39 @@ namespace AngelicVerifierNull
                 {
                     // check how many times we've blocked this guy
                     var done = false;
-                    if (assertLoc != null)
-                    {
-                        var key = assertLoc.ToString();
-                        if (!AssertionBlockedCount.ContainsKey(key))
-                            AssertionBlockedCount[key] = 0;
-                        AssertionBlockedCount[key]++;
+                    //if (assertLoc != null)
+                    //{
+                    //    var key = assertLoc.ToString();
+                    //    if (!AssertionBlockedCount.ContainsKey(key))
+                    //        AssertionBlockedCount[key] = 0;
+                    //    AssertionBlockedCount[key]++;
 
-                        if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
+                    //    if (AssertionBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
+                    //    {
+                    //        Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
+                    //        if (Options.reportOnMaxBlockCount)
+                    //        {
+                    //            PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
+                    //            done = false;
+                    //        }
+                    //        else
+                    //        {
+                    //            SuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo });
+                    //            done = true;
+                    //        }
+                    //    }
+                    //}
+
+                    if (failingAssert != null)
+                    {
+                        var key = failingAssert.Line;
+                        if (!AssertionLineBlockedCount.ContainsKey(key))
+                            AssertionLineBlockedCount[key] = 0;
+                        AssertionLineBlockedCount[key]++;
+
+                        if (AssertionLineBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
                         {
-                            Console.WriteLine("Unable to block {0} after {1} tries; hence suppressing", assertLoc, MAX_ASSERT_BLOCK_COUNT);
+                            Console.WriteLine("Unable to block {0} on line {1} after {2} tries; hence suppressing", failingAssert, key, MAX_ASSERT_BLOCK_COUNT);
                             if (Options.reportOnMaxBlockCount)
                             {
                                 PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
@@ -979,6 +1030,7 @@ namespace AngelicVerifierNull
         // Returns the error trace and the failing assert location
         static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string assertsPassedName, int corralTimeout)
         {
+            BoogieUtil.PrintProgram(inputProg.getProgram(), "query_"+corralIterationCount+".bpl");
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.ProverLogFilePath = null;
@@ -1393,7 +1445,7 @@ namespace AngelicVerifierNull
         private static bool filterFileHasBeenRead = false;
 
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines, bool runOld)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
@@ -1462,6 +1514,7 @@ namespace AngelicVerifierNull
                 //Now perform the precondition generation, taking skipAssumes into account
                 List<Tuple<string, int, string>> tmpEESlicedSourceLines; //don't overwrite the sound slice if the error is displayed
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
+                    runOld,
                     controlFlowDependencyInformation,
                     skipAssumes,
                     out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
@@ -1474,6 +1527,7 @@ namespace AngelicVerifierNull
                     eeflags.Add("/eliminateMapUpdates-");
                     Utils.Print("Retrying ExplainError with eliminateMapUpdates off...");
                     explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "),
+                        runOld,
                         controlFlowDependencyInformation,
                         skipAssumes,
                         out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
@@ -1555,6 +1609,7 @@ namespace AngelicVerifierNull
 
             explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1,
                 eeflags.Concat(" "),
+                true,
                 controlFlowDependencyInformation,
                 skipAssumes,
                 out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
@@ -1674,7 +1729,13 @@ namespace AngelicVerifierNull
             }
             else
             {
-                forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
+                //The next line has no trigger
+                //forallExpr = new ForallExpr(Token.NoToken, bvarList, forallBody);
+                //fixing the no trigger issue here
+
+                var trig = new Trigger(Token.NoToken, true, forallPre);
+                forallExpr = new ForallExpr(Token.NoToken, bvarList, trig, forallBody);
+
             }
             return forallExpr;
         }

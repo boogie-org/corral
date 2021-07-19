@@ -15,7 +15,6 @@ using cba.Util;
 
 namespace ExplainError
 {
-
     /// <summary>
     /// Status returned by ExplainError
     /// </summary>
@@ -41,6 +40,9 @@ namespace ExplainError
         private const int MAX_CONJUNCTS = 5000; //max depth of stack
 
         //Options: Add them to ParseAndRemoveNonBoogieOptions
+
+        //flag to control which explain error will run 
+        private static bool runOldExplainError = true;
 
         //flags to control which assumes to consider in the trace
         //Important: Keep default as the sound option, as it influences the the "true" trace slicing
@@ -114,11 +116,13 @@ namespace ExplainError
         /// <param name="tmout"></param>
         /// <param name="skipAssumes">a set of assumes to skip from slicing</param>
         /// <param name="explainErrorFilters"></param>
+        /// <param name="runOld">run the old explain error or the new explain error</param> 
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
             string extraArgs,
+            bool runOld,
             ControlFlowDependency cntrlFlowDependencyInfo,
             HashSet<AssumeCmd> skipAssumes, 
             out STATUS status, out Dictionary<string, string> complexCExprsRet,
@@ -129,6 +133,7 @@ namespace ExplainError
             suggestions = new List<Expr>();
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
+            runOldExplainError = runOld;
             /////////////////////////////////////
             //override teh default options
             verbose = false;
@@ -308,7 +313,7 @@ namespace ExplainError
             foreach (var cmd in cmds)
             {
 
-                Console.WriteLine("this is the command {0}", cmd);
+                //Console.WriteLine("this is the command {0}", cmd);
                 //if (verbose) Console.WriteLine("+++Stack = {0}", string.Join(",", branchJoinStack.ToList()));
                 CheckTimeout("Inside ComputePre");
                 var si = FindSourceLineInfo(cmd); //with SMACK, we cannot trust lineinfo to be in assert true anymore
@@ -354,7 +359,7 @@ namespace ExplainError
                         continue;
                     }
                     if (!MatchesSyntacticAssumeFilters((AssumeCmd)cmd)) { 
-                    Console.WriteLine("this assume was filtered out");
+                    //Console.WriteLine("this assume was filtered out");
                         continue;
 
                     }
@@ -508,12 +513,23 @@ namespace ExplainError
             }
             throw new Exception("This is just for experimentation");
         }
+
+        private static void printTheStringRepresentationOfList(List<Expr> exprs) { 
+            foreach (Expr expr in exprs) {
+                Console.WriteLine("A disjunct = {0}", expr); 
+            }
+        }
+
         private static HashSet<List<Expr>> ComputePreOverVocab(List<Expr> pre, string captureStateLoc)
         {
             if (verbose) Console.WriteLine("ComputePreOverVocab...");
             pre.Reverse(); // to keep up the list structure as before (when pre was conjoined)
 
+            //print the pre here
+            //Console.WriteLine("this is the precondition at the starting of ComputePreOverVocab = ");
+            printTheStringRepresentationOfList(pre);
             currPre = ExprUtil.ConjoinExprsBalanced(pre);
+            //Console.WriteLine("this is the currPre after balanced expressions = {0}", currPre);
             HashSet<List<Expr>> displayStrs = new HashSet<List<Expr>>();
             List<Expr> cubeLiterals; // = new List<Expr>();
             cubeLiterals = pre;
@@ -538,7 +554,7 @@ namespace ExplainError
             //TODO: get the NNF in a list<Expr> form so that FilteredPreIsNecessary does not have to recurse on the AND chain
             Expr fe; //filtered expr (not used)
             HashSet<Expr> filteredAtoms;
-            Console.WriteLine("\n precondition before filtering = {0}", e);
+            //Console.WriteLine("\n precondition before filtering = {0}", e);
             if ((filteredAtoms = FilteredAtoms(currImpl, e, out fe)).Count == 0)
             {
                 //throw new Exception("Abort: No atoms after applying filter...no point proceeding");
@@ -556,10 +572,24 @@ namespace ExplainError
                 preDnf = ExprUtil.PerformDNF(e);
             }
             else
-            { 
-            var mc = MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf);
+            {
+                bool mc;
+                if (runOldExplainError)
+                {
+                    mc = MonomialCubeCover(currImpl, currPre, e, filteredAtoms, out preDnf);
+
+                }
+                else
+                {
+                    mc = TemplateRankAndTry(currImpl, currPre, e, filteredAtoms, out preDnf);
+                }
+
                 if (mc)
+                {
                     Console.WriteLine("\n Found a conjunctive cube cover {0}\n", preDnf[0]);
+                    Console.WriteLine("\n Pretty print the cover {0}\n", PrettyPrintSmackFunctions(preDnf[0]));
+                }
+
                 else
                 {
                     if (eeCoverOpt == COVERMODE.MONOMIAL)
@@ -623,6 +653,76 @@ namespace ExplainError
                 l.Add(t.Aggregate((Expr)Expr.True, (x, y) => ExprUtil.And(x, y)));
             return t.Count > 0;
         }
+
+        private static bool TemplateRankAndTry(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
+        {
+            Console.WriteLine("These are the rankings");
+            List<int> rankings = GetRankingsFromFilteredExpressions(ref fe);
+            rankings.Iter(x => Console.Write($"{x}, "));
+            Console.WriteLine(" ");
+
+            foreach(int ranking in rankings)
+            {
+                Console.WriteLine($"Trying the Template Number {ranking}");
+                HashSet<Expr> fexps = fe;
+                if (ranking == 1)
+                {
+                    try
+                    {
+                        fexps = GetPattern1ConditionFromFilteredAtoms(ref fe);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("template 1 trial failed with the exception :{0}", ex);
+                    }
+                }
+                else if(ranking == 2)
+                {
+                    try
+                    {
+                        fexps = GetPattern2ConditionFromFilteredAtoms(ref fe);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("template 2 trial failed with the exception :{0}", ex);
+                    }
+                }
+                else if(ranking == 3)
+                {
+                    try
+                    {
+                        fexps = GetPattern3ConditionFromFilteredAtoms(ref fe);
+                    }
+                    catch(Exception ex)
+                    {
+                        Console.WriteLine("template 3 trial failed with the exception :{0}",  ex);
+                    }
+
+                }
+                else
+                {
+                    throw new Exception($"This Template Number {ranking} does not exists");
+                }
+
+                //Trying the template
+                var preDnf = new List<Expr>();
+                var mc = MonomialCubeCover(currImpl, currPre, e, fexps, out preDnf);
+                if(mc)
+                {
+                    Console.WriteLine($"This Template Number {ranking} worked");
+                    l = preDnf;
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"This Template Number {ranking} did not work, trying the next Template");
+                }
+            }
+
+            l = new List<Expr>();
+            return false;
+        }
+
 
         /// <summary>
         /// Clause abstraction of currPre using fe; less precise than full cover (possibly stronger than the monomial cover, if it exists)
@@ -1664,7 +1764,7 @@ namespace ExplainError
         {
             var fexps = new HashSet<Expr>(); // list of filtered exprs
 
-            LiteralFilterFlags();
+            //LiteralFilterFlags();
             fexps = new HashSet<Expr>(); // list of filtered exprs
             e = GetFilteredExpr(t, ref fexps); //the return expr is of no value now
 
@@ -1673,12 +1773,133 @@ namespace ExplainError
                 VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(p))); //remove any true/false predicate
             Console.WriteLine("\n Filtered atoms = {0}", String.Join(", ", fexps));
 
-            //exploring the structure of the atoms
-            //Console.WriteLine((((fexps.ElementAt(0) as NAryExpr).Args[0] as NAryExpr).Fun as FunctionCall).FunctionName);
 
 
+            Console.WriteLine("Pretty print smack filtered atoms");
+            fexps.Iter(x => Console.WriteLine(PrettyPrintSmackFunctions(x)));
 
-            // This part is just testing 
+
+            return fexps;
+        }
+
+        private static List<int> GetRankingsFromFilteredExpressions(ref HashSet<Expr> fexps)
+        {
+            if (IsTemplate1(ref fexps))
+            {
+                return new List<int>() { 1, 2, 3 };
+            }
+            if(IsTemplate2(ref fexps))
+            {
+                return new List<int>() { 2, 1, 3 };
+            }
+            return new List<int>() { 3, 2, 1 };
+        }
+
+        private static bool IsTemplate1(ref HashSet<Expr> fexps)
+        {
+            bool isIntComparision(string x) => IsSignedIntComparisionFunctions(x) || IsUnsignedIntComparisionFunctions(x);
+            foreach (var e in fexps)
+            {
+                if(RecursivelyOpenToFindIfContainsFunctions(e, isIntComparision))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool IsTemplate2(ref HashSet<Expr> fexps)
+        {
+            foreach (var e in fexps)
+            {
+                if (RecursivelyOpenToFindIfContainsFunctions(e, IsUnsignedRefComparisionFunctions))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        private static LiteralExpr GetSizeFromTheTrace()
+        {
+            //currImpl contains the traces, we start iterating from the back and find where the memory safety call happened
+            //Also this only works and is only required when the violation was a memory safety violation.
+            //Otherwise this should no be called
+
+            List<Cmd> cmds = currImpl.Blocks[0].Cmds.Cast<Cmd>().ToList();
+            cmds.Reverse();
+
+            //after this we search for the line 
+            //inline$pattern1_trace_1_trace_1$0$$p8:= $bitcast.ref.ref ($i2p.i64.ref (4));
+            //assume true;
+            //inline$__SMACK_check_memory_safety_trace_1_trace_1$0$p:= inline$pattern1_trace_1_trace_1$0$$p7;
+            //inline$__SMACK_check_memory_safety_trace_1_trace_1$0$size:= inline$pattern1_trace_1_trace_1$0$$p8;
+
+            //in this p8 gives use the size
+            string[] stringSeparators = { " := " };
+            bool foundSizeVariable = false;
+            Expr sizeVariable = new LiteralExpr(Token.NoToken, BigNum.FromInt(4));
+            foreach (var cmd in cmds)
+            {
+                if(!foundSizeVariable)
+                {
+                    if(cmd is AssignCmd)
+                    {
+                        var a = (cmd as AssignCmd).AsSimpleAssignCmd;
+                        Expr lhs = a.Lhss.ElementAt(0).AsExpr;
+                        Expr rhs = a.Rhss.ElementAt(0) as Expr;
+                        if(lhs.ToString().Contains("SMACK_check_memory_safety") && lhs.ToString().EndsWith("size", StringComparison.Ordinal))
+                        {
+                            foundSizeVariable = true;
+                            sizeVariable = rhs;
+                        }
+                    }
+
+                }
+                else
+                {
+                    if(cmd is AssignCmd)
+                    {
+                        var a = (cmd as AssignCmd).AsSimpleAssignCmd;
+                        Expr lhs = a.Lhss.ElementAt(0).AsExpr;
+                        if(lhs.ToString() == sizeVariable.ToString())
+                        {
+                            var f = a.Rhss.ElementAt(0) as NAryExpr;
+                            Expr size = (f.Args[0] as NAryExpr).Args[0];
+                            if(size is LiteralExpr)
+                            {
+                                return size as LiteralExpr;
+                            }
+                            else
+                            {
+                                throw new Exception("the size s"+ size + " in the command " + cmd + " is not a literal");
+                            }
+                        }
+                    }
+                }
+
+            }
+            throw new Exception("could not find the size of the type of the buffer, should not have happened if this was not a memory safety error in the first place");
+        }
+
+        private static bool IsIntegerType(string type) {
+            bool isNumeric(string str) => int.TryParse(str, out _);
+            if (type.StartsWith("i", StringComparison.Ordinal) && isNumeric(type.Substring(1))) return true;
+
+            return false;
+        }
+
+        private static HashSet<Expr> GetLengthCandidatesFromFilteredAtoms(ref HashSet<Expr> fexps)
+        {
+            /*get all the function call with comparision functions
+            then extract the variables of type any integer i1,2,4,8.... out of these, these will be length candidates
+            Have to also make sure that the template type makes sense, as in in the template, slt.i32 should be there,
+            and you might have to convert these, as in pattern1Assume takes in two i32 parameters, you may have to convert these*/
+
+            //Currently just taking the variables of type integer right now, may do the comparision function business later.
+
+            //Get the variables in filters atoms, now find which ones are of int type
             var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
             {
                 var vc = new VariableCollector();
@@ -1687,41 +1908,419 @@ namespace ExplainError
             }
             );
             HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
-            fexps.Iter(fexp=>GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
-            Console.WriteLine("\n The variables in the filtered expressions = {0}", String.Join(", ", supportVarsInFilteredAtoms));
-
-            Variable len = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
-            Variable start = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
+            fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
+            HashSet<Expr> lengthCandidates = new HashSet<Expr>();
             foreach (Variable var in supportVarsInFilteredAtoms)
             {
-                if (var.Name.Contains("i1")) {
-                    len = var;
-                }
+                //Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
+                if (IsIntegerType(var.TypedIdent.Type.ToString())) lengthCandidates.Add(new IdentifierExpr(Token.NoToken, var));
+            }
+
+            //Console.WriteLine("printing the length candidates");
+            //lengthCandidates.Iter(x => Console.WriteLine(x));
+            return lengthCandidates;
+        }
+
+        private static HashSet<Expr> GetMapCandidatesFromFilteredAtoms(ref HashSet<Expr> fexps)
+        {
+            /*get all the function call with comparision functions
+            then extract the variables of type any integer i1,2,4,8.... out of these, these will be length candidates
+            Have to also make sure that the template type makes sense, as in in the template, slt.i32 should be there,
+            and you might have to convert these, as in pattern1Assume takes in two i32 parameters, you may have to convert these*/
+
+            //Currently just taking the variables of type integer right now, may do the comparision function business later.
+
+            //Get the variables in filters atoms, now find which ones are of int type
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+            );
+            HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
+            fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
+            HashSet<Expr> lengthCandidates = new HashSet<Expr>();
+            foreach (Variable var in supportVarsInFilteredAtoms)
+            {
+                Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
+                if (var.TypedIdent.Type.IsMap) lengthCandidates.Add(new IdentifierExpr(Token.NoToken, var));
+            }
+
+            Console.WriteLine("printing the map candidates");
+            lengthCandidates.Iter(x => Console.WriteLine(x));
+            return lengthCandidates;
+        }
 
 
-                if (var.Name.Contains("p0")) {
-                    start = var;
+
+
+        //private static bool IsIntegerComparisionFunction(string functionName)
+        //{
+
+        //    if(functionName.StartsWith("$slt.i", StringComparison.Ordinal) && functionName.StartsWith("$sle.i", StringComparison.Ordinal) 
+        //    && functionName.StartsWith("$sgt.i", StringComparison.Ordinal) && functionName.StartsWith("$sge.i", StringComparison.Ordinal))
+        //    {
+        //        return true;
+        //    }
+        //    return false;
+        //}
+
+        //private static HashSet<Expr> GetLengthCandidateExpressionsFromFunctionCalls(NAryExpr exp)
+        //{
+        //    HashSet<Expr> candidateExprs = new HashSet<Expr>();
+        //    foreach(Expr arg in exp.Args)
+        //    {
+        //        if(!(arg is LiteralExpr))
+        //        {
+        //            candidateExprs.Add(arg);
+        //        }
+        //    }
+        //    return candidateExprs;
+        //}
+
+        //private static HashSet<Expr> GetLengthCandidatesFromFilteredAtoms(ref HashSet<Expr> fexps)
+        //{
+        //    /*get all the function call with comparision functions
+        //    then extract the expressions of type any integer i1,2,4,8.... out of these, these will be length candidates
+        //    Have to also make sure that the template type makes sense, as in in the template, slt.i32 should be there,
+        //    and you might have to convert these, as in pattern1Assume takes in two i32 parameters, you may have to convert these*/
+
+        //    //1. Find the integer comparision functions calls in the expressions
+        //    HashSet<Expr> candidateExprs = new HashSet<Expr>();
+        //    foreach (Expr e in fexps)
+        //    {
+        //        var exp = (e as NAryExpr);
+        //        if(!(exp == null))
+        //        {
+        //            if(IsIntegerComparisionFunction(exp.Fun.FunctionName))
+        //            {
+        //                //2. Find the actual parameters in these calls, and then remove the ones, which are only literals, i.e. take the expressions only.
+        //                // Also note that this may need to be changed, if the length,etc, are actually constants in the program.
+        //                GetLengthCandidateExpressionsFromFunctionCalls(exp).Iter(x => candidateExprs.Add(exp));
+        //            }
+        //        }
+        //    }
+        //    return candidateExprs;
+        //}
+
+        private static bool IsRefType(string type)
+        {
+            if (type == "ref") return true;
+            return false;
+        }
+
+        private static HashSet<Expr> GetStartAndEndCandidates(ref HashSet<Expr> fexps)
+        {
+            //currently we are just finding all the variables in the filtered atoms and choosing the ones with ref type
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+           );
+            HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
+            fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
+            HashSet<Expr> startAndEndCandidates = new HashSet<Expr>();
+            foreach (Variable var in supportVarsInFilteredAtoms)
+            {
+                //Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
+                if (IsRefType(var.TypedIdent.Type.ToString())) startAndEndCandidates.Add(new IdentifierExpr(Token.NoToken, var));
+            }
+            //Console.WriteLine("printing the start end candidates");
+            //startAndEndCandidates.Iter(x => Console.WriteLine(x));
+            return startAndEndCandidates;
+        }
+
+
+
+        private static HashSet<Expr> GetPattern1ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
+        {
+            //get the length candidates
+            HashSet<Expr> lengthCandidates = GetLengthCandidatesFromFilteredAtoms(ref fexps);
+            fexps.Iter(x => FindIntLoads(x).Iter(y => lengthCandidates.Add(y)));
+            //fexps.Iter(x => RecursivelyOpenToFindLengthCandidateExprFromAtom(x, ref lengthCandidates));
+
+            //get the start end candidates
+            HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //if either of the two above are empty then do not know what to do, hence exit for now
+            if (lengthCandidates.Count == 0 || startAndEndCandidates.Count == 0)
+                throw new Exception("No length or start candidate found, do not know what to do");
+
+            Console.WriteLine("these are the length candidates in the pattern1 condition generation");
+            lengthCandidates.Iter(x => { Console.WriteLine($"length candid {x}"); Console.WriteLine($"length candid pp  {PrettyPrintSmackFunctions(x)}"); });
+
+            Console.WriteLine("these are the start candidates in the pattern1 condition generation");
+            startAndEndCandidates.Iter(x => { Console.WriteLine($"start candid {x}"); Console.WriteLine($"start candid pp  {PrettyPrintSmackFunctions(x)}"); });
+
+            //generate the templates pairwise from the above
+            HashSet<Expr> filledTemplates = new HashSet<Expr>();
+            LiteralExpr size = GetSizeFromTheTrace();
+            foreach (Expr start in startAndEndCandidates)
+            {
+                Expr bufferAssumption = GetBufferAssumptionCall(start);
+                foreach (Expr len in lengthCandidates)
+                {
+                    //heurestic to avoid the problems faced in the expressions case
+                    if(GetVariableInExpression(len).Count > 0)
+                    {
+                        //generating the patterns
+                        Expr pattern1Assumption = GenerateTemplate1(start,len,size);
+                        Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern1Assumption));
+
+                        //adding the patterns to the thing that needs to be returned
+                        filledTemplates.Add(FinalCondition);
+                    }
                 }
             }
-            Console.WriteLine("start = {0}, len = {1}", start, len);
+            return filledTemplates;
+        }
 
-            LiteralExpr size = new LiteralExpr(Token.NoToken, BigNum.FromInt(4));
+        private static bool AreExpressionsEqual(Expr e1, Expr e2)
+        {
 
-            //Done
-            Console.WriteLine("buffer assumption call {0}", GetBufferAssumptionCall(new IdentifierExpr(Token.NoToken, start)));
-            Console.WriteLine("pattern1 assumption call {0}", GenerateTemplate1(new IdentifierExpr(Token.NoToken, start), 
-                new IdentifierExpr(Token.NoToken, len),
-                size));
-            Expr bufferAssumption = GetBufferAssumptionCall(new IdentifierExpr(Token.NoToken, start));
-            Expr pattern1Assumption = GenerateTemplate1(new IdentifierExpr(Token.NoToken, start),
-                new IdentifierExpr(Token.NoToken, len),
-                size);
+            var isEqual = VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Eq(e1, e2)));
+            return isEqual;
+        }
 
-            Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern1Assumption));
-            Console.WriteLine("final condition = {0}",FinalCondition);
-            fexps = new HashSet<Expr>();
-            fexps.Add(FinalCondition);
-            return fexps;
+        private static HashSet<Variable> GetVariableInExpression(Expr e)
+        {
+            var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+            {
+                var vc = new VariableCollector();
+                vc.Visit(x);
+                return vc.usedVars;
+            }
+           );
+            HashSet<Variable> vars = new HashSet<Variable>();
+            GetSupportVars(e).Iter(x => vars.Add(x));
+            return vars;
+        }
+
+        private static bool DoExpressionsHaveTheSameVariable(Expr e1, Expr e2)
+        {
+            HashSet<Variable> varInE1 = GetVariableInExpression(e1);
+            HashSet<Variable> varInE2 = GetVariableInExpression(e2);
+            if (varInE1.Count == 1 && varInE2.Count == 1 && varInE1.SetEquals(varInE2))
+                return true;
+            return false;
+        }
+
+        private static Expr FuncNameToSymbol(string funcName, Expr arg1, Expr arg2)
+        {
+            if (funcName.StartsWith("$add", StringComparison.Ordinal))
+            {
+                return Expr.Add(arg1, arg2);
+            }
+            else if (funcName.StartsWith("$sub", StringComparison.Ordinal))
+            {
+                return Expr.Sub(arg1, arg2);
+            }
+            else if (funcName.StartsWith("$mul", StringComparison.Ordinal))
+            {
+                return Expr.Mul(arg1, arg2);
+            }
+            else if (funcName.StartsWith("$sle", StringComparison.Ordinal) || funcName.StartsWith("$ule", StringComparison.Ordinal))
+            {
+                return Expr.Le(arg1, arg2);
+            }
+            else if (funcName.StartsWith("$slt", StringComparison.Ordinal) || funcName.StartsWith("$ult", StringComparison.Ordinal))
+            {
+                return Expr.Lt(arg1, arg2);
+            }
+            else if (funcName.StartsWith("$sge", StringComparison.Ordinal) || funcName.StartsWith("$uge", StringComparison.Ordinal))
+            {
+                return Expr.Ge(arg1, arg2);
+
+            }
+            else if (funcName.StartsWith("$sgt", StringComparison.Ordinal) || funcName.StartsWith("$ugt", StringComparison.Ordinal))
+            {
+                return Expr.Gt(arg1, arg2);
+
+            }
+            else 
+            {
+                return null; 
+            }
+        }
+
+        private static Expr PrettyPrintSmackFunctions(Expr e) 
+        {
+            if (e is IdentifierExpr)
+            {
+                var id = (e as IdentifierExpr);
+                return new IdentifierExpr(Token.NoToken, id.Name);
+            }
+            else if (e is LiteralExpr)
+            {
+                var lit = (e as LiteralExpr);
+                var numLit = (lit.asBigNum);
+                if(numLit ==  null)
+                {
+                    return null;
+                }
+                else
+                {
+                    return new LiteralExpr(Token.NoToken, numLit);
+                }
+            }
+            else if (e is NAryExpr)
+            {
+                var function = (e as NAryExpr).Fun;
+                var funcName = (e as NAryExpr).Fun.FunctionName;
+                var args = (e as NAryExpr).Args.ToList();
+                if (args.Count == 2)
+                {
+                    //binary function
+                    var lhs = PrettyPrintSmackFunctions(args[0]);
+                    var rhs = PrettyPrintSmackFunctions(args[1]);
+                    var modifiedCall = FuncNameToSymbol(funcName, lhs, rhs);
+                    if (modifiedCall != null)
+                    {
+                        return modifiedCall;
+                    }
+                    else
+                    {
+                        var newCall = new NAryExpr(Token.NoToken, function, new List<Expr>() { lhs, rhs });
+                        return newCall;
+                    }
+                }
+                else
+                {
+                    // if its one of the bitcast functions as they just make things difficult to read
+                    if(funcName.StartsWith("$i2p", StringComparison.Ordinal) || funcName.StartsWith("$p2i", StringComparison.Ordinal) || funcName.StartsWith("$bitcast", StringComparison.Ordinal))
+                    {
+                        return PrettyPrintSmackFunctions(args[0]);
+                    }
+                    List<Expr> newArgs = new List<Expr>();
+                    for(int i = 0; i < args.Count; i++)
+                    {
+                        newArgs.Add(PrettyPrintSmackFunctions(args[i]));
+                    }
+                    var newCall = new NAryExpr(Token.NoToken, function, newArgs);
+                    return newCall;
+                }
+
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        private static HashSet<Expr> GetPattern2ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
+        {
+            //get the start end candidates
+            HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //if either of the two above are empty then do not know what to do, hence exit for now
+            if (startAndEndCandidates.Count == 0)
+                throw new Exception("No start candidate found, do not know what to do");
+
+            Console.WriteLine("these are the start candidates in the pattern1 condition generation");
+            startAndEndCandidates.Iter(x => { Console.WriteLine($"start candid {x}"); Console.WriteLine($"start candid pp  {PrettyPrintSmackFunctions(x)}"); });
+
+            //generate the templates pairwise from the above
+            HashSet<Expr> filledTemplates = new HashSet<Expr>();
+
+            // even this should be a parameter, bu considering constant for test purposes
+            //LiteralExpr size = new LiteralExpr(Token.NoToken, BigNum.FromInt(4));
+            LiteralExpr size = GetSizeFromTheTrace();
+
+            foreach (Expr start in startAndEndCandidates)
+            {
+                Expr bufferAssumption = GetBufferAssumptionCall(start);
+                foreach (Expr end in startAndEndCandidates)
+                {
+                    //var isEqual =  AreExpressionsEqual(start, end);
+                    //Console.WriteLine($"this is checking the expressions start {start} and end {end} semantically, rather than syntactically {isEqual}");
+                    //if(start.ToString() !=  end.ToString())
+                    if(!AreExpressionsEqual(start, end) && !DoExpressionsHaveTheSameVariable(start, end))
+                    //if (!AreExpressionsEqual(start, end))
+                        {
+                        //generating the patterns
+                        Expr pattern2Assumption = GenerateTemplate2(start,end,size);
+                        Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern2Assumption));
+
+                        //adding the patterns to the thing that needs to be returned
+                        filledTemplates.Add(FinalCondition);
+                    }
+                }
+            }
+            return filledTemplates;
+        }
+
+        private static HashSet<Expr> GetAllMapInTheProg()
+        {
+            var maps = new HashSet<Expr>();
+            foreach(var dec in prog.TopLevelDeclarations.OfType<GlobalVariable>())
+            {
+                if(dec.ToString().StartsWith("$M.", StringComparison.Ordinal) && dec.TypedIdent.Type.IsMap)
+                {
+                    maps.Add(new IdentifierExpr(Token.NoToken, dec));
+                }
+            }
+            return maps;
+        }
+
+        private static HashSet<Expr> GetPattern3ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
+        {
+            //get the start candidates
+            HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //if either of the two above are empty then do not know what to do, hence exit for now
+            if (startAndEndCandidates.Count == 0)
+                throw new Exception("No start candidate found, do not know what to do");
+
+            Console.WriteLine("these are the start candidates in the pattern1 condition generation");
+            startAndEndCandidates.Iter(x => { Console.WriteLine($"start candid {x}"); Console.WriteLine($"start candid pp  {PrettyPrintSmackFunctions(x)}"); });
+
+
+            HashSet<Expr> maps = new HashSet<Expr>();
+            fexps.Iter(x => RecursivelyOpenToFindMapCandidateExprFromAtom(x, ref maps));
+            if (maps.Count == 0)
+            {
+                maps = GetMapCandidatesFromFilteredAtoms(ref fexps);
+            }
+            if(maps.Count == 0)
+                throw new Exception("No map candidate found, do not know what to do");
+
+            Console.WriteLine("this is the list of map candidates");
+            maps.Iter(x => Console.WriteLine("candidate {0}", x));
+
+            //generate the templates pairwise from the above
+            HashSet<Expr> filledTemplates = new HashSet<Expr>();
+
+            // even this should be a parameter, bu considering constant for test purposes
+            //LiteralExpr size = new LiteralExpr(Token.NoToken, BigNum.FromInt(4));
+            LiteralExpr size = GetSizeFromTheTrace();
+
+            foreach (Expr start in startAndEndCandidates)
+            {
+                Expr bufferAssumption = GetBufferAssumptionCall(start);
+                foreach (Expr map in maps)
+                {
+             
+                    //generating the patterns
+                    Expr pattern3Assumption = GenerateTemplate3(start,
+                    map,
+                    size);
+                    Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern3Assumption));
+
+                    //adding the patterns to the thing that needs to be returned
+                    filledTemplates.Add(FinalCondition);
+
+                }
+            }
+            return filledTemplates;
         }
 
 
@@ -1733,17 +2332,16 @@ namespace ExplainError
                 throw new InvalidInput("pattern1Assume function not found");
             }
 
-            Variable AllocArray = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
-            if (AllocArray == null)
-            {
-                throw new InvalidInput("$Alloc array not found.");
-            }
+            //Variable AllocArray = BoogieUtil.findVarDecl(prog.TopLevelDeclarations, "$Alloc");
+            //if (AllocArray == null)
+            //{
+            //    throw new InvalidInput("$Alloc array not found.");
+            //}
 
-            List<Expr> argsList = new List<Expr>() {buffStart, new IdentifierExpr(Token.NoToken, AllocArray) };
+            List<Expr> argsList = new List<Expr>() { buffStart};
             return new NAryExpr(Token.NoToken, new FunctionCall(BufferAssumptionFunction), argsList);
         }
 
-        //Note that you might need an argument for  buff type too
         private static Expr GenerateTemplate1(Expr buffStart, Expr buffLen, Expr buffSize)
         {
             Function pattern1Assume = BoogieUtil.findFunctionDecl(prog.TopLevelDeclarations, "pattern1Assume");
@@ -1754,6 +2352,27 @@ namespace ExplainError
             return new NAryExpr(Token.NoToken, new FunctionCall(pattern1Assume) , argsList);
         }
 
+        private static Expr GenerateTemplate2(Expr buffStart, Expr buffEnd, Expr buffSize)
+        {
+            Function pattern2Assume = BoogieUtil.findFunctionDecl(prog.TopLevelDeclarations, "pattern2Assume");
+            if (pattern2Assume == null)
+            {
+                throw new InvalidInput("pattern2Assume function not found");
+            }
+            List<Expr> argsList = new List<Expr>() { buffStart, buffEnd, buffSize };
+            return new NAryExpr(Token.NoToken, new FunctionCall(pattern2Assume), argsList);
+        }
+
+        private static Expr GenerateTemplate3(Expr buffStart, Expr map, Expr buffSize)
+        {
+            Function pattern3Assume = BoogieUtil.findFunctionDecl(prog.TopLevelDeclarations, "pattern3Assume");
+            if (pattern3Assume == null)
+            {
+                throw new InvalidInput("pattern3Assume function not found");
+            }
+            List<Expr> argsList = new List<Expr>() { buffStart, map, buffSize };
+            return new NAryExpr(Token.NoToken, new FunctionCall(pattern3Assume), argsList);
+        }
 
         private static Expr GetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
         {
@@ -1778,6 +2397,278 @@ namespace ExplainError
             }
             return ExprUtil.NAryExpr(binOp,
                 new List<Expr> { GetFilteredExpr(expr.Args[0], ref fexps), GetFilteredExpr(expr.Args[1], ref fexps) });
+        }
+
+        private static bool IsSignedRefComparisionFunctions(string functionName)
+        {
+            if (functionName.StartsWith("$sle.ref", StringComparison.Ordinal) || functionName.StartsWith("$sge.ref", StringComparison.Ordinal) ||
+            functionName.StartsWith("$slt.ref", StringComparison.Ordinal) || functionName.StartsWith("$sgt.ref", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsUnsignedRefComparisionFunctions(string functionName)
+        {
+            if (functionName.StartsWith("$ule.ref", StringComparison.Ordinal) || functionName.StartsWith("$uge.ref", StringComparison.Ordinal) ||
+            functionName.StartsWith("$ult.ref", StringComparison.Ordinal) || functionName.StartsWith("$ugt.ref", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsSignedIntComparisionFunctions(string functionName)
+        {
+            if(functionName.StartsWith("$sle.i", StringComparison.Ordinal) || functionName.StartsWith("$slt.i", StringComparison.Ordinal) ||
+            functionName.StartsWith("$sge.i", StringComparison.Ordinal) || functionName.StartsWith("$sgt.i", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsUnsignedIntComparisionFunctions(string functionName)
+        {
+            if (functionName.StartsWith("$ule.i", StringComparison.Ordinal) || functionName.StartsWith("$ult.i", StringComparison.Ordinal) ||
+            functionName.StartsWith("$uge.i", StringComparison.Ordinal) || functionName.StartsWith("$ugt.i", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void RecursivelyOpenToFindLengthCandidateExprFromAtom(Expr e, ref HashSet<Expr> lengthCandidates)
+        {
+            //recursively opens up the expressions and fills the lengthCandidates argument
+            //Console.WriteLine("recursiveExpr : {0}", e);
+            var expr = e as NAryExpr;
+            if (expr is null)
+            {
+                //Console.WriteLine("not naryexpr");
+                return;
+            }
+            else
+            {
+                //Console.WriteLine("function name: {0}", expr.Fun.FunctionName);
+                if (IsSignedIntComparisionFunctions(expr.Fun.FunctionName) || IsUnsignedIntComparisionFunctions(expr.Fun.FunctionName))
+                {
+                    //Console.WriteLine("int comparision");
+                    foreach (var arg in expr.Args)
+                    { 
+                        if(!(arg is LiteralExpr))
+                        {
+                            lengthCandidates.Add(arg);
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var arg in expr.Args)
+                    {
+                        RecursivelyOpenToFindLengthCandidateExprFromAtom(arg, ref lengthCandidates);
+                    }
+                }
+            }
+        }
+
+
+
+
+        private static void RecursivelyOpenToFindStartCandidateExprFromAtom(Expr e, ref HashSet<Expr> startCandidates)
+        {
+            //recursively opens up the expressions and fills the ref Candidates argument
+            //ref candidates are the arguments of the base function and the non literal argument of the ref comparision functions  
+            //
+            var expr = e as NAryExpr;
+            if (expr is null)
+            {
+                //Console.WriteLine("not naryexpr");
+                return;
+            }
+            else
+            {
+                //if (IsSignedIntComparisionFunctions(expr.Fun.FunctionName) || IsUnsignedIntComparisionFunctions(expr.Fun.FunctionName))
+                //{
+                //    foreach (var arg in expr.Args)
+                //    {
+                //        if (!(arg is LiteralExpr) && IsRefType(arg.Type.ToString()))
+                //        {
+                //            startCandidates.Add(arg);
+                //        }
+                //    }
+                //}
+
+                //this signed ref comparision function is giving bad results
+                //if( IsSignedRefComparisionFunctions(expr.Fun.FunctionName) || IsUnsignedRefComparisionFunctions(expr.Fun.FunctionName))
+                if(IsUnsignedRefComparisionFunctions(expr.Fun.FunctionName))
+                {
+
+                    foreach (var arg in expr.Args)
+                    {
+                        if (!(arg is LiteralExpr))
+                        {
+                            startCandidates.Add(arg);
+                        }
+                    }
+                }
+                else if(expr.Fun.FunctionName.StartsWith("$base", StringComparison.Ordinal))
+                {
+                    //base has only one argument
+                    startCandidates.Add(expr.Args[0]);
+                }
+                else
+                {
+                    foreach (var arg in expr.Args)
+                    {
+                        RecursivelyOpenToFindStartCandidateExprFromAtom(arg, ref startCandidates);
+                    }
+                }
+            }
+        }
+
+        private static void RecursivelyOpenToFindMapCandidateExprFromAtom(Expr e, ref HashSet<Expr> mapCandidates)
+        {
+            //recursively opens up the expressions and fills the lengthCandidates argument
+            //Console.WriteLine("recursiveExpr : {0}", e);
+            var expr = e as NAryExpr;
+            if (expr is null)
+            {
+                //Console.WriteLine("not naryexpr");
+                return;
+            }
+            else
+            {
+                //Console.WriteLine("function name: {0}", expr.Fun.FunctionName);
+                //trying to extract $M.1 from $ne.i32($load.i32($M.1, $add.ref($load.ref($M.0, $add.ref($add.ref(alloc_$p0_pattern3_struct_pointer__207, $mul.ref(0, 16)), $mul.ref(0, 1))), $mul.ref($sext.i32.i64($add.i32($add.i32(0, 1), 1)), 4))), 0) == 1
+                if ((expr.Fun.FunctionName).StartsWith("$ne.i", StringComparison.Ordinal))
+                {
+                    //Console.WriteLine("int comparision");
+                    foreach (var arg in expr.Args)
+                    {
+                        if(arg is NAryExpr && (arg as NAryExpr).Fun.FunctionName.StartsWith("$load", StringComparison.Ordinal))
+                        {
+                            mapCandidates.Add((arg as NAryExpr).Args[0]);
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var arg in expr.Args)
+                    {
+                        RecursivelyOpenToFindMapCandidateExprFromAtom(arg, ref mapCandidates);
+                    }
+                }
+            }
+        }
+
+        private static void RecursivelyOpenToFindLoadExpression(Expr e, ref HashSet<Expr> loads)
+        {
+            var expr = e as NAryExpr;
+            if (expr is null)
+                return;
+            if (expr.Fun.FunctionName.StartsWith("$load", StringComparison.Ordinal))
+                loads.Add(expr);
+            else
+            {
+                foreach (var arg in expr.Args)
+                {
+                    RecursivelyOpenToFindLoadExpression(arg, ref loads);
+                }
+            }
+
+        }
+
+        private static HashSet<Expr> FindLoadExpressions(Expr e)
+        {
+            HashSet<Expr> loads = new HashSet<Expr>();
+            RecursivelyOpenToFindLoadExpression(e, ref loads);
+            //loads.Iter(x=>Console.WriteLine(x));
+            return loads;
+        }
+
+        private static HashSet<Expr> FindIntLoads(Expr e)
+        {
+            HashSet<Expr> loads = FindLoadExpressions(e);
+            HashSet<Expr> intLoads = new HashSet<Expr>();
+            foreach (Expr exp in loads)
+            {
+                if(exp is NAryExpr && (exp as NAryExpr).Fun.FunctionName.StartsWith("$load.i", StringComparison.Ordinal))
+                {
+                    intLoads.Add(exp);
+                }
+            }
+            return intLoads;
+        }
+
+        private static HashSet<Expr> FindRefLoads(Expr e)
+        {
+            HashSet<Expr> loads = FindLoadExpressions(e);
+            HashSet<Expr> refLoads = new HashSet<Expr>();
+            foreach (Expr exp in loads)
+            {
+                if (exp is NAryExpr && (exp as NAryExpr).Fun.FunctionName.StartsWith("$load.ref", StringComparison.Ordinal))
+                {
+                    refLoads.Add(exp);
+                }
+            }
+            return refLoads;
+        }
+
+        private static bool RecursivelyOpenToFindIfContainsFunctions(Expr e, Func<string, bool> functionPredicate)
+        {
+            var expr = e as NAryExpr;
+            if (expr is null)
+            {
+                return false;
+            }
+            else if(functionPredicate(expr.Fun.FunctionName))
+            {
+                return true;
+            }
+            else
+            {
+                foreach (var arg in expr.Args)
+                {
+                    if(RecursivelyOpenToFindIfContainsFunctions(arg, functionPredicate))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        private static void RecursivelyOpen(Expr e)
+        {
+            Console.WriteLine("recursiveExpr : {0}", e);
+
+            var expr = e as NAryExpr;
+            if(expr is null)
+            {
+                Console.WriteLine("not naryexpr");
+                return;
+            }
+            else
+            {
+                Console.WriteLine("function name: {0}", expr.Fun.FunctionName);
+                Console.WriteLine("is signed ref Comparision: {0}", IsSignedRefComparisionFunctions(expr.Fun.FunctionName));
+                Console.WriteLine("is unsigned ref Comparision: {0}", IsUnsignedRefComparisionFunctions(expr.Fun.FunctionName));
+                Console.WriteLine("is signed int Comparision: {0}", IsSignedIntComparisionFunctions(expr.Fun.FunctionName));
+                Console.WriteLine("is unsigned int Comparision: {0}", IsUnsignedIntComparisionFunctions(expr.Fun.FunctionName));
+            }
+
+
+            foreach (var arg in expr.Args)
+            {
+                RecursivelyOpen(arg);
+            }
+
         }
 
         private static Expr NewGetFilteredExpr(Expr e, ref HashSet<Expr> fexps)
