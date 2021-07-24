@@ -87,6 +87,15 @@ namespace ServerDriver
             for (int i = 0; i < numProgramsToVerify; i++)
             {
                 workingFile = fileQueue.Dequeue();
+                if (configuration.resume)
+                {
+                    string resultFileName = workingFile + ".txt";
+                    if (File.Exists(resultFileName))
+                    {
+                        Console.WriteLine("Skipping " + workingFile);
+                        continue;
+                    }
+                }
                 Process p = new Process();
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
@@ -206,6 +215,12 @@ namespace ServerDriver
                             configuration.cloudDeployment = true;
                         else
                             configuration.cloudDeployment = false;
+                        break;
+                    case "resume":
+                        if (configKey[1] == "false")
+                            configuration.resume = false;
+                        else
+                            configuration.resume = true;
                         break;
                     case "listenerExecutablePath":
                         configuration.listenerExecutablePath = configKey[1];

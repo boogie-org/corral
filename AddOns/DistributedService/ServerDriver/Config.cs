@@ -34,6 +34,7 @@ namespace ServerDriver
         public string[] listenerExecutablesLocation;
         public string cloudAddress;
         public bool cloudDeployment;
+        public bool resume;
         public Config()
         {
             //The following values are set by default if the corresponding flag is not present in the configuration file
@@ -55,6 +56,7 @@ namespace ServerDriver
             hydraArguments = " /useProverEvaluate /di /doNotUseLabels /recursionBound:3 /bopt:proverOpt:O:smt.qi.eager_threshold=100";
             startLocalListener = true;
             dumpSIBoogieFiles = false;
+            resume = true;
             //Modify The Following Flags Only If Necessary 
 
             // /newStratifiedInlining:ucsplitparallel runs the original heuristic
