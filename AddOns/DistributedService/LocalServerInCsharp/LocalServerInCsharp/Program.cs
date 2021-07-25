@@ -1588,11 +1588,11 @@ namespace LocalServerInCsharp
 
                 if (parse[3].Equals("AND"))
                 {
-                    if (!portfolioSplitDone)
+                    /*if (!portfolioSplitDone)
                     {
                         Console.WriteLine("ERROR: portfolio split not performed " + algoID.ToString() + " algo and client " + (clientID - 1).ToString());
                         //Console.ReadLine();
-                    }
+                    }*/
                     long mustReachId = Int64.Parse(parse[2]);
                     long blockId = Int64.Parse(parse[2]) - 1;
                     string partitionType = parse[3];

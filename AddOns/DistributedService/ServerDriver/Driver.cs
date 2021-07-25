@@ -120,6 +120,31 @@ namespace ServerDriver
                 else
                     Console.WriteLine("Cannot Run On This Operating System");
                 p.WaitForExit();
+                TimeSpan timeout = new TimeSpan();
+                timeout = TimeSpan.FromMilliseconds(2000);
+                //PERFORM CLEANUP IN CASE OF CRASH
+                //DOES NOT SUPPORT RUNNING MULTIPLE HYDRA INSTANCES IN PARALLEL
+                Console.WriteLine("Cleaning Up Stray Processes In Case Of Crash");
+                Console.WriteLine("Write Error If There Are No Stray Processes And Continue");
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    string stdout;
+                    RunProcessAndWaitForExit("pkill", "-f mono", timeout, out stdout);
+                    RunProcessAndWaitForExit("pkill", "-f z3", timeout, out stdout);
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    string stdout;
+                    RunProcessAndWaitForExit("taskkill", "/T /F /IM Client.exe", timeout, out stdout);
+                    RunProcessAndWaitForExit("taskkill", "/T /F /IM corral.exe", timeout, out stdout);
+                    RunProcessAndWaitForExit("taskkill", "/T /F /IM z3.exe", timeout, out stdout);
+                }
+                string resultFileName2 = workingFile + ".txt";
+                if (!File.Exists(resultFileName2))
+                {
+                    string toWrite = "SERVERCRASHED";
+                    File.AppendAllText(resultFileName2, toWrite);
+                }
                 Thread.Sleep(60000);    //Wait for cleanup
             }
         }
@@ -144,6 +169,34 @@ namespace ServerDriver
                 err = true;                
             }
             return err;
+        }
+
+        static int RunProcessAndWaitForExit(string fileName, string arguments, TimeSpan timeout, out string stdout)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+
+            var process = Process.Start(startInfo);
+
+            stdout = null;
+            if (process.WaitForExit((int)timeout.TotalMilliseconds))
+            {
+                stdout = process.StandardOutput.ReadToEnd();
+            }
+            else
+            {
+                Console.WriteLine("Process did not finish");
+                process.Kill();
+                while (!process.WaitForExit(1000)) ;
+                Console.WriteLine("Process killed");
+            }
+
+            return process.ExitCode;
         }
 
         static void setupConfig(string[] args)
