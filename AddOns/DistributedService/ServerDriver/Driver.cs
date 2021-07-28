@@ -119,7 +119,12 @@ namespace ServerDriver
                 }
                 else
                     Console.WriteLine("Cannot Run On This Operating System");
-                p.WaitForExit();                
+                TimeSpan hydraTimeout = new TimeSpan();
+                hydraTimeout = TimeSpan.FromSeconds(configuration.timeout + 180);                
+                p.WaitForExit((int)hydraTimeout.TotalMilliseconds); //Wait for server to terminate normally for (timeout + 3) minutes
+                if (!p.HasExited) // If server does not terminate normally within timeout, force kill 
+                    p.Kill();
+                p.WaitForExit(2000);
                 TimeSpan timeout = new TimeSpan();
                 timeout = TimeSpan.FromMilliseconds(2000);
                 //PERFORM CLEANUP IN CASE OF CRASH

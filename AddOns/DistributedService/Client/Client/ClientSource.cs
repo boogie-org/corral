@@ -142,6 +142,7 @@ namespace ClientSource
                 try
                 {
                     SendToServerAsync();
+                    break;
                 }
                 catch (Exception e)
                 {
