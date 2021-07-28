@@ -126,11 +126,10 @@ namespace ServerDriver
                 //DOES NOT SUPPORT RUNNING MULTIPLE HYDRA INSTANCES IN PARALLEL
                 Console.WriteLine("Cleaning Up Stray Processes In Case Of Crash");
                 Console.WriteLine("Write Error If There Are No Stray Processes And Continue");
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                killProcessSubTree(p.Id);
+                /*if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    string stdout;
-                    RunProcessAndWaitForExit("pkill", "-f mono", timeout, out stdout);
-                    RunProcessAndWaitForExit("pkill", "-f z3", timeout, out stdout);
+                    killProcessSubTree(p.Id);
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -138,7 +137,7 @@ namespace ServerDriver
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM Client.exe", timeout, out stdout);
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM corral.exe", timeout, out stdout);
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM z3.exe", timeout, out stdout);
-                }
+                }*/
                 string resultFileName2 = workingFile + ".txt";
                 if (!File.Exists(resultFileName2))
                 {
@@ -169,6 +168,63 @@ namespace ServerDriver
                 err = true;                
             }
             return err;
+        }
+
+        static void killProcessSubTree(int pId)
+        {
+            TimeSpan timeout = new TimeSpan();
+            timeout = TimeSpan.FromMilliseconds(2000);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                string stdout;
+                RunProcessAndWaitForExit("taskkill", $"/T /F /PID {pId}", timeout, out stdout);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                HashSet<int> subProcess = new HashSet<int>();
+                getSubProcessIds(pId, subProcess, timeout);
+                foreach (var pid in subProcess)
+                {
+                    Console.WriteLine("Killing : " + pid);
+                    killProcess(pid, timeout);
+                }
+            }
+            else
+                Console.WriteLine("Cannot Run On This Operating System");
+        }
+
+        static void getSubProcessIds(int pid, ISet<int> subProcess, TimeSpan timeout)
+        {
+            string stdout;
+            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
+
+            if (exitCode == 0 && !string.IsNullOrEmpty(stdout))
+            {
+                using (var reader = new StringReader(stdout))
+                {
+                    while (true)
+                    {
+                        var text = reader.ReadLine();
+                        if (text == null)
+                        {
+                            return;
+                        }
+
+                        int id;
+                        if (int.TryParse(text, out id))
+                        {
+                            subProcess.Add(id);
+                            getSubProcessIds(id, subProcess, timeout); // Recursively get the children                            
+                        }
+                    }
+                }
+            }
+        }
+
+        static void killProcess(int pid, TimeSpan timeout)
+        {
+            string stdout;
+            RunProcessAndWaitForExit("kill", $"-TERM {pid}", timeout, out stdout);
         }
 
         static int RunProcessAndWaitForExit(string fileName, string arguments, TimeSpan timeout, out string stdout)
