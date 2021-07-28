@@ -126,10 +126,10 @@ namespace ServerDriver
                 //DOES NOT SUPPORT RUNNING MULTIPLE HYDRA INSTANCES IN PARALLEL
                 Console.WriteLine("Cleaning Up Stray Processes In Case Of Crash");
                 Console.WriteLine("Write Error If There Are No Stray Processes And Continue");
-                killProcessSubTree(1);  //kill orphaned processes due to server crash
-                /*if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                //killProcessSubTree(1);  //kill orphaned processes due to server crash
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    killProcessSubTree(p.Id);
+                    killProcessSubTree(1);
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -137,7 +137,7 @@ namespace ServerDriver
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM Client.exe", timeout, out stdout);
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM corral.exe", timeout, out stdout);
                     RunProcessAndWaitForExit("taskkill", "/T /F /IM z3.exe", timeout, out stdout);
-                }*/
+                }
                 string resultFileName2 = workingFile + ".txt";
                 if (!File.Exists(resultFileName2))
                 {
@@ -196,7 +196,8 @@ namespace ServerDriver
         static void getSubProcessIds(int pid, ISet<int> subProcess, TimeSpan timeout)
         {
             string stdout;
-            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
+            //var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
+            var exitCode = RunProcessAndWaitForExit("/bin/bash", $"pgrep -P {pid} -x mono || pgrep -P {pid} -x z3", timeout, out stdout);
 
             if (exitCode == 0 && !string.IsNullOrEmpty(stdout))
             {
