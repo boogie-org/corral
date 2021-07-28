@@ -129,7 +129,9 @@ namespace ServerDriver
                 //killProcessSubTree(1);  //kill orphaned processes due to server crash
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    killProcessSubTree(1);
+                    killProcessSubTree(1); //kill orphaned mono processes due to server crash
+                    string stdout;
+                    RunProcessAndWaitForExit("pkill", "-f z3", timeout, out stdout);
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -196,9 +198,8 @@ namespace ServerDriver
         static void getSubProcessIds(int pid, ISet<int> subProcess, TimeSpan timeout)
         {
             string stdout;
-            //var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
-            var exitCode = RunProcessAndWaitForExit("/bin/bash", $"pgrep -P {pid} -x mono || pgrep -P {pid} -x z3", timeout, out stdout);
-
+            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid} -x mono", timeout, out stdout);
+            
             if (exitCode == 0 && !string.IsNullOrEmpty(stdout))
             {
                 using (var reader = new StringReader(stdout))
