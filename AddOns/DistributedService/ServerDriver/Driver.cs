@@ -119,14 +119,14 @@ namespace ServerDriver
                 }
                 else
                     Console.WriteLine("Cannot Run On This Operating System");
-                p.WaitForExit();
+                p.WaitForExit();                
                 TimeSpan timeout = new TimeSpan();
                 timeout = TimeSpan.FromMilliseconds(2000);
                 //PERFORM CLEANUP IN CASE OF CRASH
                 //DOES NOT SUPPORT RUNNING MULTIPLE HYDRA INSTANCES IN PARALLEL
                 Console.WriteLine("Cleaning Up Stray Processes In Case Of Crash");
                 Console.WriteLine("Write Error If There Are No Stray Processes And Continue");
-                killProcessSubTree(p.Id);
+                killProcessSubTree(1);  //kill orphaned processes due to server crash
                 /*if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     killProcessSubTree(p.Id);
