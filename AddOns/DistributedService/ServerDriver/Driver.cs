@@ -119,9 +119,23 @@ namespace ServerDriver
                 }
                 else
                     Console.WriteLine("Cannot Run On This Operating System");
-                TimeSpan hydraTimeout = new TimeSpan();
-                hydraTimeout = TimeSpan.FromSeconds(configuration.timeout + 180);                
-                p.WaitForExit((int)hydraTimeout.TotalMilliseconds); //Wait for server to terminate normally for (timeout + 3) minutes
+
+                DateTime serverStartTime = DateTime.Now;
+                TimeSpan t = new TimeSpan();
+                t = TimeSpan.FromMilliseconds(2000);
+                HashSet<int> subProcess = new HashSet<int>();
+                while (!p.HasExited)
+                {                    
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    {                        
+                        getSubProcessIds(p.Id, subProcess, t);
+                    }
+                    if ((DateTime.Now - serverStartTime).TotalSeconds > (configuration.timeout + 180))  //Wait for server to terminate normally for (timeout + 3) minutes
+                        break;
+                    else
+                        Thread.Sleep(5000);
+                }
+
                 if (!p.HasExited) // If server does not terminate normally within timeout, force kill 
                     p.Kill();
                 p.WaitForExit(2000);
@@ -134,9 +148,11 @@ namespace ServerDriver
                 //killProcessSubTree(1);  //kill orphaned processes due to server crash
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    killProcessSubTree(1); //kill orphaned mono processes due to server crash
-                    string stdout;
-                    RunProcessAndWaitForExit("pkill", "-f z3", timeout, out stdout);
+                    foreach (var pid in subProcess)
+                    {
+                        Console.WriteLine("Killing : " + pid);
+                        killProcess(pid, timeout);
+                    }
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -203,8 +219,8 @@ namespace ServerDriver
         static void getSubProcessIds(int pid, ISet<int> subProcess, TimeSpan timeout)
         {
             string stdout;
-            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid} -x mono", timeout, out stdout);
-            
+            //var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid} -x mono", timeout, out stdout);
+            var exitCode = RunProcessAndWaitForExit("pgrep", $"-P {pid}", timeout, out stdout);
             if (exitCode == 0 && !string.IsNullOrEmpty(stdout))
             {
                 using (var reader = new StringReader(stdout))
