@@ -140,7 +140,7 @@ namespace ServerDriver
                     p.Kill();
                 p.WaitForExit(2000);
                 TimeSpan timeout = new TimeSpan();
-                timeout = TimeSpan.FromMilliseconds(2000);
+                timeout = TimeSpan.FromMilliseconds(60000);
                 //PERFORM CLEANUP IN CASE OF CRASH
                 //DOES NOT SUPPORT RUNNING MULTIPLE HYDRA INSTANCES IN PARALLEL
                 Console.WriteLine("Cleaning Up Stray Processes In Case Of Crash");
