@@ -270,9 +270,12 @@ namespace ServerDriver
             else
             {
                 Console.WriteLine("Process did not finish");
-                process.Kill();
-                while (!process.WaitForExit(1000)) ;
-                Console.WriteLine("Process killed");
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                    while (!process.WaitForExit(1000)) ;
+                    Console.WriteLine("Process killed");
+                }
             }
 
             return process.ExitCode;

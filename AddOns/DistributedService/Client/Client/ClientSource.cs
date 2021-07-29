@@ -147,8 +147,8 @@ namespace ClientSource
                 catch (Exception e)
                 {
                     Console.WriteLine("Server Has Not Yet Started.");
-                    RestartVerification();
-                    return;
+                    //RestartVerification();
+                    break;
                 }
             }
         }
