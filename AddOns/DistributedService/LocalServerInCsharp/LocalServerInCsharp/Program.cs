@@ -522,8 +522,19 @@ namespace LocalServerInCsharp
                 {
                     writeDetailedOutcome(false);
                     //Console.ReadLine();
-                    while (waitingListener.Count > 0)
-                        ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    if (fileQueue.Count == 0)
+                    {
+                        //Console.WriteLine("All Finished");
+                        while (waitingListener.Count > 0)
+                            ResponseHttp(waitingListener.Dequeue(), "Finished");
+                        //Console.ReadLine();
+                        break;
+                    }
+                    else
+                    {
+                        while (waitingListener.Count > 0)
+                            ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    }
                     /*if (err)
                         startListenerService();*/
                 }
@@ -544,8 +555,19 @@ namespace LocalServerInCsharp
                     writeDetailedOutcome(true);
                     setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
-                    while (waitingListener.Count > 0)
-                        ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    if (fileQueue.Count == 0)
+                    {
+                        //Console.WriteLine("All Finished");
+                        while (waitingListener.Count > 0)
+                            ResponseHttp(waitingListener.Dequeue(), "Finished");
+                        //Console.ReadLine();
+                        break;
+                    }
+                    else
+                    {
+                        while (waitingListener.Count > 0)
+                            ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    }
                     //Console.WriteLine("TIMEOUT END");
                 }
             }

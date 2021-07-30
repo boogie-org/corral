@@ -142,13 +142,13 @@ namespace ClientSource
                 try
                 {
                     SendToServerAsync();
-                    break;
+                    //break;
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine("Server Has Not Yet Started.");
                     //RestartVerification();
-                    break;
+                    //break;
                 }
             }
         }
@@ -194,12 +194,17 @@ namespace ClientSource
                 requestKeyValue = "WaitForReply";                                            //Value is placeholder. Not used anywhere
                 serverUri.Query = string.Format("{0}={1}", requestKey, requestKeyValue);
                 replyFromServer = newClient.GetStringAsync(serverUri.Uri).Result;
-                if (replyFromServer.Equals("RESTART"))
+                if (replyFromServer.Equals("RESTART") || replyFromServer.Equals("Finished"))
                     break;
             }
             if (replyFromServer.Equals("RESTART"))
             {
                 RestartVerification();
+            }
+            else if (replyFromServer.Equals("Finished"))
+            {
+                RestartVerification();
+                Process.GetCurrentProcess().Kill();
             }
             //JsonContent tmp = new JsonContent(string.Format("{0}={1}", "Start", "this"));
             //var rep = sendStart.PostAsync(address, tmp).Result;
