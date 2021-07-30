@@ -239,8 +239,8 @@ namespace LocalServerInCsharp
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
             startServer();
-            Console.WriteLine("Terminate Server");
-            return;
+            //Console.WriteLine("Terminate Server");
+            //return;
         }
 
         static void ResponseThread()
@@ -531,7 +531,7 @@ namespace LocalServerInCsharp
                         while (waitingListener.Count > 0)
                             ResponseHttp(waitingListener.Dequeue(), "Finished");
                         //Console.ReadLine();
-                        break;
+                        Process.GetCurrentProcess().Kill();
                     }
                     else
                     {
@@ -565,7 +565,7 @@ namespace LocalServerInCsharp
                         while (waitingListener.Count > 0)
                             ResponseHttp(waitingListener.Dequeue(), "Finished");
                         //Console.ReadLine();
-                        break;
+                        Process.GetCurrentProcess().Kill();
                     }
                     else
                     {
@@ -575,8 +575,8 @@ namespace LocalServerInCsharp
                     //Console.WriteLine("TIMEOUT END");
                 }
             }
-            Console.WriteLine("Break loop");
-            return;
+            //Console.WriteLine("Break loop");
+            //return;
         }
 
         static void distributeClients()
