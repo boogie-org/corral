@@ -239,6 +239,8 @@ namespace LocalServerInCsharp
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
             startServer();
+            Console.WriteLine("Terminate Server");
+            return;
         }
 
         static void ResponseThread()
@@ -522,9 +524,10 @@ namespace LocalServerInCsharp
                 {
                     writeDetailedOutcome(false);
                     //Console.ReadLine();
+                    Console.WriteLine("filequeue count : " + fileQueue.Count);
                     if (fileQueue.Count == 0)
                     {
-                        //Console.WriteLine("All Finished");
+                        Console.WriteLine("All Finished");
                         while (waitingListener.Count > 0)
                             ResponseHttp(waitingListener.Dequeue(), "Finished");
                         //Console.ReadLine();
@@ -555,9 +558,10 @@ namespace LocalServerInCsharp
                     writeDetailedOutcome(true);
                     setKillFlag = true;
                     //ResponseHttp(waitingListener, "RESTART");
+                    Console.WriteLine("filequeue count : " + fileQueue.Count);
                     if (fileQueue.Count == 0)
                     {
-                        //Console.WriteLine("All Finished");
+                        Console.WriteLine("All Finished");
                         while (waitingListener.Count > 0)
                             ResponseHttp(waitingListener.Dequeue(), "Finished");
                         //Console.ReadLine();
@@ -571,6 +575,8 @@ namespace LocalServerInCsharp
                     //Console.WriteLine("TIMEOUT END");
                 }
             }
+            Console.WriteLine("Break loop");
+            return;
         }
 
         static void distributeClients()
