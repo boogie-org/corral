@@ -139,7 +139,8 @@ namespace ExplainError
             verbose = false;
             // onlySlicAssumes = true; //changing it to false makese several stackoverflowexns, timeouts with little 
             onlySlicAssumes = false; //changed for the purposes of experimentation 
-            onlyDisplayAliasingInPre = true;
+            //onlyDisplayAliasingInPre = true;
+            onlyDisplayAliasingInPre = false;//changed for experimentation as in some places require the non aliasining as well in buffere overflows
             onlyDisplayMapExpressions = true;
             dontDisplayComparisonsWithConsts = true;
             cflowDependencyInfo = cntrlFlowDependencyInfo;
@@ -685,6 +686,7 @@ namespace ExplainError
                     catch (Exception ex)
                     {
                         Console.WriteLine("template 2 trial failed with the exception :{0}", ex);
+                        continue;
                     }
                 }
                 else if(ranking == 3)
@@ -696,6 +698,7 @@ namespace ExplainError
                     catch(Exception ex)
                     {
                         Console.WriteLine("template 3 trial failed with the exception :{0}",  ex);
+                        continue;
                     }
 
                 }
@@ -1908,11 +1911,14 @@ namespace ExplainError
             }
             );
             HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
+            //printing hthe filtered atoms
+
+            fexps.Iter(fexp => Console.WriteLine("filtered atoms in get length candidates {0}", fexp));
             fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
             HashSet<Expr> lengthCandidates = new HashSet<Expr>();
             foreach (Variable var in supportVarsInFilteredAtoms)
             {
-                //Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
+                Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
                 if (IsIntegerType(var.TypedIdent.Type.ToString())) lengthCandidates.Add(new IdentifierExpr(Token.NoToken, var));
             }
 
