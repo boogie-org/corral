@@ -85,6 +85,7 @@ namespace AngelicVerifierNull
             visitor.Run(prog);
 
             BoogieUtil.PrintProgram(prog, args[1]);
+            Console.WriteLine("The attibutes have been added to {0}", args[1]);
 
 
 
@@ -141,7 +142,7 @@ namespace AngelicVerifierNull
 
         public override Block VisitBlock(Block node)
         {
-            Console.WriteLine($"this block is being visited {node.Label}");
+            //Console.WriteLine($"this block is being visited {node.Label}");
             if (DoAnyOfThePredecessorsHaveMultipleSucessor(node))
             {
                 AddPartitionAttributeToAssume(ref node);
@@ -151,11 +152,11 @@ namespace AngelicVerifierNull
 
         private bool DoAnyOfThePredecessorsHaveMultipleSucessor(Block node)
         {
-            Console.WriteLine("this is the number of predeccors {0}", node.Predecessors.Count());
+            //Console.WriteLine("this is the number of predeccors {0}", node.Predecessors.Count());
 
             foreach (Block pre in node.Predecessors)
             {
-                Console.WriteLine($"this is the predecessor {pre.Label}");
+                //Console.WriteLine($"this is the predecessor {pre.Label}");
                 //pre.succCount is always 0 and hence we use the following command to find the number of successors
                 if (NumSuccessors(pre) > 1)
                 {
@@ -180,11 +181,11 @@ namespace AngelicVerifierNull
 
         public void AddPartitionAttributeToAssume(ref Block node)
         {
-            Console.WriteLine($"this is called for block {node.Label}");
+            //Console.WriteLine($"this is called for block {node.Label}");
             Cmd firstCmd = node.cmds.ElementAt(0);
             if (firstCmd is AssumeCmd && (firstCmd as AssumeCmd).Expr != Expr.True)
             {
-                Console.WriteLine($"this is the fist cmd {firstCmd}");
+                //Console.WriteLine($"this is the fist cmd {firstCmd}");
                 AssumeCmd assCmd = (firstCmd as AssumeCmd);
                 assCmd.Attributes = new QKeyValue(Token.NoToken, "partition", new List<object>(),
                        assCmd.Attributes); ;

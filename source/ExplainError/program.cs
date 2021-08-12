@@ -1886,11 +1886,25 @@ namespace ExplainError
             throw new Exception("could not find the size of the type of the buffer, should not have happened if this was not a memory safety error in the first place");
         }
 
-        private static bool IsIntegerType(string type) {
+        private static bool IsIntegerType(string type) 
+        {
             bool isNumeric(string str) => int.TryParse(str, out _);
             if (type.StartsWith("i", StringComparison.Ordinal) && isNumeric(type.Substring(1))) return true;
 
             return false;
+        }
+
+        //Precondition should only by available on the function parameters, so
+        //the length and size candidates should be only function params
+        private static bool IsFunctionParameter(string name)
+        {
+            //either they can be
+            //alloc_$r__968, in which case they are the return value of stubs
+            //or they can be alloc_$p0_get_tag__913, in which case they are the initial values of the parameters
+
+            //first difference is the number of underscores
+            int numUnderscores = name.ToCharArray().Count(c => c == '_');
+            return numUnderscores > 3;
         }
 
         private static HashSet<Expr> GetLengthCandidatesFromFilteredAtoms(ref HashSet<Expr> fexps)
@@ -1916,10 +1930,12 @@ namespace ExplainError
             fexps.Iter(fexp => Console.WriteLine("filtered atoms in get length candidates {0}", fexp));
             fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
             HashSet<Expr> lengthCandidates = new HashSet<Expr>();
+
+            Console.WriteLine("exploring all int vars which can be length candidates");
             foreach (Variable var in supportVarsInFilteredAtoms)
             {
-                Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
-                if (IsIntegerType(var.TypedIdent.Type.ToString())) lengthCandidates.Add(new IdentifierExpr(Token.NoToken, var));
+                Console.WriteLine("variable {0}, variable type {1}, function par {2}", var, var.TypedIdent.Type, IsFunctionParameter(var.Name));
+                if (IsIntegerType(var.TypedIdent.Type.ToString()) && IsFunctionParameter(var.Name)) lengthCandidates.Add(new IdentifierExpr(Token.NoToken, var));
             }
 
             //Console.WriteLine("printing the length candidates");
@@ -2029,10 +2045,11 @@ namespace ExplainError
             HashSet<Variable> supportVarsInFilteredAtoms = new HashSet<Variable>();
             fexps.Iter(fexp => GetSupportVars(fexp).Iter(x => supportVarsInFilteredAtoms.Add(x)));
             HashSet<Expr> startAndEndCandidates = new HashSet<Expr>();
+            Console.WriteLine("exploring all ref vars which can be start and end candidates");
             foreach (Variable var in supportVarsInFilteredAtoms)
             {
-                //Console.WriteLine("variable {0}, variable type {1}", var, var.TypedIdent.Type);
-                if (IsRefType(var.TypedIdent.Type.ToString())) startAndEndCandidates.Add(new IdentifierExpr(Token.NoToken, var));
+                Console.WriteLine("variable {0}, variable type {1}, function par {2}", var, var.TypedIdent.Type, IsFunctionParameter(var.Name));
+                if (IsRefType(var.TypedIdent.Type.ToString()) && IsFunctionParameter(var.Name)) startAndEndCandidates.Add(new IdentifierExpr(Token.NoToken, var));
             }
             //Console.WriteLine("printing the start end candidates");
             //startAndEndCandidates.Iter(x => Console.WriteLine(x));
@@ -2076,10 +2093,13 @@ namespace ExplainError
                     {
                         //generating the patterns
                         Expr pattern1Assumption = GenerateTemplate1(start,len,size);
+                        Expr minLengthAssumption = Expr.Ge(len, Expr.Literal(1));
                         Expr FinalCondition = ExprUtil.Not(ExprUtil.And(bufferAssumption, pattern1Assumption));
+                        Expr FinalConditionWithMinLengthAss = ExprUtil.Not(ExprUtil.And(ExprUtil.And(bufferAssumption, pattern1Assumption), minLengthAssumption));
 
                         //adding the patterns to the thing that needs to be returned
                         filledTemplates.Add(FinalCondition);
+                        filledTemplates.Add(FinalConditionWithMinLengthAss);
                     }
                 }
             }
