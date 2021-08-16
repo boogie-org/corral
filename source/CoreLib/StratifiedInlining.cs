@@ -1359,6 +1359,7 @@ namespace CoreLib
             int callsitesInlinedCurrentPartition = 0;
             bool staticAlphaListMode = false;
             List<int> staticAlphaList = new List<int>();
+            Console.WriteLine("SPLITMODE : " + splitMode);
             if (cba.Util.HydraConfig.staticAlphaListMode)
             {
                 staticAlphaListMode = true;
@@ -3070,7 +3071,7 @@ namespace CoreLib
             if (replyFromServer.Equals("YES"))
             {
                 startFirstJob = true;
-                splitMode = 100;
+                splitMode = cba.Util.HydraConfig.alpha;
                 currentId = 0;
             }
             /*else

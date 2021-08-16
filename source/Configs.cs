@@ -583,6 +583,11 @@ namespace cba
                 maxSplitPerIteration = Int32.Parse(split[1]);
                 cba.Util.HydraConfig.maxSplitPerIteration = maxSplitPerIteration;
             }
+            else if (flag.StartsWith("/alpha:"))
+            {
+                var split = flag.Split(sep);
+                cba.Util.HydraConfig.alpha = Int32.Parse(split[1]);                
+            }
             else if (flag.StartsWith("/alphaOR:"))
             {
                 var split = flag.Split(sep);

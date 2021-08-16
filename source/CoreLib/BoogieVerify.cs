@@ -22,6 +22,7 @@ namespace cba.Util
         public static int alphaOR = 0;
         public static bool staticAlphaListMode = false;
         public static List<int> staticAlphaList = new List<int>();
+        public static int alpha = 100;
     }
 
     public static class BoogieVerify
