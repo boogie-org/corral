@@ -35,6 +35,7 @@ namespace ServerDriver
         public string cloudAddress;
         public bool cloudDeployment;
         public bool resume;
+        public List<int> clientPoolSize;
         public Config()
         {
             //The following values are set by default if the corresponding flag is not present in the configuration file
@@ -57,6 +58,7 @@ namespace ServerDriver
             startLocalListener = true;
             dumpSIBoogieFiles = false;
             resume = true;
+            clientPoolSize = new List<int>();
             //Modify The Following Flags Only If Necessary 
 
             // /newStratifiedInlining:ucsplitparallel runs the original heuristic

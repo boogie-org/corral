@@ -1360,6 +1360,7 @@ namespace CoreLib
             bool staticAlphaListMode = false;
             List<int> staticAlphaList = new List<int>();
             //Console.WriteLine("SPLITMODE : " + splitMode);
+            //Console.WriteLine("Client " + (Int32.Parse(clientID)-1) + " Using " + splitMode);
             if (cba.Util.HydraConfig.staticAlphaListMode)
             {
                 staticAlphaListMode = true;

@@ -611,7 +611,9 @@ namespace LocalServerInCsharp
             //Current allocation for client as follows
             for (int algo = 0; algo < totalAlgo; algo++)
             {
-                int clientsToAdd = algo == 0 ? ((maxClients / totalAlgo) + (maxClients % totalAlgo)) - 1 : maxClients / totalAlgo;
+                //Console.WriteLine("POOL SIZE : " + configuration.clientPoolSize[algo]);
+                //Console.ReadLine();
+                int clientsToAdd = algo == 0 ? configuration.clientPoolSize[algo] - 1 : configuration.clientPoolSize[algo];
                 bool areAdded = addClientsToAlgo(algo, clientsToAdd);
                 if (!areAdded)
                 {
@@ -628,7 +630,7 @@ namespace LocalServerInCsharp
                 algoIdToSplitMode.Add(-1);
                 askForResetTime.Add(false);
                 clientRequestQueue.Add(new Queue<Tuple<int, HttpListenerContext>>());
-                if (PortfolioLog)
+                //if (PortfolioLog)
                     showClientsOfAlgo(algo);
             }
 
@@ -640,7 +642,7 @@ namespace LocalServerInCsharp
 
         static void showClientsOfAlgo(int algoID)
         {
-            //Console.WriteLine("Algo Client list " + algoID.ToString() + ":  " + string.Join(",", algoClientList[algoID]));
+            Console.WriteLine("Algo Client list " + algoID.ToString() + ":  " + string.Join(",", algoClientList[algoID]));
         }
 
         static bool addClientsToAlgo(int algoId, int clientsToAdd)
@@ -769,6 +771,12 @@ namespace LocalServerInCsharp
                         break;
                     case "smackBin":
                         configuration.smackBin = configKey[1];
+                        break;
+                    case "clientPoolSize":
+                        string strPool = configKey[1];
+                        var poolSizes = strPool.Split(',');
+                        foreach (var v in poolSizes)
+                            configuration.clientPoolSize.Add(Int32.Parse(v));
                         break;
                     default:
                         Console.WriteLine("Invalid Option: " + configKey[0]);
