@@ -7,6 +7,7 @@ using System.Net;
 using System.Threading;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.ComponentModel;
 
 namespace ServerDriver
 {
@@ -252,6 +253,7 @@ namespace ServerDriver
 
         static int RunProcessAndWaitForExit(string fileName, string arguments, TimeSpan timeout, out string stdout)
         {
+            int excode = 1;
             var startInfo = new ProcessStartInfo
             {
                 FileName = fileName,
@@ -259,26 +261,34 @@ namespace ServerDriver
                 RedirectStandardOutput = true,
                 UseShellExecute = false
             };
-
-            var process = Process.Start(startInfo);
-
-            stdout = null;
-            if (process.WaitForExit((int)timeout.TotalMilliseconds))
+            try
             {
-                stdout = process.StandardOutput.ReadToEnd();
-            }
-            else
-            {
-                Console.WriteLine("Process did not finish");
-                if (!process.HasExited)
+                var process = Process.Start(startInfo);
+
+                stdout = null;
+                if (process.WaitForExit((int)timeout.TotalMilliseconds))
                 {
-                    process.Kill();
-                    while (!process.WaitForExit(1000)) ;
-                    Console.WriteLine("Process killed");
+                    stdout = process.StandardOutput.ReadToEnd();
                 }
-            }
+                else
+                {
+                    Console.WriteLine("Process did not finish");
+                    if (!process.HasExited)
+                    {
+                        process.Kill();
+                        while (!process.WaitForExit(1000)) ;
+                        Console.WriteLine("Process killed");
+                    }
+                }
 
-            return process.ExitCode;
+                return process.ExitCode;
+            }
+            catch(Win32Exception w)
+            {
+                Console.WriteLine(w.Message);
+                stdout = w.Message;
+                return excode;
+            }            
         }
 
         static void setupConfig(string[] args)
