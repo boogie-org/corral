@@ -266,7 +266,7 @@ namespace ServerDriver
                 var process = Process.Start(startInfo);
 
                 stdout = null;
-                if (process.WaitForExit((int)timeout.TotalMilliseconds))
+                if (process.WaitForExit(60000))
                 {
                     stdout = process.StandardOutput.ReadToEnd();
                 }
