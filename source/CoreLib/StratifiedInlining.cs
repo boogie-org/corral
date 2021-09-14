@@ -431,6 +431,8 @@ namespace CoreLib
             //public HashSet<StratifiedCallSite> previousSplitSites;
             public HashSet<string> previousSplitSites;
             public string calltreeToSend;
+            public HashSet<StratifiedCallSite> blockedCallsites;
+            public HashSet<StratifiedCallSite> unreachableOpenCallsites;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -448,6 +450,17 @@ namespace CoreLib
                 var ret = new SiState();
                 ret = SiState.SaveState(SI, openCallSites);
                 ret.previousSplitSites = new HashSet<string>(previousSplitSites);
+                return ret;
+            }
+
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
+                HashSet<string> previousSplitSites, HashSet<StratifiedCallSite> blockedCallsites,
+                HashSet<StratifiedCallSite> unreachableOpenCallsites)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites, previousSplitSites);
+                ret.blockedCallsites = new HashSet<StratifiedCallSite>(blockedCallsites);
+                ret.unreachableOpenCallsites = new HashSet<StratifiedCallSite>(unreachableOpenCallsites);
                 return ret;
             }
 
@@ -482,6 +495,17 @@ namespace CoreLib
                 ApplyState(SI, ref openCallSites);
                 previousSplitSites = this.previousSplitSites;
                 calltreeToSend = this.calltreeToSend;
+            }
+
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites,
+                ref HashSet<string> previousSplitSites, ref string calltreeToSend,
+                ref HashSet<StratifiedCallSite> blockedCallsites, ref HashSet<StratifiedCallSite> unreachableOpenCallsites)
+            {
+                ApplyState(SI, ref openCallSites);
+                previousSplitSites = this.previousSplitSites;
+                calltreeToSend = this.calltreeToSend;
+                blockedCallsites = this.blockedCallsites;
+                unreachableOpenCallsites = this.unreachableOpenCallsites;
             }
         }
 
@@ -1324,7 +1348,8 @@ namespace CoreLib
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, TimeGraph timeGraph,
             Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar, 
-            Stack<SiState> backtrack, Stack<Decision> dc)
+            Stack<SiState> backtrack, Stack<Decision> dc,
+            HashSet<StratifiedCallSite> blockedCallsites, HashSet<StratifiedCallSite> unreachableOpenCallsites)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
 
@@ -1686,7 +1711,23 @@ namespace CoreLib
                             if (killThisClient(replyFromServer, "calltreeSend AND"))
                                 return Outcome.Correct;
                             currentId = blockId;
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
+                            blockedCallsites.Add(scs);
+                            foreach (StratifiedCallSite callsite in openCallSites)
+                            {
+                                StratifiedCallSite parentOfCs = callsite;
+                                while (parent.ContainsKey(parentOfCs))
+                                {
+                                    parentOfCs = parent[parentOfCs];
+                                    if (blockedCallsites.Contains(parentOfCs))
+                                    {
+                                        if (!unreachableOpenCallsites.Contains(callsite))
+                                            unreachableOpenCallsites.Add(callsite);
+                                        break;
+                                    }
+                                }
+                            }
+                            //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             prover.Assert(scs.callSiteExpr, false);
@@ -1722,7 +1763,7 @@ namespace CoreLib
                     // Non-uniform unfolding
                     else if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                         Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
-                    else
+                    else if (!unreachableOpenCallsites.Contains(cs))
                         prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
 
                     //continue;
@@ -1781,9 +1822,9 @@ namespace CoreLib
 
                                     openCallSites.Remove(scs);
                                     StratifiedVC svc = null;
-                                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-                                        svc = Expand(scs);
-                                    else
+                                    //if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                    //    svc = Expand(scs);
+                                    //else
                                         svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                                     if (svc != null)
                                     {
@@ -1857,9 +1898,9 @@ namespace CoreLib
 
                             openCallSites.Remove(scs);
                             StratifiedVC svc = null;
-                            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-                                svc = Expand(scs);
-                            else
+                            //if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                            //    svc = Expand(scs);
+                            //else
                                 svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                             if (svc != null)
                             {
@@ -1968,13 +2009,16 @@ namespace CoreLib
                         if (doneBT)
                             break;
 
-                        topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
+                        //topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
+                        topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend,
+                            ref blockedCallsites, ref unreachableOpenCallsites);
                         //timeGraph.Pop(npops - 1);
 
                         // flip the decision
 
                         Push();
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
+                        //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
 
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
@@ -3051,6 +3095,8 @@ namespace CoreLib
             DI initialDI = new DI(this, BoogieVerify.options.useFwdBck || !BoogieVerify.options.useDI);
             DagOracle initialDAG = initialDI.currentDag.Copy();
             Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
+            HashSet<StratifiedCallSite> blockedCallsites = new HashSet<StratifiedCallSite>();
+            HashSet<StratifiedCallSite> unreachableOpenCallsites = new HashSet<StratifiedCallSite>();
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
@@ -3199,6 +3245,8 @@ namespace CoreLib
                 backtrackingPoints.Clear();
                 decisions.Clear();
                 persistentIDToCallsiteMap.Clear();
+                blockedCallsites.Clear();
+                unreachableOpenCallsites.Clear();
                 //prover.Reset(prover.VCExprGen);
                 //prover.FullReset(prover.VCExprGen);
                 while (stats.stacksize > 1)
@@ -3398,9 +3446,25 @@ namespace CoreLib
                                     if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
+                                    blockedCallsites.Add(cs);
+                                    foreach (StratifiedCallSite scs in openCallSites)
+                                    {
+                                        StratifiedCallSite parentOfCs = scs;
+                                        while (parent.ContainsKey(parentOfCs))
+                                        {
+                                            parentOfCs = parent[parentOfCs];
+                                            if (blockedCallsites.Contains(parentOfCs))
+                                            {
+                                                if (!unreachableOpenCallsites.Contains(scs))
+                                                    unreachableOpenCallsites.Add(scs);
+                                                break;
+                                            }
+                                        }
+                                    }
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
@@ -3414,7 +3478,8 @@ namespace CoreLib
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));                                    
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
                                     decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
                                     //try
                                     {
@@ -3468,7 +3533,7 @@ namespace CoreLib
                     {
                         //Console.WriteLine("running Hydra");
                         outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                            backtrackingPoints, decisions);
+                            backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
                         //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
                     }
                     catch(Exception e)
@@ -3482,12 +3547,12 @@ namespace CoreLib
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions);
+                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions);
+                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
                 }
                 else
                 {                    
