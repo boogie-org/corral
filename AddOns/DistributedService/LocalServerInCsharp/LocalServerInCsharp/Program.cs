@@ -239,6 +239,7 @@ namespace LocalServerInCsharp
             Thread _responseThread = new Thread(ResponseThread);
             _responseThread.Start(); // start the response thread
             startServer();
+            //Console.ReadLine();
             //Console.WriteLine("Terminate Server");
             //return;
         }

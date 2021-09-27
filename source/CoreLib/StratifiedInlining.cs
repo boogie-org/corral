@@ -454,11 +454,11 @@ namespace CoreLib
             }
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
-                HashSet<string> previousSplitSites, HashSet<StratifiedCallSite> blockedCallsites,
+                HashSet<string> previousSplitSites, string calltree, HashSet<StratifiedCallSite> blockedCallsites,
                 HashSet<StratifiedCallSite> unreachableOpenCallsites)
             {
                 var ret = new SiState();
-                ret = SiState.SaveState(SI, openCallSites, previousSplitSites);
+                ret = SiState.SaveState(SI, openCallSites, previousSplitSites, calltree);
                 ret.blockedCallsites = new HashSet<StratifiedCallSite>(blockedCallsites);
                 ret.unreachableOpenCallsites = new HashSet<StratifiedCallSite>(unreachableOpenCallsites);
                 return ret;
@@ -1352,7 +1352,7 @@ namespace CoreLib
             HashSet<StratifiedCallSite> blockedCallsites, HashSet<StratifiedCallSite> unreachableOpenCallsites)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
-
+            //Console.WriteLine("Calling UCSP");
             Outcome outcome = Outcome.Inconclusive;
             reporter.reportTraceIfNothingToExpand = true;
             var boundHit = false;
@@ -1578,6 +1578,7 @@ namespace CoreLib
                     }
                     if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1
                     && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
+                    //if (true)
                     {
                         var st = DateTime.Now;
 
@@ -1712,6 +1713,20 @@ namespace CoreLib
                                 return Outcome.Correct;
                             currentId = blockId;
                             blockedCallsites.Add(scs);
+                            //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
+                            /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(maxVc);
+                            if (disjointNodes.Count > 0)
+                            {
+                                foreach (StratifiedVC v in disjointNodes)
+                                {
+                                    Console.WriteLine("DISJOINT : " + GetPersistentID(attachedVCInv[v]));
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("No Disjoint Nodes");
+                            }*/
+
                             foreach (StratifiedCallSite callsite in openCallSites)
                             {
                                 StratifiedCallSite parentOfCs = callsite;
@@ -1721,13 +1736,16 @@ namespace CoreLib
                                     if (blockedCallsites.Contains(parentOfCs))
                                     {
                                         if (!unreachableOpenCallsites.Contains(callsite))
+                                        {
                                             unreachableOpenCallsites.Add(callsite);
+                                            //Console.WriteLine("UNREACHABLE : " + GetPersistentID(callsite));
+                                        }
                                         break;
                                     }
                                 }
                             }
                             //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
                             prover.Assert(scs.callSiteExpr, false);
@@ -1737,7 +1755,7 @@ namespace CoreLib
                                 Console.WriteLine(replyFromServer);
                             if (pauseForDebug)
                                 Console.ReadLine();
-                            calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";
+                            calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                            
                         }
                     }
                 }
@@ -1765,6 +1783,8 @@ namespace CoreLib
                         Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
                     else if (!unreachableOpenCallsites.Contains(cs))
                         prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                    //else
+                    //    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
 
                     //continue;
 
@@ -1822,6 +1842,12 @@ namespace CoreLib
 
                                     openCallSites.Remove(scs);
                                     StratifiedVC svc = null;
+                                    /*Console.WriteLine("UW INLINING : " + GetPersistentID(scs));
+                                    if (unreachableOpenCallsites.Contains(scs))
+                                    {
+                                        Console.WriteLine("UW Inlining Unreachable Callsite : " + GetPersistentID(scs));
+                                        Console.ReadLine();
+                                    }*/
                                     //if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
                                     //    svc = Expand(scs);
                                     //else
@@ -1998,6 +2024,7 @@ namespace CoreLib
                             topState = backtrackingPoints.Peek();
 
                             // Pop
+                            //Console.WriteLine("POP DECISION");
                             Pop();
                             decisions.Pop();
                             backtrackingPoints.Pop();
@@ -2018,7 +2045,7 @@ namespace CoreLib
 
                         Push();
                         //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
 
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
@@ -2028,6 +2055,28 @@ namespace CoreLib
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             treesize = di.ComputeSize();
+                            StratifiedCallSite scs = topDecision.cs;
+
+                            blockedCallsites.Add(scs);
+                            //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
+                            
+                            foreach (StratifiedCallSite callsite in openCallSites)
+                            {
+                                StratifiedCallSite parentOfCs = callsite;
+                                while (parent.ContainsKey(parentOfCs))
+                                {
+                                    parentOfCs = parent[parentOfCs];
+                                    if (blockedCallsites.Contains(parentOfCs))
+                                    {
+                                        if (!unreachableOpenCallsites.Contains(callsite))
+                                        {
+                                            unreachableOpenCallsites.Add(callsite);
+                                            //Console.WriteLine("UNREACHABLE : " + GetPersistentID(callsite));
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
                         }
                         else
                         {
@@ -2037,6 +2086,33 @@ namespace CoreLib
                             prevMustAsserted.Push(
                                AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                             treesize = di.ComputeSize();
+
+                            StratifiedCallSite cs = topDecision.cs;
+                            HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
+                            if (disjointNodes.Count > 0)
+                            {
+                                foreach (StratifiedVC v in disjointNodes)
+                                {
+                                    blockedCallsites.Add(attachedVCInv[v]);
+                                }
+                            }
+                            foreach (StratifiedCallSite scs in openCallSites)
+                            {
+                                StratifiedCallSite parentOfCs = scs;
+                                while (parent.ContainsKey(parentOfCs))
+                                {
+                                    parentOfCs = parent[parentOfCs];
+                                    if (blockedCallsites.Contains(parentOfCs))
+                                    {
+                                        if (!unreachableOpenCallsites.Contains(scs))
+                                        {
+                                            unreachableOpenCallsites.Add(scs);
+                                            //Console.WriteLine("UNREACHABLE : " + GetPersistentID(scs));
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                     else
@@ -2118,6 +2194,7 @@ namespace CoreLib
 
         public string sendCalltreeToServer(string calltree)
         {
+            //Console.WriteLine("SENT : " + calltree);
             serverUri.Query = string.Empty;
             JsonContent tmp = new JsonContent(string.Format("{0}={1}", clientID, calltree));
             DateTime communicationStartTime = DateTime.Now;
@@ -3185,7 +3262,7 @@ namespace CoreLib
                         continueVerification = false;
                         continue;
                     }
-
+                    //Console.WriteLine("NEW PARTITION");                    
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -3233,8 +3310,9 @@ namespace CoreLib
                         if (writeLog)
                             Console.WriteLine("Received Calltree:");
                         if (writeLog)
-                            Console.WriteLine(receivedCalltree);
+                            Console.WriteLine("RECEIVED : " + receivedCalltree);
                     }
+                    //Console.ReadLine();
                 }
                 resetStart = DateTime.Now;
                 attachedVC.Clear();
@@ -3456,7 +3534,10 @@ namespace CoreLib
                                             if (blockedCallsites.Contains(parentOfCs))
                                             {
                                                 if (!unreachableOpenCallsites.Contains(scs))
+                                                {
                                                     unreachableOpenCallsites.Add(scs);
+                                                    //Console.WriteLine("UNREACHABLE : " + GetPersistentID(scs));
+                                                }
                                                 break;
                                             }
                                         }
@@ -3464,7 +3545,7 @@ namespace CoreLib
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
                                     //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
@@ -3476,10 +3557,35 @@ namespace CoreLib
                                     if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
                                     StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
+                                    HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
+                                    if (disjointNodes.Count > 0)
+                                    {
+                                        foreach (StratifiedVC v in disjointNodes)
+                                        {
+                                            blockedCallsites.Add(attachedVCInv[v]);
+                                        }
+                                    }
+                                    foreach (StratifiedCallSite scs in openCallSites)
+                                    {
+                                        StratifiedCallSite parentOfCs = scs;
+                                        while (parent.ContainsKey(parentOfCs))
+                                        {
+                                            parentOfCs = parent[parentOfCs];
+                                            if (blockedCallsites.Contains(parentOfCs))
+                                            {
+                                                if (!unreachableOpenCallsites.Contains(scs))
+                                                {
+                                                    unreachableOpenCallsites.Add(scs);
+                                                    //Console.WriteLine("UNREACHABLE : " + GetPersistentID(scs));
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
                                     //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, blockedCallsites, unreachableOpenCallsites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
                                     decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
                                     //try
                                     {
@@ -4225,7 +4331,7 @@ namespace CoreLib
                 {
                     Console.WriteLine(e.Message);
                     Console.WriteLine(n.ToString());
-                    Console.ReadLine();
+                    //Console.ReadLine();
                 }
             }
             //disj[vcNodeMap[vc]].Iter(n => ret.Add(vcNodeMap[n]));

@@ -351,6 +351,7 @@ namespace ClientSource
 
         static void RestartVerification()
         {
+            //Thread.Sleep(60000);
             //Console.WriteLine("Kill All Clients And Restart Verification");
             //Thread.Sleep(1000);
             //Process.GetCurrentProcess().Kill();
