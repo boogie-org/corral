@@ -1712,6 +1712,12 @@ namespace CoreLib
                             if (killThisClient(replyFromServer, "calltreeSend AND"))
                                 return Outcome.Correct;
                             currentId = blockId;
+                            
+                            //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                            prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                            decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
+                            prover.Assert(scs.callSiteExpr, false);
                             blockedCallsites.Add(scs);
                             //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
                             /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(maxVc);
@@ -1744,11 +1750,6 @@ namespace CoreLib
                                     }
                                 }
                             }
-                            //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
-                            prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                            decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            prover.Assert(scs.callSiteExpr, false);
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
                             if (writeLog)
@@ -1806,6 +1807,18 @@ namespace CoreLib
                     if (makeTimeGraph)
                         timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
                     //sendRequestToServer("outcome", "NOK");
+                    /*
+                    bool isAnyCallsiteOverapproximated = false;
+                    foreach (var scs in reporter.callSitesToExpand)
+                    {
+                        if (unreachableOpenCallsites.Contains(scs))
+                        {
+                            isAnyCallsiteOverapproximated = true;
+                        }
+                    }
+                    if (!isAnyCallsiteOverapproximated)
+                        break; // done (error found)
+                    */
                     break; // done (error found)
                 }
                 
@@ -3524,7 +3537,15 @@ namespace CoreLib
                                 {
                                     if (writeLog)
                                         Console.WriteLine("BLOCK " + callsiteToInline);
-                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
+                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];                                    
+                                    Push();
+                                    previousSplitSites.Add(callsiteToInline);
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
+                                    decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
+                                    //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
+                                    prover.Assert(cs.callSiteExpr, false);
                                     blockedCallsites.Add(cs);
                                     foreach (StratifiedCallSite scs in openCallSites)
                                     {
@@ -3543,14 +3564,6 @@ namespace CoreLib
                                             }
                                         }
                                     }
-                                    Push();
-                                    previousSplitSites.Add(callsiteToInline);
-                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
-                                    prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
-                                    decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
-                                    //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false);                                    
                                     mode = 0;                                    
                                 }
                                 else //MUSTREACH callsite
