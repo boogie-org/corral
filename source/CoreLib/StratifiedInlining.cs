@@ -2099,7 +2099,7 @@ namespace CoreLib
                             prevMustAsserted.Push(
                                AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
                             treesize = di.ComputeSize();
-                            /*
+                            
                             StratifiedCallSite cs = topDecision.cs;
                             HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
                             if (disjointNodes.Count > 0)
@@ -2126,7 +2126,7 @@ namespace CoreLib
                                     }
                                 }
                             }
-                            */
+                            
                         }
                     }
                     else
@@ -3570,8 +3570,23 @@ namespace CoreLib
                                 {
                                     if (writeLog)
                                         Console.WriteLine("MUSTREACH " + callsiteToInline);
-                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];
-                                    /*
+                                    StratifiedCallSite cs = persistentIDToCallsiteMap[callsiteToInline];                                    
+                                    Push();
+                                    previousSplitSites.Add(callsiteToInline);
+                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                                    decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
+                                    //try
+                                    {
+                                        //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
+                                    }
+                                    //catch (KeyNotFoundException e)
+                                    //
+                                    //    Console.WriteLine(e.Message);
+                                    //    Console.ReadLine();
+                                    //}
+                                    prevMustAsserted.Push(AssertMustReach(attachedVC[cs], PrevAsserted()));
+                                    
                                     HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
                                     if (disjointNodes.Count > 0)
                                     {
@@ -3597,22 +3612,7 @@ namespace CoreLib
                                             }
                                         }
                                     }
-                                    */
-                                    Push();
-                                    previousSplitSites.Add(callsiteToInline);
-                                    //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
-                                    decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
-                                    //try
-                                    {
-                                        //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
-                                    }
-                                    //catch (KeyNotFoundException e)
-                                    //
-                                    //    Console.WriteLine(e.Message);
-                                    //    Console.ReadLine();
-                                    //}
-                                    prevMustAsserted.Push(AssertMustReach(attachedVC[cs], PrevAsserted()));
+                                    
                                     //AssertMustReach(attachedVC[cs], new HashSet<Tuple<StratifiedVC, Block>>());
                                     mode = 0;
                                     
