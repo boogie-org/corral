@@ -655,6 +655,14 @@ namespace ExplainError
             return t.Count > 0;
         }
 
+        private static bool FindAllSatisfyingTemplates(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l) 
+        {
+            Console.WriteLine("currPre in  findAllSatisfyingTemplate = {0}", currPre);
+            Console.WriteLine("fe in findAllSatisfyingTemplate = {0}", fe);
+            l = fe.ToList().FindAll(a => VCVerifier.CheckIfExprFalse(currImpl, Expr.Not(Expr.Imp(currPre, a))));
+            return l.Count > 0;
+        }
+
         private static bool TemplateRankAndTry(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
         {
             Console.WriteLine("These are the rankings");
@@ -709,11 +717,44 @@ namespace ExplainError
 
                 //Trying the template
                 var preDnf = new List<Expr>();
-                var mc = MonomialCubeCover(currImpl, currPre, e, fexps, out preDnf);
-                if(mc)
+                var mc = FindAllSatisfyingTemplates(currImpl, currPre, e, fexps, out preDnf);
+                var GetWeight = new Func<Expr, int>(x =>
+                    {
+                        var wf = new WeightFinder();
+                        wf.Visit(x);
+                        return wf.score;
+                    }
+                );
+
+                if (mc)
                 {
                     Console.WriteLine($"This Template Number {ranking} worked");
-                    l = preDnf;
+
+                    //this is old method
+                    //l = preDnf;
+                    //return true;
+
+
+                    //this is weighted vocab method
+                    //weighting all the expression and choosing the min one
+                    Console.WriteLine("Now doing the rankings");
+                    List<int> expressionWeights = new List<int>();
+
+                    foreach (Expr exp in preDnf)
+                    {
+                        Console.WriteLine("this is the expression in preDnf {0}", exp);
+                        int weight = GetWeight(exp);
+                        Console.WriteLine("this is its weight {0}", weight);
+                        expressionWeights.Add(weight);
+
+                    }
+
+                    //find the minimum one
+                    int minWeight = expressionWeights.Min();
+                    int minIndex = expressionWeights.IndexOf(minWeight);
+                    Expr bestExpression = preDnf[minIndex];
+                    l = new List<Expr>();
+                    l.Add(bestExpression);
                     return true;
                 }
                 else
@@ -2061,14 +2102,34 @@ namespace ExplainError
         private static HashSet<Expr> GetPattern1ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
         {
             //get the length candidates
-            HashSet<Expr> lengthCandidates = GetLengthCandidatesFromFilteredAtoms(ref fexps);
-            fexps.Iter(x => FindIntLoads(x).Iter(y => lengthCandidates.Add(y)));
+
+            //1.variable only and load only scheme
+            //HashSet<Expr> lengthCandidates = GetLengthCandidatesFromFilteredAtoms(ref fexps);
+            //fexps.Iter(x => FindIntLoads(x).Iter(y => lengthCandidates.Add(y)));
+
+            //2.expression only scheme
+            //HashSet<Expr> lengthCandidates = new HashSet<Expr>();
             //fexps.Iter(x => RecursivelyOpenToFindLengthCandidateExprFromAtom(x, ref lengthCandidates));
 
+            //3.variable, expression and load scheme
+            HashSet<Expr> lengthCandidates = GetLengthCandidatesFromFilteredAtoms(ref fexps);
+            fexps.Iter(x => FindIntLoads(x).Iter(y => lengthCandidates.Add(y)));
+            fexps.Iter(x => RecursivelyOpenToFindLengthCandidateExprFromAtom(x, ref lengthCandidates));
+
             //get the start end candidates
+
+            //1.variable only and load only scheme
+            //HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            //fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+
+            //2.expression only scheme
+            //HashSet<Expr> startAndEndCandidates = new HashSet<Expr>();
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (lengthCandidates.Count == 0 || startAndEndCandidates.Count == 0)
@@ -2089,6 +2150,7 @@ namespace ExplainError
                 foreach (Expr len in lengthCandidates)
                 {
                     //heurestic to avoid the problems faced in the expressions case
+                    //where constants come in length candidates
                     if(GetVariableInExpression(len).Count > 0)
                     {
                         //generating the patterns
@@ -2241,9 +2303,19 @@ namespace ExplainError
         private static HashSet<Expr> GetPattern2ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
         {
             //get the start end candidates
+
+            //1.variable only and load only scheme
+            //HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            //fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+
+            //2.expression only scheme
+            //HashSet<Expr> startAndEndCandidates = new HashSet<Expr>();
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (startAndEndCandidates.Count == 0)
@@ -2297,10 +2369,20 @@ namespace ExplainError
 
         private static HashSet<Expr> GetPattern3ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)
         {
-            //get the start candidates
+            //get the start end candidates
+
+            //1.variable only and load only scheme
+            //HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
+            //fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
+
+            //2.expression only scheme
+            //HashSet<Expr> startAndEndCandidates = new HashSet<Expr>();
+            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            //fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (startAndEndCandidates.Count == 0)
@@ -2472,16 +2554,16 @@ namespace ExplainError
         private static void RecursivelyOpenToFindLengthCandidateExprFromAtom(Expr e, ref HashSet<Expr> lengthCandidates)
         {
             //recursively opens up the expressions and fills the lengthCandidates argument
-            //Console.WriteLine("recursiveExpr : {0}", e);
+            Console.WriteLine("recursiveExpr : {0}", e);
             var expr = e as NAryExpr;
             if (expr is null)
             {
-                //Console.WriteLine("not naryexpr");
+                Console.WriteLine("not naryexpr");
                 return;
             }
             else
             {
-                //Console.WriteLine("function name: {0}", expr.Fun.FunctionName);
+                Console.WriteLine("function name: {0}", expr.Fun.FunctionName);
                 if (IsSignedIntComparisionFunctions(expr.Fun.FunctionName) || IsUnsignedIntComparisionFunctions(expr.Fun.FunctionName))
                 {
                     //Console.WriteLine("int comparision");
