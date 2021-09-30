@@ -12,6 +12,7 @@ using VC;
 using Microsoft.Basetypes;
 using BType = Microsoft.Boogie.Type;
 using cba.Util;
+using System.Diagnostics.Contracts;
 
 namespace ExplainError
 {
@@ -2097,6 +2098,73 @@ namespace ExplainError
             return startAndEndCandidates;
         }
 
+        public class WeightFinder : ReadOnlyVisitor
+        {
+            protected int _score;
+            public int score
+            {
+                get
+                {
+                    return _score;
+                }
+            }
+
+            public WeightFinder()
+            {
+                _score = 0;
+            }
+
+            protected static bool IsArithmetic(string funcName)
+            {
+                if (funcName.StartsWith("$add", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+                else if (funcName.StartsWith("$sub", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+                else return false;
+            }
+
+            protected static bool IsConstantExpression(Expr e)
+            {
+                var GetSupportVars = new Func<Expr, IEnumerable<Variable>>(x =>
+                {
+                    var vc = new VariableCollector();
+                    vc.Visit(x);
+                    return vc.usedVars;
+                }
+                );
+                HashSet<Variable> vars = new HashSet<Variable>();
+                GetSupportVars(e).Iter(x => vars.Add(x));
+                return vars.Count == 0;
+            }
+
+
+            public override Expr VisitNAryExpr(NAryExpr node)
+            {
+                Contract.Ensures(Contract.Result<Expr>() == node);
+
+                var funcName = node.Fun.FunctionName;
+                var args = node.Args.ToList();
+                if (args.Count == 2)
+                {
+                    //binary function
+                    var lhs = args[0];
+                    var rhs = args[1];
+                    if (IsArithmetic(funcName))
+                    {
+                        _score++;
+                    }
+
+                }
+
+                this.VisitExprSeq(node.Args);
+                return node;
+            }
+
+        }
 
 
         private static HashSet<Expr> GetPattern1ConditionFromFilteredAtoms(ref HashSet<Expr> fexps)

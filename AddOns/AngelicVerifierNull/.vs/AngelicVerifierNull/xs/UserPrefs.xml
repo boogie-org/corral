@@ -3,7 +3,7 @@
     <Files>
       <File FileName="../../source/ExplainError/program.cs" Line="2141" Column="40" />
       <File FileName="AngelicVerifierNull/Program.cs" Line="319" Column="42" />
-      <File FileName="../../boogie/Source/Core/DeadVarElim.cs" Line="1" Column="1" />
+      <File FileName="../../boogie/Source/Core/DeadVarElim.cs" Line="355" Column="10" />
       <File FileName="../../boogie/Source/Core/StandardVisitor.cs" Line="646" Column="25" />
     </Files>
   </MonoDevelop.Ide.Workbench>
