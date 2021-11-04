@@ -1771,14 +1771,39 @@ namespace CoreLib
                     {
                         if (ucore.Count != 0)
                         {
-                            HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
-                            foreach (StratifiedCallSite scs in openCallSites2)
+                            Push();
+                            foreach (StratifiedCallSite cs in openCallSites)
                             {
-                                if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                                //Console.WriteLine(GetPersistentID(cs));
+                                if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                                    (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                                    StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                                {
+                                    prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                                    procsHitRecBound.Add(cs.callSite.calleeName);
+                                    boundHit = true;
+                                }
+                                // Non-uniform unfolding
+                                else if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                                    Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+                                else if (!ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+
+                                //continue;
+
+                            }
+                            reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                            reporter.reportTrace = false;
+                            outcome = CheckVC(reporter);
+                            Pop();
+                            if (outcome == Outcome.Errors)
+                            {
+                                int numORInlinings = 0;
+                                foreach (var scs in reporter.callSitesToExpand)
                                 {
                                     numUWInlinings++;
                                     calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
+                                    //Console.WriteLine("OR inlining " + GetPersistentID(scs));
                                     openCallSites.Remove(scs);
                                     StratifiedVC svc = null;
                                     if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
@@ -1789,6 +1814,30 @@ namespace CoreLib
                                     {
                                         openCallSites.UnionWith(svc.CallSites);
                                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
+                                foreach (StratifiedCallSite scs in openCallSites2)
+                                {
+                                    if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                                    {
+                                        numUWInlinings++;
+                                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                                        //Console.WriteLine("UW inlining " + GetPersistentID(scs));
+                                        openCallSites.Remove(scs);
+                                        StratifiedVC svc = null;
+                                        if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                            svc = Expand(scs);
+                                        else
+                                            svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                        if (svc != null)
+                                        {
+                                            openCallSites.UnionWith(svc.CallSites);
+                                            Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                        }
                                     }
                                 }
                             }
