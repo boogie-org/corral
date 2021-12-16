@@ -433,6 +433,7 @@ namespace CoreLib
             public string calltreeToSend;
             public HashSet<StratifiedCallSite> blockedCallsites;
             public HashSet<StratifiedCallSite> unreachableOpenCallsites;
+            public VCExpr decisionVc;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
             {
@@ -461,6 +462,15 @@ namespace CoreLib
                 ret = SiState.SaveState(SI, openCallSites, previousSplitSites, calltree);
                 ret.blockedCallsites = new HashSet<StratifiedCallSite>(blockedCallsites);
                 ret.unreachableOpenCallsites = new HashSet<StratifiedCallSite>(unreachableOpenCallsites);
+                return ret;
+            }
+
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
+                HashSet<string> previousSplitSites, string calltree, VCExpr decisionVc)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites, previousSplitSites, calltree);
+                ret.decisionVc = decisionVc;
                 return ret;
             }
 
@@ -506,6 +516,16 @@ namespace CoreLib
                 calltreeToSend = this.calltreeToSend;
                 blockedCallsites = this.blockedCallsites;
                 unreachableOpenCallsites = this.unreachableOpenCallsites;
+            }
+
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites,
+                ref HashSet<string> previousSplitSites, ref string calltreeToSend,
+                ref VCExpr decisionVc)
+            {
+                ApplyState(SI, ref openCallSites);
+                previousSplitSites = this.previousSplitSites;
+                calltreeToSend = this.calltreeToSend;
+                decisionVc = this.decisionVc;
             }
         }
 
@@ -1349,7 +1369,7 @@ namespace CoreLib
             StratifiedInliningErrorReporter reporter, TimeGraph timeGraph,
             Stack<List<Tuple<StratifiedVC, Block>>> prevMustAssertedSoFar, 
             Stack<SiState> backtrack, Stack<Decision> dc,
-            HashSet<StratifiedCallSite> blockedCallsites, HashSet<StratifiedCallSite> unreachableOpenCallsites)
+            HashSet<StratifiedCallSite> blockedCallsites, HashSet<StratifiedCallSite> unreachableOpenCallsites, VCExpr decisionVc)
         {
             //flags to set - /newStratifiedInlining:ucsplit /enableUnSatCoreExtraction:1
             //Console.WriteLine("Calling UCSP");
@@ -1384,6 +1404,8 @@ namespace CoreLib
             int callsitesInlinedCurrentPartition = 0;
             bool staticAlphaListMode = false;
             List<int> staticAlphaList = new List<int>();
+            VCExpr decisionVar = null;
+            
             //Console.WriteLine("SPLITMODE : " + splitMode);
             //Console.WriteLine("Client " + (Int32.Parse(clientID)-1) + " Using " + splitMode);
             if (cba.Util.HydraConfig.staticAlphaListMode)
@@ -1595,6 +1617,8 @@ namespace CoreLib
                             Console.WriteLine("Splitting On MUSTREACH");*/
                         foreach (var vc in attachedVCInv.Keys)
                         {
+                            if (attachedVCInv[vc].callSite.calleeName.Equals("main"))
+                                continue;
                             if (!di.VcExists(vc))
                             {
                                 toRemove.Add(vc);
@@ -1643,7 +1667,10 @@ namespace CoreLib
                                 }
                             }
                         }
-
+                        /*if (maxVc != null)
+                        {
+                            Console.WriteLine("Chosen split : " + attachedVCInv[maxVc].callSite.calleeName);
+                        }*/
                         if (maxVc != null)
                         {
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
@@ -1714,11 +1741,12 @@ namespace CoreLib
                             currentId = blockId;
                             
                             //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
-                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                            backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, decisionVc));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            prover.Assert(scs.callSiteExpr, false);
-                            blockedCallsites.Add(scs);
+                            prover.Assert(scs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(scs));
+                            //blockedCallsites.Add(scs);
+                            decisionVc = prover.VCExprGen.And(decisionVc, prover.VCExprGen.Not(scs.callSiteExpr));
                             //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
                             /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(maxVc);
                             if (disjointNodes.Count > 0)
@@ -1733,7 +1761,7 @@ namespace CoreLib
                                 Console.WriteLine("No Disjoint Nodes");
                             }*/
 
-                            foreach (StratifiedCallSite callsite in openCallSites)
+                            /*foreach (StratifiedCallSite callsite in openCallSites)
                             {
                                 StratifiedCallSite parentOfCs = callsite;
                                 while (parent.ContainsKey(parentOfCs))
@@ -1749,7 +1777,7 @@ namespace CoreLib
                                         break;
                                     }
                                 }
-                            }
+                            }*/
                             treesize = di.ComputeSize();
                             tt += (DateTime.Now - st);
                             if (writeLog)
@@ -1759,15 +1787,20 @@ namespace CoreLib
                             calltreeToSend = calltreeToSend + "BLOCK," + GetPersistentID(scs) + ",";                            
                         }
                     }
-                }
-
+                }                
                 numSplitThisIteration = 0;
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
-                ucore = null;
+                ucore = new List<string>();
                 boundHit = false;
                 // underapproximate query
                 //Console.WriteLine("Underapprox Begin");
+                List<StratifiedCallSite> parentOfOpenCallsites = new List<StratifiedCallSite>();
                 Push();
+                if (mainVC != null)
+                {
+                    decisionVar = mainVC.info.vcgen.CreateNewVar(Microsoft.Boogie.Type.Bool);
+                    prover.Assert(prover.VCExprGen.Eq(decisionVc, decisionVar), true, name: "dec_var");
+                }
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     //Console.WriteLine(GetPersistentID(cs));
@@ -1782,14 +1815,49 @@ namespace CoreLib
                     // Non-uniform unfolding
                     else if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                         Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
-                    else if (!unreachableOpenCallsites.Contains(cs))
-                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                    //else if (!unreachableOpenCallsites.Contains(cs))
+                    else
+                    {
+                        //if (parent.ContainsKey(cs) && previousSplitSites.Count > 0)
+                        if (parent.ContainsKey(cs))
+                        {
+                            StratifiedCallSite parentCs = parent[cs];
+                            if (!parentOfOpenCallsites.Contains(parentCs))
+                                parentOfOpenCallsites.Add(parentCs);
+                            StratifiedVC parentVC = attachedVC[parentCs];
+                            var vcgen = parentVC.info.vcgen;
+                            var gen = vcgen.prover.VCExprGen;
+
+                            //var assertVC = gen.Implies(gen.Not(parentCs.callSiteExpr), cs.callSiteExpr);
+                            //var assertVC = gen.Implies(gen.Not(parentCs.callSiteExpr), gen.Not(cs.callSiteExpr));
+                            VCExpr assertVC;
+                            if (decisionVar != null)
+                                assertVC = gen.Implies(gen.And(decisionVar, parentCs.callSiteExpr), gen.Not(cs.callSiteExpr));
+                            else
+                                assertVC = gen.Implies(parentCs.callSiteExpr, gen.Not(cs.callSiteExpr));
+                            //var assertVC = gen.Implies(parentCs.callSiteExpr, cs.callSiteExpr);
+                            //prover.Assert(assertVC, true, name: "label_Implies_" + GetPersistentID(cs));
+                            //if (decisionVar != null)
+                            //    assertVC = prover.VCExprGen.And(assertVC, decisionVar);
+                            prover.Assert(assertVC, true, name: "label_" + GetPersistentID(cs));
+                            //prover.Assert(assertVC, true);
+                            //prover.Assert(parentCs.callSiteExpr, true);
+                            //prover.Assert(cs.callSiteExpr, true, name: "label_open_" + GetPersistentID(cs));
+                        }
+                        else
+                            prover.Assert(cs.callSiteExpr, false, name: "label_" + GetPersistentID(cs));
+                    }
                     //else
                     //    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-
+                    
                     //continue;
 
                 }
+                /*foreach (StratifiedCallSite cs in parentOfOpenCallsites)
+                {
+                    if(!previousSplitSites.Contains(GetPersistentID(cs)))
+                        prover.Assert(cs.callSiteExpr, true, name: "label_inlined_" + GetPersistentID(cs));
+                }*/
                 //Console.WriteLine("Underapprox end");
                 reporter.reportTrace = true;
                 if (writeLog)
@@ -1819,6 +1887,7 @@ namespace CoreLib
                     if (!isAnyCallsiteOverapproximated)
                         break; // done (error found)
                     */
+                    //Console.WriteLine("Client" + clientID + " Underapprox Query : NOK");
                     break; // done (error found)
                 }
                 
@@ -1827,6 +1896,14 @@ namespace CoreLib
                 if (outcome == Outcome.Correct)
                 {
                     ucore = prover.UnsatCore();
+                    //Console.WriteLine("Client" + clientID + " UNSAT CORE:");
+                    /*if (ucore != null)
+                    {
+                        foreach (string s in ucore)
+                            Console.WriteLine(clientID + " : " + s);
+                    }
+                    else
+                        Console.WriteLine("EMPTY");*/
                 }
                 if (writeLog)
                     Console.WriteLine("point 2");
@@ -1848,15 +1925,15 @@ namespace CoreLib
                             HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
                             foreach (StratifiedCallSite scs in openCallSites2)
                             {
-                                if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                                if (ucore.Contains("label_" + GetPersistentID(scs)))
                                 {
                                     numUWInlinings++;
                                     calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
 
                                     openCallSites.Remove(scs);
                                     StratifiedVC svc = null;
-                                    /*Console.WriteLine("UW INLINING : " + GetPersistentID(scs));
-                                    if (unreachableOpenCallsites.Contains(scs))
+                                    //Console.WriteLine(clientID + " : UW INLINING : " + GetPersistentID(scs));
+                                    /*if (unreachableOpenCallsites.Contains(scs))
                                     {
                                         Console.WriteLine("UW Inlining Unreachable Callsite : " + GetPersistentID(scs));
                                         Console.ReadLine();
@@ -1864,7 +1941,7 @@ namespace CoreLib
                                     //if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
                                     //    svc = Expand(scs);
                                     //else
-                                        svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                        svc = Expand(scs, "inlined_" + GetPersistentID(scs), true, true);
                                     if (svc != null)
                                     {
                                         openCallSites.UnionWith(svc.CallSites);
@@ -1874,7 +1951,7 @@ namespace CoreLib
                             }
                             foreach (StratifiedCallSite cs in attachedVC.Keys)
                             {
-                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                if (ucore.Contains("label_" + GetPersistentID(cs)))
                                 {
                                     CallSitesInUCore.Add(cs);
                                 }
@@ -2051,29 +2128,31 @@ namespace CoreLib
 
                         //topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
                         topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend,
-                            ref blockedCallsites, ref unreachableOpenCallsites);
+                            ref decisionVc);
                         //timeGraph.Pop(npops - 1);
 
                         // flip the decision
 
                         Push();
                         //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
-                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                        backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, decisionVc));
 
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
                             // Block
-                            prover.Assert(topDecision.cs.callSiteExpr, false);
+                            StratifiedCallSite cs = topDecision.cs;
+                            prover.Assert(topDecision.cs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(topDecision.cs));
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             treesize = di.ComputeSize();
-                            StratifiedCallSite scs = topDecision.cs;
-
-                            blockedCallsites.Add(scs);
-                            //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
+                            decisionVc = prover.VCExprGen.And(decisionVc, prover.VCExprGen.Not(cs.callSiteExpr));
                             
-                            foreach (StratifiedCallSite callsite in openCallSites)
+
+                            //blockedCallsites.Add(scs);
+                            //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
+
+                            /*foreach (StratifiedCallSite callsite in openCallSites)
                             {
                                 StratifiedCallSite parentOfCs = callsite;
                                 while (parent.ContainsKey(parentOfCs))
@@ -2089,19 +2168,21 @@ namespace CoreLib
                                         break;
                                     }
                                 }
-                            }
+                            }*/
                         }
                         else
                         {
                             // Must Reach
+                            StratifiedCallSite cs = topDecision.cs;
                             decisions.Push(new Decision(DecisionType.MUST_REACH, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(
                                AssertMustReach(attachedVC[topDecision.cs], PrevAsserted()));
+                            //prover.Assert(topDecision.cs.callSiteExpr, true);
                             treesize = di.ComputeSize();
+                            decisionVc = prover.VCExprGen.And(decisionVc, cs.callSiteExpr);
                             
-                            StratifiedCallSite cs = topDecision.cs;
-                            HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
+                            /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
                             if (disjointNodes.Count > 0)
                             {
                                 foreach (StratifiedVC v in disjointNodes)
@@ -2125,7 +2206,7 @@ namespace CoreLib
                                         break;
                                     }
                                 }
-                            }
+                            }*/
                             
                         }
                     }
@@ -2737,18 +2818,52 @@ namespace CoreLib
             } while (true);
         }
 
+        VCExpr binaryXOR (VCExpr v1, VCExpr v2)
+        {
+            VCExpr t1 = prover.VCExprGen.And(v1, prover.VCExprGen.Not(v2));
+            VCExpr t2 = prover.VCExprGen.And(v2, prover.VCExprGen.Not(v1));
+            return prover.VCExprGen.Or(t1, t2);
+        }
+
         // Assert that we must reach this VC; returns the list of call sites asserted
         public List<Tuple<StratifiedVC, Block>> AssertMustReach(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
         {
             var ret = new List<Tuple<StratifiedVC, Block>>();
-
+            string label = "none";
+            StratifiedCallSite cs;
+            if (attachedVCInv.ContainsKey(svc))
+            {
+                cs = attachedVCInv[svc];
+                label = GetPersistentID(cs);
+            }
+            /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(svc);
+            if (disjointNodes.Count > 0)
+            {
+                foreach (StratifiedVC v in disjointNodes)
+                {
+                    string xorlabel = GetPersistentID(attachedVCInv[svc]) + "_XOR_" + GetPersistentID(attachedVCInv[v]);
+                    prover.Assert(binaryXOR(attachedVCInv[svc].callSiteExpr, attachedVCInv[v].callSiteExpr), true, name: xorlabel);
+                    Console.WriteLine(clientID + " : Assert " + xorlabel);
+                    foreach (StratifiedCallSite scs in parent.Keys)
+                    {
+                        if (parent[scs] == attachedVCInv[v])
+                        {
+                            xorlabel = GetPersistentID(attachedVCInv[svc]) + "_XOR_" + GetPersistentID(scs);
+                            prover.Assert(binaryXOR(attachedVCInv[svc].callSiteExpr, scs.callSiteExpr), true, name: xorlabel);
+                            Console.WriteLine(clientID + " : Assert " + xorlabel);
+                        }
+                    }
+                    
+                }
+            }*/
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true, name: "MUSTREACH_0_" + label);
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
 
-            var iter = attachedVCInv[svc]; 
+            var iter = attachedVCInv[svc];
+            int i = 1;
             while (parent.ContainsKey(iter))
             {
                 var vc = attachedVC[parent[iter]];
@@ -2757,13 +2872,44 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true);
+                    prover.Assert(vc.MustReach(callblock), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+                    i++;
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+            i++;
             return ret;
+        }
+
+        public VCExpr getMustReachVc(StratifiedVC svc, HashSet<Tuple<StratifiedVC, Block>> prevAsserted)
+        {
+            VCExpr d = VCExpressionGenerator.True;
+            d = prover.VCExprGen.And(d, svc.MustReach(svc.info.impl.Blocks[0]));
+            if (!attachedVCInv.ContainsKey(svc))
+                return d;
+
+            var iter = attachedVCInv[svc];
+            while (parent.ContainsKey(iter))
+            {
+                var vc = attachedVC[parent[iter]];
+                var callblock = vc.callSites.First(tup => tup.Value.Contains(iter)).Key;
+
+                var key = Tuple.Create(vc, callblock);
+                if (prevAsserted != null && !prevAsserted.Contains(key))
+                {
+                    d = prover.VCExprGen.And(d, vc.MustReach(callblock));
+                    //prover.Assert(vc.MustReach(callblock), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+                    //ret.Add(key);
+                }
+                iter = parent[iter];
+            }
+            //prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+            //i++;
+            //return ret;
+            d = prover.VCExprGen.And(d, mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key));
+            return d;
         }
 
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
@@ -3188,6 +3334,8 @@ namespace CoreLib
             Dictionary<string, StratifiedCallSite> persistentIDToCallsiteMap = new Dictionary<string, StratifiedCallSite>();
             HashSet<StratifiedCallSite> blockedCallsites = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> unreachableOpenCallsites = new HashSet<StratifiedCallSite>();
+            VCExpr decisionVC = VCExpressionGenerator.True;
+            //var decisionVar = mainVC.info.vcgen.CreateNewVar(Microsoft.Boogie.Type.Bool);
             var PrevAsserted = new Func<HashSet<Tuple<StratifiedVC, Block>>>(() =>
             {
                 var ret = new HashSet<Tuple<StratifiedVC, Block>>();
@@ -3199,6 +3347,7 @@ namespace CoreLib
                 Console.WriteLine("Requesting ID");
             replyFromServer = sendRequestToServer("requestID", "What Is My ID");
             clientID = replyFromServer;
+            CommandLineOptions.Clo.ProverLogFilePath = "client" + clientID + "ProverLog.smt2";
             if (writeLog)
                 Console.WriteLine("Client ID is : " + clientID);
             if (writeLog)
@@ -3324,7 +3473,7 @@ namespace CoreLib
                         if (writeLog)
                             Console.WriteLine("Received Calltree:");
                         if (writeLog)
-                            Console.WriteLine("RECEIVED : " + receivedCalltree);
+                            Console.WriteLine(clientID + " : RECEIVED : " + receivedCalltree);
                     }
                     //Console.ReadLine();
                 }
@@ -3526,7 +3675,7 @@ namespace CoreLib
                                         //Console.ReadLine();
                                     }
                                     openCallSites.Remove(scs);
-                                    var vc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                                    var vc = Expand(scs, "inline_" + GetPersistentID(scs), true, true);
                                     if (vc != null)
                                     {
                                         openCallSites.UnionWith(vc.CallSites);
@@ -3541,13 +3690,14 @@ namespace CoreLib
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
                                     //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, decisionVC));
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false);
+                                    prover.Assert(cs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(cs));
                                     blockedCallsites.Add(cs);
-                                    foreach (StratifiedCallSite scs in openCallSites)
+                                    decisionVC = prover.VCExprGen.And(decisionVC, prover.VCExprGen.Not(cs.callSiteExpr));
+                                    /*foreach (StratifiedCallSite scs in openCallSites)
                                     {
                                         StratifiedCallSite parentOfCs = scs;
                                         while (parent.ContainsKey(parentOfCs))
@@ -3563,7 +3713,7 @@ namespace CoreLib
                                                 break;
                                             }
                                         }
-                                    }
+                                    }*/
                                     mode = 0;                                    
                                 }
                                 else //MUSTREACH callsite
@@ -3574,8 +3724,10 @@ namespace CoreLib
                                     Push();
                                     previousSplitSites.Add(callsiteToInline);
                                     //backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites));
-                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, blockedCallsites, unreachableOpenCallsites));
+                                    backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, decisionVC));
                                     decisions.Push(new Decision(DecisionType.MUST_REACH, 1, cs));
+                                    //decisionVC = prover.VCExprGen.And(decisionVC, getMustReachVc(attachedVC[cs], PrevAsserted()));
+                                    decisionVC = prover.VCExprGen.And(decisionVC, cs.callSiteExpr);
                                     //try
                                     {
                                         //applyDecisionToDI(DecisionType.MUST_REACH, attachedVC[cs]);
@@ -3586,8 +3738,9 @@ namespace CoreLib
                                     //    Console.ReadLine();
                                     //}
                                     prevMustAsserted.Push(AssertMustReach(attachedVC[cs], PrevAsserted()));
+                                    //prover.Assert(cs.callSiteExpr, true);
                                     
-                                    HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
+                                    /*HashSet<StratifiedVC> disjointNodes = di.DisjointNodes(attachedVC[cs]);
                                     if (disjointNodes.Count > 0)
                                     {
                                         foreach (StratifiedVC v in disjointNodes)
@@ -3611,7 +3764,7 @@ namespace CoreLib
                                                 break;
                                             }
                                         }
-                                    }
+                                    }*/
                                     
                                     //AssertMustReach(attachedVC[cs], new HashSet<Tuple<StratifiedVC, Block>>());
                                     mode = 0;
@@ -3653,9 +3806,10 @@ namespace CoreLib
                 {
                     try
                     {
+                        //prover.Assert(prover.VCExprGen.Eq(decisionVar, decisionVC), true);
                         //Console.WriteLine("running Hydra");
                         outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                            backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
+                            backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites, decisionVC);
                         //Console.WriteLine("Hydra Outcome: " + outcome.ToString());
                     }
                     catch(Exception e)
@@ -3668,13 +3822,15 @@ namespace CoreLib
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
+                    //prover.Assert(prover.VCExprGen.Eq(decisionVar, decisionVC), true);
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
+                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites, decisionVC);
                 }
                 else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel3" && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
+                    //prover.Assert(prover.VCExprGen.Eq(decisionVar, decisionVC), true);
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
-                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites);
+                        backtrackingPoints, decisions, blockedCallsites, unreachableOpenCallsites, decisionVC);
                 }
                 else
                 {                    
@@ -3846,6 +4002,13 @@ namespace CoreLib
                 attachedVCInv[svc] = scs;
                 //TestMustReach(svc);
                 ret = svc;
+                if (svc.blockToControlVar != null)
+                {
+                    VCExpr cv = svc.blockToControlVar[svc.info.impl.Blocks[0]];
+                    StratifiedVC parentVC = attachedVC[parent[scs]];
+                    VCExpr pv = parentVC.blockToControlVar[parentVC.callSites.First(tup => tup.Value.Contains(scs)).Key];
+                    prover.Assert(prover.VCExprGen.Implies(prover.VCExprGen.Not(pv), prover.VCExprGen.Not(cv)), true);
+                }
             }
             else
             {

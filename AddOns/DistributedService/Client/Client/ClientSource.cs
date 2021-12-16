@@ -305,12 +305,12 @@ namespace ClientSource
             for (int i = 0; i < maxClients; i++)
             {
                 //System.Threading.Tasks.Task.Factory.StartNew(() => runClient());
-                runCorral(fileToRun);
+                runCorral(fileToRun, i);
                 //runCorral(fileName);
             }
         }
 
-        static void runCorral(string fileName)
+        static void runCorral(string fileName, int clientNum)
         {
             //corralExecutablePath = Directory.GetCurrentDirectory();
             //corralExecutablePath = corralExecutablePath.Substring(0, corralExecutablePath.Length-75);
@@ -318,6 +318,7 @@ namespace ClientSource
             //Console.WriteLine(corralExecutablePath);
             //Console.ReadLine();
             //Config configuration = new Config();
+            //configuration.hydraArguments = configuration.hydraArguments + " /proverLog:clietNum" + clientNum + ".smt2";
             Process p = new Process();
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
