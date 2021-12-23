@@ -1941,7 +1941,7 @@ namespace CoreLib
                                     //if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
                                     //    svc = Expand(scs);
                                     //else
-                                        svc = Expand(scs, "inlined_" + GetPersistentID(scs), true, true);
+                                        svc = Expand(scs, null, true, true);
                                     if (svc != null)
                                     {
                                         openCallSites.UnionWith(svc.CallSites);
@@ -3675,7 +3675,7 @@ namespace CoreLib
                                         //Console.ReadLine();
                                     }
                                     openCallSites.Remove(scs);
-                                    var vc = Expand(scs, "inline_" + GetPersistentID(scs), true, true);
+                                    var vc = Expand(scs, null, true, true);
                                     if (vc != null)
                                     {
                                         openCallSites.UnionWith(vc.CallSites);
