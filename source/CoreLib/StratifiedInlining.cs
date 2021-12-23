@@ -1744,7 +1744,7 @@ namespace CoreLib
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend, decisionVc));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs));
-                            prover.Assert(scs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(scs));
+                            prover.Assert(scs.callSiteExpr, false);
                             //blockedCallsites.Add(scs);
                             decisionVc = prover.VCExprGen.And(decisionVc, prover.VCExprGen.Not(scs.callSiteExpr));
                             //Console.WriteLine("BLOCK : " + GetPersistentID(scs));
@@ -1799,7 +1799,7 @@ namespace CoreLib
                 if (mainVC != null)
                 {
                     decisionVar = mainVC.info.vcgen.CreateNewVar(Microsoft.Boogie.Type.Bool);
-                    prover.Assert(prover.VCExprGen.Eq(decisionVc, decisionVar), true, name: "dec_var");
+                    prover.Assert(prover.VCExprGen.Eq(decisionVc, decisionVar), true);
                 }
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
@@ -2141,7 +2141,7 @@ namespace CoreLib
                         {
                             // Block
                             StratifiedCallSite cs = topDecision.cs;
-                            prover.Assert(topDecision.cs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(topDecision.cs));
+                            prover.Assert(topDecision.cs.callSiteExpr, false);
                             decisions.Push(new Decision(DecisionType.BLOCK, 1, topDecision.cs));
                             //applyDecisionToDI(DecisionType.BLOCK, attachedVC[topDecision.cs]);
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
@@ -2857,7 +2857,7 @@ namespace CoreLib
                 }
             }*/
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true, name: "MUSTREACH_0_" + label);
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -2872,13 +2872,13 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+                    prover.Assert(vc.MustReach(callblock), true);
                     i++;
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true, name: "MUSTREACH_" + i.ToString() + "_" + label);
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
             i++;
             return ret;
         }
@@ -3694,7 +3694,7 @@ namespace CoreLib
                                     prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                                     decisions.Push(new Decision(DecisionType.BLOCK, 1, cs));
                                     //applyDecisionToDI(DecisionType.BLOCK, attachedVC[cs]);
-                                    prover.Assert(cs.callSiteExpr, false, name: "BLOCK_" + GetPersistentID(cs));
+                                    prover.Assert(cs.callSiteExpr, false);
                                     blockedCallsites.Add(cs);
                                     decisionVC = prover.VCExprGen.And(decisionVC, prover.VCExprGen.Not(cs.callSiteExpr));
                                     /*foreach (StratifiedCallSite scs in openCallSites)
