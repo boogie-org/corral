@@ -1796,11 +1796,11 @@ namespace CoreLib
                 //Console.WriteLine("Underapprox Begin");
                 List<StratifiedCallSite> parentOfOpenCallsites = new List<StratifiedCallSite>();
                 Push();
-                if (mainVC != null)
+                /*if (mainVC != null)
                 {
                     decisionVar = mainVC.info.vcgen.CreateNewVar(Microsoft.Boogie.Type.Bool);
                     prover.Assert(prover.VCExprGen.Eq(decisionVc, decisionVar), true);
-                }
+                }*/
                 foreach (StratifiedCallSite cs in openCallSites)
                 {
                     //Console.WriteLine(GetPersistentID(cs));
@@ -1832,7 +1832,7 @@ namespace CoreLib
                             //var assertVC = gen.Implies(gen.Not(parentCs.callSiteExpr), gen.Not(cs.callSiteExpr));
                             VCExpr assertVC;
                             if (decisionVar != null)
-                                assertVC = gen.Implies(gen.And(decisionVar, parentCs.callSiteExpr), gen.Not(cs.callSiteExpr));
+                                assertVC = gen.Implies(gen.And(decisionVc, parentCs.callSiteExpr), gen.Not(cs.callSiteExpr));
                             else
                                 assertVC = gen.Implies(parentCs.callSiteExpr, gen.Not(cs.callSiteExpr));
                             //var assertVC = gen.Implies(parentCs.callSiteExpr, cs.callSiteExpr);
@@ -1965,6 +1965,7 @@ namespace CoreLib
                 }
                 else
                 {
+                    //Push();
                     foreach (StratifiedCallSite cs in openCallSites)
                     {
                         // Stop if we've reached the recursion bound or
@@ -3490,8 +3491,15 @@ namespace CoreLib
                 unreachableOpenCallsites.Clear();
                 //prover.Reset(prover.VCExprGen);
                 //prover.FullReset(prover.VCExprGen);
+               
                 while (stats.stacksize > 1)
+                {
+                    //Console.WriteLine("STACKSIZE" + stats.stacksize);
                     Pop();
+                }                
+                //prover.FullReset(prover.VCExprGen);
+                //VCExpressionGenerator vcgen = new VCExpressionGenerator();
+
                 procsHitRecBound = new HashSet<string>();
 
                 // Find all procedures that are "forced inline"
@@ -3523,6 +3531,7 @@ namespace CoreLib
 
                 StratifiedVC svc = new StratifiedVC(implName2StratifiedInliningInfo[impl.Name], implementations);
                 mainVC = svc;
+                
                 di.RegisterMain(svc);
                 HashSet<StratifiedCallSite> openCallSites = new HashSet<StratifiedCallSite>(svc.CallSites);
                 prover.Assert(svc.vcexpr, true);
@@ -3863,7 +3872,7 @@ namespace CoreLib
                     }
                 }
 
-                Pop();
+                //Pop();
 
                 if (BoogieVerify.options.extraFlags.Contains("DiCheckSanity"))
                     di.CheckSanity();
