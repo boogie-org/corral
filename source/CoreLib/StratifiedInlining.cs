@@ -1839,13 +1839,14 @@ namespace CoreLib
                             //prover.Assert(assertVC, true, name: "label_Implies_" + GetPersistentID(cs));
                             //if (decisionVar != null)
                             //    assertVC = prover.VCExprGen.And(assertVC, decisionVar);
-                            prover.Assert(assertVC, true, name: "label_" + GetPersistentID(cs));
+                            //prover.Assert(assertVC, true, name: "label_" + GetPersistentID(cs));
+                            prover.Assert(assertVC, true, name: "label_" + cs.callSiteExpr.ToString());
                             //prover.Assert(assertVC, true);
                             //prover.Assert(parentCs.callSiteExpr, true);
                             //prover.Assert(cs.callSiteExpr, true, name: "label_open_" + GetPersistentID(cs));
                         }
                         else
-                            prover.Assert(cs.callSiteExpr, false, name: "label_" + GetPersistentID(cs));
+                            prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
                     }
                     //else
                     //    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
@@ -1925,7 +1926,7 @@ namespace CoreLib
                             HashSet<StratifiedCallSite> openCallSites2 = new HashSet<StratifiedCallSite>(openCallSites);
                             foreach (StratifiedCallSite scs in openCallSites2)
                             {
-                                if (ucore.Contains("label_" + GetPersistentID(scs)))
+                                if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
                                 {
                                     numUWInlinings++;
                                     calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1951,7 +1952,7 @@ namespace CoreLib
                             }
                             foreach (StratifiedCallSite cs in attachedVC.Keys)
                             {
-                                if (ucore.Contains("label_" + GetPersistentID(cs)))
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
                                 {
                                     CallSitesInUCore.Add(cs);
                                 }
