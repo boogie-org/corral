@@ -1839,7 +1839,7 @@ namespace CoreLib
                 prevDag = di.GetDag();
             }
             #endregion
-            
+            Console.WriteLine("Total queries: " + stats.calls);
             return outcome;
         }
 
