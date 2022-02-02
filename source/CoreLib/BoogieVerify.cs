@@ -15,6 +15,7 @@ namespace cba.Util
     public static class CorralConfig
     {
         public static int alphaInterleaving = 100;
+        public static bool newConstraints = false;
     }
     public static class BoogieVerify
     {

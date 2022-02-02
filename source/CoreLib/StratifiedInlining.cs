@@ -1235,7 +1235,20 @@ namespace CoreLib
                         if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                             Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
 
-                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                        if (cba.Util.CorralConfig.newConstraints)
+                        {
+                            if (parent.ContainsKey(cs))
+                            {
+                                VCExpressionGenerator gen = prover.VCExprGen;
+                                StratifiedCallSite parentOfCs = parent[cs];
+                                VCExpr assertVC = gen.Implies(parentOfCs.callSiteExpr, gen.Not(cs.callSiteExpr));
+                                prover.Assert(assertVC, true, name: "label_" + cs.callSiteExpr.ToString());
+                            }
+                            else
+                                prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                        }
+                        else
+                            prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
                         //Console.WriteLine("Asserting Labels : " + GetPersistentID(cs));
                         //assertedLabels = true;
                         continue;
