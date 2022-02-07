@@ -14,6 +14,7 @@ using Microsoft.Boogie.SMTLib;
 using System.Net.Http;
 using Newtonsoft.Json;
 using System.Threading;
+using System.IO;
 //using LocalServerInCsharp;
 
 namespace CoreLib
@@ -1330,7 +1331,8 @@ namespace CoreLib
                             //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => Spliiting due to client waiting");
                         }
                     }
-                }else if (splitMode == 100)
+                }
+                else if (splitMode == 100)
                 {
                     // Added new heuristic for splitting for UW
                     // split if alpha number of callsites are inlined or if any client is waiting
@@ -1403,9 +1405,10 @@ namespace CoreLib
             int aggressiveSplitQueryBound = 5;
             int callsitesInlinedCurrentPartition = 0;
             bool staticAlphaListMode = false;
+            bool firstQuery = true;
             List<int> staticAlphaList = new List<int>();
             VCExpr decisionVar = null;
-            
+                        
             //Console.WriteLine("SPLITMODE : " + splitMode);
             //Console.WriteLine("Client " + (Int32.Parse(clientID)-1) + " Using " + splitMode);
             if (cba.Util.HydraConfig.staticAlphaListMode)
@@ -1674,7 +1677,8 @@ namespace CoreLib
                         if (maxVc != null)
                         {
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
-
+                            string splitWrite = "1\n";
+                            File.AppendAllText("numSplits.txt", splitWrite);
                             toRemove.Iter(vc => attachedVCInv.Remove(vc));
                             UCsplit += 1;
                             StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -1819,7 +1823,7 @@ namespace CoreLib
                     else
                     {
                         //if (parent.ContainsKey(cs) && previousSplitSites.Count > 0)
-                        if (parent.ContainsKey(cs))
+                        if (parent.ContainsKey(cs) && cba.Util.HydraConfig.newConstraints)
                         {
                             StratifiedCallSite parentCs = parent[cs];
                             if (!parentOfOpenCallsites.Contains(parentCs))
@@ -1865,7 +1869,13 @@ namespace CoreLib
                     Console.WriteLine("point 0.1");
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
-                Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                //if (firstQuery)
+                {
+                    Console.WriteLine("UNDERAPPROX QUERY TIME_" + clientID + " = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                    string writeTime = (DateTime.Now - uqStartTime).TotalSeconds.ToString() + "\n";
+                    File.AppendAllText("queryTime.txt", writeTime);
+                    firstQuery = false;
+                }
                 if (writeLog)
                     Console.WriteLine("point 0.2");
 
@@ -1950,6 +1960,7 @@ namespace CoreLib
                                     }
                                 }
                             }
+                            //Console.WriteLine("UWINLININGS : " + numUWInlinings);
                             foreach (StratifiedCallSite cs in attachedVC.Keys)
                             {
                                 if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
@@ -1962,7 +1973,9 @@ namespace CoreLib
                     callsitesInlinedCurrentPartition += numUWInlinings;
                     if (numUWInlinings == 0)
                         isDone = true;
-                    //Console.WriteLine("UWInlinings : " + numUWInlinings);
+                    //Console.WriteLine("UWInlinings_" + clientID + " : " + numUWInlinings);
+                    string writeInlinings = numUWInlinings.ToString() + "\n";
+                    File.AppendAllText("numInlinings.txt", writeInlinings);
                 }
                 else
                 {
@@ -2046,7 +2059,7 @@ namespace CoreLib
                 if (isDone)
                 {
                     //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => LOOP outcome: " + outcome.ToString() + " & reachbound = " + reachedBound.ToString());
-
+                    Console.WriteLine("Client_" + clientID + " DONE");
                     if (outcome == Outcome.ReachedBound || (reachedBound && outcome == Outcome.Correct))
                     {
                         replyFromServer = sendRequestToServer("ReachedBound", clientID);
@@ -3634,6 +3647,7 @@ namespace CoreLib
                 if (receivedCalltree != null)
                 {
                     //Console.WriteLine(receivedCalltree);
+                    int setupInlinings = 0;
                     calltreeToSend = receivedCalltree;
                     string callsiteToInline = "";
                     int mode = 0;
@@ -3690,6 +3704,7 @@ namespace CoreLib
                                     {
                                         openCallSites.UnionWith(vc.CallSites);
                                         Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                                        setupInlinings++;
                                     }
                                 }
                                 else if (mode == 1) //BLOCK callsite
@@ -3786,6 +3801,7 @@ namespace CoreLib
                         else
                             callsiteToInline = callsiteToInline + receivedCalltree[i];
                     }
+                    Console.WriteLine("SetupInlinings : " + setupInlinings);
                     if (makeTimeGraph)
                     {
                         timeGraph.startTime = DateTime.Now;

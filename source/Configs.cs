@@ -577,6 +577,10 @@ namespace cba
             {
                 cba.Util.HydraConfig.runPortfolio = true;
             }
+            else if (flag.StartsWith("/newConstraints"))
+            {
+                cba.Util.HydraConfig.newConstraints = true;
+            }
             else if (flag.StartsWith("/maxSplitPerIteration:"))
             {
                 var split = flag.Split(sep);
