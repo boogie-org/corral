@@ -124,6 +124,8 @@ namespace LocalServerInCsharp
         public static int lastAlgoCompleted = -1;
         public static Queue<HttpListenerContext> requestQueue = new Queue<HttpListenerContext>();
         public static bool clientReplyCrash = false;
+        public static List<string> timePerQuery;
+        public static List<string> inliningsPerQuery;
         static void Main(string[] args)
         {
             //Config configuration = new Config();
@@ -376,6 +378,8 @@ namespace LocalServerInCsharp
                         replyYesOrNoForSplitNow(context, msgContent["SplitNow"]);
                     else if (msgContent.ContainsKey("ReachedBound"))
                         handleReachedBound(context, msgContent["ReachedBound"]);
+                    else if (msgContent.ContainsKey("queryStat"))
+                        recordQueryStat(context, msgContent["queryStat"]);
                     //else if (msgContent.ContainsKey("calltree"))
                     //    addCalltree(context, msgContent["calltree"]);
                     else if (msgContent.ContainsKey("TimeGraph"))
@@ -578,7 +582,7 @@ namespace LocalServerInCsharp
             }
             //Console.WriteLine("Break loop");
             //return;
-        }
+        }        
 
         static void distributeClients()
         {
@@ -594,6 +598,8 @@ namespace LocalServerInCsharp
             isJobCompleted = new List<bool>();
             totalTime = new List<double>();
             askForResetTime = new List<bool>();
+            timePerQuery = new List<string>();
+            inliningsPerQuery = new List<string>();
             bestAlgo = -1;
             lastAlgoCompleted = -1;
 
@@ -900,6 +906,8 @@ namespace LocalServerInCsharp
             Array.Clear(clientNumForwardPops, 0, maxClients);
             Array.Clear(clientNumBackwardPops, 0, maxClients);
             Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
+            timePerQuery.Clear();
+            inliningsPerQuery.Clear();
             numSplitsOr = 0;
             numSplitsAnd = 0;
             orList.Clear();
@@ -1141,7 +1149,17 @@ namespace LocalServerInCsharp
                 if (err)
                     handleClientCrash();
             }
-        }        
+        }
+
+        static void recordQueryStat(HttpListenerContext context, string msg)
+        {
+            string[] parse = msg.Split(',');
+            timePerQuery.Add(parse[0]);
+            inliningsPerQuery.Add(parse[1]);
+            bool err = ResponseHttp(context, "OK");
+            if (err)
+                handleClientCrash();
+        }
 
         static void killRedundantClients(HttpListenerContext context, string msg)
         {
@@ -1959,6 +1977,21 @@ namespace LocalServerInCsharp
         public static void writeDetailedOutcome(bool timedOut)
         {
             string outFile = workingFile + ".txt";
+            string writeTimePerQuery = workingFile + ".time.txt";
+            string writeInliningsPerQuery = workingFile + ".inlinings.txt";
+            
+            if (timePerQuery.Count > 0)
+            {
+                foreach (string str in timePerQuery)
+                    File.AppendAllText(writeTimePerQuery, str + "\n");
+            }
+            
+            if (inliningsPerQuery.Count > 0)
+            {
+                foreach (string str in inliningsPerQuery)
+                    File.AppendAllText(writeInliningsPerQuery, str + "\n");
+            }
+            
             string toWrite;
             bool allTimedOut = timedOut;
             if (waitForBetterResult)

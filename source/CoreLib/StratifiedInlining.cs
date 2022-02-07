@@ -1677,8 +1677,8 @@ namespace CoreLib
                         if (maxVc != null)
                         {
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
-                            string splitWrite = "1\n";
-                            File.AppendAllText("numSplits.txt", splitWrite);
+                            //string splitWrite = "1\n";
+                            //File.AppendAllText("numSplits.txt", splitWrite);
                             toRemove.Iter(vc => attachedVCInv.Remove(vc));
                             UCsplit += 1;
                             StratifiedCallSite scs = attachedVCInv[maxVc];
@@ -1869,13 +1869,14 @@ namespace CoreLib
                     Console.WriteLine("point 0.1");
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
-                //if (firstQuery)
+                string writeTime = (DateTime.Now - uqStartTime).TotalSeconds.ToString();
+                /*if (firstQuery)
                 {
                     Console.WriteLine("UNDERAPPROX QUERY TIME_" + clientID + " = " + (DateTime.Now - uqStartTime).TotalSeconds);
                     string writeTime = (DateTime.Now - uqStartTime).TotalSeconds.ToString() + "\n";
                     File.AppendAllText("queryTime.txt", writeTime);
                     firstQuery = false;
-                }
+                }*/
                 if (writeLog)
                     Console.WriteLine("point 0.2");
 
@@ -1973,9 +1974,11 @@ namespace CoreLib
                     callsitesInlinedCurrentPartition += numUWInlinings;
                     if (numUWInlinings == 0)
                         isDone = true;
+                    string queryStat = writeTime + "," + numUWInlinings.ToString();
+                    string discardReply = sendRequestToServer("queryStat", queryStat);
                     //Console.WriteLine("UWInlinings_" + clientID + " : " + numUWInlinings);
-                    string writeInlinings = numUWInlinings.ToString() + "\n";
-                    File.AppendAllText("numInlinings.txt", writeInlinings);
+                    //string writeInlinings = numUWInlinings.ToString() + "\n";
+                    //File.AppendAllText("numInlinings.txt", writeInlinings);
                 }
                 else
                 {
@@ -2059,7 +2062,7 @@ namespace CoreLib
                 if (isDone)
                 {
                     //Console.WriteLine((Int16.Parse(clientID) - 1).ToString() + " => LOOP outcome: " + outcome.ToString() + " & reachbound = " + reachedBound.ToString());
-                    Console.WriteLine("Client_" + clientID + " DONE");
+                    //Console.WriteLine("Client_" + clientID + " DONE");
                     if (outcome == Outcome.ReachedBound || (reachedBound && outcome == Outcome.Correct))
                     {
                         replyFromServer = sendRequestToServer("ReachedBound", clientID);
@@ -3801,7 +3804,7 @@ namespace CoreLib
                         else
                             callsiteToInline = callsiteToInline + receivedCalltree[i];
                     }
-                    Console.WriteLine("SetupInlinings : " + setupInlinings);
+                    //Console.WriteLine("SetupInlinings : " + setupInlinings);
                     if (makeTimeGraph)
                     {
                         timeGraph.startTime = DateTime.Now;
