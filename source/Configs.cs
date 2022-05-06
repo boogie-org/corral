@@ -468,15 +468,11 @@ namespace cba
                 var split = flag.Split(sep);
                 recursionBound = Int32.Parse(split[1]);
             }
-            else if (flag.StartsWith("/alphaInterleaving:"))
+            else if (flag.StartsWith("/underWidenSI"))
             {
-                var split = flag.Split(sep);
-                cba.Util.CorralConfig.alphaInterleaving = Int32.Parse(split[1]);
+                cba.Util.CorralConfig.underWidenSI = true;
             }
-            else if (flag.StartsWith("/newConstraints"))
-            {
-                cba.Util.CorralConfig.newConstraints = true;
-            }
+            
             else if (flag.StartsWith("/timeLimit:"))
             {
                 var split = flag.Split(sep);

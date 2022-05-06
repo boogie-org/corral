@@ -1185,8 +1185,7 @@ namespace CoreLib
         {
 
             List<string> ucore = new List<string>();
-            Random random = new Random();
-            int toggle = cba.Util.CorralConfig.alphaInterleaving;
+            bool underWidenSI = cba.Util.CorralConfig.underWidenSI;
             Outcome outcome = Outcome.Inconclusive;
             DateTime qStartTime;
             ForceInline(openCallSites, recBound);
@@ -1209,8 +1208,8 @@ namespace CoreLib
                 {
                     return Outcome.ReachedBound;
                 }
-                int chooseMode = random.Next(0, 100);
-                if (chooseMode >= toggle)
+                
+                if (underWidenSI)
                 {
                     MacroSI.PRINT_DEBUG("  - underapprox");
                     boundHit = false;
@@ -1235,20 +1234,7 @@ namespace CoreLib
                         if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                             Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
 
-                        if (cba.Util.CorralConfig.newConstraints)
-                        {
-                            if (parent.ContainsKey(cs))
-                            {
-                                VCExpressionGenerator gen = prover.VCExprGen;
-                                StratifiedCallSite parentOfCs = parent[cs];
-                                VCExpr assertVC = gen.Implies(parentOfCs.callSiteExpr, gen.Not(cs.callSiteExpr));
-                                prover.Assert(assertVC, true, name: "label_" + cs.callSiteExpr.ToString());
-                            }
-                            else
-                                prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-                        }
-                        else
-                            prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
                         //Console.WriteLine("Asserting Labels : " + GetPersistentID(cs));
                         //assertedLabels = true;
                         continue;
@@ -1788,7 +1774,7 @@ namespace CoreLib
             {
                 outcome = MustReachSplitStyle(openCallSites, reporter);
             }
-            else if (cba.Util.CorralConfig.alphaInterleaving < 100)
+            else if (cba.Util.CorralConfig.underWidenSI)
             {
                 outcome = Fwd(openCallSites, reporter, true, CommandLineOptions.Clo.RecursionBound);
             }
