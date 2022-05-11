@@ -52,6 +52,8 @@ namespace AngelicVerifierNull
         public static string eeFilters = "";
         // Kill the process after these many seconds
         public static int killAfter = 0;
+        // if this is false, new AV is never run
+        public static bool tryNewAv = false;
         // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
         public static bool UseDuplicator
         { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
@@ -275,6 +277,9 @@ namespace AngelicVerifierNull
                 ResultsFile.WriteLine("Description,Src File,Line,Procedure,Fail Status,Trace Number"); // result file header
                 ResultsFile.Flush();
             }
+
+            if (args.Any(s => s == "/tryNewAv"))
+                Options.tryNewAv = true;
         }
 
 
@@ -463,7 +468,7 @@ namespace AngelicVerifierNull
                 List<Tuple<string, int, string>> eeSlicedSourceLines = null;
 
                 bool runOld;
-                if (AssertionLineBlockedCount.ContainsKey(failingAssert.Line) && AssertionLineBlockedCount[failingAssert.Line] > MAX_ASSERT_BLOCK_COUNT-2  && failingAssert.HasAttribute("valid_deref"))
+                if (AssertionLineBlockedCount.ContainsKey(failingAssert.Line) && AssertionLineBlockedCount[failingAssert.Line] > MAX_ASSERT_BLOCK_COUNT-2  && failingAssert.HasAttribute("valid_deref") && (Options.tryNewAv))
                 {
                     Console.WriteLine($"This assertion {failingAssert}, on line {failingAssert.Line} has been violated {MAX_ASSERT_BLOCK_COUNT}, so now new explain error will run");
                     runOld = false;
@@ -869,7 +874,7 @@ namespace AngelicVerifierNull
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
                 foreach (var block in impl.Blocks)
                     block.Cmds = new List<Cmd>(block.Cmds.Map(c => assertToAssume(c)));
-
+                    
             // Remove Ebasic
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
@@ -1295,6 +1300,7 @@ namespace AngelicVerifierNull
 
             // Add Boolean Vars for environment constraints
             var boolVarMap = AddBooleanVariables(program);
+            boolVarMap.Iter(x => Console.WriteLine("boolvarmap {0}, {1}", x.Key, x.Value));
 
             var prevTracked = corralState;
             var iter = 0;
@@ -1309,6 +1315,12 @@ namespace AngelicVerifierNull
                 try
                 {
                     cex = RunCorral(pprog, null, timeoutRelax);
+                    corralState.TrackedVariables.Iter(x => Console.WriteLine("tracked var {0}", x));
+                    corralState.TrackedVariables
+                .Where(tv => boolVarMap.ContainsKey(tv))
+                .Iter(tv => Console.WriteLine("bool map {0},{1}", tv, boolVarMap[tv]));
+                    Console.WriteLine("Printing tt{0}", iter);
+                    cba.PrintProgramPath.print(pprog, cex, "tt" + iter);
                 }
                 catch (Exception e)
                 {
@@ -1322,8 +1334,7 @@ namespace AngelicVerifierNull
                     break;
                 }
 
-                //Console.WriteLine("Printing tt{0}", iter);
-                //cba.PrintProgramPath.print(pprog, cex, "tt" + iter);
+
 
                 // Suppress the assertion from the error trace
                 SuppressAssertion(program, cex, ap);
@@ -1340,6 +1351,7 @@ namespace AngelicVerifierNull
                 .Iter(tv => ret.Add(boolVarMap[tv]));
             corralState = prevTracked;
 
+            Console.WriteLine("the return value of Relax Constraints {0}", ret);
             return ret;
         }
 
@@ -1699,6 +1711,10 @@ namespace AngelicVerifierNull
             }
 
             var substMap = new Dictionary<Variable, Expr>();
+            Console.WriteLine("this is the list of used variables in the found precondition : {0}", usedVarsCollector.usedVars.ToList());
+            Console.WriteLine("this is the list of the bound variables in the program:");
+            allocToBndVarAndTrigger.ToList().ForEach(x => Console.WriteLine("{0} : {1}", x.Key, x.Value));
+
             var forallPre = new List<Expr>();
             List<Variable> bvarList = new List<Variable>(); //only bound variables used in the expression
             usedVarsCollector.usedVars.Iter(x =>

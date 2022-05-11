@@ -1102,6 +1102,7 @@ namespace cba
                 BoogieVerify.setTimeOut(GlobalConfig.getTimeLeft());
 
                 Console.WriteLine("Verifying program while tracking: {0}", varsToKeep.Variables.Print());
+                Console.WriteLine("changed Made here");
 
                 //Stats.beginTime();
                 BoogieVerify.verificationTime = TimeSpan.Zero;
@@ -1580,6 +1581,8 @@ namespace cba
 
                 ProgTransformation.PersistentProgramIO.CheckMemoryPressure();
 
+                Log.WriteLine("change made here");
+                Log.WriteLine("this is the version {0}", VersionInfo());
                 if (!GlobalConfig.useLocalVariableAbstraction)
                     Log.WriteLine("Verifying program while tracking: {0}", refinementState.getVars().Variables.Print());
                 else

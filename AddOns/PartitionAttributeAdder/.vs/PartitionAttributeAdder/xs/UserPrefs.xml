@@ -2,7 +2,7 @@
   <MonoDevelop.Ide.ItemProperties.cba PreferredExecutionTarget="MonoDevelop.Default" />
   <MonoDevelop.Ide.Workbench ActiveDocument="PartitionAttributeAdder/Program.cs">
     <Files>
-      <File FileName="PartitionAttributeAdder/Program.cs" Line="83" Column="13" />
+      <File FileName="PartitionAttributeAdder/Program.cs" Line="83" Column="1" />
       <File FileName="../../source/Util/Visitor.cs" Line="25" Column="40" />
     </Files>
   </MonoDevelop.Ide.Workbench>

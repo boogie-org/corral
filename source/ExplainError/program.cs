@@ -365,7 +365,7 @@ namespace ExplainError
                         continue;
 
                     }
-                    Console.WriteLine("this assume was not filtered out");
+                    //Console.WriteLine("this assume was not filtered out");
                     numAssumes++; //this assume permitted by filter
                     if (skipAssumes.Contains(cmd) || branchJoinStack.Count > 0)
                     {
@@ -377,7 +377,7 @@ namespace ExplainError
                     if (conjunctCount++ > MAX_CONJUNCTS) throw new Exception("Aborting as there is a chance of StackOverflow");
                     if (conjunctCount % 100 == 0) Console.Write("{0},", conjunctCount);
                     //pre = Expr.And(((AssumeCmd)cmd).Expr, pre); //TODO: Boolean simplifications
-                    Console.WriteLine("expr for this added to pre");
+                    //Console.WriteLine("expr for this added to pre");
                     preL.Add(((AssumeCmd)cmd).Expr);
                     GetSupportVars(((AssumeCmd)cmd).Expr).Iter(x => supportVarsInPre.Add(x));
                 }
@@ -583,7 +583,7 @@ namespace ExplainError
                 }
                 else
                 {
-                    mc = TemplateRankAndTry(currImpl, currPre, e, filteredAtoms, out preDnf);
+                    mc = TemplateRankAndTry(currImpl, currPre, pre, e, filteredAtoms, out preDnf);
                 }
 
                 if (mc)
@@ -664,10 +664,76 @@ namespace ExplainError
             return l.Count > 0;
         }
 
-        private static bool TemplateRankAndTry(Implementation currImpl, Expr currPre, Expr e, HashSet<Expr> fe, out List<Expr> l)
+        private static Expr GetFailingAssertionExpr(List<Expr> pre)
+        {
+            pre.Reverse();
+            foreach(Expr e in pre) 
+            {
+                if (e.ToString().Contains("true")) continue;
+                else return e;
+            }
+            return null;
+        }
+
+        private static Expr GetTheExpressionOfTheStartPointerFromTheFailingAssert(Expr failingAssert)
+        {
+            //find the argument of the base() atom in the expression
+            //in that keep opening up the adds or subs and taking the first argument untill you arive at a load or a variable
+            // the following two can be the failing asserts, 
+            // we will first check which one is which
+            // ! $sle.ref.bool($base(inline$__SMACK_check_memory_safety$0$p), inline$__SMACK_check_memory_safety$0$p);
+            //! $sle.ref.bool($add.ref (inline$__SMACK_check_memory_safety$0$p, inline$__SMACK_check_memory_safety$0$size), $add.ref ($base(inline$__SMACK_check_memory_safety$0$p), $Size($base(inline$__SMACK_check_memory_safety$0$p))));
+
+            // first remove the not
+            var expr = failingAssert as NAryExpr;
+            expr = expr.Args.ElementAt(0) as NAryExpr;
+            Console.WriteLine("not removed {0}", expr);
+
+            // then remove the sle
+            var arg1 = expr.Args.ElementAt(0) as NAryExpr;
+            var arg2 = expr.Args.ElementAt(1) as NAryExpr;
+           
+
+            // check the function name of arg1
+            NAryExpr addExpression = null;
+
+            if(arg1.Fun.FunctionName.StartsWith("$base", StringComparison.Ordinal))
+            {
+                addExpression = arg1.Args.ElementAt(0) as NAryExpr; 
+            }
+            else
+            {
+                addExpression = (arg1.Args.ElementAt(0) as NAryExpr).Args.ElementAt(0) as NAryExpr;
+            }
+            Console.WriteLine("add expression {0}", addExpression);
+
+            // now recursively open untill there are no more adds or bitcasts and the expreession is load or a variable
+            while (addExpression.Fun.FunctionName.StartsWith("$add.ref", StringComparison.Ordinal) || addExpression.Fun.FunctionName.StartsWith("$bitcast.ref", StringComparison.Ordinal))
+            {
+                var arg = addExpression.Args.ElementAt(0);
+                Console.WriteLine("arg {0}", arg);
+                Console.WriteLine("type {0}", arg.Type);
+                if(arg is IdentifierExpr || (arg is NAryExpr && (arg as NAryExpr).Fun.FunctionName.StartsWith("$load", StringComparison.Ordinal)))
+                {
+                    return arg;
+                }
+                addExpression = arg as NAryExpr;
+                Console.WriteLine("add expression {0}", addExpression);
+            }
+
+            return addExpression as Expr;
+        }
+
+        private static bool TemplateRankAndTry(Implementation currImpl, Expr currPre, List<Expr> pre, Expr e, HashSet<Expr> fe, out List<Expr> l)
         {
             Console.WriteLine("These are the rankings");
-            List<int> rankings = GetRankingsFromFilteredExpressions(ref fe);
+            Console.WriteLine("This is the curr pre in template rank and try {0}", currPre);
+            Expr failingAssertionExpr = GetFailingAssertionExpr(pre);
+            Expr failingAssertionVariable = GetTheExpressionOfTheStartPointerFromTheFailingAssert(failingAssertionExpr);
+            Console.WriteLine("this is the failing expression assertion {0}", failingAssertionExpr);
+            Console.WriteLine("this is the expression corresponding to the load {0}", GetTheExpressionOfTheStartPointerFromTheFailingAssert(failingAssertionExpr));
+
+            List<int> rankings = GetRankingsFromFilteredExpressions(ref fe, ref failingAssertionVariable);
             rankings.Iter(x => Console.Write($"{x}, "));
             Console.WriteLine(" ");
 
@@ -1827,8 +1893,21 @@ namespace ExplainError
             return fexps;
         }
 
-        private static List<int> GetRankingsFromFilteredExpressions(ref HashSet<Expr> fexps)
+        private static List<int> GetRankingsFromFilteredExpressions(ref HashSet<Expr> fexps, ref Expr failingAssertionPointerExpression)
         {
+            Console.WriteLine("running template 1");
+            IsTemplate1(ref fexps);
+
+            Console.WriteLine("running template 2");
+            IsTemplate2(ref fexps);
+
+            Console.WriteLine("running template 3");
+            IsTemplate3(ref fexps, ref failingAssertionPointerExpression);
+
+            if(IsTemplate3(ref fexps, ref failingAssertionPointerExpression))
+            {
+                return new List<int>() { 3, 1, 2 };
+            }
             if (IsTemplate1(ref fexps))
             {
                 return new List<int>() { 1, 2, 3 };
@@ -1860,6 +1939,50 @@ namespace ExplainError
                 if (RecursivelyOpenToFindIfContainsFunctions(e, IsUnsignedRefComparisionFunctions))
                 {
                     return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool IsTemplate3(ref HashSet<Expr> fexps, ref Expr failingAssertionPointerExpression)
+        {
+            //$ne.i32($sext.i8.i32($load.i8($M.0, $add.ref (alloc_$p0_gdImageStringFTEx__2383, $mul.ref ($sext.i32.i64(0), 1)))), 0) == 1
+            foreach (var e in fexps)
+            {
+                Console.WriteLine("in is template 3 {0}", e);
+                // if the expression is a comparision with 0
+                var expr = e as NAryExpr;
+                if (expr is null)
+                {
+                    Console.WriteLine("null");
+                    continue; 
+                }
+                else if (expr.Fun.FunctionName == "==") 
+                {
+                    expr = (expr.Args.ElementAt(0) as NAryExpr);
+                    if (!IsEqualityCheckFunction(expr.Fun.FunctionName))
+                        continue;
+                    var args = expr.Args;
+                    if(args.Count != 2)
+                    {
+                        continue; 
+                    }
+                    else
+                    {
+                        var firstArg = args.ElementAt(0);
+                        var secondArg = args.ElementAt(1);
+
+                        Console.WriteLine("the second argument of the comparision {0}", secondArg);
+                        string failingVar = failingAssertionPointerExpression.ToString();
+                        if(firstArg.ToString().Contains("load") && firstArg.ToString().Contains(failingVar) && secondArg.ToString() == "0")
+                        {
+                            return true; 
+                        }
+                    }
+                }
+                else
+                {
+                    continue; 
                 }
             }
             return false;
@@ -2612,6 +2735,16 @@ namespace ExplainError
         {
             if (functionName.StartsWith("$ule.i", StringComparison.Ordinal) || functionName.StartsWith("$ult.i", StringComparison.Ordinal) ||
             functionName.StartsWith("$uge.i", StringComparison.Ordinal) || functionName.StartsWith("$ugt.i", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsEqualityCheckFunction(string functionName)
+        {
+            if (functionName.StartsWith("$ne.i", StringComparison.Ordinal) || functionName.StartsWith("$eq.i", StringComparison.Ordinal))
             {
                 return true;
             }
