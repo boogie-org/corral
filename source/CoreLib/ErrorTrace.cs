@@ -1917,6 +1917,7 @@ namespace cba
         public static void print(PersistentProgram program, ErrorTrace trace, string file)
         {
             setupPrint(program, trace, file);
+            findTheEntryProcedureWithAssertionViolation(trace);
             printProcTrace(trace);
             pathFile.Close();
         }
@@ -1936,6 +1937,38 @@ namespace cba
 
             pathFile.WriteLine("s");
             pathFile.WriteLine("#");
+        }
+
+        public static string findTheEntryProcedureWithAssertionViolation(ErrorTrace trace)
+        {
+            foreach (var tblk in trace.Blocks)
+            {
+                Implementation impl = nameImplMap[trace.procName];
+                var nameBlockMap = BoogieUtil.labelBlockMapping(impl);
+                Block pblk = nameBlockMap[tblk.blockName];
+
+                int cmdIndex = 0;
+                foreach (var tcmd in tblk.Cmds)
+                {
+
+                    if (tcmd.isCall())
+                    {
+                        CallInstr cc = tcmd as CallInstr;
+                        //Console.WriteLine(tcmd.info);
+                        //Console.WriteLine("this is the string of the call inst {0}", cc.ToString());
+                        //Console.WriteLine("this is the name of the callee {0}", cc.callee);
+                        var tok = pblk.Cmds[cmdIndex].tok as Token;
+                        var attributes = (pblk.Cmds[cmdIndex] as CallCmd).Attributes;
+                        if(QKeyValue.FindBoolAttribute(attributes, "AvhEntryPoint"))
+                        {
+                            Console.WriteLine("has the entry attribute, so this is the entrypoint for this trace");
+                            return cc.callee;
+                        }
+                    }
+                    cmdIndex++;
+                }
+            }
+            return "";
         }
 
         // Prints trace by recursively calling itself on calleeTraces

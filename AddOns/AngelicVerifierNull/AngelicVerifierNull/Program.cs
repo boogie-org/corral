@@ -54,6 +54,8 @@ namespace AngelicVerifierNull
         public static int killAfter = 0;
         // if this is false, new AV is never run
         public static bool tryNewAv = false;
+        // if this is true, use only variables and load expressions to fill the templates
+        public static bool useOnlyVariablesAndLoads = false;
         // Don't use the duplicator for cloning programs -- BCT programs seem to crash as a result
         public static bool UseDuplicator
         { set { ProgTransformation.PersistentProgramIO.useDuplicator = value; } }
@@ -280,6 +282,9 @@ namespace AngelicVerifierNull
 
             if (args.Any(s => s == "/tryNewAv"))
                 Options.tryNewAv = true;
+
+            if (args.Any(s => s == "/useOnlyVariablesAndLoads"))
+                Options.useOnlyVariablesAndLoads = true;
         }
 
 
@@ -375,7 +380,9 @@ namespace AngelicVerifierNull
         static Dictionary<string, int> AssertionBlockedCount = new Dictionary<string, int>();
 
         // The above one is not working as instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus), is always returning null
-        static Dictionary<int, int> AssertionLineBlockedCount = new Dictionary<int, int>();
+        // changing the map from the line number to pair<string, int> to count the failure of an assertion from each distinct entrypoint, as otherwise it leads to errors
+        //static Dictionary<int, int> AssertionLineBlockedCount = new Dictionary<int, int>();
+        static Dictionary<Tuple<string, int>, int> AssertionLineBlockedCount = new Dictionary<Tuple<string, int>, int>();
 
         static int eecnt = 0;
 
@@ -446,7 +453,7 @@ namespace AngelicVerifierNull
                 Console.WriteLine("this assert has the attribute, {0}", failingAssert.HasAttribute("valid_deref"));
                 Console.WriteLine("this assert has the attribute, {0}", failingAssert.HasAttribute("valid-de"));
 
-                Console.WriteLine($"this is  the failing assert line and code {failingAssert.Line}, {failingAssert.UniqueId}");
+                Console.WriteLine($"this is the failing assert line and code {failingAssert.Line}, {failingAssert.UniqueId}");
                 var failStatus = BoogieUtil.checkAttrExists(AliasAnalysis.MarkMustAliasQueries.mustNULL, failingAssert.Attributes) ? cba.PrintSdvPath.mustFail : cba.PrintSdvPath.notmustFail; 
       
                 // Remove axioms on alloc constants
@@ -467,8 +474,28 @@ namespace AngelicVerifierNull
                 Stats.resume("explain.error");
                 List<Tuple<string, int, string>> eeSlicedSourceLines = null;
 
+                Console.WriteLine("reached here");
+
+                // print the trace to disk
+                var traceName = "Trace" + traceCount;
+                Console.WriteLine("Printing trace {0}", traceName);
+                var stubs = instr.GetStubs(cex);
+                if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
+                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
+
+
+                // finding the name of the entrypoint procedure for the assertion failure and the line number for the assertion failure.
+                var assertEntryPoint = instr.GetAssertEntrypoint(cex);
+                Console.WriteLine("this is the avh entrypoint {0}", assertEntryPoint);
+                var assertLineNumber = failingAssert.Line;
+
+
                 bool runOld;
-                if (AssertionLineBlockedCount.ContainsKey(failingAssert.Line) && AssertionLineBlockedCount[failingAssert.Line] > MAX_ASSERT_BLOCK_COUNT-2  && failingAssert.HasAttribute("valid_deref") && (Options.tryNewAv))
+                if (AssertionLineBlockedCount.ContainsKey(new Tuple<string, int>(assertEntryPoint, assertLineNumber)) &&
+                    AssertionLineBlockedCount[new Tuple<string, int>(assertEntryPoint, assertLineNumber)] > MAX_ASSERT_BLOCK_COUNT-2  && 
+                    failingAssert.HasAttribute("valid_deref") && 
+                    (Options.tryNewAv)
+                    )
                 {
                     Console.WriteLine($"This assertion {failingAssert}, on line {failingAssert.Line} has been violated {MAX_ASSERT_BLOCK_COUNT}, so now new explain error will run");
                     runOld = false;
@@ -478,16 +505,12 @@ namespace AngelicVerifierNull
                     Console.WriteLine("old explain error will run");
                     runOld = true;
                 }
-                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, "", Options.EEflags, out eeSlicedSourceLines, runOld);
+                var eeStatus = CheckWithExplainError(ppprog, mainImpl,concretize, "", Options.EEflags, out eeSlicedSourceLines, runOld, Options.useOnlyVariablesAndLoads);
                 if (!Options.TraceSlicing) eeSlicedSourceLines = null;
                 Stats.stop("explain.error");
 
-                // print the trace to disk
-                var traceName = "Trace" + traceCount;
-                Console.WriteLine("Printing trace {0}", traceName);
-                var stubs = instr.GetStubs(cex);
-                if (stubs.Count == 0) failStatus = cba.PrintSdvPath.notmustFail;
-                var assertLoc = instr.PrintErrorTrace(cex, traceName, eeSlicedSourceLines, failStatus);
+
+
 
                 Console.WriteLine("this is the location of the assertion failure");
                 if(assertLoc != null) 
@@ -536,14 +559,16 @@ namespace AngelicVerifierNull
 
                     if (failingAssert != null)
                     {
-                        var key = failingAssert.Line;
+                        //var key = failingAssert.Line;
+                        Tuple<string, int>  key = new Tuple<string, int>(assertEntryPoint, assertLineNumber);
+
                         if (!AssertionLineBlockedCount.ContainsKey(key))
                             AssertionLineBlockedCount[key] = 0;
                         AssertionLineBlockedCount[key]++;
 
                         if (AssertionLineBlockedCount[key] > MAX_ASSERT_BLOCK_COUNT)
                         {
-                            Console.WriteLine("Unable to block {0} on line {1} after {2} tries; hence suppressing", failingAssert, key, MAX_ASSERT_BLOCK_COUNT);
+                            Console.WriteLine("Unable to block {0} on entrypoint {1} line {2} after {3} tries; hence suppressing", assertEntryPoint, assertLineNumber, key, MAX_ASSERT_BLOCK_COUNT);
                             if (Options.reportOnMaxBlockCount)
                             {
                                 PrintAndSuppressAssert(instr, new List<ErrorTraceInfo> { traceInfo }, failStatus);
@@ -1457,7 +1482,7 @@ namespace AngelicVerifierNull
         private static bool filterFileHasBeenRead = false;
 
         private static Tuple<REFINE_ACTIONS,Expr> CheckWithExplainError(Program nprog, Implementation mainImpl, 
-            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines, bool runOld)
+            CoreLib.SDVConcretizePathPass concretize, string entrypoint_name, HashSet<string> extraEEflags, out List<Tuple<string, int, string>> eeSlicedSourceLines, bool runOld, bool onlyVariablesAndLoads)
         {
             //Let ee be the result of ExplainError
             // if (ee is SUCCESS && ee is True) ShowWarning; Suppress 
@@ -1527,6 +1552,7 @@ namespace AngelicVerifierNull
                 List<Tuple<string, int, string>> tmpEESlicedSourceLines; //don't overwrite the sound slice if the error is displayed
                 var explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "), 
                     runOld,
+                    onlyVariablesAndLoads, 
                     controlFlowDependencyInformation,
                     skipAssumes,
                     out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
@@ -1540,6 +1566,7 @@ namespace AngelicVerifierNull
                     Utils.Print("Retrying ExplainError with eliminateMapUpdates off...");
                     explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1, eeflags.Concat(" "),
                         runOld,
+                        onlyVariablesAndLoads, 
                         controlFlowDependencyInformation,
                         skipAssumes,
                         out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);
@@ -1622,6 +1649,7 @@ namespace AngelicVerifierNull
             explain = ExplainError.Toplevel.Go(mainImpl, nprog, Options.eeTimeout, 1,
                 eeflags.Concat(" "),
                 true,
+                Options.useOnlyVariablesAndLoads, 
                 controlFlowDependencyInformation,
                 skipAssumes,
                 out eeStatus, out eeComplexExprs, out preDisjuncts, out tmpEESlicedSourceLines);

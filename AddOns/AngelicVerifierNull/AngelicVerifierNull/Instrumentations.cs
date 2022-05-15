@@ -547,6 +547,7 @@ namespace AngelicVerifierNull
 
             if (Driver.printTraceMode == Driver.PRINT_TRACE_MODE.Boogie)
             {
+                Console.WriteLine("the name of the files is {0}", filename);
                 cba.PrintProgramPath.print(input, trace, filename);
                 return null;
             }
@@ -595,6 +596,12 @@ namespace AngelicVerifierNull
 
                 return Tuple.Create(cba.PrintSdvPath.lastDriverLocation.Item1, cba.PrintSdvPath.lastDriverLocation.Item3);
             }
+        }
+
+        public string GetAssertEntrypoint(cba.ErrorTrace trace)
+        {
+            trace = mapBackTrace(trace);
+            return cba.PrintProgramPath.findTheEntryProcedureWithAssertionViolation(trace);
         }
 
         // Get the current program (with blocked assertions and input constraints)

@@ -45,6 +45,8 @@ namespace ExplainError
         //flag to control which explain error will run 
         private static bool runOldExplainError = true;
 
+        private static bool onlyLoadsAndVariablesInTemplates = false;
+
         //flags to control which assumes to consider in the trace
         //Important: Keep default as the sound option, as it influences the the "true" trace slicing
         private static bool onlySlicAssumes = false;
@@ -118,12 +120,14 @@ namespace ExplainError
         /// <param name="skipAssumes">a set of assumes to skip from slicing</param>
         /// <param name="explainErrorFilters"></param>
         /// <param name="runOld">run the old explain error or the new explain error</param> 
+        /// <param name="onlyVariablesAndLoads">if this is true only variables and loads will be allowed to fill the templates, not expressions</param> 
         /// <param name="status"></param>
         /// <param name="complexCExprsRet"></param>
         /// <returns></returns>
         public static List<string> Go(Implementation impl, Program pr, int tmout, int explainErrorFilters,
             string extraArgs,
             bool runOld,
+            bool onlyVariablesAndLoads, 
             ControlFlowDependency cntrlFlowDependencyInfo,
             HashSet<AssumeCmd> skipAssumes, 
             out STATUS status, out Dictionary<string, string> complexCExprsRet,
@@ -135,6 +139,7 @@ namespace ExplainError
             ExplainError.Toplevel.ParseCommandLine("");
             prog = pr;
             runOldExplainError = runOld;
+            onlyLoadsAndVariablesInTemplates = onlyVariablesAndLoads;
             /////////////////////////////////////
             //override teh default options
             verbose = false;
@@ -2305,7 +2310,10 @@ namespace ExplainError
             //3.variable, expression and load scheme
             HashSet<Expr> lengthCandidates = GetLengthCandidatesFromFilteredAtoms(ref fexps);
             fexps.Iter(x => FindIntLoads(x).Iter(y => lengthCandidates.Add(y)));
-            fexps.Iter(x => RecursivelyOpenToFindLengthCandidateExprFromAtom(x, ref lengthCandidates));
+
+            // if only loads and variables are allowed in templates, dont require expressions
+            if(!onlyLoadsAndVariablesInTemplates)
+                fexps.Iter(x => RecursivelyOpenToFindLengthCandidateExprFromAtom(x, ref lengthCandidates));
 
             //get the start end candidates
 
@@ -2320,7 +2328,9 @@ namespace ExplainError
             //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            if (!onlyLoadsAndVariablesInTemplates)
+                fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (lengthCandidates.Count == 0 || startAndEndCandidates.Count == 0)
@@ -2506,7 +2516,9 @@ namespace ExplainError
             //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            if (!onlyLoadsAndVariablesInTemplates)
+                fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (startAndEndCandidates.Count == 0)
@@ -2573,7 +2585,9 @@ namespace ExplainError
             //3.variable, expression and load scheme
             HashSet<Expr> startAndEndCandidates = GetStartAndEndCandidates(ref fexps);
             fexps.Iter(x => FindRefLoads(x).Iter(y => startAndEndCandidates.Add(y)));
-            fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
+
+            if (!onlyLoadsAndVariablesInTemplates)
+                fexps.Iter(x => RecursivelyOpenToFindStartCandidateExprFromAtom(x, ref startAndEndCandidates));
 
             //if either of the two above are empty then do not know what to do, hence exit for now
             if (startAndEndCandidates.Count == 0)
