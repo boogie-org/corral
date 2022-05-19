@@ -1,8 +1,8 @@
 ﻿<Properties StartupConfiguration="{71E626CD-6FC4-42F0-B91D-5CC42B2875CF}|Default">
-  <MonoDevelop.Ide.Workbench ActiveDocument="../../boogie/Source/Core/AbsyQuant.cs">
+  <MonoDevelop.Ide.Workbench ActiveDocument="AngelicVerifierNull/Program.cs">
     <Files>
-      <File FileName="../../source/ExplainError/program.cs" Line="172" Column="111" />
-      <File FileName="AngelicVerifierNull/Program.cs" Line="494" Column="65" />
+      <File FileName="../../source/ExplainError/program.cs" Line="1933" Column="18" />
+      <File FileName="AngelicVerifierNull/Program.cs" Line="478" Column="17" />
       <File FileName="../../boogie/Source/Core/DeadVarElim.cs" Line="5" Column="1" />
       <File FileName="../../boogie/Source/Core/StandardVisitor.cs" Line="646" Column="25" />
       <File FileName="../../source/Driver.cs" Line="199" Column="49" />

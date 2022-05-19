@@ -1060,7 +1060,7 @@ namespace AngelicVerifierNull
         // Returns the error trace and the failing assert location
         static cba.ErrorTrace RunCorral(PersistentProgram inputProg, string assertsPassedName, int corralTimeout)
         {
-            BoogieUtil.PrintProgram(inputProg.getProgram(), "query_"+corralIterationCount+".bpl");
+            // BoogieUtil.PrintProgram(inputProg.getProgram(), "query_"+corralIterationCount+".bpl");
             corralIterationCount ++;
             SetCorralTimeout(corralTimeout);
             CommandLineOptions.Clo.ProverLogFilePath = null;
