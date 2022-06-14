@@ -172,7 +172,8 @@ namespace CoreLib
         /* call-site to VC map -- used for trace construction */
         public Dictionary<StratifiedCallSite, StratifiedVC> attachedVC;
         public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
-
+        public Dictionary<StratifiedCallSite, StratifiedVC> summaryCache;
+        
         /* VC of main */
         private StratifiedVC mainVC;
 
@@ -271,6 +272,7 @@ namespace CoreLib
             }
 
             attachedVC = new Dictionary<StratifiedCallSite, StratifiedVC>();
+            summaryCache = new Dictionary<StratifiedCallSite, StratifiedVC>();
             attachedVCInv = new Dictionary<StratifiedVC, StratifiedCallSite>();
             parent = new Dictionary<StratifiedCallSite, StratifiedCallSite>();
             implementations = new HashSet<string>(implName2StratifiedInliningInfo.Keys);
@@ -375,6 +377,7 @@ namespace CoreLib
             public Dictionary<StratifiedVC, StratifiedCallSite> attachedVCInv;
             public Dictionary<StratifiedCallSite, StratifiedCallSite> parent;
             public HashSet<StratifiedCallSite> openCallSites;
+            public HashSet<StratifiedCallSite> blockedCallSites;
             public DI di;
 
             public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites)
@@ -388,6 +391,15 @@ namespace CoreLib
                 return ret;
             }
 
+            public static SiState SaveState(StratifiedInlining SI, HashSet<StratifiedCallSite> openCallSites,
+                HashSet<StratifiedCallSite> blockedCallsites)
+            {
+                var ret = new SiState();
+                ret = SiState.SaveState(SI, openCallSites);
+                ret.blockedCallSites = new HashSet<StratifiedCallSite>(blockedCallsites);
+                return ret;
+            }
+
             public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites)
             {
                 SI.attachedVC = attachedVC;
@@ -395,6 +407,13 @@ namespace CoreLib
                 SI.parent = parent;
                 SI.di = di;
                 openCallSites = this.openCallSites;
+            }
+
+            public void ApplyState(StratifiedInlining SI, ref HashSet<StratifiedCallSite> openCallSites,
+                ref HashSet<StratifiedCallSite> blockedCallsites)
+            {
+                ApplyState(SI, ref openCallSites);
+                blockedCallsites = this.blockedCallSites;
             }
         }
 
@@ -1393,6 +1412,113 @@ namespace CoreLib
             return outcome;
         }
 
+        
+        public Outcome TraceInlining(HashSet<StratifiedCallSite> openCallSites, StratifiedInliningErrorReporter reporter, bool main, int recBound)
+        {
+
+            Outcome outcome = Outcome.Inconclusive;
+            DateTime qStartTime;
+            ForceInline(openCallSites, recBound);
+            Stack<SiState> partitionStack = new Stack<SiState>();
+            HashSet<StratifiedCallSite> blockedCallsites = new HashSet<StratifiedCallSite>();
+
+            var boundHit = false;
+            while (true)
+            {
+                // Check timeout
+                if (CommandLineOptions.Clo.ProverKillTime != -1)
+                {
+                    if ((DateTime.UtcNow - startTime).TotalSeconds > CommandLineOptions.Clo.ProverKillTime)
+                    {
+                        return Outcome.TimedOut;
+                    }
+                }
+
+                // Bound on max procs inlined
+                if (BoogieVerify.options.maxInlinedBound != 0 &&
+                    stats.numInlined > BoogieVerify.options.maxInlinedBound)
+                {
+                    return Outcome.ReachedBound;
+                }
+                
+                MacroSI.PRINT_DEBUG("  - overapprox");
+                // overapproximate query
+                Push();
+                var softAssumptions = new List<VCExpr>();
+                foreach (StratifiedCallSite cs in openCallSites)
+                {
+                    // Stop if we've reached the recursion bound or
+                    // the stack-depth bound (if there is one)
+                    if (HasExceededRecursionDepth(cs, recBound) ||
+                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    {
+                        prover.Assert(cs.callSiteExpr, false);
+                        procsHitRecBound.Add(cs.callSite.calleeName);
+                        //Console.WriteLine("Proc {0} hit rec bound of {1}", cs.callSite.calleeName, recBound);
+                        boundHit = true;
+                    }
+                    // Non-uniform unfolding
+                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                        softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
+                }
+                MacroSI.PRINT_DEBUG("    - check");
+                reporter.reportTrace = false;
+                reporter.callSitesToExpand = new List<StratifiedCallSite>();
+                qStartTime = DateTime.Now;
+                outcome = BoogieVerify.options.NonUniformUnfolding ? CheckVC(softAssumptions, reporter) :
+                    CheckVC(reporter);
+                //Console.WriteLine("OQ: " + (DateTime.Now - qStartTime).TotalMilliseconds);
+                Pop();
+                MacroSI.PRINT_DEBUG("    - checked: " + outcome);
+                /*if (outcome != Outcome.Errors)
+                {
+                    if (boundHit && outcome == Outcome.Correct)
+                        outcome = Outcome.ReachedBound;
+
+                    break; // done
+                }
+                //Console.WriteLine("OR Inlining:" + reporter.callSitesToExpand.Count.ToString());
+                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count == 0)
+                    return outcome;
+                else if (reporter.callSitesToExpand.Count == 0)
+                    return Outcome.Inconclusive;*/
+                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count > 0)
+                {
+                    var toExpand = reporter.callSitesToExpand;
+                    if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
+                    {
+                        var min = toExpand.Select(cs => RecursionDepth(cs)).Min();
+                        toExpand = toExpand.Where(cs => RecursionDepth(cs) == min).ToList();
+                    }
+
+                    foreach (StratifiedCallSite scs in openCallSites)
+                    {
+                        if (!toExpand.Contains(scs))
+                            blockedCallsites.Add(scs);
+                    }
+                    openCallSites.RemoveWhere(cs => !toExpand.Contains(cs));
+                    
+                    foreach (var scs in toExpand)
+                    {
+                        //Console.WriteLine("OR Inlining: " + GetPersistentID(scs));
+                        openCallSites.Remove(scs);
+                        var svc = Expand(scs);
+                        if (svc != null)
+                        {
+                            openCallSites.UnionWith(svc.CallSites);
+                            if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
+                        }
+                    }
+                }
+
+                ForceInline(openCallSites, recBound);      //Not sure whether to enable this   
+                
+            }
+            return outcome;
+        }
+
+
         void ForceInline(HashSet<StratifiedCallSite> openCallSites, int recBound)
         {
             do
@@ -1777,6 +1903,10 @@ namespace CoreLib
             else if (cba.Util.CorralConfig.underWidenSI)
             {
                 outcome = Fwd(openCallSites, reporter, true, CommandLineOptions.Clo.RecursionBound);
+            }
+            else if (cba.Util.CorralConfig.traceInlining)
+            {
+                outcome = TraceInlining(openCallSites, reporter, true, CommandLineOptions.Clo.RecursionBound);
             }
             else
             {

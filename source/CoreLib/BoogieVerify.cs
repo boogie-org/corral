@@ -14,7 +14,8 @@ namespace cba.Util
 {
     public static class CorralConfig
     {
-        public static bool underWidenSI = false;        
+        public static bool underWidenSI = false;
+        public static bool traceInlining = false;
     }
     public static class BoogieVerify
     {

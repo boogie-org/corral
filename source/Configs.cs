@@ -472,7 +472,10 @@ namespace cba
             {
                 cba.Util.CorralConfig.underWidenSI = true;
             }
-            
+            else if (flag.StartsWith("/traceInlining"))
+            {
+                cba.Util.CorralConfig.traceInlining = true;
+            }
             else if (flag.StartsWith("/timeLimit:"))
             {
                 var split = flag.Split(sep);
