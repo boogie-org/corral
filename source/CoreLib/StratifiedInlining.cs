@@ -10,6 +10,7 @@ using VC;
 using Outcome = VC.VCGen.Outcome;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
+using Microsoft.Boogie.SMTLib;
 
 namespace CoreLib
 {
@@ -1420,6 +1421,7 @@ namespace CoreLib
             DateTime qStartTime;
             ForceInline(openCallSites, recBound);
             Stack<SiState> partitionStack = new Stack<SiState>();
+            HashSet<StratifiedCallSite> allObservedCallsites = new HashSet<StratifiedCallSite>();
             HashSet<StratifiedCallSite> blockedCallsites = new HashSet<StratifiedCallSite>();
 
             var boundHit = false;
@@ -1440,7 +1442,10 @@ namespace CoreLib
                 {
                     return Outcome.ReachedBound;
                 }
-                
+                //save current solver state and partition state
+                partitionStack.Push(SiState.SaveState(this, openCallSites, blockedCallsites));
+                Push();
+
                 MacroSI.PRINT_DEBUG("  - overapprox");
                 // overapproximate query
                 Push();
@@ -1483,8 +1488,11 @@ namespace CoreLib
                     return outcome;
                 else if (reporter.callSitesToExpand.Count == 0)
                     return Outcome.Inconclusive;*/
-                if (outcome == Outcome.Errors && reporter.callSitesToExpand.Count > 0)
+                if (outcome == Outcome.Errors)
                 {
+                    if (reporter.callSitesToExpand.Count == 0)
+                        return outcome;
+
                     var toExpand = reporter.callSitesToExpand;
                     if (BoogieVerify.options.extraFlags.Contains("SiStingy"))
                     {
@@ -1495,7 +1503,10 @@ namespace CoreLib
                     foreach (StratifiedCallSite scs in openCallSites)
                     {
                         if (!toExpand.Contains(scs))
+                        {
                             blockedCallsites.Add(scs);
+                            prover.Assert(scs.callSiteExpr, false, name: "blocked_" + scs.callSiteExpr.ToString());
+                        }
                     }
                     openCallSites.RemoveWhere(cs => !toExpand.Contains(cs));
                     
@@ -1503,12 +1514,48 @@ namespace CoreLib
                     {
                         //Console.WriteLine("OR Inlining: " + GetPersistentID(scs));
                         openCallSites.Remove(scs);
-                        var svc = Expand(scs);
+                        var svc = Expand(scs, "inlined_" + scs.callSiteExpr.ToString(), true, false);
                         if (svc != null)
                         {
                             openCallSites.UnionWith(svc.CallSites);
                             if (cba.Util.BoogieVerify.options.useFwdBck) MustNotFail(scs, svc);
                         }
+                    }
+                }
+                else
+                {
+                    if (partitionStack.Count == 0)
+                    {
+                        if (outcome == Outcome.Correct)
+                        {
+                            if (boundHit)
+                                return Outcome.ReachedBound;
+                            else
+                                return Outcome.Correct;
+                        }
+                        else
+                            return Outcome.Inconclusive;
+                    }
+                    else
+                    {
+                        //get interpolants
+                        if (reporter.callSitesToExpand.Count > 0)
+                        {
+                            List<string> root = new List<string>();
+                            List<string> leaves = new List<string>();
+                            List<VCExpr> summaries = new List<VCExpr>();
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                                root.Add("inlined_" + cs.callSiteExpr.ToString());
+                            foreach (StratifiedCallSite cs in reporter.callSitesToExpand)
+                                leaves.Add(cs.callSiteExpr.ToString());
+
+                            summaries = prover.GetTreeInterpolant(root, leaves);
+
+                        }
+
+                        SiState topState = partitionStack.Pop();
+                        topState.ApplyState(this, ref openCallSites, ref blockedCallsites);
+                        Pop();
                     }
                 }
 
