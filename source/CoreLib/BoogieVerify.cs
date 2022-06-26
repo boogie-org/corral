@@ -170,7 +170,7 @@ namespace cba.Util
             {
                 Debug.Assert (CommandLineOptions.Clo.StratifiedInlining > 0);
                 if (options.newStratifiedInlining) {
-                  if(options.newStratifiedInliningAlgo.ToLower() == "duality") Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
+                  if(options.newStratifiedInliningAlgo.ToLower() == "duality" || CorralConfig.traceInlining) Microsoft.Boogie.SMTLib.Factory.UseInterpolation = true;
                   vcgen = new CoreLib.StratifiedInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, null);
                 }
                 else
