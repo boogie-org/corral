@@ -454,7 +454,7 @@ namespace cba.Util
         {
             node = (Function)node.Clone();
             node.Attributes = CopyAttr(node.Attributes);
-            node.doingExpansion = false;
+            // node.doingExpansion = false;
             return base.VisitFunction(node);
         }
 

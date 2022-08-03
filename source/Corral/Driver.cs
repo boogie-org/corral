@@ -152,8 +152,10 @@ namespace cba
 
             // Initialize Boogie
             CommandLineOptions.Clo.PrintInstrumented = true;
-            CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Assume;
-            CommandLineOptions.Clo.TypeEncodingMethod = CommandLineOptions.TypeEncoding.Monomorphic;
+            CommandLineOptions.Clo.ProcedureInlining =
+                CoreOptions.Inlining.Assume;
+            CommandLineOptions.Clo.TypeEncodingMethod =
+                CoreOptions.TypeEncoding.Monomorphic;
 
             // /noRemoveEmptyBlocks is needed for field refinement. It ensures that
             // we get an actual path in the program (so that we can concretize it)
@@ -213,7 +215,7 @@ namespace cba
             Console.WriteLine("Corral program verifier version {0}", VersionInfo());
 
             Configs config = Configs.parseCommandLine(args);
-            CommandLineOptions.Install(new CommandLineOptions());
+            CommandLineOptions.Clo = new CommandLineOptions(new ConsolePrinter());
 
             if (!System.IO.File.Exists(config.inputFile))
             {
@@ -595,7 +597,7 @@ namespace cba
             {
                 BoogieVerify.removeAsserts = false;
                 var err = new List<BoogieErrorTrace>();
-                init.Typecheck();
+                init.Typecheck(CommandLineOptions.Clo);
 
                 BoogieVerify.options = new BoogieVerifyOptions();
                 BoogieVerify.options.NonUniformUnfolding = config.NonUniformUnfolding;
@@ -777,7 +779,8 @@ namespace cba
             }
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {
-                if (CommandLineOptions.Clo.UserWantsToCheckRoutine(impl.Name) && !impl.SkipVerification)
+                if ((CommandLineOptions.Clo as ExecutionEngineOptions).UserWantsToCheckRoutine(impl.Name) && 
+                    !impl.IsSkipVerification(CommandLineOptions.Clo))
                 {
                     CodeExprInliner.ProcessImplementation(program, impl);
                 }
@@ -795,7 +798,7 @@ namespace cba
             Dictionary<Declaration, QKeyValue> declToAnnotations;
 
             public CodeExprInliner(Program program)
-                : base(program, null, -1)
+                : base(program, null, -1, CommandLineOptions.Clo)
             {
                 this.declToAnnotations = new Dictionary<Declaration, QKeyValue>();
                 // save annotation
@@ -849,8 +852,9 @@ namespace cba
         {
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
-            ExecutionEngine.EliminateDeadVariables(program);
-            ExecutionEngine.Inline(program);
+            var executionEngine = new ExecutionEngine(CommandLineOptions.Clo, new VerificationResultCache());
+            executionEngine.EliminateDeadVariables(program);
+            executionEngine.Inline(program);
             CommandLineOptions.Clo.StratifiedInlining = si;
         }
 

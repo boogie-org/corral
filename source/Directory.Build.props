@@ -2,7 +2,7 @@
 
   <!-- Target framework and package configuration -->
   <PropertyGroup>
-    <TargetFrameworks>net5.0;net6.0</TargetFrameworks>
+    <TargetFrameworks>net6.0</TargetFrameworks>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <Authors>Corral</Authors>
     <RepositoryUrl>https://github.com/boogie-org/corral</RepositoryUrl>
@@ -15,8 +15,12 @@
   </ItemGroup>
 
   <!-- Boogie dependency -->
+  <!--ItemGroup>
+    <PackageReference Include="Boogie.ExecutionEngine" Version="2.15.7" />
+  </ItemGroup!-->
+
   <ItemGroup>
-    <PackageReference Include="Boogie.ExecutionEngine" Version="2.9.1" />
+    <ProjectReference Include="../../boogie/Source/ExecutionEngine/ExecutionEngine.csproj" />
   </ItemGroup>
 
 </Project>

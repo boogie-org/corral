@@ -50,19 +50,19 @@ namespace cba.Util
 
         public static void DoModSetAnalysis(Program p)
         {
-            (new ModSetCollector()).DoModSetAnalysis(p);
+            (new ModSetCollector(CommandLineOptions.Clo)).DoModSetAnalysis(p);
         }
 
         public static void PrintProgram(Program p, string filename)
         {
-            var outFile = new TokenTextWriter(filename);
+            var outFile = new TokenTextWriter(filename, CommandLineOptions.Clo);
             p.Emit(outFile);
             outFile.Close();
         }
 
         public static bool ResolveProgram(Program p, string filename)
         {
-            int errorCount = p.Resolve();
+            int errorCount = p.Resolve(CommandLineOptions.Clo);
             if (errorCount != 0)
                 Console.WriteLine(errorCount + " name resolution errors in " + filename);
             return errorCount != 0;
@@ -70,7 +70,7 @@ namespace cba.Util
 
         public static bool TypecheckProgram(Program p, string filename)
         {
-            int errorCount = p.Typecheck();
+            int errorCount = p.Typecheck(CommandLineOptions.Clo);
             if (errorCount != 0)
             {
                 PrintProgram(p, "error.bpl");
@@ -454,7 +454,7 @@ namespace cba.Util
             using (var writer = new System.IO.MemoryStream())
             {
                 var st = new System.IO.StreamWriter(writer);
-                var tt = new TokenTextWriter(st);
+                var tt = new TokenTextWriter(st, CommandLineOptions.Clo);
                 p.Emit(tt);
                 writer.Flush();
                 st.Flush();
@@ -485,7 +485,7 @@ namespace cba.Util
 
         public static void PrintGlobalVariables(Program p)
         {
-            TokenTextWriter log = new TokenTextWriter(Console.Out);
+            TokenTextWriter log = new TokenTextWriter(Console.Out, CommandLineOptions.Clo);
             foreach (Declaration d in p.TopLevelDeclarations)
             {
                 if (d is GlobalVariable)
@@ -1598,8 +1598,8 @@ namespace cba.Util
             var op = CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible;
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = false;
 
-            // Extract loops, we don't want cycles in the CFG            
-            program.ExtractLoops(out irreducible);
+            // Extract loops, we don't want cycles in the CFG  
+            LoopExtractor.ExtractLoops(CommandLineOptions.Clo, program);
             RemoveVarsFromAttributes.Prune(program);
 
             if (GVN.doGVN)
@@ -1663,7 +1663,7 @@ namespace cba.Util
             }
 
             // Remove unreachble blocks
-            impl.PruneUnreachableBlocks();
+            impl.PruneUnreachableBlocks(CommandLineOptions.Clo);
 
             // Live variable analysis
             CbaLiveVariableAnalysis.ClearLiveVariables(impl);

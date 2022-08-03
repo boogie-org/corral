@@ -37,7 +37,7 @@ namespace CoreLib
 
         public override CBAProgram runCBAPass(CBAProgram p)
         {
-            p.Typecheck();
+            p.Typecheck(CommandLineOptions.Clo);
 
             p.TopLevelDeclarations.OfType<Procedure>().Iter(proc => procsWithoutBody.Add(proc.Name));
             p.TopLevelDeclarations.OfType<Implementation>().Iter(impl => procsWithoutBody.Remove(impl.Name));

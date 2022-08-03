@@ -1120,7 +1120,7 @@ namespace cba
             
             foreach (var impl in BoogieUtil.GetImplementations(p))
             {
-                impl.PruneUnreachableBlocks();
+                impl.PruneUnreachableBlocks(CommandLineOptions.Clo);
             }
 
             // save RB
@@ -1129,7 +1129,7 @@ namespace cba
                 CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
 
             var procsWithIrreducibleLoops = new HashSet<string>();
-            var passInfo = p.ExtractLoops(out procsWithIrreducibleLoops);
+            var passInfo = LoopExtractor.ExtractLoops(CommandLineOptions.Clo, p).ToTuple().Item1;
 
             // restore RB
             CommandLineOptions.Clo.RecursionBound = rb;

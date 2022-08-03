@@ -147,7 +147,7 @@ namespace cba
                 rest[i] = this.VisitDeclaration(rest[i]);
 
             // Remove globals that are not tracked
-            node.TopLevelDeclarations = globals.Where(x => isTrackedVariable(x as GlobalVariable));
+            node.TopLevelDeclarations = globals.Where(x => isTrackedVariable(x as GlobalVariable)).ToList();
 
             node.AddTopLevelDeclarations(rest);
 
@@ -423,7 +423,7 @@ namespace cba
                 }
                 else
                 {
-                    cmd.Emit(new TokenTextWriter(Console.Out), 0);
+                    cmd.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InternalError("Unkown Cmd type encountered during variable slicing");
                 }
 
@@ -552,7 +552,7 @@ namespace cba
             }
             else
             {
-                lhs.Emit(new TokenTextWriter(Console.Out));
+                lhs.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo));
                 throw new InternalError("Unknown type of AssignLhs");
             }
 
@@ -645,7 +645,7 @@ namespace cba
             globalsRead = new HashSet<string>();
 
             // Typecheck -- needed for variable abstraction
-            if (node.Typecheck() != 0)
+            if (node.Typecheck(CommandLineOptions.Clo) != 0)
             {
                 BoogieUtil.PrintProgram(node, "error.bpl");
                 throw new InternalError("Type errors");

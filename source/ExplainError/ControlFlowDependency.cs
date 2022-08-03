@@ -32,7 +32,7 @@ namespace ExplainError
         public void Run()
         {
             Console.WriteLine("Performing ControlFlowDependencyPrePass.....\n");
-            (new ModSetCollector()).DoModSetAnalysis(prog);
+            (new ModSetCollector(CommandLineOptions.Clo)).DoModSetAnalysis(prog);
             prog.Implementations.Iter(impl => (new SplitBranchBlocks(impl)).Run());
             prog.Implementations.Iter(impl => (new IntraProcModSetComputerPerImpl(this, impl)).Run());
             // Add place holders for variables/blocks
@@ -183,7 +183,7 @@ namespace ExplainError
             private void FindBranchJoinPairs()
             {
                 impl.ComputePredecessorsForBlocks();
-                var blockGraph = parent.prog.ProcessLoops(impl);
+                var blockGraph = parent.prog.ProcessLoops(CommandLineOptions.Clo, impl);
                 //(branch node) n -> all nodes for which n is the immediate dominator (then, else, join-if-not-return)
                 var immDomMap = blockGraph.ImmediateDominatorMap;
                 #region Other dominator datastructures, not used
