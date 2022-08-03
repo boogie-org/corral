@@ -1127,9 +1127,12 @@ namespace cba
             var rb = CommandLineOptions.Clo.RecursionBound;
             if (BoogieVerify.irreducibleLoopUnroll >= 0)
                 CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
-
-            var procsWithIrreducibleLoops = new HashSet<string>();
-            var passInfo = LoopExtractor.ExtractLoops(CommandLineOptions.Clo, p).ToTuple().Item1;
+            
+            var loopExtractionResult = LoopExtractor.ExtractLoops(CommandLineOptions.Clo, p);
+            var passInfo = loopExtractionResult.loops;
+            var procsWithIrreducibleLoops =
+                loopExtractionResult.procsWithIrreducibleLoops
+                    .Select(implementation => implementation.Name).ToHashSet();
 
             // restore RB
             CommandLineOptions.Clo.RecursionBound = rb;

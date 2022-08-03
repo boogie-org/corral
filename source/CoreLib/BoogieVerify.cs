@@ -117,8 +117,8 @@ namespace cba.Util
                 CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
 
             // Do loop extraction
-            var extractionInfo =
-                LoopExtractor.ExtractLoops(CommandLineOptions.Clo, program);
+            var extractionInfo = LoopExtractor
+                .ExtractLoops(CommandLineOptions.Clo, program).loops;
 
             // restore RB
             CommandLineOptions.Clo.RecursionBound = rb;
@@ -276,7 +276,7 @@ namespace cba.Util
                         // Map the trace across loop extraction
                         if (vcgen is VC.VCGen)
                         {
-                            errors[i] = (vcgen as VC.VCGen).ExtractLoopTrace(errors[i], impl.Name, program, extractionInfo.loops);
+                            errors[i] = (vcgen as VC.VCGen).ExtractLoopTrace(errors[i], impl.Name, program, extractionInfo);
                         }
 
                         if (errors[i] is AssertCounterexample)

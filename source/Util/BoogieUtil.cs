@@ -1599,7 +1599,9 @@ namespace cba.Util
             CommandLineOptions.Clo.ExtractLoopsUnrollIrreducible = false;
 
             // Extract loops, we don't want cycles in the CFG  
-            LoopExtractor.ExtractLoops(CommandLineOptions.Clo, program);
+            irreducible = LoopExtractor.ExtractLoops(CommandLineOptions.Clo, program)
+                .procsWithIrreducibleLoops
+                .Select(implementation => implementation.Name).ToHashSet();
             RemoveVarsFromAttributes.Prune(program);
 
             if (GVN.doGVN)
