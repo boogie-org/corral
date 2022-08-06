@@ -246,7 +246,7 @@ namespace cba.Util
                 Log.WriteLine(Log.Debug, outcome.ToString());
 
                 Log.WriteLine(Log.Debug, (errors == null ? 0 : errors.Count) + " counterexamples.");
-                if (errors != null) ret = ReturnStatus.NOK;
+                if (errors != null && errors.Count > 0) ret = ReturnStatus.NOK;
 
                 // Print model
                 if (errors != null && errors.Count > 0 && errors[0].Model != null && CommandLineOptions.Clo.ModelViewFile != null)

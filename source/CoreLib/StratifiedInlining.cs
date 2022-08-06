@@ -13,8 +13,9 @@ using Outcome = VC.VCGen.Outcome;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
  using Microsoft.Boogie.SMTLib;
+using System.Threading.Tasks;
 
- namespace CoreLib
+namespace CoreLib
 {
     /****************************************
     *           Pseudo macros               *
@@ -1512,9 +1513,10 @@ using Microsoft.Boogie.GraphUtil;
 
 
         /* verification */
-        public Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
+        public override Task<Outcome> VerifyImplementation(ImplementationRun run, VerifierCallback callback, CancellationToken cancellationToken)
         {
             startTime = DateTime.UtcNow;
+            var impl = run.Implementation;
 
             procsHitRecBound = new HashSet<string>();
 
@@ -1531,11 +1533,11 @@ using Microsoft.Boogie.GraphUtil;
             * Otherwise, use forward approach */
             if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
             {
-                return FwdBckVerify(impl, callback);
+                return Task.FromResult(FwdBckVerify(impl, callback));
             }
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "duality")
             {
-                return DepthFirstStyle(impl, callback);
+                return Task.FromResult(DepthFirstStyle(impl, callback));
             }
 
             MacroSI.PRINT_DEBUG("Starting forward approach...");
@@ -1717,7 +1719,7 @@ using Microsoft.Boogie.GraphUtil;
             }
             #endregion
             
-            return outcome;
+            return Task.FromResult(outcome);
         }
 
         static int dumpCnt = 0;
@@ -1868,9 +1870,9 @@ using Microsoft.Boogie.GraphUtil;
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            prover.Check();
-            stats.time += stopwatch.ElapsedTicks;
+            (prover as SMTLibInteractiveTheoremProver).currentErrorHandler = reporter;
             ProverInterface.Outcome outcome = (prover as SMTLibInteractiveTheoremProver).CheckSat(CancellationToken.None, 1).Result;
+            stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
