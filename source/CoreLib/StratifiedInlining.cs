@@ -4,12 +4,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Diagnostics;
-using Microsoft.Boogie;
+ using System.IO;
+ using System.Threading;
+ using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
 using VC;
 using Outcome = VC.VCGen.Outcome;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
+ using Microsoft.Boogie.SMTLib;
+using System.Threading.Tasks;
 
 namespace CoreLib
 {
@@ -255,7 +259,7 @@ namespace CoreLib
         }
 
         public StratifiedInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
-            base(program, logFilePath, appendLogFile, new List<Checker>(), PassiveImplInstrumentation)
+            base(TextWriter.Null, CommandLineOptions.Clo, program, logFilePath, appendLogFile, new CheckerPool(CommandLineOptions.Clo), PassiveImplInstrumentation)
         {
             stats = new Stats();
 
@@ -1304,7 +1308,7 @@ namespace CoreLib
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+            prover.Assert(svc.MustReach(svc.info.Implementation.Blocks[0], svc.info.absyIds), true);
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -1318,28 +1322,28 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true);
+                    prover.Assert(vc.MustReach(callblock, svc.info.absyIds), true);
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key, svc.info.absyIds), true);
             return ret;
         }
 
         public Outcome Bck(StratifiedVC svc, HashSet<StratifiedCallSite> openCallSites,
             StratifiedInliningErrorReporter reporter, Dictionary<string, int> backboneRecDepth)
         {
-            var outcome = Fwd(openCallSites, reporter, svc.info.impl.Name == mainProc.Name, CommandLineOptions.Clo.RecursionBound);
+            var outcome = Fwd(openCallSites, reporter, svc.info.Implementation.Name == mainProc.Name, CommandLineOptions.Clo.RecursionBound);
             if (outcome != Outcome.Errors)
                 return outcome;
-            if (svc.info.impl.Name == mainProc.Name)
+            if (svc.info.Implementation.Name == mainProc.Name)
                 return outcome;
 
             outcome = Outcome.Correct;
             var boundHit = false;
 
-            foreach (var caller in callGraph.callers[svc.info.impl.Proc])
+            foreach (var caller in callGraph.callers[svc.info.Implementation.Proc])
             {
                 if (backboneRecDepth[caller.Name] == CommandLineOptions.Clo.RecursionBound)
                 {
@@ -1358,7 +1362,7 @@ namespace CoreLib
                 callerOpenCallSites.UnionWith(callerVC.CallSites);
                 //Console.WriteLine("Adding call-sites: {0}", callerVC.CallSites.Select(s => s.callSiteExpr.ToString()).Concat(" "));
 
-                foreach (var cs in callerVC.CallSites.Where(s => s.callSite.calleeName == svc.info.impl.Name))
+                foreach (var cs in callerVC.CallSites.Where(s => s.callSite.calleeName == svc.info.Implementation.Name))
                 {
                     Push();
 
@@ -1509,9 +1513,10 @@ namespace CoreLib
 
 
         /* verification */
-        public override Outcome VerifyImplementation(Implementation impl, VerifierCallback callback)
+        public override Task<Outcome> VerifyImplementation(ImplementationRun run, VerifierCallback callback, CancellationToken cancellationToken)
         {
             startTime = DateTime.UtcNow;
+            var impl = run.Implementation;
 
             procsHitRecBound = new HashSet<string>();
 
@@ -1528,11 +1533,11 @@ namespace CoreLib
             * Otherwise, use forward approach */
             if (cba.Util.BoogieVerify.options.useFwdBck && assertMethods.Count > 0)
             {
-                return FwdBckVerify(impl, callback);
+                return Task.FromResult(FwdBckVerify(impl, callback));
             }
             else if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "duality")
             {
-                return DepthFirstStyle(impl, callback);
+                return Task.FromResult(DepthFirstStyle(impl, callback));
             }
 
             MacroSI.PRINT_DEBUG("Starting forward approach...");
@@ -1714,7 +1719,7 @@ namespace CoreLib
             }
             #endregion
             
-            return outcome;
+            return Task.FromResult(outcome);
         }
 
         static int dumpCnt = 0;
@@ -1759,7 +1764,7 @@ namespace CoreLib
                     toassert = prover.VCExprGen.And(prover.VCExprGen.Implies(cb, svc.vcexpr), toassert);
                 }
 
-                prover.LogComment("Inlining " + scs.callSite.calleeName + " from " + (parent.ContainsKey(scs) ? attachedVC[parent[scs]].info.impl.Name : "main"));
+                prover.LogComment("Inlining " + scs.callSite.calleeName + " from " + (parent.ContainsKey(scs) ? attachedVC[parent[scs]].info.Implementation.Name : "main"));
 
                 di.Expanded(scs, svc);
                 stats.vcSize += SizeComputingVisitor.ComputeSize(toassert);
@@ -1834,7 +1839,7 @@ namespace CoreLib
                 var scs = attachedVCInv[vc];
                 ret = GetPersistentID(scs);
             }
-            return string.Format("{0}_262_{1}", ret, vc.info.impl.Name);
+            return string.Format("{0}_262_{1}", ret, vc.info.Implementation.Name);
         }
 
         // 'Attach' inlined from Boogie/StratifiedVC.cs (and made static)
@@ -1865,20 +1870,20 @@ namespace CoreLib
         {
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            prover.Check();
+            (prover as SMTLibInteractiveTheoremProver).currentErrorHandler = reporter;
+            ProverInterface.Outcome outcome = (prover as SMTLibInteractiveTheoremProver).CheckSat(CancellationToken.None, 1).Result;
             stats.time += stopwatch.ElapsedTicks;
-            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
         private Outcome CheckVC(List<VCExpr> softAssumptions, ProverInterface.ErrorHandler reporter)
         {
-            List<int> unsatCore;
 
             stats.calls++;
             var stopwatch = Stopwatch.StartNew();
-            ProverInterface.Outcome outcome = 
-                prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, out unsatCore, reporter);
+            var task = prover.CheckAssumptions(new List<VCExpr>(), softAssumptions, reporter, CancellationToken.None);
+            var unsatCore = task.Result.Item2;
+            ProverInterface.Outcome outcome = task.Result.Item1;
             stats.time += stopwatch.ElapsedTicks;
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
@@ -2170,7 +2175,7 @@ namespace CoreLib
             {
                 IndexC = new IndexComputer(SI.program);
                 var impls = new Dictionary<string, Implementation>();
-                SI.implName2StratifiedInliningInfo.Iter(tup => impls.Add(tup.Key, tup.Value.impl));
+                SI.implName2StratifiedInliningInfo.Iter(tup => impls.Add(tup.Key, tup.Value.Implementation));
                 Disj = new ProgramDisjointness(impls);
 
                 currentDag = new DagOracle(SI.program, Disj, SI.extraRecBound);
@@ -2320,11 +2325,11 @@ namespace CoreLib
             Debug.Assert(currentDag.Nodes.Count == 0);
 
             var rv = IndexC.GetMainRv();
-            var index = IndexC.GetIndex(vc.info.impl.Name, rv);
+            var index = IndexC.GetIndex(vc.info.Implementation.Name, rv);
             vcToRecVector.Add(vc, rv);
 
             // Add to dag
-            var node = new DagOracle.DagNode(index, vc.info.impl.Name, 1);
+            var node = new DagOracle.DagNode(index, vc.info.Implementation.Name, 1);
 
             vcNodeMap.Add(vc, node);
             currentDag.AddNode(node);
@@ -2348,7 +2353,7 @@ namespace CoreLib
             RegisterVC(vc);
 
             if (disabled) return;
-            Debug.Assert(cs.callSite.calleeName == vc.info.impl.Name);
+            Debug.Assert(cs.callSite.calleeName == vc.info.Implementation.Name);
 
             var n1 = vcNodeMap[containingVC[cs]];
 
@@ -2357,7 +2362,7 @@ namespace CoreLib
             vcToRecVector.Add(vc, rv2);
 
             // create node
-            var n2 = new DagOracle.DagNode(id2, vc.info.impl.Name, 1);
+            var n2 = new DagOracle.DagNode(id2, vc.info.Implementation.Name, 1);
 
             vcNodeMap.Add(vc, n2);
             currentDag.AddNode(n2);
@@ -4072,6 +4077,10 @@ namespace CoreLib
     public class EmptyErrorReporter : ProverInterface.ErrorHandler
     {
         public override void OnModel(IList<string> labels, Model model, ProverInterface.Outcome proverOutcome) { }
+
+        public EmptyErrorReporter() : base(CommandLineOptions.Clo)
+        {
+        }
     }
 
     public class InsufficientDetailsToConstructCexPath : Exception
@@ -4093,7 +4102,7 @@ namespace CoreLib
         public List<StratifiedCallSite> callSitesToExpand;
         List<Tuple<int, int>> orderedStateIds;
 
-        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC)
+        public StratifiedInliningErrorReporter(VerifierCallback callback, StratifiedInlining si, StratifiedVC mainVC): base(CommandLineOptions.Clo)
         {
             this.callback = callback;
             this.si = si;
@@ -4110,8 +4119,7 @@ namespace CoreLib
         private Absy Label2Absy(string procName, string label)
         {
             int id = int.Parse(label);
-            var l2a = si.implName2StratifiedInliningInfo[procName].label2absy;
-            return (Absy)l2a[id];
+            return si.implName2StratifiedInliningInfo[procName].absyIds.fromId[id];
         }
 
         public override void OnProverError(string message)
@@ -4172,12 +4180,13 @@ namespace CoreLib
         {
             if (labels == null)
             {
-                labels = si.prover.CalculatePath(svc.id);
+                var task = (si.prover as SMTLibInteractiveTheoremProver).CalculatePath(svc.id, new CancellationToken());
+                labels = task.Result;
             }
             var ret = new List<Absy>();
             foreach (var label in labels)
             {
-                ret.Add(Label2Absy(svc.info.impl.Name, label));
+                ret.Add(Label2Absy(svc.info.Implementation.Name, label));
             }
             return ret;
         }
@@ -4187,7 +4196,7 @@ namespace CoreLib
             Debug.Assert(CommandLineOptions.Clo.UseProverEvaluate, "Must use prover evaluate option with boolControlVC"); 
             
             var ret = new List<Absy>();
-            var impl = svc.info.impl;
+            var impl = svc.info.Implementation;
             var block = impl.Blocks[0];
 
             while (true)
@@ -4198,7 +4207,7 @@ namespace CoreLib
                 Block next = null;
                 foreach (var succ in gc.labelTargets)
                 {
-                    var succtaken = (bool)svc.info.vcgen.prover.Evaluate(svc.blockToControlVar[succ]);
+                    var succtaken = (bool)svc.info.vcgen.prover.Evaluate(svc.blockToControlVar[succ]).Result;
                     if (succtaken)
                     {
                         next = succ;
@@ -4303,7 +4312,7 @@ namespace CoreLib
             }
 
             Block lastBlock = (Block)absyList[absyList.Count - 2];
-            Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(assertCmd, lastBlock.TransferCmd, trace, null, model, svc.info.mvInfo, si.prover.Context);
+            Counterexample newCounterexample = VC.VCGen.AssertCmdToCounterexample(CommandLineOptions.Clo, assertCmd, lastBlock.TransferCmd, trace, null, model, svc.info.mvInfo, si.prover.Context, null);
             newCounterexample.AddCalleeCounterexample(calleeCounterexamples);
             return newCounterexample;
         }

@@ -11,7 +11,10 @@ using Outcome = VC.VCGen.Outcome;
 using Bpl = Microsoft.Boogie;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
+using System.IO;
+using System.Threading;
 using Microsoft.Boogie.GraphUtil;
+using Microsoft.Boogie.SMTLib;
 
 namespace CoreLib {
 
@@ -48,8 +51,9 @@ namespace CoreLib {
             this.impl2Summary = new Dictionary<string, ISummaryElement>();
             this.name2Impl = BoogieUtil.nameImplMapping(program);
 
-            this.vcgen = new VCGen(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
-            this.prover = ProverInterface.CreateProver(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
+            var checkerPool = new CheckerPool(CommandLineOptions.Clo);
+            this.vcgen = new VCGen(program, checkerPool);
+            this.prover = ProverInterface.CreateProver(CommandLineOptions.Clo, program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
             this.reporter = new AbstractHoudiniErrorReporter();
 
             var impls = new List<Implementation>(
@@ -180,8 +184,7 @@ namespace CoreLib {
                 
                 //Console.WriteLine("Checking: {0}", vc);
 
-                prover.BeginCheck(impl.Name, vc, reporter);
-                ProverInterface.Outcome proverOutcome = prover.CheckOutcome(reporter);
+                ProverInterface.Outcome proverOutcome= prover.Check(impl.Name, vc, reporter, 1, CancellationToken.None).Result;
                 if (reporter.model == null)
                     break;
                 
@@ -312,13 +315,13 @@ namespace CoreLib {
         private void GenVC(Implementation impl)
         {
             ModelViewInfo mvInfo;
-            Dictionary<int, Absy> label2absy;
+            ControlFlowIdMap<Absy> label2absy = new ControlFlowIdMap<Absy>();
 
             vcgen.ConvertCFG2DAG(impl);
-            vcgen.PassifyImpl(impl, out mvInfo);
+            vcgen.PassifyImpl(new ImplementationRun(impl, TextWriter.Null), out mvInfo);
 
             var gen = prover.VCExprGen;
-            var vcexpr = vcgen.GenerateVC(impl, null, out label2absy, prover.Context);
+            var vcexpr = vcgen.GenerateVC(impl, null, label2absy, prover.Context);
 
             // Create a macro so that the VC can sit with the theorem prover
             Macro macro = new Macro(Token.NoToken, impl.Name + "Macro", new List<Variable>(), new Formal(Token.NoToken, new TypedIdent(Token.NoToken, "", Bpl.Type.Bool), false));
@@ -803,7 +806,7 @@ namespace CoreLib {
     {
         public Model model;
 
-        public AbstractHoudiniErrorReporter()
+        public AbstractHoudiniErrorReporter(): base(CommandLineOptions.Clo)
         {
             model = null;
         }

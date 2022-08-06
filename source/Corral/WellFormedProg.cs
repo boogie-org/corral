@@ -66,13 +66,13 @@ namespace cba
 
                 if (used.globalsUsed.Any(v => LanguageSemantics.isShared(v)))
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("Requires has a shared global");
                 }
 
                 if (used.oldVarsUsed.Any(v => LanguageSemantics.isShared(v)))
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("Requires has an \"old\" shared global");
                 }
 
@@ -89,7 +89,7 @@ namespace cba
 
                 if (re.Free == false)
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("A non-free requires has a non-shared global (not yet supported)");
                 }
 
@@ -102,13 +102,13 @@ namespace cba
 
                 if (used.globalsUsed.Any(v => LanguageSemantics.isShared(v)))
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("Ensures has a shared global");
                 }
 
                 if (used.oldVarsUsed.Any(v => LanguageSemantics.isShared(v)))
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("Ensures has an \"old\" shared global");
                 }
 
@@ -122,7 +122,7 @@ namespace cba
                 // "Ensures" in procs without implementation are considered free
                 if (re.Free == false && procsWithImpl.Contains(proc.Name))
                 {
-                    re.Emit(new TokenTextWriter(Console.Out), 0);
+                    re.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                     throw new InvalidInput("A non-free ensures is not yet supported");
                 }
 
@@ -143,7 +143,7 @@ namespace cba
                     used.Visit(cmd);
                     if (used.oldVarsUsed.Any())
                     {
-                        cmd.Emit(new TokenTextWriter(Console.Out), 0);
+                        cmd.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                         throw new InvalidInput("Command has an \"old\" variable");
                     }
                 }
@@ -155,7 +155,7 @@ namespace cba
         {
             if (decl is TypeCtorDecl)
             {
-                decl.Emit(new TokenTextWriter(Console.Out), 0);
+                decl.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo), 0);
                 throw new InvalidInput("Program has a user-defined type (cannot use with ArrayTheory)");
             }
         }

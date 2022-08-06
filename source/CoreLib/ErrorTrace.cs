@@ -1327,7 +1327,7 @@ namespace cba
             stack = new List<PrintProgramPath.WorkItem>();
             program = p;
             nameImplMap = BoogieUtil.nameImplMapping(program);
-            pathFile = new TokenTextWriter(filename);
+            pathFile = new TokenTextWriter(filename, CommandLineOptions.Clo);
             gcnt = 1;
             abortMessage = null;
 
@@ -1506,8 +1506,8 @@ namespace cba
         {
             program = p;
             nameImplMap = BoogieUtil.nameImplMapping(program);
-            pathFile = new TokenTextWriter(filename);
-            stackFile = new TokenTextWriter(stackFileName);
+            pathFile = new TokenTextWriter(filename, CommandLineOptions.Clo);
+            stackFile = new TokenTextWriter(stackFileName, CommandLineOptions.Clo);
             gcnt = 1;
             abortMessage = null;
             abortMessageLocation = null;
@@ -1544,7 +1544,7 @@ namespace cba
 
             if (scalarWrites.Count > 0)
             {
-                var scalarFile = new TokenTextWriter("scalars.txt");
+                var scalarFile = new TokenTextWriter("scalars.txt", CommandLineOptions.Clo);
                 scalarWrites.Iter(kvp =>
                     {
                         scalarFile.Write("{0}: ", kvp.Key);
@@ -1575,7 +1575,7 @@ namespace cba
                 memWrites.Iter(kvp =>
                     kvp.Value.Iter(line => lineWrites.InitAndAdd(line, kvp.Key)));
 
-                var memFile = new TokenTextWriter("mem1.txt");
+                var memFile = new TokenTextWriter("mem1.txt", CommandLineOptions.Clo);
                 
                 var lines = new HashSet<string>();
                 lineReads.Keys.Iter(line => lines.Add(line));
@@ -1592,7 +1592,7 @@ namespace cba
 
                 memFile.Close();
 
-                memFile = new TokenTextWriter("mem2.txt");
+                memFile = new TokenTextWriter("mem2.txt", CommandLineOptions.Clo);
 
                 var addresses = new HashSet<int>();
                 memReads.Keys.Iter(a => addresses.Add(a));
@@ -1619,7 +1619,7 @@ namespace cba
                 memWritesCS.Iter(kvp =>
                     kvp.Value.Iter(cs => stateWrites.InitAndAdd(cs, kvp.Key)));
 
-                memFile = new TokenTextWriter("mem3.txt");
+                memFile = new TokenTextWriter("mem3.txt", CommandLineOptions.Clo);
 
                 var states = new HashSet<int>();
                 stateReads.Keys.Iter(s => states.Add(s));
@@ -1636,7 +1636,7 @@ namespace cba
 
                 memFile.Close();
 
-                memFile = new TokenTextWriter("mem4.txt");
+                memFile = new TokenTextWriter("mem4.txt", CommandLineOptions.Clo);
 
                 foreach (var add in addresses)
                 {
@@ -1924,7 +1924,7 @@ namespace cba
         private static void setupPrint(PersistentProgram program, ErrorTrace trace, string file)
         {
             // Set output files
-            pathFile = new TokenTextWriter(file + "_trace.txt");
+            pathFile = new TokenTextWriter(file + "_trace.txt", CommandLineOptions.Clo);
             program.writeToFile(file + ".bpl");
             Program prog = program.getProgram();
 
@@ -2049,7 +2049,7 @@ namespace cba
         private static Stack<Dictionary<int, ErrorTrace>> traceStack = new Stack<Dictionary<int, ErrorTrace>>();
 
         public InlineToTrace(Program program, InlineCallback cb)
-            :base(program, cb, -1)
+            :base(program, cb, -1, CommandLineOptions.Clo)
         { }
 
         // Return callCmd -> callee trace
@@ -2112,7 +2112,7 @@ namespace cba
             var inliner = new InlineToTrace(program, null);
 
             traceStack.Push(FindCallsOnTrace(entryPoint, trace));
-            Inliner.ProcessImplementation(program, entryPoint, inliner);
+            Inliner.ProcessImplementation(CommandLineOptions.Clo, program, entryPoint);
 
             foreach (var impl in program.TopLevelDeclarations.OfType<Implementation>())
             {

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.Boogie;
 using System.Diagnostics;
+using System.IO;
 using cba.Util;
 using Microsoft.Boogie.Houdini;
 
@@ -1383,7 +1384,8 @@ namespace cba
 
             CommandLineOptions.Clo.InlineDepth = InlineDepth;
             var old = CommandLineOptions.Clo.ProcedureInlining;
-            CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
+            CommandLineOptions.Clo.ProcedureInlining =
+                CoreOptions.Inlining.Spec;
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
             var oldErrorLimit = CommandLineOptions.Clo.ErrorLimit;
@@ -1455,8 +1457,9 @@ namespace cba
                 {
 
                     var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                    Houdini houdini = new Houdini(program, houdiniStats);
-                    outcome = houdini.PerformHoudiniInference();
+                    Houdini houdini = new Houdini(TextWriter.Null, CommandLineOptions.Clo, program, houdiniStats);
+                    var task = houdini.PerformHoudiniInference();
+                    outcome = task.Result;
                     Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
 
                     if (!fastRequiresInference)
@@ -1488,8 +1491,9 @@ namespace cba
 
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
                     var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                    Houdini houdini = new Houdini(origProg, houdiniStats);
-                    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
+                    Houdini houdini = new Houdini(TextWriter.Null, CommandLineOptions.Clo, origProg, houdiniStats);
+                    var task = houdini.PerformHoudiniInference();
+                    var outcomeReq = task.Result;
                     Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
 
@@ -1541,7 +1545,7 @@ namespace cba
                         break;
                     }
                     Console.WriteLine("The following expr in {0} is not valid", proc);
-                    expr.Emit(new TokenTextWriter(Console.Out));
+                    expr.Emit(new TokenTextWriter(Console.Out, CommandLineOptions.Clo));
                     Console.WriteLine();
                 }
 
@@ -1622,11 +1626,11 @@ namespace cba
             foreach (Declaration d in program.TopLevelDeclarations)
             {
                 Implementation impl = d as Implementation;
-                if (impl != null && !impl.SkipVerification)
+                if (impl != null && !impl.IsSkipVerification(CommandLineOptions.Clo))
                 {
                     if (CommandLineOptions.Clo.InlineDepth >= 0)
                     {
-                        Inliner.ProcessImplementation(program, impl);
+                        Inliner.ProcessImplementation(CommandLineOptions.Clo, program, impl);
                     }
                     else
                     {
@@ -1650,7 +1654,7 @@ namespace cba
         public class CallInliner : Inliner
         {
             public CallInliner(Program program)
-                : base(program, null, -1)
+                : base(program, null, -1, CommandLineOptions.Clo)
             { }
 
             new public static void ProcessImplementation(Program program, Implementation impl)
@@ -1688,7 +1692,7 @@ namespace cba
             });
 
             program.TopLevelDeclarations =
-                program.TopLevelDeclarations.Where(decl => !(decl is Implementation) || (implHasEnsures(decl as Implementation) && !ignoreImpl(decl as Implementation)));
+                program.TopLevelDeclarations.Where(decl => !(decl is Implementation) || (implHasEnsures(decl as Implementation) && !ignoreImpl(decl as Implementation))).ToList();
         }
 
         public override ErrorTrace mapBackTrace(ErrorTrace trace)
@@ -1734,7 +1738,7 @@ namespace cba
                 CommandLineOptions.Clo.RecursionBound = 2;
                 
                 // Unroll loops
-                program.ExtractLoops();
+                LoopExtractor.ExtractLoops(CommandLineOptions.Clo, program);
 
                 CommandLineOptions.Clo.RecursionBound = rb;
             }
@@ -1806,7 +1810,7 @@ namespace cba
 
             CommandLineOptions.Clo.InlineDepth = InlineDepth;
             var old = CommandLineOptions.Clo.ProcedureInlining;
-            CommandLineOptions.Clo.ProcedureInlining = CommandLineOptions.Inlining.Spec;
+            CommandLineOptions.Clo.ProcedureInlining = CoreOptions.Inlining.Spec;
             var si = CommandLineOptions.Clo.StratifiedInlining;
             CommandLineOptions.Clo.StratifiedInlining = 0;
             var oldErrorLimit = CommandLineOptions.Clo.ErrorLimit;
@@ -1866,8 +1870,9 @@ namespace cba
 
                 {
                     var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                    Houdini houdini = new Houdini(program, houdiniStats);
-                    outcome = houdini.PerformHoudiniInference();
+                    Houdini houdini = new Houdini(TextWriter.Null, CommandLineOptions.Clo, program, houdiniStats);
+                    var task = houdini.PerformHoudiniInference();
+                    outcome = task.Result;
                     Debug.Assert(outcome.ErrorCount == 0, "Something wrong with houdini");
 
                     if (!fastRequiresInference)
@@ -1897,8 +1902,9 @@ namespace cba
 
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = true;
                     var houdiniStats = new HoudiniSession.HoudiniStatistics();
-                    Houdini houdini = new Houdini(origProg, houdiniStats);
-                    HoudiniOutcome outcomeReq = houdini.PerformHoudiniInference();
+                    Houdini houdini = new Houdini(TextWriter.Null, CommandLineOptions.Clo, origProg, houdiniStats);
+                    var task = houdini.PerformHoudiniInference();
+                    var outcomeReq = task.Result;
                     Debug.Assert(outcomeReq.ErrorCount == 0, "Something wrong with houdini");
                     CommandLineOptions.Clo.ReverseHoudiniWorklist = false;
 

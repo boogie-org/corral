@@ -7,6 +7,7 @@ using Microsoft.Boogie;
 //using BoogiePL;
 using System.Diagnostics.Contracts;
 using System.IO;
+using System.Threading;
 using VC;
 using cba.Util;
 
@@ -116,7 +117,8 @@ namespace cba.Util
                 CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
 
             // Do loop extraction
-            var extractionInfo = program.ExtractLoops();
+            var extractionInfo = LoopExtractor
+                .ExtractLoops(CommandLineOptions.Clo, program).loops;
 
             // restore RB
             CommandLineOptions.Clo.RecursionBound = rb;
@@ -191,7 +193,9 @@ namespace cba.Util
                 {
                     var start = DateTime.Now;
 
-                    outcome = vcgen.VerifyImplementation(impl, out errors);
+                    var verificationResult = vcgen.VerifyImplementation(new ImplementationRun(impl, TextWriter.Null), CancellationToken.None).Result;
+                    outcome = verificationResult.Item1;
+                    errors = verificationResult.errors;
 
                     var end = DateTime.Now;
 
@@ -242,7 +246,7 @@ namespace cba.Util
                 Log.WriteLine(Log.Debug, outcome.ToString());
 
                 Log.WriteLine(Log.Debug, (errors == null ? 0 : errors.Count) + " counterexamples.");
-                if (errors != null) ret = ReturnStatus.NOK;
+                if (errors != null && errors.Count > 0) ret = ReturnStatus.NOK;
 
                 // Print model
                 if (errors != null && errors.Count > 0 && errors[0].Model != null && CommandLineOptions.Clo.ModelViewFile != null)
@@ -272,7 +276,7 @@ namespace cba.Util
                         // Map the trace across loop extraction
                         if (vcgen is VC.VCGen)
                         {
-                            errors[i] = (vcgen as VC.VCGen).extractLoopTrace(errors[i], impl.Name, program, extractionInfo);
+                            errors[i] = (vcgen as VC.VCGen).ExtractLoopTrace(errors[i], impl.Name, program, extractionInfo);
                         }
 
                         if (errors[i] is AssertCounterexample)
@@ -626,7 +630,7 @@ namespace cba.Util
                 {
                     // find the corresponding call in origBlock
                     var calleeInfo = trace.calleeCounterexamples[currLocation];
-                    var calleeName = trace.getCalledProcName(trace.Trace[currLocation.numBlock].Cmds[currLocation.numInstr]);
+                    var calleeName = trace.GetCalledProcName(trace.Trace[currLocation.numBlock].Cmds[currLocation.numInstr]);
                     while (currOrigInstr < currOrigBlock.Cmds.Count)
                     {
                         var cmd = currOrigBlock.Cmds[currOrigInstr] as CallCmd;
@@ -649,7 +653,7 @@ namespace cba.Util
                     break;
             }
 
-            var ret = new AssertCounterexample(newTrace, null, null, trace.Model, trace.MvInfo, trace.Context);
+            var ret = new AssertCounterexample(CommandLineOptions.Clo, newTrace, null, null, trace.Model, trace.MvInfo, trace.Context, null);
             ret.calleeCounterexamples = newTraceCallees;
 
             return ret;
@@ -703,7 +707,7 @@ namespace cba.Util
                         if (trace.calleeCounterexamples.ContainsKey(loc))
                         {
                             Cmd c = b.Cmds[numInstr];
-                            var calleeName = trace.getCalledProcName(c);
+                            var calleeName = trace.GetCalledProcName(c);
                             var calleeTrace = trace.calleeCounterexamples[loc].counterexample;
                             ReconstructImperativeTrace(calleeTrace, calleeName, origProg);
                             calleeTraces.Add(

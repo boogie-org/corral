@@ -1120,16 +1120,19 @@ namespace cba
             
             foreach (var impl in BoogieUtil.GetImplementations(p))
             {
-                impl.PruneUnreachableBlocks();
+                impl.PruneUnreachableBlocks(CommandLineOptions.Clo);
             }
 
             // save RB
             var rb = CommandLineOptions.Clo.RecursionBound;
             if (BoogieVerify.irreducibleLoopUnroll >= 0)
                 CommandLineOptions.Clo.RecursionBound = BoogieVerify.irreducibleLoopUnroll;
-
-            var procsWithIrreducibleLoops = new HashSet<string>();
-            var passInfo = p.ExtractLoops(out procsWithIrreducibleLoops);
+            
+            var loopExtractionResult = LoopExtractor.ExtractLoops(CommandLineOptions.Clo, p);
+            var passInfo = loopExtractionResult.loops;
+            var procsWithIrreducibleLoops =
+                loopExtractionResult.procsWithIrreducibleLoops
+                    .Select(implementation => implementation.Name).ToHashSet();
 
             // restore RB
             CommandLineOptions.Clo.RecursionBound = rb;

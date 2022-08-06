@@ -231,7 +231,7 @@ public class CbaLiveVariableAnalysis
         else if (cmd is SugaredCmd)
         {
             SugaredCmd/*!*/ sugCmd = (SugaredCmd)cce.NonNull(cmd);
-            Propagate(sugCmd.Desugaring, liveSet, allGlobalsAreLive);
+            Propagate(sugCmd.GetDesugaring(CommandLineOptions.Clo), liveSet, allGlobalsAreLive);
         }
         else if (cmd is StateCmd)
         {

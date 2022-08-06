@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Diagnostics;
+using System.Threading;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
 using VC;
@@ -86,7 +87,7 @@ namespace ExplainError
         static private VCGen vcgen;
         static private ProverInterface proverInterface;
         //static private ProverInterface.ErrorHandler handler;
-        static private ConditionGeneration.CounterexampleCollector collector;
+        static private ConditionGeneration.VerificationResultCollector collector;
         static private Boogie2VCExprTranslator translator;
         static private VCExpressionGenerator exprGen;
 
@@ -481,7 +482,7 @@ namespace ExplainError
                     oldExpr.ToString().Contains("!="))) continue;
 
                 assumeCmd.Expr = Expr.Not(oldExpr);
-                prog.Resolve(); prog.Typecheck(); //TODO: perhaps move this inside MyVerifyImplementation?
+                prog.Resolve(CommandLineOptions.Clo); prog.Typecheck(CommandLineOptions.Clo); //TODO: perhaps move this inside MyVerifyImplementation?
                 Console.WriteLine("Checking the assume {0} ", assumeCmd);
                 if (VCVerifier.MyVerifyImplementation(currImpl) == ConditionGeneration.Outcome.Correct)
                 {
@@ -1155,9 +1156,9 @@ namespace ExplainError
             string[] args;
             //Custom parser to look and remove RootCause specific options
             var help = ParseArgs(oldArgs, out args);
-            CommandLineOptions.Install(new CommandLineOptions());
+            CommandLineOptions.Clo = new CommandLineOptions(new ConsolePrinter());
             CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
-            CommandLineOptions.Clo.TypeEncodingMethod = CommandLineOptions.TypeEncoding.Monomorphic;
+            CommandLineOptions.Clo.TypeEncodingMethod = CoreOptions.TypeEncoding.Monomorphic;
             CommandLineOptions.Clo.Parse(args);
             return !help;
         }
@@ -1255,13 +1256,13 @@ namespace ExplainError
                 Console.WriteLine("WARNING: Error opening file \"{0}\": {1}", fname, e.Message);
                 return false;
             }
-            errCount = prog.Resolve();
+            errCount = prog.Resolve(CommandLineOptions.Clo);
             if (errCount > 0)
             {
                 Console.WriteLine("WARNING: {0} name resolution errors in {1}", errCount, fname);
                 return false;
             }
-            errCount = prog.Typecheck();
+            errCount = prog.Typecheck(CommandLineOptions.Clo);
             if (errCount > 0)
             {
                 Console.WriteLine("WARNING: {0} type checking errors in {1}", errCount, fname);
@@ -1273,7 +1274,7 @@ namespace ExplainError
         private static bool CheckSanity(Implementation impl)
         {
             if (impl == null) { returnStatus = STATUS.ILLEGAL; return false; }
-            if (!CommandLineOptions.Clo.UserWantsToCheckRoutine(impl.Name))
+            if (!(CommandLineOptions.Clo as ExecutionEngineOptions).UserWantsToCheckRoutine(impl.Name))
             {
                 returnStatus = STATUS.ILLEGAL; return false;
             }
@@ -1302,15 +1303,15 @@ namespace ExplainError
         #endregion
 
         #region Invoking Verifier for semantic queries
-        private static void CreateProver()
+        /*private static void CreateProver()
         {
             //create vcgen/proverInterface
             vcgen = new VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
             proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
             translator = proverInterface.Context.BoogieExprTranslator;
             exprGen = proverInterface.Context.ExprGen;
-            collector = new ConditionGeneration.CounterexampleCollector();
-        }
+            collector = new ConditionGeneration.VerificationResultCollector();
+        }*/
         /// <summary>
         /// Class for asking semantic questions for the verifier (carried over from almost correct specs)
         /// </summary>
@@ -1335,13 +1336,13 @@ namespace ExplainError
                 var cexList = new List<Counterexample>();
                 prog.AddTopLevelDeclaration(i);
                 prog.AddTopLevelDeclaration(p);
-                prog.Resolve();
-                prog.Typecheck();
+                prog.Resolve(CommandLineOptions.Clo);
+                prog.Typecheck(CommandLineOptions.Clo);
                 var result = (MyVerifyImplementation(i, ref cexList) == VC.ConditionGeneration.Outcome.Correct);
                 prog.RemoveTopLevelDeclaration(i);
                 prog.RemoveTopLevelDeclaration(p);
-                prog.Resolve();
-                prog.Typecheck();
+                prog.Resolve(CommandLineOptions.Clo);
+                prog.Typecheck(CommandLineOptions.Clo);
                 Console.Write(".");
                 if (verbose) Console.WriteLine("CheckIfExprFalse: input {0}, output {1}", e.ToString(), result);
                 checkIfExprFalseCalled = true;
@@ -1352,8 +1353,8 @@ namespace ExplainError
                 ref List<Counterexample> cexList)
             {
                 //this creates a z3 process per vcgen
-                var checkers = new List<Checker>();
-                VC.VCGen vcgen = new VC.VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, checkers);
+                var checkers = new CheckerPool(CommandLineOptions.Clo);
+                VC.VCGen vcgen = new VC.VCGen(prog, checkers);
                 //make deep copy of the blocks
                 var tmpBlocks = new List<Block>();
                 foreach (Block b in i.Blocks)
@@ -1369,14 +1370,12 @@ namespace ExplainError
                     i.Blocks = i.OriginalBlocks;
                     i.LocVars = i.OriginalLocVars;
                 }
-                var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList);
+
+                var run = new ImplementationRun(i, TextWriter.Null);
+                var outcome = vcgen.VerifyImplementation(run, CancellationToken.None).Result.Item1;
                 var reset = new ResetVerificationState();
                 reset.Visit(i);
-                foreach (Checker checker in checkers)
-                {
-                    //Contract.Assert(checker != null);
-                    checker.Close();
-                }
+                checkers.Dispose();
                 vcgen.Close();
                 i.Blocks = tmpBlocks;
                 i.LocVars = tmpLocVars;

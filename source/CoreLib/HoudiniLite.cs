@@ -4,12 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Threading;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
 using VC;
 using Outcome = VC.VCGen.Outcome;
 using cba.Util;
 using Microsoft.Boogie.GraphUtil;
+using Microsoft.Boogie.SMTLib;
 
 namespace CoreLib
 {
@@ -150,6 +152,7 @@ namespace CoreLib
             HoudiniStats.Start("VCGen");
 
             // VC Gen
+            VC.CheckerPool checkerPool = new CheckerPool(CommandLineOptions.Clo);
             var hi = new HoudiniInlining(program, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, RewriteAssumedToAssertedAction);
 
             HoudiniStats.Stop("VCGen");
@@ -392,7 +395,7 @@ namespace CoreLib
                 }
 
                 prover.Check();
-                var outcome = prover.CheckOutcomeCore(reporter);
+                var outcome = (prover as SMTLibInteractiveTheoremProver).CheckSat(CancellationToken.None, 1).Result;
 
                 // check which ones failed
                 if (outcome == ProverInterface.Outcome.Invalid || outcome == ProverInterface.Outcome.Undetermined)
@@ -402,8 +405,15 @@ namespace CoreLib
                     {
                         foreach (var k in remaining)
                         {
-                            var b = recordingBool == null ? (bool)prover.Evaluate(constantToAssertedExpr[k])
-                                : (bool)prover.Evaluate(recordingBool[k]);
+                            bool b;
+                            if (recordingBool == null) {
+                                var task = prover.Evaluate(
+                                    constantToAssertedExpr[k]);
+                                b = (bool)task.Result;
+                            } else {
+                                var task = prover.Evaluate(recordingBool[k]);
+                                b = (bool)task.Result;
+                            }
 
                             if (!b)
                             {
@@ -417,12 +427,12 @@ namespace CoreLib
                     {
                         foreach (var tup in callSiteVarToConstantToExpr)
                         {
-                            if (!(bool)prover.Evaluate(nameToCallSiteVar[tup.Key]))
+                            if (!(bool)prover.Evaluate(nameToCallSiteVar[tup.Key]).Result)
                                 continue;
                             // call site taken
                             foreach (var tup2 in tup.Value)
                             {
-                                if ((bool)prover.Evaluate(tup2.Value))
+                                if ((bool)prover.Evaluate(tup2.Value).Result)
                                 {
                                     failed.Add(tup2.Key);
                                     if (dbg) Console.WriteLine("Failed: {0}", tup2.Key);

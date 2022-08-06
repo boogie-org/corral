@@ -450,7 +450,7 @@ namespace cba
                 .Iter(cc =>
                 {
                     var str = new System.IO.StringWriter();
-                    var tt = new TokenTextWriter(str);
+                    var tt = new TokenTextWriter(str, CommandLineOptions.Clo);
                     cc.Emit(tt, 0);
                     tt.Close();
                     callStr.Add(str.ToString());
@@ -538,9 +538,9 @@ namespace cba
             // Type information is needed in some cases. For instance, the Command
             // Mem[x] := untracked-expr is converted to havoc temp; Mem[x] := temp. Here
             // we need the type of "untracked-expr" or of "Mem[x]"
-            if (p.Typecheck() != 0)
+            if (p.Typecheck(CommandLineOptions.Clo) != 0)
             {
-                p.Emit(new TokenTextWriter("error.bpl"));
+                p.Emit(new TokenTextWriter("error.bpl", CommandLineOptions.Clo));
                 throw new InternalError("Type errors");
             }
             vslice.VisitProgram(p as Program);
@@ -712,9 +712,9 @@ namespace cba
                 foreach (Declaration d in TopLevelDeclarations)
                 {
                     Implementation impl = d as Implementation;
-                    if (impl != null && !impl.SkipVerification)
+                    if (impl != null && !impl.IsSkipVerification(CommandLineOptions.Clo))
                     {
-                        Inliner.ProcessImplementation(p as Program, impl);
+                        Inliner.ProcessImplementation(CommandLineOptions.Clo, p, impl);
                     }
                 }
                 foreach (Declaration d in TopLevelDeclarations)
@@ -766,7 +766,7 @@ namespace cba
             }
             foreach (Implementation impl in impls)
             {
-                Inliner.ProcessImplementationForHoudini(program, impl);
+                Inliner.ProcessImplementationForHoudini(CommandLineOptions.Clo, program, impl);
             }
             foreach (Implementation impl in impls)
             {

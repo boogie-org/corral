@@ -393,7 +393,7 @@ namespace cba
                         graph.AddEdge(kvp.Key, tgt);
                 }));
 
-            if (!Graph<string>.Acyclic(graph, proc))
+            if (!Graph<string>.Acyclic(graph))
                 return false;
 
             return true;

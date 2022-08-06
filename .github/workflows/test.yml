@@ -4,6 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 env:
   SOLUTION: source/Corral.sln
+  BOOGIESOLUTION: boogie/Source/Boogie.sln
   Z3URL: https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
 
 jobs:
@@ -32,6 +33,8 @@ jobs:
           cd $GITHUB_WORKSPACE
           # Restore dotnet tools
           dotnet tool restore
+          # Build custom Boogie
+          dotnet build ${BOOGIESOLUTION}
           # Build Corral
           dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
           # Run regression tests
