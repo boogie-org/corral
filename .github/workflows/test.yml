@@ -49,3 +49,9 @@ jobs:
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           # Run regression tests
           ./run.sh ${{ matrix.configuration }}
+      - name: Test Angelic Verifier
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE/test/av-regressions
+          # Run regression tests
+          ./run.sh ${{ matrix.configuration }}

@@ -1,23 +1,13 @@
 #!/bin/bash
-
-echo "Usage: run.sh [clean]"
-
-if [[ $# == 1 ]];
+rm -f Output
+./runtest.sh $1 >> Output
+diff Output Answer > /dev/null 2>&1
+error=$?
+if [ $error -eq 0 ]
 then
-    rm -f *_hinst.bpl
-    rm -f *_hinst_inst.bpl
-    exit
-fi
-
-diff --unified=3 --strip-trailing-cr --ignore-all-space \
- <(./runtest.sh "$@") <(cat Answer)
-
-if [[ $? == 0 ]];
-then
-    echo Succeeded
-    exit 0
+  echo "Succeeded"
+  exit 0
 else
-    echo Failed
-    exit 1
+  echo "FAILED"
+  exit 1
 fi
-
