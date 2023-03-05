@@ -13,7 +13,7 @@
     <ProjectReference Include="..\AliasAnalysis\AliasAnalysis.csproj" />
     <ProjectReference Include="..\AvUtil\AvUtil.csproj" />
     <ProjectReference Include="..\Corral\Corral.csproj" />
-    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj" />
+    <ProjectReference Include="..\propinstutils\PropInstUtils.csproj" />
   </ItemGroup>
 
 </Project>

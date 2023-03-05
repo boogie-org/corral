@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Util\CorralUtil.csproj" />
-    <ProjectReference Include="..\PropInstUtils\PropInstUtils.csproj" />
+    <ProjectReference Include="..\propinstutils\PropInstUtils.csproj" />
   </ItemGroup>
 
 </Project>
