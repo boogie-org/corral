@@ -1,6 +1,6 @@
 #!/bin/bash
-rm Output
-./runtest.sh >> Output
+rm -f Output
+./runtest.sh $1 >> Output
 diff Output Answer > /dev/null 2>&1
 error=$?
 if [ $error -eq 0 ]

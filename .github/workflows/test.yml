@@ -45,4 +45,4 @@ jobs:
           export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           # Run regression tests
-          ./run.sh
+          ./run.sh ${{ matrix.configuration }}
