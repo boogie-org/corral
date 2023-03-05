@@ -33,14 +33,15 @@ jobs:
           # Restore dotnet tools
           dotnet tool restore
           # Build Corral
-          cd $GITHUB_WORKSPACE
           dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
       - name: Test Corral
+        run: |
           cd $GITHUB_WORKSPACE
           # Run regression tests
           export CONFIGURATION=${{ matrix.configuration }}
           (cd test/regression && perl check.pl)
       - name: Test AliasAnalysis
+        run: |
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           # Run regression tests
           ./run.sh
