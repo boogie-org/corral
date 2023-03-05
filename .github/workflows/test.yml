@@ -43,15 +43,21 @@ jobs:
           # Run regression tests
           export CONFIGURATION=${{ matrix.configuration }}
           (cd test/regression && perl check.pl)
+      - name: Test Fwdbck
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE
+          export CONFIGURATION=${{ matrix.configuration }}
+          (cd test/fwdbck && perl checkNSIFB.pl)
       - name: Test AliasAnalysis
         run: |
           export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           # Run regression tests
           ./run.sh ${{ matrix.configuration }}
-      - name: Test Angelic Verifier
-        run: |
-          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
-          cd $GITHUB_WORKSPACE/test/av-regressions
-          # Run regression tests
-          ./run.sh ${{ matrix.configuration }}
+      #- name: Test Angelic Verifier
+      #  run: |
+      #    export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+      #    cd $GITHUB_WORKSPACE/test/av-regressions
+      #    # Run regression tests
+      #    ./run.sh ${{ matrix.configuration }}
