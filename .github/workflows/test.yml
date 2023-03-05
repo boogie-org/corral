@@ -27,7 +27,6 @@ jobs:
           # Download a Z3 release
           wget ${Z3URL}
           unzip z3*.zip
-          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           # Change directory to Corral root folder
           cd $GITHUB_WORKSPACE
           # Restore dotnet tools
@@ -36,12 +35,14 @@ jobs:
           dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
       - name: Test Corral
         run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           cd $GITHUB_WORKSPACE
           # Run regression tests
           export CONFIGURATION=${{ matrix.configuration }}
           (cd test/regression && perl check.pl)
       - name: Test AliasAnalysis
         run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           # Run regression tests
           ./run.sh
