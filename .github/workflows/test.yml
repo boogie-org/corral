@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Install tools, build Corral, test Corral
+      - name: Install tools, build Corral
         run: |
           # Download a Z3 release
           wget ${Z3URL}
@@ -33,7 +33,14 @@ jobs:
           # Restore dotnet tools
           dotnet tool restore
           # Build Corral
+          cd $GITHUB_WORKSPACE
           dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
+      - name: Test Corral
+          cd $GITHUB_WORKSPACE
           # Run regression tests
           export CONFIGURATION=${{ matrix.configuration }}
           (cd test/regression && perl check.pl)
+      - name: Test AliasAnalysis
+          cd $GITHUB_WORKSPACE/test/AliasAnalysis
+          # Run regression tests
+          ./run.sh
