@@ -3,3 +3,5 @@ corral_out*.bpl
 corral_out*_trace.txt
 CorralTmpConcatFile.bpl
 next.bpl
+av-regressions/*inst.bpl
+av-regressions/*.txt
