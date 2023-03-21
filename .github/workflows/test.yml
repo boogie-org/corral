@@ -3,8 +3,8 @@ name: Corral CI
 on: [push, pull_request, workflow_dispatch]
 
 env:
-  CORRAL_SOLUTION: source/Corral.sln
-  AV_SOLUTION: source/av.sln
+  SOLUTION: source/Corral.sln
+  AVSOLUTION: source/av.sln
   Z3URL: https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
 
 jobs:
@@ -33,9 +33,9 @@ jobs:
           # Restore dotnet tools
           dotnet tool restore
           # Build Corral
-          dotnet build -c ${{ matrix.configuration }} ${CORRAL_SOLUTION}
+          dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
           # Build Angelic Verifier
-          dotnet build -c ${{ matrix.configuration }} ${AV_SOLUTION}
+          dotnet build -c ${{ matrix.configuration }} ${AVSOLUTION}
       - name: Test Corral
         run: |
           export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
@@ -53,3 +53,13 @@ jobs:
           export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           cd $GITHUB_WORKSPACE/test/AliasAnalysis
           ./run.sh ${{ matrix.configuration }}
+      #- name: Test Angelic Verifier
+      #  run: |
+      #    export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+      #    cd $GITHUB_WORKSPACE/test/av-regressions
+      #    ./run.sh ${{ matrix.configuration }}
+      #- name: Test PropInst
+      #  run: |
+      #    export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+      #    cd $GITHUB_WORKSPACE/test/propinst-regressions
+      #    ./run.sh ${{ matrix.configuration }}
