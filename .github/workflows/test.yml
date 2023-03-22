@@ -4,6 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 env:
   SOLUTION: source/Corral.sln
+  AVSOLUTION: source/av.sln
   Z3URL: https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip
 
 jobs:
@@ -22,18 +23,38 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Install tools, build Corral, test Corral
+      - name: Install tools, build Corral, build Angelic Verifier
         run: |
           # Download a Z3 release
           wget ${Z3URL}
           unzip z3*.zip
-          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
           # Change directory to Corral root folder
           cd $GITHUB_WORKSPACE
           # Restore dotnet tools
           dotnet tool restore
           # Build Corral
           dotnet build -c ${{ matrix.configuration }} ${SOLUTION}
-          # Run regression tests
+          # Build Angelic Verifier
+          dotnet build -c ${{ matrix.configuration }} ${AVSOLUTION}
+      - name: Test Corral
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE
           export CONFIGURATION=${{ matrix.configuration }}
           (cd test/regression && perl check.pl)
+      - name: Test Fwdbck
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE
+          export CONFIGURATION=${{ matrix.configuration }}
+          (cd test/fwdbck && perl checkNSIFB.pl)
+      - name: Test AliasAnalysis
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE/test/AliasAnalysis
+          ./run.sh ${{ matrix.configuration }}
+      - name: Test Angelic Verifier
+        run: |
+          export PATH="$(find $PWD/z3* -name bin -type d):$PATH"
+          cd $GITHUB_WORKSPACE/test/av-regressions
+          ./run.sh ${{ matrix.configuration }}

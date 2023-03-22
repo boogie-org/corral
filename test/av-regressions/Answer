@@ -1,24 +1,26 @@
 
 -------------------- t1.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t1_hinst.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
 
 -------------------- t2_err.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t2_err_hinst.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_2(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
 
 -------------------- t3_err.bpl --------------------
 [TAG: AV_OUTPUT] AngelicVerifier failed with: ABORT: no NULL constant declared in the input program
 
 -------------------- t4.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t4_hinst.bpl ------
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace0 }
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_2(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace2 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
 
 -------------------- t5.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t5_hinst.bpl ------
@@ -30,17 +32,18 @@
 
 -------------------- t7.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t7_hinst.bpl ------
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> field[x_2] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
 
 -------------------- t8.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t8_hinst.bpl ------
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_4(x_2) ==> x_2 != NULL)
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace1 }
-[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_2(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_3(x_2) ==> x_2 != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_3: int :: unknownTrigger_5(x_3) ==> arr[x_3] != NULL)
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_4(x_2) ==> x_2 != NULL)
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Failing traces {Trace5 }
+[TAG: AV_OUTPUT] ANGELIC_VERIFIER_WARNING: Assertion failed in proc Bar with expr a != NULL
 
 -------------------- t9.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing t9_hinst.bpl ------
@@ -65,9 +68,9 @@
 -------------------- generalize.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing generalize_hinst.bpl ------
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1 + 1] != NULL)
+[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_4: int :: unknownTrigger_3(x_4) ==> b[x_4] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1 + 2] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_1: int :: unknownTrigger_0(x_1) ==> b[x_1] != NULL)
-[TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall x_2: int :: unknownTrigger_1(x_2) ==> b[x_2] != NULL)
 [TAG: AV_OUTPUT] EXPLAINERROR-BLOCK :: (forall _z: int :: b[_z] > 0)
 
 -------------------- rec.bpl --------------------
@@ -111,4 +114,3 @@
 
 -------------------- delayed_initialization.bpl --------------------
 [TAG: AV_OUTPUT] ----- Analyzing delayed_initialization_hinst.bpl ------
->>>>>>> upstream/master

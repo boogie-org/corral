@@ -1,3 +1,10 @@
+use warnings;
+
+use Cwd;
+use File::Basename;
+use File::Find;
+use File::Spec;
+
 open (FINAL_OUTPUT, "Files") || die "cannot read Files";
 @files = <FINAL_OUTPUT>;
 close (FINAL_OUTPUT);
@@ -54,7 +61,7 @@ foreach $line (@files) {
     }
 
     # get directory name from the file name
-    @tmp = split(/\\/, $file);
+    @tmp = split('/', $file);
     $dir = $tmp[0];
     
     #print "Directory given: $dir";
@@ -62,9 +69,25 @@ foreach $line (@files) {
     # check if files exists
     open(TMP_HANDLE, $file) || die "File $file does not exist\n";
     close (TMP_HANDLE);
+    
+    my @files;
+    my $buildPath = File::Spec->catfile('..', '..', 'source', 'Corral', 'bin', $BuildConfig);
+    find( sub {
+        # Skip any `publish` directories
+        $File::Find::prune = 1 if $File::Find::name =~ m/\bpublish\b/;
 
-    $cmd = "$timeout ..\\..\\bin\\Debug\\corral.exe /newStratifiedInlining $file /fwdBck /fwdBckInRef /flags:$dir\\config.txt $flags > out";
-    #print $cmd; print "\n";
+        # Only look for corral executables
+        return unless -f && /^corral([.]exe)?$/i;
+
+        push @files, $File::Find::name;
+    }, $buildPath );
+    die "No corral executable found" unless scalar(@files) > 0;
+    warn "Multiple corral executables found: @{[ join(', ', @files) ]}" unless scalar(@files) == 1;
+
+    my $corralPath = $files[0];
+
+    $cmd = "$timeout $corralPath /newStratifiedInlining:nounder $file /fwdBck /fwdBckInRef /flags:$dir/config.txt $flags > out";
+    # print $cmd; print "\n";
     system($cmd);
 
     # Check result
