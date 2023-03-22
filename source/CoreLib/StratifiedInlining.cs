@@ -4263,6 +4263,14 @@ namespace CoreLib
                                 {
                                     args.Add(model.MkElement((expr as VCExprIntLit).Val.ToString()));
                                 }
+                                else if (expr is VCExprNAry && 
+                                    (expr as VCExprNAry).Op is VCExprBvOp &&
+                                    (expr as VCExprNAry).Length == 1 &&
+                                    (expr as VCExprNAry)[0] is VCExprIntLit
+                                    )
+                                {
+                                    args.Add(model.MkElement(((expr as VCExprNAry)[0] as VCExprIntLit).Val.ToString() + (expr.Type.ToString())));
+                                }
                                 else if (expr == VCExpressionGenerator.True)
                                 {
                                     args.Add(model.MkElement("true"));
