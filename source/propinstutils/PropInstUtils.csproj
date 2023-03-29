@@ -9,4 +9,8 @@
     <ProjectReference Include="..\Util\CorralUtil.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="Boogie.ExecutionEngine" Version="2.9.2" />
+  </ItemGroup>
+
 </Project>
