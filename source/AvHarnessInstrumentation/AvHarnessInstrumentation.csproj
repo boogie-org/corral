@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Boogie.ExecutionEngine" Version="2.9.2" />
+    <PackageReference Update="Boogie.ExecutionEngine" Version="2.9.5" />
   </ItemGroup>
 
 </Project>

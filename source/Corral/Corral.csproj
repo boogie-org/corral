@@ -22,7 +22,10 @@
 
   <ItemGroup>
     <PackageReference Include="System.Resources.Extensions" Version="4.6.0" />
-    <PackageReference Update="Boogie.ExecutionEngine" Version="2.9.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../boogie/Source/ExecutionEngine/ExecutionEngine.csproj" />
   </ItemGroup>
 
 </Project>

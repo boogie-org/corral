@@ -1305,7 +1305,7 @@ namespace ExplainError
         private static void CreateProver()
         {
             //create vcgen/proverInterface
-            vcgen = new VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, new List<Checker>());
+            vcgen = new VCGen(prog, new CheckerPool(CommandLineOptions.Clo));
             proverInterface = ProverInterface.CreateProver(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, CommandLineOptions.Clo.TimeLimit);
             translator = proverInterface.Context.BoogieExprTranslator;
             exprGen = proverInterface.Context.ExprGen;
@@ -1352,8 +1352,8 @@ namespace ExplainError
                 ref List<Counterexample> cexList)
             {
                 //this creates a z3 process per vcgen
-                var checkers = new List<Checker>();
-                VC.VCGen vcgen = new VC.VCGen(prog, CommandLineOptions.Clo.ProverLogFilePath, CommandLineOptions.Clo.ProverLogFileAppend, checkers);
+                var checkers = new CheckerPool(CommandLineOptions.Clo);
+                VC.VCGen vcgen = new VC.VCGen(prog, checkers);
                 //make deep copy of the blocks
                 var tmpBlocks = new List<Block>();
                 foreach (Block b in i.Blocks)
@@ -1372,11 +1372,7 @@ namespace ExplainError
                 var outcome = vcgen.VerifyImplementation((Implementation)i, out cexList);
                 var reset = new ResetVerificationState();
                 reset.Visit(i);
-                foreach (Checker checker in checkers)
-                {
-                    //Contract.Assert(checker != null);
-                    checker.Close();
-                }
+                checkers.Dispose();
                 vcgen.Close();
                 i.Blocks = tmpBlocks;
                 i.LocVars = tmpLocVars;
