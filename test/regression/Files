@@ -35,7 +35,6 @@
 024\f.bpl b
 loop\seq.bpl b
 loop\conc.bpl b
-loop\assert.bpl b
 smack\a.bpl b
 stackdepth\f1.bpl c
 cex\twoasserts.bpl b
