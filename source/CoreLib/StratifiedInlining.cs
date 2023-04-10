@@ -255,7 +255,7 @@ namespace CoreLib
         }
 
         public StratifiedInlining(Program program, string logFilePath, bool appendLogFile, Action<Implementation> PassiveImplInstrumentation) :
-            base(program, logFilePath, appendLogFile, new List<Checker>(), PassiveImplInstrumentation)
+            base(program, logFilePath, appendLogFile, new CheckerPool(CommandLineOptions.Clo), PassiveImplInstrumentation)
         {
             stats = new Stats();
 
@@ -1304,7 +1304,7 @@ namespace CoreLib
             var ret = new List<Tuple<StratifiedVC, Block>>();
 
             // This is most likely redundant
-            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0]), true);
+            prover.Assert(svc.MustReach(svc.info.impl.Blocks[0], svc.info.absyIds), true);
 
             if (!attachedVCInv.ContainsKey(svc))
                 return ret;
@@ -1318,12 +1318,12 @@ namespace CoreLib
                 var key = Tuple.Create(vc, callblock);
                 if (prevAsserted != null && !prevAsserted.Contains(key))
                 {
-                    prover.Assert(vc.MustReach(callblock), true);
+                    prover.Assert(vc.MustReach(callblock, svc.info.absyIds), true);
                     ret.Add(key);
                 }
                 iter = parent[iter];
             }
-            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key), true);
+            prover.Assert(mainVC.MustReach(mainVC.callSites.First(tup => tup.Value.Contains(iter)).Key, svc.info.absyIds), true);
             return ret;
         }
 
@@ -1867,7 +1867,7 @@ namespace CoreLib
             var stopwatch = Stopwatch.StartNew();
             prover.Check();
             stats.time += stopwatch.ElapsedTicks;
-            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
+            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter, 1);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
@@ -4110,8 +4110,7 @@ namespace CoreLib
         private Absy Label2Absy(string procName, string label)
         {
             int id = int.Parse(label);
-            var l2a = si.implName2StratifiedInliningInfo[procName].label2absy;
-            return (Absy)l2a[id];
+            return si.implName2StratifiedInliningInfo[procName].absyIds.GetValue(id);
         }
 
         public override void OnProverError(string message)

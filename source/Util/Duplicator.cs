@@ -453,8 +453,7 @@ namespace cba.Util
         public override Function VisitFunction(Function node)
         {
             node = (Function)node.Clone();
-            node.Attributes = CopyAttr(node.Attributes);
-            node.doingExpansion = false;
+            node.Attributes = CopyAttr(node.Attributes);        
             return base.VisitFunction(node);
         }
 

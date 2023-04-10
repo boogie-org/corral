@@ -5,4 +5,8 @@
     <AssemblyName>AvUtil</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Update="Boogie.ExecutionEngine" Version="2.9.5" />
+  </ItemGroup>
+
 </Project>
