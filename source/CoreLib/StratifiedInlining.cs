@@ -1867,7 +1867,7 @@ namespace CoreLib
             var stopwatch = Stopwatch.StartNew();
             prover.Check();
             stats.time += stopwatch.ElapsedTicks;
-            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter);
+            ProverInterface.Outcome outcome = prover.CheckOutcomeCore(reporter, 1);
             return ConditionGeneration.ProverInterfaceOutcomeToConditionGenerationOutcome(outcome);
         }
 
