@@ -173,6 +173,8 @@ namespace cba
                     Debug.Assert(false);
                 }
                 refinementState.trackedTokens = ec;
+                timeTaken = (DateTime.Now - startTime);
+                return;
             }
 
             var varsDone = 0;
